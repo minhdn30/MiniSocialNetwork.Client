@@ -25,18 +25,16 @@
           <!-- Login Form -->
           <form id="login-form">
             <input
-              id="username"
+              id="username-login"
               type="text"
               placeholder="Username"
               autocomplete="username"
-              required
             />
             <input
-              id="password"
+              id="password-login"
               type="password"
               placeholder="Password"
               autocomplete="current-password"
-              required
             />
 
             <div class="terms">
@@ -69,17 +67,17 @@
               </a>
             </div>
           </form>
+
           <!-- Register Form -->
           <form id="register-form" class="active">
-            <input id="username" type="text" placeholder="Username" required />
-            <input id="email" type="email" placeholder="Email" required />
-            <input id="fullname" type="text" placeholder="Fullname" required />
+            <input id="username-regis" type="text" placeholder="Username" />
+            <input id="email" type="email" placeholder="Email" />
+            <input id="fullname" type="text" placeholder="Fullname" />
             <div class="input-group">
               <input
-                id="password"
+                id="password-regis"
                 type="password"
                 placeholder="Password"
-                required
               />
               <span class="toggle-eye">&#128065;</span>
               <!-- Unicode mắt 👁 -->
@@ -90,7 +88,6 @@
                 id="cfpassword"
                 type="password"
                 placeholder="Confirm Password"
-                required
               />
               <span class="toggle-eye">&#128065;</span>
             </div>
@@ -99,7 +96,9 @@
           </form>
         </div>
       </div>
+      <div id="toast" class="toast"></div>
     </div>
+
     <script src="js/auth.js"></script>
   </body>
 </html>

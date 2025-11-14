@@ -334,3 +334,53 @@ input:focus {
     text-align: center;
   }
 }
+
+/* CSS cho popup toast */
+.toast {
+  visibility: hidden;
+  min-width: 200px;
+  margin-left: -100px;
+  text-align: center;
+  border-radius: 20px;
+  padding: 10px;
+  position: fixed;
+  z-index: 1000;
+  left: 50%;
+  top: 20px;
+  font-size: 14px;
+  color: white;
+}
+
+.toast.show {
+  visibility: visible;
+  animation: fadein 0.5s, fadeout 0.5s 2.5s;
+}
+
+.toast.error {
+  background-color: #f44336;
+}
+
+.toast.success {
+  background-color: #4caf50;
+}
+
+@keyframes fadein {
+  from {
+    top: 0;
+    opacity: 0;
+  }
+  to {
+    top: 20px;
+    opacity: 1;
+  }
+}
+@keyframes fadeout {
+  from {
+    top: 20px;
+    opacity: 1;
+  }
+  to {
+    top: 0;
+    opacity: 0;
+  }
+}
