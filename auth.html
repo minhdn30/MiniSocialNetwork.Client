@@ -3,102 +3,109 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sign Up</title>
+    <title>Auth</title>
     <link rel="stylesheet" href="css/auth.css" />
   </head>
   <body>
-    <div class="container">
-      <div class="left-panel">
-        <span class="icon">
-          <img
-            src="https://cdn-icons-png.flaticon.com/512/414/414825.png"
-            alt="Cloud Icon"
-          />
-        </span>
-        <h1>Welcome Back!</h1>
-        <p>To keep connected with us please login with your personal info</p>
-        <button class="login-btn" id="toggle-btn">Sign Up</button>
-      </div>
-      <div class="right-panel">
-        <h2 id="form-title">Log In</h2>
-        <div class="form-wrapper">
-          <!-- Login Form -->
-          <form id="login-form">
+    <div class="container" id="container">
+      <div class="form-container sign-up-container">
+        <form action="#">
+          <h1>Create Account</h1>
+          <input id="signup-username" type="text" placeholder="Username" />
+          <input id="signup-email" type="email" placeholder="Email" />
+          <input id="signup-fullname" type="text" placeholder="Full Name" />
+          <div class="password-wrapper">
             <input
-              id="username-login"
-              type="text"
-              placeholder="Username"
-              autocomplete="username"
-            />
-            <input
-              id="password-login"
+              id="signup-password"
               type="password"
               placeholder="Password"
-              autocomplete="current-password"
             />
+            <span class="toggle-password" data-target="signup-password"
+              >👁️</span
+            >
+          </div>
+          <div class="password-wrapper">
+            <input
+              id="cf-password"
+              type="password"
+              placeholder="Confirm Password"
+            />
+            <span class="toggle-password" data-target="cf-password">👁️</span>
+          </div>
+          <button>Sign Up</button>
+        </form>
+      </div>
+      <div class="form-container sign-in-container">
+        <form action="#">
+          <h1>Sign in</h1>
+          <input id="login-username" type="text" placeholder="Username" />
+          <div class="password-wrapper">
+            <input id="login-password" type="password" placeholder="Password" />
+            <span class="toggle-password" data-target="login-password">👁️</span>
+          </div>
 
-            <div class="terms">
-              <input type="checkbox" id="remember" />
-              <label for="remember">Remember me</label>
-            </div>
-            <button type="submit" class="register-btn">Log In</button>
-            <div class="or-divider">Or continue with</div>
-            <div class="social-login">
-              <a href="#" class="social-btn google">
-                <img
-                  src="https://cdn-icons-png.flaticon.com/512/270/270014.png"
-                  alt="Google Logo"
-                />
-                <span>Login with Google</span>
-              </a>
-              <a href="#" class="social-btn facebook">
-                <img
-                  src="https://cdn-icons-png.flaticon.com/512/733/733547.png"
-                  alt="Facebook Logo"
-                />
-                <span>Login with Facebook</span>
-              </a>
-              <a href="#" class="social-btn tiktok">
-                <img
-                  src="https://cdn-icons-png.flaticon.com/512/3046/3046123.png"
-                  alt="TikTok Logo"
-                />
-                <span>Login with TikTok</span>
-              </a>
-            </div>
-          </form>
-
-          <!-- Register Form -->
-          <form id="register-form" class="active">
-            <input id="username-regis" type="text" placeholder="Username" />
-            <input id="email" type="email" placeholder="Email" />
-            <input id="fullname" type="text" placeholder="Fullname" />
-            <div class="input-group">
-              <input
-                id="password-regis"
-                type="password"
-                placeholder="Password"
+          <button>Sign In</button>
+          <a>------------- Or continue with -------------</a>
+          <div class="social-container">
+            <a href="#" class="social-btn google">
+              <img
+                src="https://cdn-icons-png.flaticon.com/512/270/270014.png"
+                alt="Google Logo"
               />
-              <span class="toggle-eye">&#128065;</span>
-              <!-- Unicode mắt 👁 -->
-            </div>
-
-            <div class="input-group">
-              <input
-                id="cfpassword"
-                type="password"
-                placeholder="Confirm Password"
+            </a>
+            <a href="#" class="social-btn facebook">
+              <img
+                src="https://cdn-icons-png.flaticon.com/512/733/733547.png"
+                alt="Facebook Logo"
               />
-              <span class="toggle-eye">&#128065;</span>
-            </div>
-
-            <button type="submit" class="register-btn">Sign Up</button>
-          </form>
+            </a>
+            <a href="#" class="social-btn tiktok">
+              <img
+                src="https://cdn-icons-png.flaticon.com/512/3046/3046123.png"
+                alt="TikTok Logo"
+              />
+            </a>
+          </div>
+          <a href="#">Forgot your password?</a>
+        </form>
+      </div>
+      <div class="overlay-container">
+        <div class="overlay">
+          <div class="overlay-panel overlay-left">
+            <h1>Welcome Back!</h1>
+            <p>
+              To keep connected with us please login with your personal info
+            </p>
+            <button class="ghost" id="signIn">Sign In</button>
+          </div>
+          <div class="overlay-panel overlay-right">
+            <h1>Hello, Friend!</h1>
+            <p>Enter your personal details and start journey with us</p>
+            <button class="ghost" id="signUp">Sign Up</button>
+          </div>
         </div>
       </div>
-      <div id="toast" class="toast"></div>
+    </div>
+    <div id="verify-popup" class="verify-popup">
+      <div class="verify-popup-content">
+        <span class="close-popup">&times;</span>
+        <h2>Verify Email</h2>
+        <p>Enter the 6-digit code sent to your email</p>
+        <div class="code-inputs">
+          <input type="text" maxlength="1" class="code-input" />
+          <input type="text" maxlength="1" class="code-input" />
+          <input type="text" maxlength="1" class="code-input" />
+          <input type="text" maxlength="1" class="code-input" />
+          <input type="text" maxlength="1" class="code-input" />
+          <input type="text" maxlength="1" class="code-input" />
+        </div>
+        <button id="verify-btn">Verify</button>
+        <button id="resend-btn" class="ghost">Resend Code</button>
+      </div>
     </div>
 
+    <!-- Toast notification -->
+    <div id="toast" class="toast"></div>
     <script src="js/auth.js"></script>
   </body>
 </html>
