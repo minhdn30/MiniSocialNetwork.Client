@@ -1,156 +1,50 @@
 const API_BASE = "http://localhost:5000/api";
 
-// Lấy các element cần thiết
-const container = document.querySelector(".container");
-const toggleBtn = document.getElementById("toggle-btn");
-const leftPanel = document.querySelector(".left-panel");
-const rightPanel = document.querySelector(".right-panel");
-const loginBtn = document.getElementById("login-btn");
-const registerBtn = document.getElementById("register-btn");
-const formTitle = document.getElementById("form-title");
+const signUpButton = document.getElementById("signUp");
+const signInButton = document.getElementById("signIn");
+const container = document.getElementById("container");
 
-const leftH1 = document.querySelector(".left-panel h1");
-const leftP = document.querySelector(".left-panel p");
-
-// Hàm cập nhật nội dung left-panel
-function updateLeftPanelContent() {
-  if (container.classList.contains("show-register")) {
-    leftH1.textContent = "Hello, Friend!";
-    leftP.textContent =
-      "Enter your personal details and start your journey with us";
-  } else {
-    leftH1.textContent = "Welcome Back!";
-    leftP.textContent =
-      "To keep connected with us please login with your personal info";
-  }
-}
-
-// Hàm trượt sang register dựa trên width thực tế
-function slideToRegister() {
-  const leftWidth = leftPanel.offsetWidth;
-  const rightWidth = rightPanel.offsetWidth;
-
-  leftPanel.style.transform = `translateX(${rightWidth}px)`;
-  rightPanel.style.transform = `translateX(-${leftWidth}px)`;
-}
-
-// Hàm trượt về login
-function slideToLogin() {
-  leftPanel.style.transform = "translateX(0)";
-  rightPanel.style.transform = "translateX(0)";
-}
-
-// Hàm cập nhật text form title
-function updateFormTitle() {
-  if (container.classList.contains("show-register")) {
-    formTitle.textContent = "Register";
-  } else {
-    formTitle.textContent = "Log In";
-  }
-}
-
-// Khi bấm nút toggle (Sign Up / Log In)
-toggleBtn.addEventListener("click", () => {
-  container.classList.toggle("show-register");
-
-  if (container.classList.contains("show-register")) {
-    toggleBtn.textContent = "LOG IN";
-    slideToRegister();
-  } else {
-    toggleBtn.textContent = "SIGN UP";
-    slideToLogin();
-  }
-
-  updateFormTitle();
-  updateLeftPanelContent();
+signUpButton.addEventListener("click", () => {
+  container.classList.add("right-panel-active");
 });
 
-// Nếu có nút riêng trong login form
-if (loginBtn) {
-  loginBtn.addEventListener("click", () => {
-    container.classList.remove("show-register");
-    toggleBtn.textContent = "SIGN UP";
-    slideToLogin();
-    updateFormTitle();
-    updateLeftPanelContent();
-  });
-}
-
-// Nếu có nút riêng trong register form
-if (registerBtn) {
-  registerBtn.addEventListener("click", () => {
-    container.classList.add("show-register");
-    toggleBtn.textContent = "LOG IN";
-    slideToRegister();
-    updateFormTitle();
-    updateLeftPanelContent();
-  });
-}
-
-// Responsive: nếu đang show register, cập nhật transform khi resize
-window.addEventListener("resize", () => {
-  if (container.classList.contains("show-register")) {
-    slideToRegister();
-  } else {
-    slideToLogin();
-  }
+signInButton.addEventListener("click", () => {
+  container.classList.remove("right-panel-active");
 });
-document.querySelectorAll(".toggle-eye").forEach((eye) => {
-  eye.addEventListener("click", () => {
-    const input = eye.previousElementSibling; // input nằm trước icon
+
+document.querySelectorAll(".toggle-password").forEach((icon) => {
+  icon.addEventListener("click", () => {
+    const targetId = icon.getAttribute("data-target");
+    const input = document.getElementById(targetId);
+
     if (input.type === "password") {
       input.type = "text";
-      eye.textContent = "🙈"; // icon khi show password
+      icon.textContent = "🙈";
     } else {
       input.type = "password";
-      eye.textContent = "👁"; // icon mặc định khi hide
+      icon.textContent = "👁️";
     }
   });
 });
 
-// js/auth.js
-
-// === Toast function ===
-function showToast(message) {
-  const toast = document.getElementById("toast");
-  toast.textContent = message;
-  toast.className = "toast show";
-  setTimeout(() => {
-    toast.className = "toast";
-  }, 3000);
-}
-
-// === Toast function ===
-function showToast(message) {
-  const toast = document.getElementById("toast");
-  toast.textContent = message;
-  toast.className = "toast show";
-  setTimeout(() => {
-    toast.className = "toast";
-  }, 3000);
-}
-
-// === Toast function ===
+// === Toast ===
 function showToast(message, type = "error") {
   const toast = document.getElementById("toast");
   toast.textContent = message;
-
-  // Thêm class dựa vào type
-  toast.className = `toast show ${type}`; // type = "error" hoặc "success"
+  toast.className = `show ${type}`;
 
   setTimeout(() => {
-    toast.className = "toast"; // reset
+    toast.className = "";
   }, 3000);
 }
 
 // === LOGIN FORM ===
-const loginForm = document.getElementById("login-form");
-
+const loginForm = document.querySelector(".sign-in-container form");
 loginForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  const username = document.getElementById("username-login").value.trim();
-  const password = document.getElementById("password-login").value.trim();
+  const username = document.getElementById("login-username").value.trim();
+  const password = document.getElementById("login-password").value.trim();
 
   if (!username) {
     showToast("Username is required.", "error");
@@ -162,7 +56,7 @@ loginForm.addEventListener("submit", async (e) => {
   }
 
   try {
-    const res = await fetch("${API_BASE}/Auths/login-with-username", {
+    const res = await fetch(`${API_BASE}/Auths/login-with-username`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
@@ -171,32 +65,32 @@ loginForm.addEventListener("submit", async (e) => {
     const data = await res.json();
 
     if (!res.ok) {
-      showToast(data.message || "Login failed.", "error");
+      showToast(data.message || "Login failed", "error");
       return;
     }
 
-    localStorage.setItem("accessToken", data.token);
-    showToast("Login success", "success");
-    setTimeout(() => {
-      window.location.href = "index.html";
-    }, 1000);
+    // Lưu token + thông tin
+    localStorage.setItem("accessToken", data.accessToken);
+    localStorage.setItem("fullname", data.fullname || "");
+    localStorage.setItem("avatarUrl", data.avatarUrl || "");
+
+    showToast("Login successful!", "success");
   } catch (err) {
     console.error(err);
     showToast("Server error. Please try again later.", "error");
   }
 });
 
-// === REGISTER FORM ===
-const registerForm = document.getElementById("register-form");
-
-registerForm.addEventListener("submit", async (e) => {
+//=== Signup form submit===
+const signupForm = document.querySelector(".sign-up-container form");
+signupForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  const username = document.getElementById("username-regis").value.trim();
-  const email = document.getElementById("email").value.trim();
-  const fullname = document.getElementById("fullname").value.trim();
-  const password = document.getElementById("password-regis").value;
-  const cfpassword = document.getElementById("cfpassword").value.trim();
+  const username = document.getElementById("signup-username").value.trim();
+  const email = document.getElementById("signup-email").value.trim();
+  const fullname = document.getElementById("signup-fullname").value.trim();
+  const password = document.getElementById("signup-password").value;
+  const cfpassword = document.getElementById("cf-password").value;
 
   if (!username || !email || !fullname || !password || !cfpassword) {
     showToast("Please fill in all fields completely.", "error");
@@ -231,7 +125,7 @@ registerForm.addEventListener("submit", async (e) => {
   }
 
   try {
-    const res = await fetch("${API_BASE}/Auths/register", {
+    const res = await fetch(`${API_BASE}/Auths/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, email, fullname, password }),
@@ -240,12 +134,163 @@ registerForm.addEventListener("submit", async (e) => {
     const data = await res.json();
 
     if (!res.ok) {
-      showToast(data.message || "Sign up failed.", "error");
+      showToast(data.message || "Sign up failed", "error");
       return;
     }
 
-    showToast("Đăng ký thành công! Bạn có thể đăng nhập ngay.", "success");
-    registerForm.reset();
+    showToast("Registration successful!", "success");
+    const emailRes = await fetch(`${API_BASE}/Auths/send-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(email),
+    });
+
+    if (!emailRes.ok) {
+      showToast("Failed to send verification email.", "error");
+      return;
+    }
+
+    showToast("Verification email sent! Please check your inbox.", "success");
+    // Hiển popup verify
+    const verifyPopup = document.getElementById("verify-popup");
+    verifyPopup.style.display = "flex";
+
+    setTimeout(() => {
+      const first = document.querySelector(".code-input");
+      if (first) first.focus();
+    }, 200);
+    // Lưu email để gửi verify
+    verifyPopup.dataset.email = email;
+  } catch (err) {
+    console.error(err);
+    showToast("Server error. Please try again later.", "error");
+  }
+});
+//=== Verify code form ===
+document.getElementById("verify-btn").addEventListener("click", async () => {
+  const code = Array.from(document.querySelectorAll(".code-input"))
+    .map((input) => input.value)
+    .join("");
+  const email = document.getElementById("verify-popup").dataset.email;
+
+  if (code.length !== 6) {
+    showToast("Please enter 6-digit code", "error");
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/Auths/verify-code`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      showToast(data.message || "Verification failed", "error");
+      resetCodeInputs();
+      return;
+    }
+
+    showToast("Email verified successfully!", "success");
+    document.getElementById("verify-popup").style.display = "none";
+
+    // Chuyển sang login
+    container.classList.remove("right-panel-active");
+  } catch (err) {
+    console.error(err);
+    showToast("Server error. Please try again later.", "error");
+  }
+});
+// Close popup when X is clicked
+document
+  .querySelector("#verify-popup .close-popup")
+  .addEventListener("click", () => {
+    document.getElementById("verify-popup").style.display = "none";
+  });
+
+// Auto move focus in verify code inputs
+const codeInputs = document.querySelectorAll(".code-input");
+
+codeInputs.forEach((input, idx) => {
+  input.addEventListener("input", (e) => {
+    const value = e.target.value;
+    if (value.length > 0 && idx < codeInputs.length - 1) {
+      // Nếu nhập xong 1 ký tự, focus sang ô tiếp theo
+      codeInputs[idx + 1].focus();
+    }
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Backspace" && !input.value && idx > 0) {
+      // Nếu backspace và ô trống, quay về ô trước
+      codeInputs[idx - 1].focus();
+    }
+  });
+
+  // Tự động chỉ cho phép số (0-9)
+  input.addEventListener("keypress", (e) => {
+    if (!/[0-9]/.test(e.key)) {
+      e.preventDefault();
+    }
+  });
+});
+
+// Khi popup hiện, focus ô đầu tiên
+const verifyPopup = document.getElementById("verify-popup");
+const popupContent = document.querySelector(
+  "#verify-popup .verify-popup-content"
+);
+if (popupContent) {
+  popupContent.addEventListener(
+    "animationend",
+    (e) => {
+      if (
+        e.animationName === "slideUp" &&
+        verifyPopup &&
+        verifyPopup.style.display === "flex"
+      ) {
+        const first = document.querySelector(".code-input");
+        if (first) first.focus();
+      }
+    },
+    { passive: true }
+  );
+}
+//reset code inputs
+function resetCodeInputs() {
+  codeInputs.forEach((input) => (input.value = ""));
+  codeInputs[0].focus();
+}
+
+//===resend code===
+const resendBtn = document.getElementById("resend-btn");
+
+resendBtn.addEventListener("click", async () => {
+  const verifyPopup = document.getElementById("verify-popup");
+  const email = verifyPopup.dataset.email;
+
+  if (!email) {
+    showToast("Email not found.", "error");
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/Auths/send-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: `"${email}"`, // giữ dạng string cho ASP.NET Core FromBody string
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      showToast(data.message || "Failed to resend code.", "error");
+      return;
+    }
+
+    showToast("Verification email sent!", "success");
   } catch (err) {
     console.error(err);
     showToast("Server error. Please try again later.", "error");
