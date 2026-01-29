@@ -1,0 +1,111 @@
+<!-- Sidebar -->
+<aside class="sidebar">
+  <!-- Logo -->
+  <div class="sidebar-logo" onclick="navigate(event, '/home')">
+    <span class="logo-icon">☁</span>
+    <span class="logo-text">CloudM</span>
+  </div>
+
+  <!-- Menu -->
+  <nav class="sidebar-menu">
+    <!-- Profile -->
+    <a
+      class="menu-item profile"
+      data-route="/profile"
+      onclick="navigate(event, '/profile')"
+    >
+      <img id="sidebar-avatar" alt="avatar" />
+      <span id="sidebar-name">User</span>
+    </a>
+
+    <a
+      class="menu-item active"
+      data-route="/home"
+      onclick="navigate(event, '/home')"
+    >
+      <i data-lucide="home"></i>
+      <span>Home</span>
+    </a>
+
+    <a
+      class="menu-item"
+      data-route="/search"
+      onclick="navigate(event, '/search')"
+    >
+      <i data-lucide="search"></i>
+      <span>Search</span>
+    </a>
+
+    <a
+      class="menu-item"
+      data-route="/explore"
+      onclick="navigate(event, '/explore')"
+    >
+      <i data-lucide="compass"></i>
+      <span>Explore</span>
+    </a>
+
+    <a
+      class="menu-item"
+      data-route="/reels"
+      onclick="navigate(event, '/reels')"
+    >
+      <i data-lucide="clapperboard"></i>
+      <span>Reels</span>
+    </a>
+
+    <a
+      class="menu-item"
+      data-route="/messages"
+      onclick="navigate(event, '/messages')"
+    >
+      <i data-lucide="send"></i>
+      <span>Messages</span>
+      <span class="badge">3</span>
+    </a>
+
+    <a
+      class="menu-item"
+      data-route="/notifications"
+      onclick="navigate(event, '/notifications')"
+    >
+      <i data-lucide="heart"></i>
+      <span>Notifications</span>
+    </a>
+    <a
+      class="menu-item"
+      data-route="/create"
+      onclick="navigate(event, '/create')"
+    >
+      <i data-lucide="plus"></i>
+      <span>Create</span>
+    </a>
+  </nav>
+
+  <!-- Footer -->
+  <div class="sidebar-footer">
+    <div class="more-wrapper">
+      <a class="menu-item" onclick="toggleMoreMenu(event)">
+        <i data-lucide="menu"></i>
+        <span>More</span>
+      </a>
+
+      <!-- More dropdown -->
+      <div class="more-dropdown" id="moreDropdown">
+        <div class="dropdown-item" onclick="navigate(event, '/settings')">
+          <i data-lucide="settings"></i>
+          <span>Settings</span>
+        </div>
+        <div class="dropdown-item" onclick="navigate(event, '/profile')">
+          <i data-lucide="user"></i>
+          <span>Profile</span>
+        </div>
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-item danger" onclick="logout()">
+          <i data-lucide="log-out"></i>
+          <span>Log out</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</aside>

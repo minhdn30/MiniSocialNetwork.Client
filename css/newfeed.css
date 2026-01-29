@@ -1,0 +1,359 @@
+.feed {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* ===== Post ===== */
+.post {
+  padding: 12px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  box-sizing: border-box;
+}
+
+/* ===== Header ===== */
+.post-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.post-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.post-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.post-username {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.post-time {
+  color: #aaa;
+  font-size: 14px;
+}
+
+.post-more {
+  cursor: pointer;
+  font-size: 18px;
+}
+
+/* ===== Media ===== */
+.post-media {
+  width: 100%;
+  overflow: hidden;
+  border-radius: 14px;
+  margin-top: 10px;
+  position: relative;
+}
+
+.post-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ===== Actions ===== */
+.post-actions {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 0;
+}
+
+.post-actions i {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  stroke-width: 1.9;
+}
+
+.post-actions .left {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+/* ===== Likes ===== */
+.post-likes {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+/* 🔥 RESET TOÀN BỘ ELEMENT BÊN TRONG CAPTION */
+.post-caption * {
+  margin: 0;
+  padding: 0;
+  text-indent: 0;
+}
+
+/* clamp */
+.post-caption.truncated {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+/* more / less */
+.caption-toggle {
+  color: #aaa;
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-block;
+  margin-top: 4px;
+}
+
+/* ===== Comments ===== */
+.post-comments {
+  color: #aaa;
+  font-size: 14px;
+  margin-top: 8px;
+  cursor: pointer;
+}
+
+/* ===== Add comment ===== */
+.post-add-comment {
+  margin-top: 10px;
+}
+
+.post-add-comment input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #222;
+  padding: 8px 0;
+  color: #fff;
+  outline: none;
+  font-size: 15px;
+}
+
+/* ===== Action item ===== */
+.action-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.action-item i {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.8;
+}
+
+.action-item .count {
+  font-size: 13px;
+  color: #eaeaea;
+}
+
+/* ===== Media slider ===== */
+.media-slider {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.media-track {
+  display: flex;
+  transition: transform 0.3s ease;
+}
+
+.media-track img {
+  width: 100%;
+  flex-shrink: 0;
+  object-fit: cover;
+  display: block;
+}
+
+/* arrows */
+.media-slider .nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+.media-slider .prev {
+  left: 8px;
+}
+
+.media-slider .next {
+  right: 8px;
+}
+
+/* dots */
+.media-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 6px;
+  cursor: pointer;
+}
+
+.media-dots span {
+  width: 6px;
+  height: 6px;
+  background: #ccc;
+  border-radius: 50%;
+}
+
+.media-dots span.active {
+  background: #ff416c;
+}
+/* ===== React (Like) ===== */
+
+.react-btn {
+  user-select: none;
+}
+
+.react-icon {
+  transition:
+    transform 0.15s ease,
+    fill 0.15s ease,
+    color 0.15s ease;
+  color: #fff;
+  fill: none;
+}
+
+.react-icon.reacted {
+  color: #ff416c;
+  fill: #ff416c;
+  transform: scale(1.05);
+}
+/* ===== Post Actions Hover Effect ===== */
+
+.post-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.post-actions .action-item {
+  transition: transform 0.15s ease;
+}
+
+/* hover → scale nhẹ */
+.post-actions .action-item:hover {
+  transform: scale(1.12);
+}
+
+/* icon hover mượt hơn */
+.post-actions .action-item i {
+  transition:
+    transform 0.15s ease,
+    color 0.15s ease,
+    stroke 0.15s ease;
+}
+
+.post-actions .action-item:hover i {
+  transform: scale(1.05);
+}
+.follow-btn {
+  background: none;
+  margin-top: 3px;
+  border: none;
+  color: #ff416c;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.follow-btn:hover {
+  transform: scale(1.05);
+}
+
+/* ===============================
+   📱 Responsive – Mobile First
+================================ */
+
+/* Tablet & mobile */
+@media (max-width: 768px) {
+  .feed {
+    max-width: 100%;
+    padding: 0 10px;
+  }
+
+  .post {
+    padding: 10px;
+    margin-bottom: 12px;
+    border-radius: 10px;
+  }
+
+  .post-avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .post-username {
+    font-size: 14px;
+  }
+
+  .post-time {
+    font-size: 13px;
+  }
+
+  .post-actions .left {
+    gap: 14px;
+  }
+
+  .post-actions i {
+    width: 22px;
+    height: 22px;
+  }
+
+  .action-item .count {
+    font-size: 12px;
+  }
+}
+
+/* Small mobile (iPhone SE, Android nhỏ) */
+@media (max-width: 480px) {
+  .feed {
+    padding: 0 8px;
+  }
+
+  .post {
+    padding: 8px;
+  }
+
+  .post-avatar {
+    width: 28px;
+    height: 28px;
+  }
+
+  .post-username {
+    font-size: 13px;
+  }
+
+  .post-caption {
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  .post-actions .left {
+    gap: 12px;
+  }
+
+  .post-actions i {
+    width: 20px;
+    height: 20px;
+  }
+}

@@ -75,6 +75,9 @@ loginForm.addEventListener("submit", async (e) => {
     localStorage.setItem("avatarUrl", data.avatarUrl || "");
 
     showToast("Login successful!", "success");
+    setTimeout(() => {
+      window.location.href = "index.html";
+    }, 800);
   } catch (err) {
     console.error(err);
     showToast("Server error. Please try again later.", "error");
