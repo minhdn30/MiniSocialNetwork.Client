@@ -25,6 +25,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+  flex: 1;
 }
 
 .post-avatar {
@@ -32,21 +34,61 @@
   height: 36px;
   border-radius: 50%;
   object-fit: cover;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .post-username {
   font-weight: 600;
   font-size: 15px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.post-username:hover,
+.post-avatar:hover {
+  transform: scale(1.05);
 }
 
 .post-time {
   color: #aaa;
   font-size: 14px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
+/* ===== Post More Button (•••) ===== */
 .post-more {
   cursor: pointer;
-  font-size: 18px;
+  background: none;
+  border: none;
+  color: #ffffff;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.post-more:hover {
+  opacity: 0.7;
+  transform: rotate(90deg);
+}
+
+.post-more:active {
+  opacity: 0.5;
+  transform: scale(0.95);
+}
+
+.post-more i {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2;
 }
 
 /* ===== Media ===== */
@@ -220,8 +262,8 @@
 .media-dots span.active {
   background: #ff416c;
 }
-/* ===== React (Like) ===== */
 
+/* ===== React (Like) ===== */
 .react-btn {
   user-select: none;
 }
@@ -240,13 +282,14 @@
   fill: #ff416c;
   transform: scale(1.05);
 }
-/* ===== Post Actions Hover Effect ===== */
 
+/* ===== Post Actions Hover Effect ===== */
 .post-actions {
   display: flex;
   align-items: center;
   gap: 6px;
 }
+
 .post-actions .action-item {
   transition: transform 0.15s ease;
 }
@@ -267,6 +310,7 @@
 .post-actions .action-item:hover i {
   transform: scale(1.05);
 }
+
 .follow-btn {
   background: none;
   margin-top: 3px;
@@ -274,6 +318,7 @@
   color: #ff416c;
   font-weight: 600;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .follow-btn:hover {
@@ -304,10 +349,20 @@
 
   .post-username {
     font-size: 14px;
+    max-width: 150px;
   }
 
   .post-time {
     font-size: 13px;
+  }
+
+  .post-more {
+    padding: 6px;
+  }
+
+  .post-more i {
+    width: 18px;
+    height: 18px;
   }
 
   .post-actions .left {
@@ -341,6 +396,7 @@
 
   .post-username {
     font-size: 13px;
+    max-width: 120px;
   }
 
   .post-caption {
@@ -355,5 +411,25 @@
   .post-actions i {
     width: 20px;
     height: 20px;
+  }
+}
+
+/* Touch devices - Better tap targets */
+@media (hover: none) and (pointer: coarse) {
+  .post-more:hover {
+    opacity: 1;
+    transform: none;
+  }
+
+  .post-more:active {
+    opacity: 0.7;
+    transform: rotate(90deg);
+  }
+
+  .post-more {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    min-width: 40px;
+    min-height: 40px;
   }
 }

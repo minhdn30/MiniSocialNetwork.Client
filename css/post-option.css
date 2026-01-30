@@ -1,0 +1,295 @@
+/* ===== Post Options Overlay ===== */
+.post-options-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+  padding: 20px;
+}
+
+.post-options-overlay.show {
+  opacity: 1;
+}
+
+/* ===== Post Options Popup ===== */
+.post-options-popup {
+  background: #262626;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 400px;
+  overflow: hidden;
+  transform: scale(0.9);
+  transition: transform 0.1s ease;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.post-options-overlay.show .post-options-popup {
+  transform: scale(1);
+}
+
+/* Custom scrollbar for popup */
+.post-options-popup::-webkit-scrollbar {
+  width: 8px;
+}
+
+.post-options-popup::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+.post-options-popup::-webkit-scrollbar-thumb {
+  background: #363636;
+  border-radius: 4px;
+}
+
+.post-options-popup::-webkit-scrollbar-thumb:hover {
+  background: #4a4a4a;
+}
+
+/* ===== Post Options Header ===== */
+.post-options-header {
+  padding: 24px 20px;
+  text-align: center;
+  border-bottom: 1px solid #363636;
+}
+
+.post-options-header h3 {
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+}
+
+.post-options-header p {
+  color: #8e8e8e;
+  font-size: 14px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ===== Post Option Button ===== */
+.post-option {
+  width: 100%;
+  padding: 14px 20px;
+  border: none;
+  background: transparent;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  border-bottom: 1px solid #363636;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.post-option:last-child {
+  border-bottom: none;
+}
+
+.post-option:hover {
+  background: #363636;
+}
+
+.post-option:active {
+  background: #1a1a1a;
+}
+
+.post-option i {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2;
+  flex-shrink: 0;
+}
+
+.post-option span {
+  white-space: nowrap;
+}
+
+/* Danger option (delete, report) */
+.post-option-danger {
+  color: #ed4956;
+  font-weight: 600;
+}
+
+.post-option-danger i {
+  color: #ed4956;
+}
+
+/* Cancel option */
+.post-option-cancel {
+  font-weight: 600;
+  color: #ffffff;
+}
+
+/* ===== Toast Notification ===== */
+.toast-notification {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: rgba(38, 38, 38, 0.95);
+  backdrop-filter: blur(10px);
+  color: #ffffff;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 10001;
+  opacity: 0;
+  transition: all 0.3s ease;
+  pointer-events: none;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+.toast-notification.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ===== Responsive - Tablet ===== */
+@media (max-width: 1024px) {
+  .post-options-popup {
+    max-width: 380px;
+  }
+
+  .post-option {
+    padding: 13px 18px;
+    font-size: 13.5px;
+  }
+}
+
+/* ===== Responsive - Mobile ===== */
+@media (max-width: 768px) {
+  .post-options-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .post-options-popup {
+    max-width: 100%;
+    border-radius: 16px 16px 0 0;
+    max-height: 70vh;
+    transform: translateY(100%);
+  }
+
+  .post-options-overlay.show .post-options-popup {
+    transform: translateY(0);
+  }
+
+  .post-options-header {
+    padding: 20px 16px;
+  }
+
+  .post-options-header h3 {
+    font-size: 17px;
+  }
+
+  .post-options-header p {
+    font-size: 13px;
+  }
+
+  .post-option {
+    padding: 14px 16px;
+    font-size: 14px;
+  }
+
+  .post-option i {
+    width: 18px;
+    height: 18px;
+  }
+
+  .toast-notification {
+    bottom: 70px;
+    font-size: 13px;
+    padding: 10px 18px;
+  }
+}
+
+/* ===== Small Mobile ===== */
+@media (max-width: 480px) {
+  .post-options-popup {
+    max-height: 80vh;
+  }
+
+  .post-options-header {
+    padding: 18px 14px;
+  }
+
+  .post-options-header h3 {
+    font-size: 16px;
+  }
+
+  .post-option {
+    padding: 13px 14px;
+    font-size: 13px;
+    gap: 10px;
+  }
+
+  .post-option i {
+    width: 16px;
+    height: 16px;
+  }
+
+  .toast-notification {
+    bottom: 60px;
+    font-size: 12px;
+    padding: 9px 16px;
+    max-width: calc(100% - 32px);
+  }
+}
+
+/* ===== Touch device improvements ===== */
+@media (hover: none) and (pointer: coarse) {
+  .post-option:hover {
+    background: transparent;
+  }
+
+  .post-option:active {
+    background: #363636;
+  }
+
+  .post-option {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    /* Larger tap target */
+    min-height: 48px;
+  }
+}
+
+/* ===== Reduced motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  .post-options-overlay,
+  .post-options-popup,
+  .toast-notification,
+  .post-option {
+    transition: none;
+  }
+
+  .post-options-overlay:not(.show) {
+    display: none;
+  }
+}
+
+/* ===== Safe area for notched devices ===== */
+@supports (padding: max(0px)) {
+  .post-options-popup {
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+  }
+
+  .toast-notification {
+    bottom: max(80px, calc(80px + env(safe-area-inset-bottom)));
+  }
+}

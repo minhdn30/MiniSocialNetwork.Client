@@ -44,4 +44,10 @@ function logout() {
   window.location.href = "auth.html";
 }
 
-loadSidebar();
+(async function bootstrap() {
+  await loadSidebar();
+
+  if (typeof initProfilePreview === "function") {
+    await initProfilePreview();
+  }
+})();

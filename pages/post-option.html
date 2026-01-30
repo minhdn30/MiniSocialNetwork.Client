@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Post Options Demo</title>
+    <link rel="stylesheet" href="profile-preview.css" />
+    <link rel="stylesheet" href="post-options.css" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        background: #000000;
+        color: #ffffff;
+        padding: 20px;
+        min-height: 100vh;
+      }
+
+      .demo-container {
+        max-width: 600px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        font-size: 24px;
+        margin-bottom: 20px;
+        text-align: center;
+      }
+
+      .demo-section {
+        background: #1a1a1a;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+      }
+
+      .demo-section h2 {
+        font-size: 18px;
+        margin-bottom: 15px;
+        color: #8e8e8e;
+      }
+
+      .demo-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .demo-btn {
+        background: #262626;
+        border: 1px solid #363636;
+        color: #ffffff;
+        padding: 12px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .demo-btn:hover {
+        background: #363636;
+        border-color: #4a4a4a;
+      }
+
+      .demo-btn i {
+        width: 20px;
+        height: 20px;
+      }
+
+      .post-preview {
+        background: #262626;
+        border-radius: 12px;
+        overflow: hidden;
+        margin-bottom: 20px;
+      }
+
+      .post-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+      }
+
+      .post-user {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .post-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      }
+
+      .post-username {
+        font-weight: 600;
+        font-size: 14px;
+      }
+
+      .post-more-btn {
+        background: none;
+        border: none;
+        color: #ffffff;
+        cursor: pointer;
+        padding: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: opacity 0.2s ease;
+      }
+
+      .post-more-btn:hover {
+        opacity: 0.7;
+      }
+
+      .post-more-btn i {
+        width: 24px;
+        height: 24px;
+      }
+
+      .post-image {
+        width: 100%;
+        height: 400px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #ffffff;
+        font-size: 18px;
+      }
+
+      @media (max-width: 768px) {
+        .post-image {
+          height: 300px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="demo-container">
+      <h1>Post Options Demo</h1>
+
+      <!-- Sample Post 1 - Own Post -->
+      <div class="post-preview">
+        <div class="post-header">
+          <div class="post-user" data-account-id="user123">
+            <div class="post-avatar"></div>
+            <span class="post-username">Your Post</span>
+          </div>
+          <button
+            class="post-more-btn"
+            onclick="showPostOptions('post123', 'user123', true, false)"
+          >
+            <i data-lucide="more-horizontal"></i>
+          </button>
+        </div>
+        <div class="post-image">Your Post Image</div>
+      </div>
+
+      <!-- Sample Post 2 - Following -->
+      <div class="post-preview">
+        <div class="post-header">
+          <div class="post-user" data-account-id="user456">
+            <div class="post-avatar"></div>
+            <span class="post-username">@johndoe (Following)</span>
+          </div>
+          <button
+            class="post-more-btn"
+            onclick="showPostOptions('post456', 'user456', false, true)"
+          >
+            <i data-lucide="more-horizontal"></i>
+          </button>
+        </div>
+        <div class="post-image">Post from Following User</div>
+      </div>
+
+      <!-- Sample Post 3 - Not Following -->
+      <div class="post-preview">
+        <div class="post-header">
+          <div class="post-user" data-account-id="user789">
+            <div class="post-avatar"></div>
+            <span class="post-username">@janedoe (Not Following)</span>
+          </div>
+          <button
+            class="post-more-btn"
+            onclick="showPostOptions('post789', 'user789', false, false)"
+          >
+            <i data-lucide="more-horizontal"></i>
+          </button>
+        </div>
+        <div class="post-image">Post from Non-Following User</div>
+      </div>
+
+      <!-- Demo Buttons -->
+      <div class="demo-section">
+        <h2>Quick Tests</h2>
+        <div class="demo-buttons">
+          <button
+            class="demo-btn"
+            onclick="showPostOptions('post1', 'user1', true, false)"
+          >
+            <span>Show Options - Own Post</span>
+            <i data-lucide="chevron-right"></i>
+          </button>
+          <button
+            class="demo-btn"
+            onclick="showPostOptions('post2', 'user2', false, true)"
+          >
+            <span>Show Options - Other's Post (Following)</span>
+            <i data-lucide="chevron-right"></i>
+          </button>
+          <button
+            class="demo-btn"
+            onclick="showPostOptions('post3', 'user3', false, false)"
+          >
+            <span>Show Options - Other's Post (Not Following)</span>
+            <i data-lucide="chevron-right"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+      lucide.createIcons();
+    </script>
+
+    <!-- Include JS files -->
+    <script src="profile-preview.js"></script>
+    <script src="post-options.js"></script>
+  </body>
+</html>

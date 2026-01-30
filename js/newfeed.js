@@ -77,14 +77,14 @@ function renderFeed(posts) {
     const isLong = post.content && post.content.length > 150;
     postEl.innerHTML = `
         <div class="post-header">
-          <div class="post-user">
+          <div class="post-user" data-account-id="${post.author.accountId}">
             <img class="post-avatar"
                  src="${post.author?.avatarUrl || "/images/default-avatar.png"}"
                  alt="">
             <span class="post-username">${post.author?.fullName || "Unknown"}</span>
             <span class="post-time">• ${timeAgo(post.createdAt)}</span>
           </div>
-           <div class="post-actions">
+          <div class="post-actions">
           ${
             !post.isOwner && !post.author.isFollowedByCurrentUser
               ? `<button class="follow-btn" onclick="followUser('${post.author.accountId}', this)">
@@ -92,7 +92,9 @@ function renderFeed(posts) {
          </button>`
               : ""
           }
-          <div class="post-more">•••</div>
+          <button class="post-more" onclick="showPostOptions('${post.postId}', '${post.author.accountId}', ${post.isOwner}, ${post.author.isFollowedByCurrentUser})">
+            <i data-lucide="more-horizontal"></i>
+          </button>
           </div>
         </div>
 
@@ -303,16 +305,17 @@ document.addEventListener("click", async (e) => {
      * }
      */
 
-    // 3️⃣ Sync lại theo backend
     reactBtn.dataset.reacted = data.isReactedByCurrentUser.toString();
     icon.classList.toggle("reacted", data.isReactedByCurrentUser);
     countEl.textContent = data.reactCount;
   } catch (err) {
     console.error(err);
 
-    // 4️⃣ Rollback nếu lỗi
     reactBtn.dataset.reacted = wasReacted.toString();
     icon.classList.toggle("reacted", wasReacted);
     countEl.textContent = oldCount;
   }
+});
+document.addEventListener("DOMContentLoaded", () => {
+  initProfilePreview();
 });

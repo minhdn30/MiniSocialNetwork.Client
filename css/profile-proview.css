@@ -1,0 +1,520 @@
+.profile-preview {
+  position: absolute;
+  width: 340px;
+  background: #000000;
+  border: 1px solid #262626;
+  border-radius: 16px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  padding: 16px;
+  z-index: 9999;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+  color: #ffffff;
+  opacity: 1;
+  transform: scale(1);
+  transform-origin: top left;
+}
+
+.profile-preview.hidden {
+  opacity: 0;
+  transform: scale(0.95);
+  pointer-events: none;
+}
+
+/* ===== Header ===== */
+.preview-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+
+.preview-header img {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #262626;
+  flex-shrink: 0;
+}
+
+.preview-header > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.preview-header .name {
+  font-weight: 600;
+  font-size: 15px;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ===== Stats ===== */
+.preview-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: #ffffff;
+}
+
+.preview-stats > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.preview-stats b {
+  font-weight: 600;
+  color: #ffffff;
+  font-size: 15px;
+}
+
+.preview-stats span {
+  color: #8e8e8e;
+  font-size: 13px;
+}
+
+/* ===== Media grid ===== */
+.preview-medias {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.preview-medias img {
+  width: 100%;
+  height: 100px;
+  object-fit: cover;
+  background: #1a1a1a;
+  border-radius: 8px;
+}
+
+.no-media {
+  font-size: 13px;
+  color: #8e8e8e;
+  text-align: center;
+  grid-column: span 3;
+  padding: 20px 0;
+}
+
+/* ===== Actions ===== */
+.profile-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  flex: 1;
+  padding: 8px 0;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.btn i {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2;
+}
+
+/* Message */
+.btn-message {
+  background: #ff416c;
+  color: #ffffff;
+}
+
+.btn-message:hover {
+  background: #ff5a7f;
+}
+
+.btn-message:active {
+  background: #e63960;
+  transform: scale(0.98);
+}
+
+/* Follow */
+.btn-follow {
+  background: #0095f6;
+  color: #ffffff;
+}
+
+.btn-follow:hover {
+  background: #1877f2;
+}
+
+.btn-follow:active {
+  background: #0082d9;
+  transform: scale(0.98);
+}
+
+/* Following */
+.btn-following {
+  background: #262626;
+  color: #ffffff;
+}
+
+.btn-following:hover {
+  background: #363636;
+}
+
+.btn-following:active {
+  background: #1a1a1a;
+  transform: scale(0.98);
+}
+
+/* View Profile */
+.btn-view-profile {
+  background: #ff416c;
+  color: #ffffff;
+}
+
+.btn-view-profile:hover {
+  background: #ff5a7f;
+}
+
+.btn-view-profile:active {
+  background: #e63960;
+  transform: scale(0.98);
+}
+
+/* ===== Responsive Tablet ===== */
+@media (max-width: 1024px) {
+  .profile-preview {
+    width: 320px;
+    padding: 14px;
+  }
+
+  .preview-header img {
+    width: 52px;
+    height: 52px;
+  }
+
+  .preview-medias img {
+    height: 90px;
+  }
+}
+
+/* ===== Responsive Mobile ===== */
+@media (max-width: 768px) {
+  .profile-preview {
+    width: calc(100vw - 24px);
+    max-width: 360px;
+    padding: 14px;
+    border-radius: 12px;
+    /* Thêm backdrop blur cho mobile */
+    backdrop-filter: blur(10px);
+    background: rgba(0, 0, 0, 0.95);
+  }
+
+  .preview-header {
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .preview-header img {
+    width: 48px;
+    height: 48px;
+  }
+
+  .preview-header .name {
+    font-size: 14px;
+  }
+
+  .preview-stats {
+    gap: 2px;
+    margin-bottom: 10px;
+    font-size: 13px;
+  }
+
+  .preview-stats b {
+    font-size: 14px;
+  }
+
+  .preview-stats span {
+    font-size: 12px;
+  }
+
+  .preview-medias {
+    gap: 3px;
+    margin-bottom: 14px;
+  }
+
+  .preview-medias img {
+    height: 80px;
+    border-radius: 6px;
+  }
+
+  .no-media {
+    font-size: 12px;
+    padding: 16px 0;
+  }
+
+  .profile-actions {
+    gap: 6px;
+  }
+
+  .btn {
+    padding: 10px 0;
+    font-size: 13px;
+    border-radius: 6px;
+  }
+
+  .btn i {
+    width: 14px;
+    height: 14px;
+  }
+
+  .btn .chevron-icon {
+    width: 12px;
+    height: 12px;
+  }
+
+  /* Larger tap targets for mobile */
+  .btn {
+    min-height: 36px;
+  }
+}
+
+/* ===== Small Mobile ===== */
+@media (max-width: 480px) {
+  .profile-preview {
+    width: calc(100vw - 16px);
+    padding: 12px;
+  }
+
+  .preview-header {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .preview-header img {
+    width: 44px;
+    height: 44px;
+  }
+
+  .preview-stats {
+    margin-bottom: 8px;
+  }
+
+  .preview-medias {
+    gap: 2px;
+    margin-bottom: 12px;
+  }
+
+  .preview-medias img {
+    height: 70px;
+  }
+
+  .profile-actions {
+    gap: 6px;
+  }
+
+  .btn {
+    font-size: 12px;
+    padding: 9px 0;
+  }
+}
+
+/* ===== Touch device improvements ===== */
+@media (hover: none) and (pointer: coarse) {
+  /* Remove hover effects on touch devices */
+  .btn:hover {
+    transform: none;
+  }
+
+  /* Better active/pressed states */
+  .btn:active {
+    transform: scale(0.96);
+  }
+
+  /* Prevent text selection on buttons */
+  .btn {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  .profile-preview {
+    /* Prevent accidental scrolling while interacting */
+    touch-action: pan-y;
+  }
+}
+
+/* ===== Dark mode support (if needed) ===== */
+@media (prefers-color-scheme: light) {
+  /* Currently using dark theme by default, but can add light mode here if needed */
+}
+
+/* ===== High contrast mode ===== */
+@media (prefers-contrast: high) {
+  .profile-preview {
+    border: 2px solid #ffffff;
+  }
+
+  .preview-header img {
+    border: 2px solid #ffffff;
+  }
+
+  .btn {
+    border: 1px solid currentColor;
+  }
+}
+
+/* ===== Reduced motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  .profile-preview,
+  .btn {
+    transition: none;
+  }
+
+  .profile-preview.hidden {
+    display: none;
+  }
+}
+
+/* ===== Unfollow Confirmation Popup ===== */
+.unfollow-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.unfollow-overlay.show {
+  opacity: 1;
+}
+
+.unfollow-popup {
+  background: #262626;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 400px;
+  overflow: hidden;
+  transform: scale(0.9);
+  transition: transform 0.2s ease;
+}
+
+.unfollow-overlay.show .unfollow-popup {
+  transform: scale(1);
+}
+
+.unfollow-content {
+  padding: 32px 24px;
+  text-align: center;
+  border-bottom: 1px solid #363636;
+}
+
+.unfollow-content h3 {
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+}
+
+.unfollow-content p {
+  color: #8e8e8e;
+  font-size: 14px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.unfollow-actions {
+  display: flex;
+  flex-direction: column;
+}
+
+.unfollow-btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  background: transparent;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  border-bottom: 1px solid #363636;
+}
+
+.unfollow-btn:last-child {
+  border-bottom: none;
+}
+
+.unfollow-btn:hover {
+  background: #363636;
+}
+
+.unfollow-btn:active {
+  background: #1a1a1a;
+}
+
+.unfollow-confirm {
+  color: #ed4956;
+}
+
+.unfollow-cancel {
+  color: #ffffff;
+}
+
+/* Mobile adjustments for unfollow popup */
+@media (max-width: 768px) {
+  .unfollow-popup {
+    max-width: 340px;
+    border-radius: 12px;
+  }
+
+  .unfollow-content {
+    padding: 28px 20px;
+  }
+
+  .unfollow-content h3 {
+    font-size: 17px;
+  }
+
+  .unfollow-content p {
+    font-size: 13px;
+  }
+
+  .unfollow-btn {
+    padding: 13px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .unfollow-popup {
+    max-width: 280px;
+  }
+
+  .unfollow-content {
+    padding: 24px 16px;
+  }
+
+  .unfollow-content h3 {
+    font-size: 16px;
+  }
+}
