@@ -23,6 +23,8 @@ async function loadSidebar() {
 
   // Setup auto-close on mouse leave
   setupAutoClose();
+  // Load create post modal
+  await loadCreatePostModal();
 }
 
 // THÊM MỚI: Tự động collapse sidebar khi chuột rời khỏi
@@ -153,6 +155,18 @@ function toggleCreateMenu(e) {
   }
 
   // Recreate icons
+  lucide.createIcons();
+}
+async function loadCreatePostModal() {
+  const res = await fetch("pages/create-post-modal.html");
+  const modalHTML = await res.text();
+
+  // Append modal vào body
+  const tempDiv = document.createElement("div");
+  tempDiv.innerHTML = modalHTML;
+  document.body.appendChild(tempDiv.firstElementChild);
+
+  // Recreate icons cho modal
   lucide.createIcons();
 }
 

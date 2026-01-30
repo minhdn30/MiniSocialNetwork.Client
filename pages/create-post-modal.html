@@ -6,24 +6,120 @@
       <button class="modal-back-btn" onclick="closeCreatePostModal()">
         <i data-lucide="arrow-left"></i>
       </button>
-      <h2 class="modal-title">Tạo bài viết mới</h2>
-      <button class="modal-share-btn" onclick="submitPost()">Chia sẻ</button>
+      <h2 class="modal-title">Create New Post</h2>
+      <button class="modal-share-btn" onclick="submitPost()">Share</button>
     </div>
 
     <!-- Content -->
     <div class="modal-content">
-      <!-- Image Preview Area -->
-      <div class="post-image-container">
-        <img id="postImagePreview" src="" alt="Preview" />
-        <button class="change-image-btn" onclick="triggerImageUpload()">
-          <i data-lucide="image"></i>
-        </button>
+      <!-- Media Preview Area -->
+      <div class="post-media-container">
+        <!-- Default Placeholder -->
+        <div class="media-placeholder" id="mediaPlaceholder">
+          <div class="placeholder-icon">
+            <i data-lucide="image"></i>
+            <i data-lucide="video"></i>
+          </div>
+          <p class="placeholder-text">Upload photos and videos here</p>
+          <button class="select-btn" onclick="triggerMediaUpload()">
+            Upload
+          </button>
+        </div>
+
+        <!-- Media Preview (hidden by default) -->
+        <div
+          class="media-preview-wrapper"
+          id="mediaPreviewWrapper"
+          style="display: none"
+        >
+          <div class="media-zoom-container" id="mediaZoomContainer">
+            <img
+              id="postImagePreview"
+              src=""
+              alt="Preview"
+              style="display: none"
+            />
+            <video id="postVideoPreview" controls style="display: none"></video>
+          </div>
+
+          <!-- Crop Ratio Selector -->
+          <div class="crop-ratio-selector">
+            <button
+              class="ratio-btn active"
+              data-ratio="original"
+              onclick="changeCropRatio('original')"
+              title="Original"
+            >
+              <i data-lucide="maximize-2"></i>
+            </button>
+            <button
+              class="ratio-btn"
+              data-ratio="1:1"
+              onclick="changeCropRatio('1:1')"
+              title="1:1 Square"
+            >
+              <i data-lucide="square"></i>
+            </button>
+            <button
+              class="ratio-btn"
+              data-ratio="4:5"
+              onclick="changeCropRatio('4:5')"
+              title="4:5 Portrait"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="5" y="2" width="10" height="16" rx="1" />
+              </svg>
+            </button>
+            <button
+              class="ratio-btn"
+              data-ratio="16:9"
+              onclick="changeCropRatio('16:9')"
+              title="16:9 Landscape"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="2" y="6" width="16" height="8" rx="1" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Zoom Controls -->
+          <div class="zoom-controls">
+            <button class="zoom-btn" onclick="zoomIn()" title="Zoom in">
+              <i data-lucide="zoom-in"></i>
+            </button>
+            <button class="zoom-btn" onclick="resetZoom()" title="Reset zoom">
+              <i data-lucide="maximize-2"></i>
+            </button>
+            <button class="zoom-btn" onclick="zoomOut()" title="Zoom out">
+              <i data-lucide="zoom-out"></i>
+            </button>
+          </div>
+
+          <button class="change-media-btn" onclick="triggerMediaUpload()">
+            <i data-lucide="image"></i>
+          </button>
+        </div>
+
         <input
           type="file"
-          id="postImageInput"
-          accept="image/*"
+          id="postMediaInput"
+          accept="image/*,video/*"
           style="display: none"
-          onchange="handleImageUpload(event)"
+          onchange="handleMediaUpload(event)"
         />
       </div>
 
@@ -40,7 +136,7 @@
           <textarea
             id="postCaption"
             class="post-caption-input"
-            placeholder="Viết chú thích..."
+            placeholder="Write a caption..."
             maxlength="2200"
             oninput="updateCharCount()"
           ></textarea>
@@ -55,7 +151,7 @@
         <!-- Location Section -->
         <div class="post-section">
           <div class="section-header" onclick="toggleSection('location')">
-            <span class="section-title">Thêm vị trí</span>
+            <span class="section-title">Add location</span>
             <i data-lucide="map-pin" class="section-icon"></i>
           </div>
           <div
@@ -66,7 +162,7 @@
             <input
               type="text"
               class="location-input"
-              placeholder="Tìm kiếm vị trí..."
+              placeholder="Search location..."
             />
           </div>
         </div>
@@ -74,7 +170,7 @@
         <!-- Collaborators Section -->
         <div class="post-section">
           <div class="section-header" onclick="toggleSection('collaborators')">
-            <span class="section-title">Thêm cộng tác viên</span>
+            <span class="section-title">Add collaborators</span>
             <i data-lucide="users" class="section-icon"></i>
           </div>
           <div
@@ -85,7 +181,7 @@
             <input
               type="text"
               class="collaborator-input"
-              placeholder="Tìm kiếm người dùng..."
+              placeholder="Search users..."
             />
           </div>
         </div>
@@ -96,7 +192,7 @@
             class="section-header expandable"
             onclick="toggleSection('advanced')"
           >
-            <span class="section-title">Chia sẻ lên</span>
+            <span class="section-title">Also share to</span>
             <i data-lucide="chevron-down" class="chevron-icon"></i>
           </div>
           <div
@@ -114,7 +210,7 @@
                 />
                 <div class="setting-details">
                   <span class="setting-name">nmin301</span>
-                  <span class="setting-desc">Threads • Công khai</span>
+                  <span class="setting-desc">Threads • Public</span>
                 </div>
               </div>
               <div class="toggle-switch active">
@@ -131,8 +227,8 @@
                   class="platform-icon"
                 />
                 <div class="setting-details">
-                  <span class="setting-name">Đặng Nhật Minh</span>
-                  <span class="setting-desc">Facebook • Chỉ mình tôi</span>
+                  <span class="setting-name">Dang Nhat Minh</span>
+                  <span class="setting-desc">Facebook • Only me</span>
                 </div>
               </div>
               <div class="toggle-switch">

@@ -32,9 +32,8 @@
 .modal-container {
   background: var(--bg-primary);
   border-radius: 16px;
-  width: 90%;
-  max-width: 1000px;
-  max-height: 90vh;
+  width: 1000px; /* Cố định chiều rộng */
+  height: 600px; /* Cố định chiều cao */
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -103,7 +102,7 @@
 }
 
 .modal-share-btn:hover {
-  opacity: 0.9;
+  background: var(--accent-hover);
 }
 
 .modal-share-btn:disabled {
@@ -118,8 +117,8 @@
   overflow: hidden;
 }
 
-/* ================= IMAGE PREVIEW ================= */
-.post-image-container {
+/* ================= MEDIA PREVIEW ================= */
+.post-media-container {
   flex: 1;
   background: var(--bg-secondary);
   display: flex;
@@ -127,15 +126,230 @@
   justify-content: center;
   position: relative;
   overflow: hidden;
+  min-height: 400px;
 }
 
-.post-image-container img {
-  max-width: 100%;
+/* ================= MEDIA PLACEHOLDER ================= */
+.media-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 40px;
+  text-align: center;
+  position: relative;
+  z-index: 2;
+}
+
+/* ================= PLACEHOLDER BG ICON ================= */
+.placeholder-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0.1;
+  z-index: 1;
+  color: var(--text-primary);
+}
+
+.placeholder-icon svg:first-child {
+  width: 250px !important;
+  height: 250px !important;
+  transform: translate(-120px, 0px);
+}
+
+.placeholder-icon svg:last-child {
+  width: 250px !important;
+  height: 250px !important;
+  position: absolute;
+  transform: translate(120px, 0px);
+}
+
+.placeholder-text {
+  font-size: 22px;
+  color: var(--text-primary);
+  font-weight: 300;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.select-btn {
+  background: var(--accent-primary);
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.select-btn:hover {
+  background: var(--accent-hover);
+}
+
+/* ================= MEDIA PREVIEW WRAPPER ================= */
+.media-preview-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+.media-zoom-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  transition: transform 0.05s linear;
+  will-change: transform;
+  position: relative;
+}
+
+.media-zoom-container.grabbing {
+  cursor: grabbing;
+  transition: none;
+}
+
+.media-zoom-container.zoomed {
+  cursor: grab;
+}
+
+.media-zoom-container:not(.grabbing) {
+  transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Crop modes */
+.media-zoom-container.crop-original {
+  width: 100%;
+  height: 100%;
+}
+
+.media-zoom-container.crop-1-1 {
+  width: 100%;
+  aspect-ratio: 1 / 1;
   max-height: 100%;
-  object-fit: contain;
 }
 
-.change-image-btn {
+.media-zoom-container.crop-4-5 {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  max-height: 100%;
+}
+
+.media-zoom-container.crop-16-9 {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 100%;
+}
+
+.media-preview-wrapper img,
+.media-preview-wrapper video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  transition: object-fit 0.3s ease;
+}
+
+/* When cropping, use cover instead of contain */
+.media-zoom-container:not(.crop-original) img,
+.media-zoom-container:not(.crop-original) video {
+  object-fit: cover;
+}
+
+.media-preview-wrapper video {
+  background: #000;
+}
+
+/* ================= CROP RATIO SELECTOR ================= */
+.crop-ratio-selector {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 8px;
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.ratio-btn {
+  background: transparent;
+  color: white;
+  border: none;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast);
+  width: 40px;
+  height: 40px;
+}
+
+.ratio-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.ratio-btn.active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.ratio-btn svg,
+.ratio-btn i {
+  width: 20px;
+  height: 20px;
+}
+
+/* ================= ZOOM CONTROLS ================= */
+.zoom-controls {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
+.zoom-btn {
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: none;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast);
+  backdrop-filter: blur(10px);
+}
+
+.zoom-btn:hover {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.zoom-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.change-media-btn {
   position: absolute;
   bottom: 20px;
   right: 20px;
@@ -151,11 +365,11 @@
   transition: background var(--transition-fast);
 }
 
-.change-image-btn:hover {
+.change-media-btn:hover {
   background: rgba(0, 0, 0, 0.85);
 }
 
-.change-image-btn svg {
+.change-media-btn svg {
   width: 20px;
   height: 20px;
 }
@@ -384,6 +598,36 @@
   color: var(--text-disabled);
 }
 
+/* ================= TOGGLE SWITCH ================= */
+.toggle-switch {
+  width: 44px;
+  height: 24px;
+  background: var(--border-tertiary);
+  border-radius: 12px;
+  position: relative;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.toggle-switch.active {
+  background: var(--accent-primary);
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 50%;
+  transition: transform var(--transition-fast);
+}
+
+.toggle-switch.active .toggle-slider {
+  transform: translateX(20px);
+}
+
 /* ================= RESPONSIVE ================= */
 @media (max-width: 768px) {
   .modal-container {
@@ -398,7 +642,7 @@
     flex-direction: column;
   }
 
-  .post-image-container {
+  .post-media-container {
     max-height: 50vh;
   }
 
