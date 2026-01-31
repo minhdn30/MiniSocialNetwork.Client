@@ -3,17 +3,23 @@
   <div class="modal-container">
     <!-- Header -->
     <div class="modal-header">
-      <button class="modal-back-btn" onclick="closeCreatePostModal()">
+      <button class="modal-back-btn" onclick="handleBackButton()">
         <i data-lucide="arrow-left"></i>
       </button>
-      <h2 class="modal-title">Create New Post</h2>
-      <button class="modal-share-btn" onclick="submitPost()">Share</button>
+      <h2 class="modal-title" id="modalTitle">Upload and Edit Photos</h2>
+      <button
+        class="modal-next-btn"
+        id="modalActionBtn"
+        onclick="handleNextStep()"
+      >
+        Next Step
+      </button>
     </div>
 
-    <!-- Content -->
-    <div class="modal-content">
+    <!-- Step 1: Upload & Edit -->
+    <div class="modal-content" id="step1Content">
       <!-- Media Preview Area -->
-      <div class="post-media-container">
+      <div class="post-media-container step1-media">
         <!-- Default Placeholder -->
         <div class="media-placeholder" id="mediaPlaceholder">
           <div class="placeholder-icon">
@@ -33,85 +39,45 @@
           style="display: none"
         >
           <div class="media-zoom-container" id="mediaZoomContainer">
-            <img
-              id="postImagePreview"
-              src=""
-              alt="Preview"
-              style="display: none"
-            />
-            <video id="postVideoPreview" controls style="display: none"></video>
+            <div class="media-content-wrapper" id="mediaContentWrapper">
+              <img
+                id="postImagePreview"
+                src=""
+                alt="Preview"
+                style="display: none"
+              />
+              <video
+                id="postVideoPreview"
+                controls
+                style="display: none"
+              ></video>
+            </div>
+
+            <!-- Crop Overlay -->
+            <div class="crop-overlay" id="cropOverlay">
+              <div class="crop-frame" id="cropFrameEl"></div>
+            </div>
           </div>
 
-          <!-- Crop Ratio Selector -->
-          <div class="crop-ratio-selector">
-            <button
-              class="ratio-btn active"
-              data-ratio="original"
-              onclick="changeCropRatio('original')"
-              title="Original"
-            >
-              <i data-lucide="maximize-2"></i>
-            </button>
-            <button
-              class="ratio-btn"
-              data-ratio="1:1"
-              onclick="changeCropRatio('1:1')"
-              title="1:1 Square"
-            >
-              <i data-lucide="square"></i>
-            </button>
-            <button
-              class="ratio-btn"
-              data-ratio="4:5"
-              onclick="changeCropRatio('4:5')"
-              title="4:5 Portrait"
-            >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 20 20"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <rect x="5" y="2" width="10" height="16" rx="1" />
-              </svg>
-            </button>
-            <button
-              class="ratio-btn"
-              data-ratio="16:9"
-              onclick="changeCropRatio('16:9')"
-              title="16:9 Landscape"
-            >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 20 20"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <rect x="2" y="6" width="16" height="8" rx="1" />
-              </svg>
-            </button>
-          </div>
-
-          <!-- Zoom Controls -->
-          <div class="zoom-controls">
+          <!-- Zoom Controls - Vertical on Right -->
+          <div class="zoom-controls" id="zoomControls">
             <button class="zoom-btn" onclick="zoomIn()" title="Zoom in">
               <i data-lucide="zoom-in"></i>
             </button>
-            <button class="zoom-btn" onclick="resetZoom()" title="Reset zoom">
-              <i data-lucide="maximize-2"></i>
-            </button>
+            <div class="zoom-slider" id="zoomSlider">
+              <div class="zoom-slider-track" id="zoomSliderTrack">
+                <div class="zoom-slider-thumb" id="zoomSliderThumb"></div>
+              </div>
+            </div>
             <button class="zoom-btn" onclick="zoomOut()" title="Zoom out">
               <i data-lucide="zoom-out"></i>
             </button>
           </div>
 
-          <button class="change-media-btn" onclick="triggerMediaUpload()">
-            <i data-lucide="image"></i>
-          </button>
+          <!-- Media Thumbnails with + button -->
+          <div class="media-thumbnails" id="mediaThumbnails">
+            <!-- Thumbnails will be dynamically added here -->
+          </div>
         </div>
 
         <input
@@ -120,15 +86,132 @@
           accept="image/*,video/*"
           style="display: none"
           onchange="handleMediaUpload(event)"
+          multiple
         />
       </div>
 
-      <!-- Right Panel -->
+      <!-- Right Panel for Step 1 - Crop Info -->
+      <div class="post-details-panel step1-panel">
+        <div class="crop-info-panel">
+          <div class="crop-info-header">
+            <i
+              data-lucide="crop"
+              style="width: 24px; height: 24px; color: var(--accent-primary)"
+            ></i>
+            <h3>Crop Ratio</h3>
+          </div>
+          <p class="crop-info-desc">
+            Choose a ratio that fits the aesthetic of your post. 1:1 is
+            recommended for most feeds.
+          </p>
+
+          <div class="crop-ratio-grid">
+            <button
+              class="crop-ratio-card active"
+              data-ratio="1:1"
+              onclick="changeCropRatio('1:1')"
+            >
+              <div class="ratio-preview ratio-1-1"></div>
+              <span>1:1</span>
+            </button>
+            <button
+              class="crop-ratio-card"
+              data-ratio="4:5"
+              onclick="changeCropRatio('4:5')"
+            >
+              <div class="ratio-preview ratio-4-5"></div>
+              <span>4:5</span>
+            </button>
+            <button
+              class="crop-ratio-card"
+              data-ratio="16:9"
+              onclick="changeCropRatio('16:9')"
+            >
+              <div class="ratio-preview ratio-16-9"></div>
+              <span>16:9</span>
+            </button>
+            <button
+              class="crop-ratio-card"
+              data-ratio="original"
+              onclick="changeCropRatio('original')"
+            >
+              <div class="ratio-preview ratio-original"></div>
+              <span>Original</span>
+            </button>
+          </div>
+
+          <div class="step1-help">
+            <div class="help-item">
+              <i data-lucide="info" style="width: 20px; height: 20px"></i>
+              <div>
+                <strong>Image Details</strong>
+                <p id="imageResolution">No image selected</p>
+              </div>
+            </div>
+            <div class="help-item">
+              <i
+                data-lucide="help-circle"
+                style="width: 20px; height: 20px"
+              ></i>
+              <div>
+                <strong>Help & Shortcuts</strong>
+                <p>Scroll to zoom • Click and drag to pan</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Add Details -->
+    <div class="modal-content" id="step2Content" style="display: none">
+      <!-- Media Preview Area (Read-only) -->
+      <div class="post-media-container step2-media">
+        <div class="media-preview-readonly" id="mediaPreviewReadonly">
+          <div
+            class="media-readonly-container crop-1-1"
+            id="mediaReadonlyContainer"
+          >
+            <img
+              id="postImagePreviewFinal"
+              src=""
+              alt="Preview"
+              style="display: none"
+            />
+            <video id="postVideoPreviewFinal" style="display: none"></video>
+          </div>
+
+          <!-- Navigation for multiple images -->
+          <div
+            class="media-navigation"
+            id="mediaNavigation"
+            style="display: none"
+          >
+            <button class="nav-btn prev-btn" onclick="previousImage()">
+              <i data-lucide="chevron-left"></i>
+            </button>
+            <button class="nav-btn next-btn" onclick="nextImage()">
+              <i data-lucide="chevron-right"></i>
+            </button>
+          </div>
+
+          <div
+            class="media-indicators"
+            id="mediaIndicators"
+            style="display: none"
+          ></div>
+        </div>
+      </div>
+
+      <!-- Right Panel for Step 2 - Details -->
       <div class="post-details-panel">
         <!-- User Info -->
         <div class="post-user-info">
           <img id="post-user-avatar" src="" alt="avatar" class="user-avatar" />
-          <span id="post-user-name" class="user-name">User</span>
+          <div>
+            <span id="post-user-name" class="user-name">User</span>
+            <span class="user-visibility">Public Post</span>
+          </div>
         </div>
 
         <!-- Caption Input -->
@@ -151,8 +234,11 @@
         <!-- Location Section -->
         <div class="post-section">
           <div class="section-header" onclick="toggleSection('location')">
-            <span class="section-title">Add location</span>
-            <i data-lucide="map-pin" class="section-icon"></i>
+            <div class="section-left">
+              <i data-lucide="map-pin" class="section-icon"></i>
+              <span class="section-title">Add Location</span>
+            </div>
+            <i data-lucide="chevron-right" class="chevron-icon"></i>
           </div>
           <div
             class="section-content"
@@ -170,8 +256,11 @@
         <!-- Collaborators Section -->
         <div class="post-section">
           <div class="section-header" onclick="toggleSection('collaborators')">
-            <span class="section-title">Add collaborators</span>
-            <i data-lucide="users" class="section-icon"></i>
+            <div class="section-left">
+              <i data-lucide="users" class="section-icon"></i>
+              <span class="section-title">Tag People / Collaborators</span>
+            </div>
+            <i data-lucide="chevron-right" class="chevron-icon"></i>
           </div>
           <div
             class="section-content"
@@ -186,13 +275,35 @@
           </div>
         </div>
 
+        <!-- Accessibility Section -->
+        <div class="post-section">
+          <div class="section-header" onclick="toggleSection('accessibility')">
+            <div class="section-left">
+              <i data-lucide="accessibility" class="section-icon"></i>
+              <span class="section-title">Accessibility</span>
+            </div>
+            <i data-lucide="chevron-down" class="chevron-icon"></i>
+          </div>
+          <div
+            class="section-content"
+            id="accessibilityContent"
+            style="display: none"
+          >
+            <p class="section-helper-text">
+              Alt text describes your photos for people with visual impairments.
+            </p>
+            <textarea
+              class="alt-text-input"
+              placeholder="Write alt text..."
+              maxlength="500"
+            ></textarea>
+          </div>
+        </div>
+
         <!-- Advanced Settings -->
         <div class="post-section">
-          <div
-            class="section-header expandable"
-            onclick="toggleSection('advanced')"
-          >
-            <span class="section-title">Also share to</span>
+          <div class="section-header" onclick="toggleSection('advanced')">
+            <span class="section-title">Advanced Settings</span>
             <i data-lucide="chevron-down" class="chevron-icon"></i>
           </div>
           <div
@@ -204,7 +315,7 @@
             <div class="setting-item">
               <div class="setting-info">
                 <img
-                  src="https://via.placeholder.com/32"
+                  src="https://via.placeholder.com/32/5B51D8/FFFFFF?text=T"
                   alt="Threads"
                   class="platform-icon"
                 />
@@ -222,7 +333,7 @@
             <div class="setting-item">
               <div class="setting-info">
                 <img
-                  src="https://via.placeholder.com/32"
+                  src="https://via.placeholder.com/32/1877F2/FFFFFF?text=F"
                   alt="Facebook"
                   class="platform-icon"
                 />
