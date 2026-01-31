@@ -52,6 +52,7 @@ loginForm.addEventListener("submit", async (e) => {
   try {
     const res = await fetch(`${API_BASE}/Auths/login-with-username`, {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
     });
@@ -62,7 +63,7 @@ loginForm.addEventListener("submit", async (e) => {
       showToast(data.message || "Login failed", "error");
       return;
     }
-
+    localStorage.removeItem("accessToken");
     // Lưu token + thông tin
     localStorage.setItem("accessToken", data.accessToken);
     localStorage.setItem("fullname", data.fullname || "");

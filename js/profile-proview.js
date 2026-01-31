@@ -16,14 +16,7 @@ function createProfilePreview() {
 
 /* ===== Load data ===== */
 async function loadProfilePreview(accountId) {
-  const res = await fetch(
-    `${window.APP_CONFIG.API_BASE}/Accounts/profile-preview/${accountId}`,
-    {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
-      },
-    },
-  );
+  const res = await apiFetch(`/Accounts/profile-preview/${accountId}`);
 
   if (!res.ok) return null;
   return await res.json();

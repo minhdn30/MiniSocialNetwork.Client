@@ -40,34 +40,26 @@ router();
 
 //logout
 async function logout() {
-  const accessToken = localStorage.getItem("accessToken");
-
   try {
-    const res = await fetch(`${APP_CONFIG.API_BASE}/Auths/logout`, {
+    await apiFetch("/Auths/logout", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
     });
-
-    if (!res.ok) {
-      throw new Error(`Logout failed: ${res.status}`);
-    }
 
     showToast("Logged out successfully", "success");
   } catch (error) {
-    console.error("Logout API error:", error);
-    showToast("Logout failed, force logout", "warning");
+    console.warn("Logout API failed, force logout");
+    showToast("Session cleared", "warning");
   } finally {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("avatarUrl");
-    localStorage.removeItem("fullname");
-
-    setTimeout(() => {
-      window.location.href = "/auth.html";
-    }, 800);
+    forceLogout();
   }
+}
+
+function forceLogout() {
+  localStorage.removeItem("accessToken");
+  localStorage.removeItem("avatarUrl");
+  localStorage.removeItem("fullname");
+
+  window.location.href = "/auth.html";
 }
 
 (async function bootstrap() {
@@ -77,3 +69,42 @@ async function logout() {
     await initProfilePreview();
   }
 })();
+async function apiFetch(url, options = {}) {
+  const accessToken = localStorage.getItem("accessToken");
+
+  const res = await fetch(`${APP_CONFIG.API_BASE}${url}`, {
+    ...options,
+    credentials: "include", // 🔥 cho refresh-token cookie
+    headers: {
+      ...options.headers,
+      Authorization: accessToken ? `Bearer ${accessToken}` : undefined,
+    },
+  });
+
+  // OK
+  if (res.status !== 401) return res;
+
+  // ⛔ Access token hết hạn → refresh
+  const refreshRes = await fetch(`${APP_CONFIG.API_BASE}/Auths/refresh-token`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  if (!refreshRes.ok) {
+    forceLogout();
+    throw new Error("Session expired");
+  }
+
+  const data = await refreshRes.json();
+  localStorage.setItem("accessToken", data.accessToken);
+
+  // 🔁 retry request ban đầu
+  return fetch(`${APP_CONFIG.API_BASE}${url}`, {
+    ...options,
+    credentials: "include",
+    headers: {
+      ...options.headers,
+      Authorization: `Bearer ${data.accessToken}`,
+    },
+  });
+}

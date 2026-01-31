@@ -1,4 +1,3 @@
-const { API_BASE } = window.APP_CONFIG;
 let feedContainer;
 let loader;
 
@@ -43,11 +42,12 @@ async function loadFeed() {
   }
 
   try {
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
-      },
-    });
+    const res = await apiFetch(
+      `/Posts/feed?limit=${LIMIT}` +
+        (cursorCreatedAt && cursorPostId
+          ? `&cursorCreatedAt=${encodeURIComponent(cursorCreatedAt)}&cursorPostId=${cursorPostId}`
+          : ""),
+    );
 
     if (!res.ok) throw new Error("Load feed failed");
 
@@ -310,11 +310,8 @@ document.addEventListener("click", async (e) => {
 
   try {
     // 2️⃣ Call API
-    const res = await fetch(`${API_BASE}/Posts/${postId}/react`, {
+    const res = await apiFetch(`/Posts/${postId}/react`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
-      },
     });
 
     if (!res.ok) throw new Error("React failed");
