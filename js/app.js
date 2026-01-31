@@ -1,13 +1,23 @@
+/* =========================
+   AUTH GUARD (SAFE)
+   ========================= */
 (function authGuard() {
-  const token = localStorage.getItem("accessToken");
-
-  if (!token) {
-    window.location.href = "auth.html";
+  // Chỉ redirect nếu đã logout thật sự
+  const forceLoggedOut = sessionStorage.getItem("forceLogout");
+  if (forceLoggedOut) {
+    window.location.href = "/auth.html";
   }
 })();
 
+/* =========================
+   GLOBAL
+   ========================= */
 const app = document.getElementById("app");
+let refreshPromise = null;
 
+/* =========================
+   ROUTER
+   ========================= */
 async function loadPage(page) {
   const res = await fetch(`pages/${page}.html`);
   app.innerHTML = await res.text();
@@ -38,13 +48,12 @@ function router() {
 window.onpopstate = router;
 router();
 
-//logout
+/* =========================
+   LOGOUT
+   ========================= */
 async function logout() {
   try {
-    await apiFetch("/Auths/logout", {
-      method: "POST",
-    });
-
+    await apiFetch("/Auths/logout", { method: "POST" });
     showToast("Logged out successfully", "success");
   } catch (error) {
     console.warn("Logout API failed, force logout");
@@ -55,6 +64,8 @@ async function logout() {
 }
 
 function forceLogout() {
+  sessionStorage.setItem("forceLogout", "true");
+
   localStorage.removeItem("accessToken");
   localStorage.removeItem("avatarUrl");
   localStorage.removeItem("fullname");
@@ -62,49 +73,79 @@ function forceLogout() {
   window.location.href = "/auth.html";
 }
 
+/* =========================
+   BOOTSTRAP
+   ========================= */
 (async function bootstrap() {
-  await loadSidebar();
+  try {
+    await loadSidebar();
 
-  if (typeof initProfilePreview === "function") {
-    await initProfilePreview();
+    if (typeof initProfilePreview === "function") {
+      await initProfilePreview();
+    }
+  } catch (err) {
+    console.error("Bootstrap failed", err);
   }
 })();
+
+/* =========================
+   REFRESH TOKEN (LOCKED)
+   ========================= */
+async function refreshAccessToken() {
+  if (!refreshPromise) {
+    refreshPromise = fetch(`${APP_CONFIG.API_BASE}/Auths/refresh-token`, {
+      method: "POST",
+      credentials: "include",
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Refresh token expired");
+        return res.json();
+      })
+      .then((data) => {
+        localStorage.setItem("accessToken", data.accessToken);
+        return data.accessToken;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
+}
+
+/* =========================
+   API FETCH (AUTO REFRESH)
+   ========================= */
 async function apiFetch(url, options = {}) {
   const accessToken = localStorage.getItem("accessToken");
 
   const res = await fetch(`${APP_CONFIG.API_BASE}${url}`, {
     ...options,
-    credentials: "include", // 🔥 cho refresh-token cookie
+    credentials: "include",
     headers: {
       ...options.headers,
       Authorization: accessToken ? `Bearer ${accessToken}` : undefined,
     },
   });
 
-  // OK
+  // ✅ Request OK
   if (res.status !== 401) return res;
 
-  // ⛔ Access token hết hạn → refresh
-  const refreshRes = await fetch(`${APP_CONFIG.API_BASE}/Auths/refresh-token`, {
-    method: "POST",
-    credentials: "include",
-  });
+  // ⛔ AccessToken hết hạn → thử refresh
+  try {
+    const newToken = await refreshAccessToken();
 
-  if (!refreshRes.ok) {
+    return fetch(`${APP_CONFIG.API_BASE}${url}`, {
+      ...options,
+      credentials: "include",
+      headers: {
+        ...options.headers,
+        Authorization: `Bearer ${newToken}`,
+      },
+    });
+  } catch (err) {
+    // ❌ Refresh token cũng hết hạn → logout thật
     forceLogout();
-    throw new Error("Session expired");
+    throw err;
   }
-
-  const data = await refreshRes.json();
-  localStorage.setItem("accessToken", data.accessToken);
-
-  // 🔁 retry request ban đầu
-  return fetch(`${APP_CONFIG.API_BASE}${url}`, {
-    ...options,
-    credentials: "include",
-    headers: {
-      ...options.headers,
-      Authorization: `Bearer ${data.accessToken}`,
-    },
-  });
 }

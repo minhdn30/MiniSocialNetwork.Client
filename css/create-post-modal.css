@@ -224,7 +224,7 @@
   justify-content: center;
   cursor: move;
   user-select: none;
-  transition: transform 0.1s ease-out;
+  transition: transform 0.05s ease-out;
 }
 
 .media-content-wrapper.dragging {
@@ -341,7 +341,12 @@
   border-radius: 2px;
   position: absolute;
   bottom: 0;
-  transition: height 0.1s ease;
+  transition: height 0.05s ease;
+  pointer-events: none;
+}
+
+.zoom-slider-track .zoom-slider-thumb {
+  pointer-events: all;
 }
 
 .zoom-slider-thumb {
@@ -632,6 +637,24 @@
   user-select: none;
 }
 
+.media-readonly-container.crop-1-1 img,
+.media-readonly-container.crop-1-1 video {
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+}
+
+.media-readonly-container.crop-4-5 img,
+.media-readonly-container.crop-4-5 video {
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+}
+
+.media-readonly-container.crop-16-9 img,
+.media-readonly-container.crop-16-9 video {
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
 /* Media Navigation */
 .media-navigation {
   position: absolute;
@@ -675,32 +698,47 @@
   height: 24px;
 }
 
-.media-indicators {
+#mediaThumbnailsStep2 {
   position: absolute;
-  bottom: 20px;
+  bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 6px;
+  gap: 8px;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.6);
   padding: 8px 12px;
-  background: rgba(0, 0, 0, 0.7);
   border-radius: 12px;
   backdrop-filter: blur(10px);
 }
 
-.indicator-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.5);
-  transition: all var(--transition-fast);
+#mediaThumbnailsStep2 .thumbnail-item {
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
+  overflow: hidden;
   cursor: pointer;
+  position: relative;
+  background: rgba(255, 255, 255, 0.1);
+  transition: all var(--transition-fast);
+  border: 2px solid transparent;
 }
 
-.indicator-dot.active {
-  background: white;
-  width: 20px;
-  border-radius: 3px;
+#mediaThumbnailsStep2 .thumbnail-item:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+#mediaThumbnailsStep2 .thumbnail-item.active {
+  border: 2px solid var(--accent-primary);
+  box-shadow: 0 0 0 1px var(--accent-primary);
+}
+
+#mediaThumbnailsStep2 .thumbnail-item img,
+#mediaThumbnailsStep2 .thumbnail-item video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 /* ================= DETAILS PANEL ================= */
