@@ -16,3 +16,51 @@ body {
     background var(--transition-slow),
     color var(--transition-slow);
 }
+/* ================= GLOBAL UPLOAD OVERLAY (Instagram Style) ================= */
+.global-upload-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--shadow-sm);
+  backdrop-filter: blur(4px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 20000;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.global-upload-overlay.show {
+  display: flex;
+  opacity: 1;
+}
+
+.global-upload-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Instagram-style spinner */
+.upload-spinner {
+  width: 64px;
+  height: 64px;
+  border: 3px solid var(--text-tertiary);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: instagram-spin 0.8s linear infinite;
+}
+
+@keyframes instagram-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.upload-text {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--accent-primary);
+  letter-spacing: 0.3px;
+}

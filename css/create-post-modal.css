@@ -131,14 +131,14 @@
   animation: spin 0.6s linear infinite;
 }
 
-.modal-next-btn.loading .btn-spinner {
-  display: block;
-}
-
 @keyframes spin {
   to {
     transform: translateY(-50%) rotate(360deg);
   }
+}
+
+.modal-next-btn.loading .btn-spinner {
+  display: block;
 }
 
 /* ================= MODAL CONTENT ================= */
@@ -1461,3 +1461,4 @@ svg {
     transform: translateY(0);
   }
 }
+

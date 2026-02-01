@@ -3,8 +3,6 @@
   box-sizing: border-box;
 }
 
-
-
 /* ================= SIDEBAR ================= */
 .sidebar {
   position: fixed;
@@ -305,6 +303,9 @@
   animation-delay: 0.23s;
 }
 
+.dropdown-item.danger svg {
+  color: var(--danger-alt);
+}
 .dropdown-item.danger {
   color: var(--danger-alt);
 }

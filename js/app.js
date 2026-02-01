@@ -136,3 +136,96 @@ async function apiFetch(url, options = {}) {
     throw err;
   }
 }
+
+/* =========================
+   GLOBAL UPLOAD HELPERS
+   These helpers provide a global full-screen upload overlay and
+   an XHR FormData uploader with progress reporting. They were
+   moved here so all modules can reuse them.
+   ========================= */
+
+// Create / manage global upload overlay (Instagram Style)
+function createGlobalLoader() {
+  if (document.getElementById("globalUploadOverlay")) return;
+
+  const overlay = document.createElement("div");
+  overlay.id = "globalUploadOverlay";
+  overlay.className = "global-upload-overlay";
+
+  const card = document.createElement("div");
+  card.className = "global-upload-card";
+
+  // Instagram-style spinner (no percentage)
+  const spinner = document.createElement("div");
+  spinner.className = "upload-spinner";
+
+  const label = document.createElement("div");
+  label.className = "upload-text";
+  label.textContent = "Uploading...";
+
+  card.appendChild(spinner);
+  card.appendChild(label);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+}
+
+function showGlobalLoader(percent) {
+  createGlobalLoader();
+  const overlay = document.getElementById("globalUploadOverlay");
+  if (!overlay) return;
+
+  // Just show the overlay - no need to update percentage
+  overlay.classList.add("show");
+}
+
+function hideGlobalLoader() {
+  const overlay = document.getElementById("globalUploadOverlay");
+  if (overlay) overlay.classList.remove("show");
+}
+
+// Upload FormData with XHR to track progress and include auth
+function uploadFormDataWithProgress(url, formData, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", APP_CONFIG.API_BASE + url);
+    xhr.withCredentials = true;
+
+    const accessToken = localStorage.getItem("accessToken");
+    if (accessToken) {
+      xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
+    }
+
+    xhr.upload.onprogress = function (e) {
+      if (e.lengthComputable && typeof onProgress === "function") {
+        const percent = (e.loaded / e.total) * 100;
+        onProgress(percent);
+      }
+    };
+
+    xhr.onreadystatechange = function () {
+      if (xhr.readyState === 4) {
+        const status = xhr.status;
+        const text = xhr.responseText;
+        const ok = status >= 200 && status < 300;
+        resolve({
+          status: status,
+          ok: ok,
+          text: () => Promise.resolve(text),
+          json: () => {
+            try {
+              return Promise.resolve(JSON.parse(text));
+            } catch (e) {
+              return Promise.resolve(null);
+            }
+          },
+        });
+      }
+    };
+
+    xhr.onerror = function (e) {
+      reject(e);
+    };
+
+    xhr.send(formData);
+  });
+}

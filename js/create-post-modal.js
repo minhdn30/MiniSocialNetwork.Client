@@ -115,6 +115,10 @@ function hasModalContent() {
 
 // Show discard confirmation popup
 function showDiscardConfirmation() {
+  if (isProcessingCrop) {
+    // Prevent showing discard while processing/uploading
+    return;
+  }
   const overlay = document.createElement("div");
   overlay.className = "post-options-overlay";
   overlay.id = "discardConfirmOverlay";
@@ -229,6 +233,10 @@ function setLoadingState(loading) {
     card.disabled = loading;
   });
 }
+
+// Global upload helpers have been moved to `js/app.js` so they are
+// available application-wide: `createGlobalLoader`, `showGlobalLoader`,
+// `hideGlobalLoader`, and `uploadFormDataWithProgress`.
 
 // Handle next step / share
 async function handleNextStep() {
@@ -1206,18 +1214,32 @@ async function submitPost() {
     };
     console.log("submitPost FormData preview:", serverPreview);
 
-    // Call API
-    const res = await apiFetch("/Posts", { method: "POST", body: formData });
+    // Show Instagram-style upload spinner (no progress percentage)
+    showGlobalLoader();
+    // Ensure processing flag
+    isProcessingCrop = true;
+
+    const res = await uploadFormDataWithProgress("/Posts", formData, (p) => {
+      // Do nothing with progress - just keep spinner spinning
+    });
 
     if (!res) throw new Error("No response from server");
 
     if (res.status === 201 || res.ok) {
       const data = await res.json().catch(() => null);
-      if (window.toastSuccess)
-        toastSuccess(
-          `Post with ${mediaFiles.length} image(s) shared successfully!`,
-        );
-      closeCreatePostModal();
+      if (window.toastSuccess) toastSuccess(`Post uploaded successfully!`);
+
+      // Close modal automatically after successful upload
+      const modal = document.getElementById("createPostModal");
+      if (modal) {
+        modal.classList.remove("show");
+        document.body.style.overflow = "";
+      }
+
+      // Reset form
+      resetPostForm();
+      currentStep = 1;
+      showStep(1);
     } else if (res.status === 401) {
       if (window.toastError) toastError("Unauthorized. Please login again.");
     } else {
@@ -1233,9 +1255,12 @@ async function submitPost() {
     if (window.toastError)
       toastError("Failed to create post. Please try again.");
   } finally {
+    hideGlobalLoader();
     setLoadingState(false);
   }
 }
+
+// Rest of the file continues...
 
 // ================= CROP RATIO FUNCTIONALITY =================
 
@@ -1863,6 +1888,8 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     const modal = document.getElementById("createPostModal");
     if (modal && modal.classList.contains("show")) {
+      // Prevent closing modal with Escape when upload/processing is running
+      if (isProcessingCrop) return;
       // Don't close if discard confirmation is showing
       if (document.getElementById("discardConfirmOverlay")) return;
 
@@ -1891,6 +1918,13 @@ document.addEventListener("keydown", (e) => {
 
 // Prevent accidental page close when modal has content
 window.addEventListener("beforeunload", (e) => {
+  // If an upload is in progress, warn the user before leaving
+  if (isProcessingCrop) {
+    e.preventDefault();
+    e.returnValue = "";
+    return "";
+  }
+
   const modal = document.getElementById("createPostModal");
   if (modal && modal.classList.contains("show") && hasModalContent()) {
     e.preventDefault();
