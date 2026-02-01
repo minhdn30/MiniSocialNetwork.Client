@@ -3,18 +3,7 @@
   box-sizing: border-box;
 }
 
-body {
-  margin: 0;
-  background: var(--bg-primary);
-  font-family:
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    sans-serif;
-  transition:
-    background var(--transition-slow),
-    color var(--transition-slow);
-}
+
 
 /* ================= SIDEBAR ================= */
 .sidebar {

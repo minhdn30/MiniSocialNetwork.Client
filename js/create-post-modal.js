@@ -36,6 +36,26 @@ const MAX_ZOOM = 3;
 // Global crop ratio for all images
 let globalCropRatio = "1:1";
 
+// Loading state
+let isProcessingCrop = false;
+
+// Post privacy state (0 = Public, 1 = FollowOnly, 2 = Private)
+let selectedPrivacy = 0;
+
+// Emoji picker instance
+let emojiPicker = null;
+
+// Format file size from bytes to KB/MB
+function formatFileSize(bytes) {
+  if (bytes === 0) return "0 Bytes";
+
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
+}
+
 // Load user info for create post modal
 function loadCreatePostUserInfo() {
   const avatarUrl = localStorage.getItem("avatarUrl");
@@ -73,11 +93,14 @@ function openCreatePostModal() {
   imageOffsetX = 0;
   imageOffsetY = 0;
   isDragging = false;
+  isProcessingCrop = false;
+  selectedPrivacy = 0;
 
   modal.classList.add("show");
   document.body.style.overflow = "hidden";
 
   loadCreatePostUserInfo();
+  resetPrivacySelector();
   showMediaPlaceholder();
   lucide.createIcons();
 }
@@ -179,31 +202,63 @@ function handleBackButton() {
   }
 }
 
-// Handle next step / share
-function handleNextStep() {
-  if (currentStep === 1) {
-    // Save crop data for current media if exists
-    if (mediaFiles.length > 0) {
-      saveCropData();
+// Set loading state
+function setLoadingState(loading) {
+  isProcessingCrop = loading;
+  const actionBtn = document.getElementById("modalActionBtn");
 
-      // Ensure all images have crop data before moving to step 2
-      ensureAllCropData();
+  if (actionBtn) {
+    if (loading) {
+      actionBtn.classList.add("loading");
+      actionBtn.disabled = true;
+
+      // Add spinner if not exists
+      if (!actionBtn.querySelector(".btn-spinner")) {
+        const spinner = document.createElement("div");
+        spinner.className = "btn-spinner";
+        actionBtn.appendChild(spinner);
+      }
+    } else {
+      actionBtn.classList.remove("loading");
+      actionBtn.disabled = false;
     }
+  }
+
+  // Disable/enable ratio buttons
+  document.querySelectorAll(".crop-ratio-card").forEach((card) => {
+    card.disabled = loading;
+  });
+}
+
+// Handle next step / share
+async function handleNextStep() {
+  if (isProcessingCrop) {
+    return; // Prevent action if still processing
+  }
+
+  if (currentStep === 1) {
+    // Check if media is uploaded
+    if (mediaFiles.length === 0) {
+      if (window.toastError) {
+        toastError("Please upload at least one image to continue!");
+      }
+      return;
+    }
+
+    // Save crop data for current media if exists
+    saveCropData();
+
+    // Show loading
+    setLoadingState(true);
+
+    // Ensure all images have crop data before moving to step 2
+    await ensureAllCropData();
 
     currentStep = 2;
     showStep(2);
-    if (mediaFiles.length > 0) {
-      prepareStep2Preview();
-    } else {
-      // Clear any existing media previews in step 2
-      const sliderWrapper = document.getElementById("mediaSliderWrapper");
-      const navigation = document.getElementById("mediaNavigation");
-      const thumbnails = document.getElementById("mediaThumbnailsStep2");
 
-      if (sliderWrapper) sliderWrapper.innerHTML = "";
-      if (navigation) navigation.style.display = "none";
-      if (thumbnails) thumbnails.style.display = "none";
-    }
+    // Wait for step 2 preview to be fully ready (this will hide loading)
+    await prepareStep2Preview();
   } else {
     submitPost();
   }
@@ -443,80 +498,62 @@ function showMediaAtIndex(index) {
   const imagePreview = document.getElementById("postImagePreview");
   const videoPreview = document.getElementById("postVideoPreview");
 
-  if (media.type === "image") {
-    if (imagePreview) {
-      imagePreview.src = media.data;
-      imagePreview.style.display = "block";
+  // Only handle images now
+  if (imagePreview) {
+    imagePreview.src = media.data;
+    imagePreview.style.display = "block";
 
-      // Wait for image to load
-      imagePreview.onload = function () {
-        currentImage = imagePreview;
-        imageNaturalWidth = imagePreview.naturalWidth;
-        imageNaturalHeight = imagePreview.naturalHeight;
+    // Wait for image to load
+    imagePreview.onload = function () {
+      currentImage = imagePreview;
+      imageNaturalWidth = imagePreview.naturalWidth;
+      imageNaturalHeight = imagePreview.naturalHeight;
 
-        // Calculate display scale to fit full image
-        displayScale = calculateDisplayScale();
+      // Calculate display scale to fit full image
+      displayScale = calculateDisplayScale();
 
-        // Use global crop ratio
-        currentCropRatio = globalCropRatio;
-        cropFrameSize = calculateCropFrameSize(currentCropRatio);
+      // Use global crop ratio
+      currentCropRatio = globalCropRatio;
+      cropFrameSize = calculateCropFrameSize(currentCropRatio);
 
-        // Update resolution display
-        const imageResolution = document.getElementById("imageResolution");
-        if (imageResolution) {
-          imageResolution.textContent = `${imageNaturalWidth} × ${imageNaturalHeight}`;
-        }
+      // Update resolution and file size display
+      const imageResolution = document.getElementById("imageResolution");
+      if (imageResolution) {
+        const fileSize = media.file.size;
+        const fileSizeText = formatFileSize(fileSize);
+        imageResolution.textContent = `${imageNaturalWidth} × ${imageNaturalHeight} • ${fileSizeText}`;
+      }
 
-        // Restore crop data if exists
-        if (media.cropData && media.cropData.ratio === currentCropRatio) {
-          zoomLevel = media.cropData.zoomLevel;
-          imageOffsetX = media.cropData.offsetX;
-          imageOffsetY = media.cropData.offsetY;
+      // Restore crop data if exists
+      if (media.cropData && media.cropData.ratio === currentCropRatio) {
+        zoomLevel = media.cropData.zoomLevel;
+        imageOffsetX = media.cropData.offsetX;
+        imageOffsetY = media.cropData.offsetY;
+      } else {
+        // Calculate optimal crop for this image with current ratio
+        calculateOptimalCrop(currentCropRatio);
+      }
+
+      // Show/hide zoom controls based on ratio
+      const zoomControls = document.getElementById("zoomControls");
+      if (zoomControls) {
+        if (currentCropRatio === "original") {
+          zoomControls.classList.add("hidden");
         } else {
-          // Calculate optimal crop for this image with current ratio
-          calculateOptimalCrop(currentCropRatio);
+          zoomControls.classList.remove("hidden");
         }
+      }
 
-        // Show/hide zoom controls based on ratio
-        const zoomControls = document.getElementById("zoomControls");
-        if (zoomControls) {
-          if (currentCropRatio === "original") {
-            zoomControls.classList.add("hidden");
-          } else {
-            zoomControls.classList.remove("hidden");
-          }
-        }
+      updateImagePosition();
+      updateCropOverlay();
+      updateZoomSlider();
+    };
+  }
 
-        updateImagePosition();
-        updateCropOverlay();
-        updateZoomSlider();
-      };
-    }
-    if (videoPreview) {
-      videoPreview.style.display = "none";
-      videoPreview.src = "";
-      videoPreview.pause();
-    }
-  } else if (media.type === "video") {
-    if (videoPreview) {
-      videoPreview.src = media.data;
-      videoPreview.style.display = "block";
-    }
-    if (imagePreview) {
-      imagePreview.style.display = "none";
-      imagePreview.src = "";
-    }
-
-    const imageResolution = document.getElementById("imageResolution");
-    if (imageResolution) {
-      imageResolution.textContent = "Video file";
-    }
-
-    // Hide zoom controls for video
-    const zoomControls = document.getElementById("zoomControls");
-    if (zoomControls) {
-      zoomControls.classList.add("hidden");
-    }
+  if (videoPreview) {
+    videoPreview.style.display = "none";
+    videoPreview.src = "";
+    videoPreview.pause();
   }
 }
 
@@ -525,43 +562,56 @@ function saveCropData() {
   if (currentMediaIndex >= 0 && currentMediaIndex < mediaFiles.length) {
     const media = mediaFiles[currentMediaIndex];
 
-    if (media.type === "image") {
-      // Calculate crop coordinates in original image
-      const container = document.getElementById("mediaZoomContainer");
-      const containerRect = container.getBoundingClientRect();
-      const centerX = containerRect.width / 2;
-      const centerY = containerRect.height / 2;
+    // Only save crop data for images
+    // Calculate crop coordinates in original image
+    const container = document.getElementById("mediaZoomContainer");
+    const containerRect = container.getBoundingClientRect();
+    const centerX = containerRect.width / 2;
+    const centerY = containerRect.height / 2;
 
-      const finalScale = displayScale * zoomLevel;
+    const finalScale = displayScale * zoomLevel;
 
-      // Crop frame position in container
-      const cropLeft = centerX - cropFrameSize.width / 2;
-      const cropTop = centerY - cropFrameSize.height / 2;
+    // Crop frame position in container
+    const cropLeft = centerX - cropFrameSize.width / 2;
+    const cropTop = centerY - cropFrameSize.height / 2;
 
-      // Image position in container
-      const imgCenterX = centerX + imageOffsetX;
-      const imgCenterY = centerY + imageOffsetY;
-      const imgLeft = imgCenterX - (imageNaturalWidth * finalScale) / 2;
-      const imgTop = imgCenterY - (imageNaturalHeight * finalScale) / 2;
+    // Image position in container
+    const imgCenterX = centerX + imageOffsetX;
+    const imgCenterY = centerY + imageOffsetY;
+    const imgLeft = imgCenterX - (imageNaturalWidth * finalScale) / 2;
+    const imgTop = imgCenterY - (imageNaturalHeight * finalScale) / 2;
 
-      // Crop area relative to image
-      const cropX = (cropLeft - imgLeft) / finalScale;
-      const cropY = (cropTop - imgTop) / finalScale;
-      const cropWidth = cropFrameSize.width / finalScale;
-      const cropHeight = cropFrameSize.height / finalScale;
+    // Crop area relative to image (in pixel values first)
+    const cropX_px = (cropLeft - imgLeft) / finalScale;
+    const cropY_px = (cropTop - imgTop) / finalScale;
+    const cropWidth_px = cropFrameSize.width / finalScale;
+    const cropHeight_px = cropFrameSize.height / finalScale;
 
-      media.cropData = {
-        ratio: currentCropRatio,
-        zoomLevel: zoomLevel,
-        offsetX: imageOffsetX,
-        offsetY: imageOffsetY,
-        cropX: Math.max(0, cropX),
-        cropY: Math.max(0, cropY),
-        cropWidth: Math.min(cropWidth, imageNaturalWidth),
-        cropHeight: Math.min(cropHeight, imageNaturalHeight),
-        displayScale: displayScale,
-      };
-    }
+    // Normalize to 0-1 range based on image dimensions
+    const cropX_norm = Math.max(0, cropX_px / imageNaturalWidth);
+    const cropY_norm = Math.max(0, cropY_px / imageNaturalHeight);
+    const cropWidth_norm = Math.min(cropWidth_px / imageNaturalWidth, 1);
+    const cropHeight_norm = Math.min(cropHeight_px / imageNaturalHeight, 1);
+
+    media.cropData = {
+      ratio: currentCropRatio,
+      zoomLevel: zoomLevel,
+      offsetX: imageOffsetX,
+      offsetY: imageOffsetY,
+      // Store both pixel values (for display/editing) and normalized values (for API)
+      cropX_px: Math.max(0, cropX_px),
+      cropY_px: Math.max(0, cropY_px),
+      cropWidth_px: Math.min(cropWidth_px, imageNaturalWidth),
+      cropHeight_px: Math.min(cropHeight_px, imageNaturalHeight),
+      // Normalized values for backend (0-1)
+      cropX: cropX_norm,
+      cropY: cropY_norm,
+      cropWidth: cropWidth_norm,
+      cropHeight: cropHeight_norm,
+      displayScale: displayScale,
+      imageNaturalWidth: imageNaturalWidth,
+      imageNaturalHeight: imageNaturalHeight,
+    };
   }
 }
 
@@ -582,15 +632,9 @@ function updateThumbnails() {
       }
     };
 
-    if (media.type === "image") {
-      const img = document.createElement("img");
-      img.src = media.data;
-      thumbDiv.appendChild(img);
-    } else {
-      const video = document.createElement("video");
-      video.src = media.data;
-      thumbDiv.appendChild(video);
-    }
+    const img = document.createElement("img");
+    img.src = media.data;
+    thumbDiv.appendChild(img);
 
     // Add delete button
     const deleteBtn = document.createElement("div");
@@ -605,11 +649,14 @@ function updateThumbnails() {
     container.appendChild(thumbDiv);
   });
 
-  const addBtn = document.createElement("button");
-  addBtn.className = "thumbnail-add";
-  addBtn.onclick = triggerMediaUpload;
-  addBtn.innerHTML = '<i data-lucide="plus"></i>';
-  container.appendChild(addBtn);
+  // Only show + button if less than 8 images
+  if (mediaFiles.length < 8) {
+    const addBtn = document.createElement("button");
+    addBtn.className = "thumbnail-add";
+    addBtn.onclick = triggerMediaUpload;
+    addBtn.innerHTML = '<i data-lucide="plus"></i>';
+    container.appendChild(addBtn);
+  }
 
   lucide.createIcons();
 }
@@ -699,6 +746,27 @@ function resetPostForm() {
   });
 }
 
+// Extract dominant color from image
+function extractDominantColor(imageDataUrl) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = function () {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1;
+      canvas.height = 1;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, 1, 1);
+      const imageData = ctx.getImageData(0, 0, 1, 1).data;
+      const rgb = `rgb(${imageData[0]}, ${imageData[1]}, ${imageData[2]})`;
+      resolve(rgb);
+    };
+    img.onerror = () => {
+      resolve("var(--accent-primary)"); // Fallback
+    };
+    img.src = imageDataUrl;
+  });
+}
+
 // Trigger media upload
 function triggerMediaUpload() {
   const mediaInput = document.getElementById("postMediaInput");
@@ -713,41 +781,69 @@ function handleMediaUpload(event) {
   const files = event.target.files;
   if (!files || files.length === 0) return;
 
-  Array.from(files).forEach((file) => {
-    const isImage = file.type.startsWith("image/");
-    const isVideo = file.type.startsWith("video/");
+  // Check if adding these files would exceed the 8 image limit
+  const remainingSlots = 8 - mediaFiles.length;
+  if (files.length > remainingSlots) {
+    if (window.toastError) {
+      toastError(
+        `You can only upload ${remainingSlots} more image(s). Maximum is 8 images per post.`,
+      );
+    }
+    event.target.value = "";
+    return;
+  }
 
-    if (!isImage && !isVideo) {
+  Array.from(files).forEach((file) => {
+    // Check if we've reached the limit
+    if (mediaFiles.length >= 8) {
       if (window.toastError) {
-        toastError("Please select image or video files only!");
+        toastError("Maximum 8 images per post!");
       }
       return;
     }
 
-    const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
-    if (file.size > maxSize) {
-      const limit = isVideo ? "50MB" : "10MB";
+    const isImage = file.type.startsWith("image/");
+
+    if (!isImage) {
       if (window.toastError) {
-        toastError(`File size must not exceed ${limit}!`);
+        toastError("Please select image files only!");
+      }
+      return;
+    }
+
+    const maxSize = 5 * 1024 * 1024; // 5MB for images
+    if (file.size > maxSize) {
+      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      if (window.toastError) {
+        toastError(
+          `Image "${file.name}" is ${fileSizeMB}MB. Maximum size is 5MB!`,
+        );
       }
       return;
     }
 
     const reader = new FileReader();
-    reader.onload = function (e) {
+    reader.onload = async function (e) {
+      // Extract dominant color before creating media object
+      const dominantColor = await extractDominantColor(e.target.result);
+
       const mediaData = {
         data: e.target.result,
-        type: isImage ? "image" : "video",
+        type: "image",
         file: file,
         cropData: null,
+        dominantColor: dominantColor,
       };
 
       mediaFiles.push(mediaData);
 
+      // Switch to the newly added media immediately
+      currentMediaIndex = mediaFiles.length - 1;
+
       if (mediaFiles.length === 1) {
-        currentMediaIndex = 0;
         showMediaPreview();
       } else {
+        showMediaAtIndex(currentMediaIndex);
         updateThumbnails();
       }
 
@@ -768,7 +864,7 @@ function updateCharCount() {
     const count = captionInput.value.length;
     charCount.textContent = count;
 
-    if (count > 2000) {
+    if (count >= 3000) {
       charCount.style.color = "var(--danger-alt)";
     } else {
       charCount.style.color = "var(--text-disabled)";
@@ -793,89 +889,374 @@ function toggleSection(sectionName) {
 }
 
 // Toggle emoji picker
-function toggleEmojiPicker() {
-  if (window.toastInfo) {
-    toastInfo("Emoji feature is under development!");
+async function toggleEmojiPicker(event) {
+  event.stopPropagation();
+
+  const container = document.getElementById("emojiPickerContainer");
+  if (!container) return;
+
+  // If picker is already open, close it
+  if (container.classList.contains("show")) {
+    container.classList.remove("show");
+    setTimeout(() => {
+      container.innerHTML = "";
+      emojiPicker = null;
+    }, 200);
+    return;
+  }
+
+  // Create new picker
+  container.innerHTML = "";
+
+  // Check if EmojiPicker is loaded
+  if (typeof window.EmojiPicker === "undefined") {
+    // Show loading message
+    const loadingDiv = document.createElement("div");
+    loadingDiv.style.padding = "20px";
+    loadingDiv.style.textAlign = "center";
+    loadingDiv.style.color = "var(--text-secondary)";
+    loadingDiv.textContent = "Loading emoji picker...";
+    container.appendChild(loadingDiv);
+    container.classList.add("show");
+
+    // Wait a bit for the module to load
+    setTimeout(async () => {
+      if (typeof window.EmojiPicker !== "undefined") {
+        container.innerHTML = "";
+        await createEmojiPicker(container);
+      } else {
+        if (window.toastError) {
+          toastError("Failed to load emoji picker. Please refresh the page!");
+        }
+        container.classList.remove("show");
+      }
+    }, 1000);
+    return;
+  }
+
+  await createEmojiPicker(container);
+}
+
+// Create emoji picker instance
+async function createEmojiPicker(container) {
+  try {
+    const pickerOptions = {
+      onEmojiSelect: (emoji) => {
+        insertEmojiAtCursor(emoji.native);
+      },
+      theme: "dark",
+      previewPosition: "none",
+      skinTonePosition: "search",
+      maxFrequentRows: 2,
+    };
+
+    emojiPicker = new window.EmojiPicker(pickerOptions);
+    container.appendChild(emojiPicker);
+    container.classList.add("show");
+  } catch (error) {
+    console.error("Emoji picker error:", error);
+    if (window.toastError) {
+      toastError("Failed to initialize emoji picker!");
+    }
+    container.classList.remove("show");
+  }
+}
+
+// Insert emoji at cursor position in caption
+function insertEmojiAtCursor(emoji) {
+  const captionInput = document.getElementById("postCaption");
+  if (!captionInput) return;
+
+  const start = captionInput.selectionStart;
+  const end = captionInput.selectionEnd;
+  const text = captionInput.value;
+
+  captionInput.value = text.substring(0, start) + emoji + text.substring(end);
+
+  // Move cursor after emoji
+  const newCursorPos = start + emoji.length;
+  captionInput.selectionStart = newCursorPos;
+  captionInput.selectionEnd = newCursorPos;
+
+  captionInput.focus();
+  updateCharCount();
+}
+
+// ================= PRIVACY SELECTOR =================
+
+// Reset privacy selector to default (Public)
+function resetPrivacySelector() {
+  selectedPrivacy = 0;
+  updatePrivacyUI(0);
+}
+
+// Toggle privacy dropdown
+function togglePrivacyDropdown(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  const dropdown = document.getElementById("privacyDropdown");
+  if (!dropdown) return;
+
+  const isVisible = dropdown.classList.contains("show");
+
+  // Close emoji picker if open
+  const emojiContainer = document.getElementById("emojiPickerContainer");
+  if (emojiContainer && emojiContainer.classList.contains("show")) {
+    emojiContainer.classList.remove("show");
+    setTimeout(() => {
+      emojiContainer.innerHTML = "";
+      emojiPicker = null;
+    }, 200);
+  }
+
+  if (isVisible) {
+    dropdown.classList.remove("show");
+  } else {
+    // Position dropdown relative to privacy selector button
+    const privacySelector = document.querySelector(".privacy-selector");
+    if (privacySelector) {
+      const rect = privacySelector.getBoundingClientRect();
+      dropdown.style.top = rect.bottom + 8 + "px";
+      dropdown.style.left = rect.left + "px";
+    }
+    dropdown.classList.add("show");
+  }
+}
+
+// Select privacy option
+function selectPrivacy(privacy) {
+  selectedPrivacy = privacy;
+  updatePrivacyUI(privacy);
+
+  const dropdown = document.getElementById("privacyDropdown");
+  if (dropdown) {
+    dropdown.classList.remove("show");
+  }
+
+  if (window.lucide) {
+    lucide.createIcons();
+  }
+}
+
+// Update privacy UI based on selection
+function updatePrivacyUI(privacy) {
+  const privacyIcon = document.getElementById("privacyIcon");
+  const privacyText = document.getElementById("privacyText");
+
+  // Update icon and text
+  const iconMap = {
+    0: { icon: "globe", text: "Public" },
+    1: { icon: "users", text: "Followers Only" },
+    2: { icon: "lock", text: "Private" },
+  };
+
+  const selected = iconMap[privacy];
+  if (privacyIcon && privacyText && selected) {
+    privacyIcon.setAttribute("data-lucide", selected.icon);
+    privacyText.textContent = selected.text;
+  }
+
+  // Update active state in dropdown options
+  document.querySelectorAll(".privacy-option").forEach((option) => {
+    const optionPrivacy = parseInt(option.getAttribute("data-privacy"));
+    if (optionPrivacy === privacy) {
+      option.classList.add("active");
+    } else {
+      option.classList.remove("active");
+    }
+  });
+
+  // Reinitialize lucide icons
+  if (window.lucide) {
+    lucide.createIcons();
   }
 }
 
 // Submit post
-function submitPost() {
+async function submitPost() {
   const captionInput = document.getElementById("postCaption");
   const caption = captionInput ? captionInput.value.trim() : "";
 
-  // Allow posting without media (text-only post)
-  if (mediaFiles.length === 0 && !caption) {
+  // Require at least one image (media is now required)
+  if (mediaFiles.length === 0) {
     if (window.toastError) {
-      toastError("Please add a caption or media to your post!");
+      toastError("Please add at least one image to your post!");
     }
     return;
   }
 
-  const selectedPlatforms = [];
-  document.querySelectorAll(".setting-item").forEach((item) => {
-    const toggle = item.querySelector(".toggle-switch");
-    const platformName = item.querySelector(".setting-name").textContent;
-    if (toggle && toggle.classList.contains("active")) {
-      selectedPlatforms.push(platformName);
-    }
-  });
+  // Build FormData for multipart/form-data
+  const formData = new FormData();
+  formData.append("Content", caption || "");
 
-  console.log("Submitting post:", {
-    caption: caption,
-    mediaCount: mediaFiles.length,
-    mediaFiles: mediaFiles.map((m) => ({
-      type: m.type,
-      cropData: m.cropData,
-    })),
-    platforms: selectedPlatforms,
-  });
-
-  if (mediaFiles.length === 0) {
-    if (window.toastSuccess) {
-      toastSuccess("Text-only post shared successfully!");
-    }
-  } else {
-    if (window.toastSuccess) {
-      toastSuccess(
-        `Post with ${mediaFiles.length} media file(s) shared successfully!`,
-      );
-    }
+  if (typeof selectedPrivacy !== "undefined" && selectedPrivacy !== null) {
+    formData.append("Privacy", String(selectedPrivacy));
   }
 
-  closeCreatePostModal();
+  // FeedAspectRatio mapping
+  const aspectMap = { original: 0, "1:1": 1, "4:5": 2, "16:9": 3 };
+  if (globalCropRatio && aspectMap.hasOwnProperty(globalCropRatio)) {
+    formData.append("FeedAspectRatio", String(aspectMap[globalCropRatio]));
+  }
+
+  // Helper function: convert base64 to Blob
+  function dataURLToBlob(dataurl) {
+    const arr = dataurl.split(",");
+    const mimeMatch = arr[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : "image/png";
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+  }
+
+  setLoadingState(true);
+  try {
+    // Prepare MediaCrops array
+    const mediaCrops = [];
+
+    for (let i = 0; i < mediaFiles.length; i++) {
+      const m = mediaFiles[i];
+
+      // Ensure crop data exists and normalize to 0-1
+      if (m.cropData) {
+        // Save crop data if current media
+        if (i === currentMediaIndex) {
+          saveCropData();
+        }
+
+        const cropData = m.cropData;
+
+        // Normalize crop values to 0-1 range
+        const cropX_norm = Math.max(
+          0,
+          (cropData.cropX_px || cropData.cropX || 0) /
+            (cropData.imageNaturalWidth || 1),
+        );
+        const cropY_norm = Math.max(
+          0,
+          (cropData.cropY_px || cropData.cropY || 0) /
+            (cropData.imageNaturalHeight || 1),
+        );
+        const cropWidth_norm = Math.min(
+          1,
+          (cropData.cropWidth_px || cropData.cropWidth || 1) /
+            (cropData.imageNaturalWidth || 1),
+        );
+        const cropHeight_norm = Math.min(
+          1,
+          (cropData.cropHeight_px || cropData.cropHeight || 1) /
+            (cropData.imageNaturalHeight || 1),
+        );
+
+        mediaCrops.push({
+          index: i,
+          cropX: cropX_norm,
+          cropY: cropY_norm,
+          cropWidth: cropWidth_norm,
+          cropHeight: cropHeight_norm,
+        });
+      } else {
+        // No crop data
+        mediaCrops.push({
+          index: i,
+          cropX: 0,
+          cropY: 0,
+          cropWidth: 1,
+          cropHeight: 1,
+        });
+      }
+
+      // Convert image to Blob and append
+      let imageDataUrl = m.data;
+      if (m.cropData) {
+        try {
+          imageDataUrl = await createCroppedImage(m);
+        } catch (err) {
+          console.warn("Failed to create cropped image for index", i, err);
+          imageDataUrl = m.data;
+        }
+      }
+
+      const blob = dataURLToBlob(imageDataUrl);
+      const filename = m.file && m.file.name ? m.file.name : `image_${i}.png`;
+      formData.append("MediaFiles", blob, filename);
+    }
+
+    // Append MediaCrops as JSON string
+    const mediaCropsString = JSON.stringify(mediaCrops);
+    formData.append("MediaCrops", mediaCropsString);
+
+    // Debug log: show what we're sending
+    const serverPreview = {
+      Content: caption,
+      Privacy:
+        typeof selectedPrivacy !== "undefined" ? Number(selectedPrivacy) : null,
+      FeedAspectRatio: aspectMap.hasOwnProperty(globalCropRatio)
+        ? Number(aspectMap[globalCropRatio])
+        : null,
+      MediaCrops: mediaCropsString,
+      MediaFilesCount: mediaFiles.length,
+    };
+    console.log("submitPost FormData preview:", serverPreview);
+
+    // Call API
+    const res = await apiFetch("/Posts", { method: "POST", body: formData });
+
+    if (!res) throw new Error("No response from server");
+
+    if (res.status === 201 || res.ok) {
+      const data = await res.json().catch(() => null);
+      if (window.toastSuccess)
+        toastSuccess(
+          `Post with ${mediaFiles.length} image(s) shared successfully!`,
+        );
+      closeCreatePostModal();
+    } else if (res.status === 401) {
+      if (window.toastError) toastError("Unauthorized. Please login again.");
+    } else {
+      let errText = `Failed to create post (status ${res.status})`;
+      try {
+        const errJson = await res.json();
+        if (errJson && errJson.message) errText = errJson.message;
+      } catch (_) {}
+      if (window.toastError) toastError(errText);
+    }
+  } catch (err) {
+    console.error("submitPost error:", err);
+    if (window.toastError)
+      toastError("Failed to create post. Please try again.");
+  } finally {
+    setLoadingState(false);
+  }
 }
 
 // ================= CROP RATIO FUNCTIONALITY =================
 
-// Recalculate crop data for all images with new ratio
-function recalculateAllCropData(ratio) {
-  const savedIndex = currentMediaIndex;
-  const savedZoom = zoomLevel;
-  const savedOffsetX = imageOffsetX;
-  const savedOffsetY = imageOffsetY;
-
-  mediaFiles.forEach((media, index) => {
-    if (media.type !== "image") return;
-
-    // Load this image temporarily
+// Calculate crop data for a single image in background (without displaying)
+function calculateCropDataForImage(media, ratio, tempCropFrameSize) {
+  return new Promise((resolve) => {
     const tempImg = new Image();
     tempImg.onload = function () {
       const tempNaturalWidth = tempImg.naturalWidth;
       const tempNaturalHeight = tempImg.naturalHeight;
 
-      // Calculate display scale for this image
       const container = document.getElementById("mediaZoomContainer");
-      if (!container) return;
+      if (!container) {
+        resolve();
+        return;
+      }
       const containerRect = container.getBoundingClientRect();
       const scaleX = containerRect.width / tempNaturalWidth;
       const scaleY = containerRect.height / tempNaturalHeight;
       const tempDisplayScale = Math.min(scaleX, scaleY);
 
-      // Calculate crop frame size for this ratio
-      const tempCropFrameSize = calculateCropFrameSize(ratio);
-
-      // Calculate optimal zoom for this image
       let tempZoomLevel = 1;
       const imageRatio = tempNaturalWidth / tempNaturalHeight;
 
@@ -904,7 +1285,6 @@ function recalculateAllCropData(ratio) {
 
       tempZoomLevel = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, tempZoomLevel));
 
-      // Calculate crop coordinates (centered, no offset)
       const centerX = containerRect.width / 2;
       const centerY = containerRect.height / 2;
       const finalScale = tempDisplayScale * tempZoomLevel;
@@ -912,8 +1292,8 @@ function recalculateAllCropData(ratio) {
       const cropLeft = centerX - tempCropFrameSize.width / 2;
       const cropTop = centerY - tempCropFrameSize.height / 2;
 
-      const imgCenterX = centerX; // No offset
-      const imgCenterY = centerY; // No offset
+      const imgCenterX = centerX;
+      const imgCenterY = centerY;
       const imgLeft = imgCenterX - (tempNaturalWidth * finalScale) / 2;
       const imgTop = imgCenterY - (tempNaturalHeight * finalScale) / 2;
 
@@ -922,7 +1302,6 @@ function recalculateAllCropData(ratio) {
       const cropWidth = tempCropFrameSize.width / finalScale;
       const cropHeight = tempCropFrameSize.height / finalScale;
 
-      // Save crop data for this image
       media.cropData = {
         ratio: ratio,
         zoomLevel: tempZoomLevel,
@@ -934,106 +1313,54 @@ function recalculateAllCropData(ratio) {
         cropHeight: Math.min(cropHeight, tempNaturalHeight),
         displayScale: tempDisplayScale,
       };
+
+      resolve();
     };
     tempImg.src = media.data;
   });
+}
 
-  // Restore current image state (for the visible image)
-  // The current image will be saved again with saveCropData() if user modifies it
+// Recalculate crop data for all images with new ratio (in background)
+async function recalculateAllCropDataInBackground(ratio) {
+  const tempCropFrameSize = calculateCropFrameSize(ratio);
+
+  const promises = mediaFiles.map((media) => {
+    return calculateCropDataForImage(media, ratio, tempCropFrameSize);
+  });
+
+  await Promise.all(promises);
 }
 
 // Ensure all images have crop data before moving to step 2
-function ensureAllCropData() {
-  mediaFiles.forEach((media, index) => {
-    if (media.type !== "image") return;
-
-    // If this image doesn't have cropData or has wrong ratio, calculate it
+async function ensureAllCropData() {
+  const promises = mediaFiles.map((media, index) => {
+    // All media are images now
     if (!media.cropData || media.cropData.ratio !== globalCropRatio) {
-      // Load this image temporarily
-      const tempImg = new Image();
-      tempImg.onload = function () {
-        const tempNaturalWidth = tempImg.naturalWidth;
-        const tempNaturalHeight = tempImg.naturalHeight;
-
-        // Calculate display scale for this image
-        const container = document.getElementById("mediaZoomContainer");
-        if (!container) return;
-        const containerRect = container.getBoundingClientRect();
-        const scaleX = containerRect.width / tempNaturalWidth;
-        const scaleY = containerRect.height / tempNaturalHeight;
-        const tempDisplayScale = Math.min(scaleX, scaleY);
-
-        // Calculate crop frame size for current ratio
-        const tempCropFrameSize = calculateCropFrameSize(globalCropRatio);
-
-        // Calculate optimal zoom for this image
-        let tempZoomLevel = 1;
-        const imageRatio = tempNaturalWidth / tempNaturalHeight;
-
-        if (globalCropRatio === "original") {
-          if (tempNaturalHeight > tempNaturalWidth) {
-            tempZoomLevel =
-              tempCropFrameSize.height / (tempNaturalHeight * tempDisplayScale);
-          } else {
-            tempZoomLevel =
-              tempCropFrameSize.width / (tempNaturalWidth * tempDisplayScale);
-          }
-        } else {
-          let cropRatio;
-          if (globalCropRatio === "1:1") cropRatio = 1;
-          else if (globalCropRatio === "4:5") cropRatio = 4 / 5;
-          else if (globalCropRatio === "16:9") cropRatio = 16 / 9;
-
-          if (imageRatio > cropRatio) {
-            tempZoomLevel =
-              tempCropFrameSize.height / (tempNaturalHeight * tempDisplayScale);
-          } else {
-            tempZoomLevel =
-              tempCropFrameSize.width / (tempNaturalWidth * tempDisplayScale);
-          }
-        }
-
-        tempZoomLevel = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, tempZoomLevel));
-
-        // Calculate crop coordinates (centered, no offset)
-        const centerX = containerRect.width / 2;
-        const centerY = containerRect.height / 2;
-        const finalScale = tempDisplayScale * tempZoomLevel;
-
-        const cropLeft = centerX - tempCropFrameSize.width / 2;
-        const cropTop = centerY - tempCropFrameSize.height / 2;
-
-        const imgCenterX = centerX; // No offset
-        const imgCenterY = centerY; // No offset
-        const imgLeft = imgCenterX - (tempNaturalWidth * finalScale) / 2;
-        const imgTop = imgCenterY - (tempNaturalHeight * finalScale) / 2;
-
-        const cropX = (cropLeft - imgLeft) / finalScale;
-        const cropY = (cropTop - imgTop) / finalScale;
-        const cropWidth = tempCropFrameSize.width / finalScale;
-        const cropHeight = tempCropFrameSize.height / finalScale;
-
-        // Save crop data for this image
-        media.cropData = {
-          ratio: globalCropRatio,
-          zoomLevel: tempZoomLevel,
-          offsetX: 0,
-          offsetY: 0,
-          cropX: Math.max(0, cropX),
-          cropY: Math.max(0, cropY),
-          cropWidth: Math.min(cropWidth, tempNaturalWidth),
-          cropHeight: Math.min(cropHeight, tempNaturalHeight),
-          displayScale: tempDisplayScale,
-        };
-      };
-      tempImg.src = media.data;
+      return calculateCropDataForImage(media, globalCropRatio, cropFrameSize);
     }
+    return Promise.resolve();
   });
+
+  await Promise.all(promises);
 }
 
-function changeCropRatio(ratio) {
+async function changeCropRatio(ratio) {
+  // Prevent changing ratio while processing
+  if (isProcessingCrop) {
+    return;
+  }
+
+  // Show loading state
+  setLoadingState(true);
+
+  // Small delay to let UI update
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
   // Save crop data for current image before changing ratio
   saveCropData();
+
+  // Store current index
+  const originalIndex = currentMediaIndex;
 
   // Update global crop ratio
   globalCropRatio = ratio;
@@ -1042,12 +1369,11 @@ function changeCropRatio(ratio) {
   // Recalculate crop frame size
   cropFrameSize = calculateCropFrameSize(ratio);
 
-  // Apply optimal crop to current image
+  // Calculate crop data for ALL images in background (without displaying them)
+  await recalculateAllCropDataInBackground(ratio);
+
+  // Now update only the currently visible image
   calculateOptimalCrop(ratio);
-
-  // Calculate crop data for ALL images with new ratio
-  recalculateAllCropData(ratio);
-
   updateImagePosition();
   updateZoomSlider();
 
@@ -1061,6 +1387,7 @@ function changeCropRatio(ratio) {
     }
   }
 
+  // Update active ratio button
   document.querySelectorAll(".crop-ratio-card").forEach((card) => {
     card.classList.remove("active");
   });
@@ -1069,7 +1396,16 @@ function changeCropRatio(ratio) {
     .querySelectorAll(`[data-ratio="${ratio}"]`)
     .forEach((el) => el.classList.add("active"));
 
+  // Save the crop data for current image
+  saveCropData();
+
+  // Update thumbnails to reflect active state
+  updateThumbnails();
+
   lucide.createIcons();
+
+  // Hide loading state
+  setLoadingState(false);
 }
 
 // ================= ZOOM FUNCTIONALITY =================
@@ -1240,11 +1576,17 @@ document.addEventListener(
 
 // ================= STEP 2 FUNCTIONALITY =================
 
-function prepareStep2Preview() {
+async function prepareStep2Preview() {
   if (mediaFiles.length === 0) return;
 
+  // Show loading while building slider
+  setLoadingState(true);
+
   currentMediaIndex = 0;
-  buildSlider();
+
+  // Wait for slider to fully build with all cropped images
+  await buildSlider();
+
   updateThumbnailsStep2();
 
   const navigation = document.getElementById("mediaNavigation");
@@ -1256,6 +1598,9 @@ function prepareStep2Preview() {
   }
 
   lucide.createIcons();
+
+  // Hide loading after everything is ready
+  setLoadingState(false);
 }
 
 // Build slider with all images
@@ -1271,24 +1616,39 @@ async function buildSlider() {
   track.className = "media-slider-track";
   track.id = "mediaSliderTrack";
 
-  for (let i = 0; i < mediaFiles.length; i++) {
-    const media = mediaFiles[i];
+  // Process all images in parallel and wait for all to complete
+  const slidePromises = mediaFiles.map(async (media, i) => {
     const slide = document.createElement("div");
     slide.className = "media-slide";
 
-    if (media.type === "image") {
-      const croppedSrc = await createCroppedImage(media);
+    // Apply dynamic gradient based on dominant color
+    const dominantColor = media.dominantColor || "var(--accent-primary)";
+    slide.style.background = `linear-gradient(
+      135deg,
+      var(--bg-primary) 0%,
+      ${dominantColor} 100%
+    )`;
+
+    // All media are images now
+    const croppedSrc = await createCroppedImage(media);
+
+    // Wait for image to actually load before returning
+    await new Promise((resolve) => {
       const img = document.createElement("img");
+      img.onload = () => resolve();
+      img.onerror = () => resolve(); // Still resolve on error to not block
       img.src = croppedSrc;
       slide.appendChild(img);
-    } else if (media.type === "video") {
-      const video = document.createElement("video");
-      video.src = media.data;
-      slide.appendChild(video);
-    }
+    });
 
-    track.appendChild(slide);
-  }
+    return slide;
+  });
+
+  // Wait for all slides to be ready
+  const slides = await Promise.all(slidePromises);
+
+  // Add all slides to track
+  slides.forEach((slide) => track.appendChild(slide));
 
   sliderWrapper.appendChild(track);
 
@@ -1310,7 +1670,7 @@ function updateSliderPosition() {
 // Create cropped image canvas - FIXED FOR ORIGINAL RATIO
 function createCroppedImage(media) {
   return new Promise((resolve) => {
-    if (media.type !== "image" || !media.cropData) {
+    if (!media.cropData) {
       resolve(media.data);
       return;
     }
@@ -1326,17 +1686,20 @@ function createCroppedImage(media) {
       if (ratio === "original") {
         // For original: canvas is square (1:1), but image maintains its aspect ratio
         // Determine canvas size to be square based on the longer dimension of the cropped area
-        const maxDimension = Math.max(cropData.cropWidth, cropData.cropHeight);
+        const maxDimension = Math.max(
+          cropData.cropWidth_px,
+          cropData.cropHeight_px,
+        );
         canvasWidth = maxDimension;
         canvasHeight = maxDimension;
       } else if (ratio === "1:1") {
         // For 1:1: canvas is square with crop dimensions
-        canvasWidth = cropData.cropWidth;
-        canvasHeight = cropData.cropHeight;
+        canvasWidth = cropData.cropWidth_px;
+        canvasHeight = cropData.cropHeight_px;
       } else if (ratio === "4:5") {
         // For 4:5: canvas is square, crop area is 4:5 in the middle
         // Canvas height = crop height (which is the max dimension)
-        canvasHeight = cropData.cropHeight;
+        canvasHeight = cropData.cropHeight_px;
         canvasWidth = canvasHeight; // Make it square
 
         // Crop width is smaller (4/5 of height)
@@ -1344,7 +1707,7 @@ function createCroppedImage(media) {
       } else if (ratio === "16:9") {
         // For 16:9: canvas is square, crop area is 16:9 in the middle
         // Canvas width = crop width (which is the max dimension)
-        canvasWidth = cropData.cropWidth;
+        canvasWidth = cropData.cropWidth_px;
         canvasHeight = canvasWidth; // Make it square
 
         // Crop height is smaller (9/16 of width)
@@ -1364,30 +1727,30 @@ function createCroppedImage(media) {
       // Calculate position to center the cropped content
       let drawX = 0;
       let drawY = 0;
-      let drawWidth = cropData.cropWidth;
-      let drawHeight = cropData.cropHeight;
+      let drawWidth = cropData.cropWidth_px;
+      let drawHeight = cropData.cropHeight_px;
 
       if (ratio === "original") {
         // Center the image (keep aspect ratio)
-        drawX = (canvasWidth - cropData.cropWidth) / 2;
-        drawY = (canvasHeight - cropData.cropHeight) / 2;
+        drawX = (canvasWidth - cropData.cropWidth_px) / 2;
+        drawY = (canvasHeight - cropData.cropHeight_px) / 2;
       } else if (ratio === "4:5") {
         // Center horizontally
-        drawX = (canvasWidth - cropData.cropWidth) / 2;
+        drawX = (canvasWidth - cropData.cropWidth_px) / 2;
         drawY = 0;
       } else if (ratio === "16:9") {
         // Center vertically
         drawX = 0;
-        drawY = (canvasHeight - cropData.cropHeight) / 2;
+        drawY = (canvasHeight - cropData.cropHeight_px) / 2;
       }
 
       // Draw the cropped image
       ctx.drawImage(
         img,
-        cropData.cropX,
-        cropData.cropY,
-        cropData.cropWidth,
-        cropData.cropHeight,
+        cropData.cropX_px,
+        cropData.cropY_px,
+        cropData.cropWidth_px,
+        cropData.cropHeight_px,
         drawX,
         drawY,
         drawWidth,
@@ -1419,15 +1782,9 @@ function updateThumbnailsStep2() {
     thumbDiv.className = `thumbnail-item ${index === currentMediaIndex ? "active" : ""}`;
     thumbDiv.onclick = () => navigateToMedia(index);
 
-    if (media.type === "image") {
-      const img = document.createElement("img");
-      img.src = media.data;
-      thumbDiv.appendChild(img);
-    } else {
-      const video = document.createElement("video");
-      video.src = media.data;
-      thumbDiv.appendChild(video);
-    }
+    const img = document.createElement("img");
+    img.src = media.data;
+    thumbDiv.appendChild(img);
 
     container.appendChild(thumbDiv);
   });
@@ -1471,6 +1828,35 @@ document.addEventListener("click", (e) => {
   if (e.target === modal) {
     closeCreatePostModal();
   }
+
+  // Close privacy dropdown if clicking outside
+  const privacyDropdown = document.getElementById("privacyDropdown");
+  const privacySelector = e.target.closest(".privacy-selector");
+  const privacyOption = e.target.closest(".privacy-option");
+
+  if (privacyDropdown && !privacySelector && !privacyOption) {
+    privacyDropdown.classList.remove("show");
+  }
+
+  // Close emoji picker if clicking outside
+  const emojiContainer = document.getElementById("emojiPickerContainer");
+  const emojiBtn = e.target.closest(".emoji-btn");
+  const isInsideEmojiPicker =
+    e.target.closest("#emojiPickerContainer") ||
+    e.target.closest("em-emoji-picker");
+
+  if (
+    emojiContainer &&
+    emojiContainer.classList.contains("show") &&
+    !emojiBtn &&
+    !isInsideEmojiPicker
+  ) {
+    emojiContainer.classList.remove("show");
+    setTimeout(() => {
+      emojiContainer.innerHTML = "";
+      emojiPicker = null;
+    }, 200);
+  }
 });
 
 document.addEventListener("keydown", (e) => {
@@ -1479,6 +1865,25 @@ document.addEventListener("keydown", (e) => {
     if (modal && modal.classList.contains("show")) {
       // Don't close if discard confirmation is showing
       if (document.getElementById("discardConfirmOverlay")) return;
+
+      // Close privacy dropdown if open
+      const privacyDropdown = document.getElementById("privacyDropdown");
+      if (privacyDropdown && privacyDropdown.classList.contains("show")) {
+        privacyDropdown.classList.remove("show");
+        return;
+      }
+
+      // Close emoji picker if open
+      const emojiContainer = document.getElementById("emojiPickerContainer");
+      if (emojiContainer && emojiContainer.classList.contains("show")) {
+        emojiContainer.classList.remove("show");
+        setTimeout(() => {
+          emojiContainer.innerHTML = "";
+          emojiPicker = null;
+        }, 200);
+        return;
+      }
+
       closeCreatePostModal();
     }
   }
@@ -1494,10 +1899,10 @@ window.addEventListener("beforeunload", (e) => {
   }
 });
 
-// Toggle platform sharing
+// Toggle switches for advanced settings
 document.addEventListener("click", (e) => {
-  if (e.target.closest(".toggle-switch") && e.target.closest(".setting-item")) {
-    const toggle = e.target.closest(".toggle-switch");
-    toggle.classList.toggle("active");
+  const toggleSwitch = e.target.closest(".toggle-switch");
+  if (toggleSwitch && e.target.closest(".setting-item")) {
+    toggleSwitch.classList.toggle("active");
   }
 });

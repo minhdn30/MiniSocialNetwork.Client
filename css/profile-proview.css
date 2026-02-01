@@ -180,7 +180,7 @@
 /* View Profile */
 .btn-view-profile {
   background: var(--accent-primary);
-  color: var(--text-primary);
+  color: var(--text-white);
 }
 
 .btn-view-profile:hover {

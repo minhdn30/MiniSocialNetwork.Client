@@ -6,7 +6,7 @@
       <button class="modal-back-btn" onclick="handleBackButton()">
         <i data-lucide="arrow-left"></i>
       </button>
-      <h2 class="modal-title" id="modalTitle">Upload and Edit Photos/Videos</h2>
+      <h2 class="modal-title" id="modalTitle">Upload and Edit Photos</h2>
       <button
         class="modal-next-btn"
         id="modalActionBtn"
@@ -24,9 +24,9 @@
         <div class="media-placeholder" id="mediaPlaceholder">
           <div class="placeholder-icon">
             <i data-lucide="image"></i>
-            <i data-lucide="video"></i>
+            <i data-lucide="image"></i>
           </div>
-          <p class="placeholder-text">Upload photos and videos here</p>
+          <p class="placeholder-text">Upload photos here</p>
           <button class="select-btn" onclick="triggerMediaUpload()">
             Upload
           </button>
@@ -83,7 +83,7 @@
         <input
           type="file"
           id="postMediaInput"
-          accept="image/*,video/*"
+          accept="image/*"
           style="display: none"
           onchange="handleMediaUpload(event)"
           multiple
@@ -142,9 +142,22 @@
 
           <div class="step1-help">
             <div class="help-item">
+              <i
+                data-lucide="alert-circle"
+                style="width: 20px; height: 20px"
+              ></i>
+              <div>
+                <strong>Important Reminder</strong>
+                <p>
+                  After changing the crop ratio, check all images to ensure
+                  they're properly cropped
+                </p>
+              </div>
+            </div>
+            <div class="help-item">
               <i data-lucide="info" style="width: 20px; height: 20px"></i>
               <div>
-                <strong>Media Details</strong>
+                <strong>Image Details</strong>
                 <p id="imageResolution">No file selected</p>
               </div>
             </div>
@@ -197,12 +210,71 @@
 
       <!-- Right Panel for Step 2 - Details -->
       <div class="post-details-panel">
-        <!-- User Info -->
+        <!-- User Info with Privacy Selector -->
         <div class="post-user-info">
           <img id="post-user-avatar" src="" alt="avatar" class="user-avatar" />
-          <div>
+          <div class="user-info-details">
             <span id="post-user-name" class="user-name">User</span>
-            <span class="user-visibility">Public Post</span>
+            <div
+              class="privacy-selector"
+              onclick="togglePrivacyDropdown(event)"
+            >
+              <i data-lucide="globe" class="privacy-icon" id="privacyIcon"></i>
+              <span class="privacy-text" id="privacyText">Public</span>
+              <i data-lucide="chevron-down" class="privacy-chevron"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- Privacy Dropdown -->
+        <div class="privacy-dropdown" id="privacyDropdown">
+          <div
+            class="privacy-option active"
+            data-privacy="0"
+            onclick="selectPrivacy(0)"
+          >
+            <div class="privacy-option-left">
+              <i data-lucide="globe"></i>
+              <div>
+                <span class="privacy-option-title">Public</span>
+                <span class="privacy-option-desc"
+                  >Anyone can see this post</span
+                >
+              </div>
+            </div>
+            <i data-lucide="check" class="privacy-check"></i>
+          </div>
+          <div
+            class="privacy-option"
+            data-privacy="1"
+            onclick="selectPrivacy(1)"
+          >
+            <div class="privacy-option-left">
+              <i data-lucide="users"></i>
+              <div>
+                <span class="privacy-option-title">Followers Only</span>
+                <span class="privacy-option-desc"
+                  >Only your followers can see</span
+                >
+              </div>
+            </div>
+            <i data-lucide="check" class="privacy-check"></i>
+          </div>
+          <div
+            class="privacy-option"
+            data-privacy="2"
+            onclick="selectPrivacy(2)"
+          >
+            <div class="privacy-option-left">
+              <i data-lucide="lock"></i>
+              <div>
+                <span class="privacy-option-title">Private</span>
+                <span class="privacy-option-desc"
+                  >Only you can see this post</span
+                >
+              </div>
+            </div>
+            <i data-lucide="check" class="privacy-check"></i>
           </div>
         </div>
 
@@ -212,16 +284,20 @@
             id="postCaption"
             class="post-caption-input"
             placeholder="Write a caption..."
-            maxlength="2200"
+            maxlength="3000"
             oninput="updateCharCount()"
           ></textarea>
-          <div class="char-count"><span id="charCount">0</span>/2200</div>
+          <div class="char-count"><span id="charCount">0</span>/3000</div>
         </div>
 
         <!-- Emoji Button -->
-        <button class="emoji-btn" onclick="toggleEmojiPicker()">
+        <button class="emoji-btn" onclick="toggleEmojiPicker(event)">
           <i data-lucide="smile"></i>
+          <span>Add emoji</span>
         </button>
+
+        <!-- Emoji Picker Container -->
+        <div id="emojiPickerContainer"></div>
 
         <!-- Location Section -->
         <div class="post-section">
@@ -274,7 +350,7 @@
               <i data-lucide="accessibility" class="section-icon"></i>
               <span class="section-title">Accessibility</span>
             </div>
-            <i data-lucide="chevron-down" class="chevron-icon"></i>
+            <i data-lucide="chevron-right" class="chevron-icon"></i>
           </div>
           <div
             class="section-content"
@@ -295,46 +371,48 @@
         <!-- Advanced Settings -->
         <div class="post-section">
           <div class="section-header" onclick="toggleSection('advanced')">
-            <span class="section-title">Advanced Settings</span>
-            <i data-lucide="chevron-down" class="chevron-icon"></i>
+            <div class="section-left">
+              <i data-lucide="sliders" class="section-icon"></i>
+              <span class="section-title">Advanced Settings</span>
+            </div>
+            <i data-lucide="chevron-right" class="chevron-icon"></i>
           </div>
           <div
             class="section-content advanced-settings"
             id="advancedContent"
             style="display: none"
           >
-            <!-- Share to Threads -->
+            <!-- Turn off commenting -->
             <div class="setting-item">
               <div class="setting-info">
-                <img
-                  src="https://via.placeholder.com/32/5B51D8/FFFFFF?text=T"
-                  alt="Threads"
-                  class="platform-icon"
-                />
+                <i
+                  data-lucide="message-circle-off"
+                  class="setting-icon-only"
+                ></i>
                 <div class="setting-details">
-                  <span class="setting-name">nmin301</span>
-                  <span class="setting-desc">Threads • Public</span>
+                  <span class="setting-name">Turn off commenting</span>
+                  <span class="setting-desc"
+                    >People won't be able to comment on this post</span
+                  >
                 </div>
               </div>
-              <div class="toggle-switch active">
+              <div class="toggle-switch" id="commentToggle">
                 <div class="toggle-slider"></div>
               </div>
             </div>
 
-            <!-- Share to Facebook -->
+            <!-- Hide like and view counts -->
             <div class="setting-item">
               <div class="setting-info">
-                <img
-                  src="https://via.placeholder.com/32/1877F2/FFFFFF?text=F"
-                  alt="Facebook"
-                  class="platform-icon"
-                />
+                <i data-lucide="eye-off" class="setting-icon-only"></i>
                 <div class="setting-details">
-                  <span class="setting-name">Dang Nhat Minh</span>
-                  <span class="setting-desc">Facebook • Only me</span>
+                  <span class="setting-name">Hide like and view counts</span>
+                  <span class="setting-desc"
+                    >Only you will see the total number of likes and views</span
+                  >
                 </div>
               </div>
-              <div class="toggle-switch">
+              <div class="toggle-switch" id="hideCountsToggle">
                 <div class="toggle-slider"></div>
               </div>
             </div>
@@ -344,3 +422,16 @@
     </div>
   </div>
 </div>
+
+<!-- Load Emoji Mart from CDN -->
+<script type="module">
+  import { Picker } from "https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js";
+
+  // Register the picker and make it available globally
+  window.EmojiPicker = Picker;
+
+  // Also define the custom element if needed
+  if (!customElements.get("em-emoji-picker")) {
+    customElements.define("em-emoji-picker", Picker);
+  }
+</script>
