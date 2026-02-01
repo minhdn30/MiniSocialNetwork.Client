@@ -1073,36 +1073,6 @@ svg {
   margin-top: 8px;
 }
 
-/* ================= EMOJI BUTTON & PICKER ================= */
-.emoji-btn {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 12px 20px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  border-bottom: 1px solid var(--border-tertiary);
-  transition: background var(--transition-fast);
-}
-
-.emoji-btn:hover {
-  background: var(--bg-hover);
-}
-
-.emoji-btn svg {
-  width: 20px;
-  height: 20px;
-}
-
-.emoji-btn span {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
 /* Emoji Picker Container */
 #emojiPickerContainer {
   position: relative;
@@ -1110,22 +1080,23 @@ svg {
   overflow: hidden;
   opacity: 0;
   transition: all var(--transition-normal);
-  border-bottom: 1px solid var(--border-tertiary);
 }
 
 #emojiPickerContainer.show {
   max-height: 450px;
   opacity: 1;
   padding: 12px;
+  overflow: visible;
 }
 
-#emojiPickerContainer em-emoji-picker {
+#emojiPickerContainer emoji-picker {
   width: 100%;
+  max-width: none;
   height: 400px;
-  --rgb-background: var(--bg-primary);
-  --rgb-input: var(--bg-secondary);
-  --rgb-color: var(--text-primary);
-  --border-radius: 8px;
+  border: none;
+  box-shadow: none;
+  --emoji-size: 1.5rem;
+  --num-columns: 8;
 }
 
 /* ================= POST SECTIONS ================= */

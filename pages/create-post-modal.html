@@ -290,14 +290,18 @@
           <div class="char-count"><span id="charCount">0</span>/3000</div>
         </div>
 
-        <!-- Emoji Button -->
-        <button class="emoji-btn" onclick="toggleEmojiPicker(event)">
-          <i data-lucide="smile"></i>
-          <span>Add emoji</span>
-        </button>
-
-        <!-- Emoji Picker Container -->
-        <div id="emojiPickerContainer"></div>
+        <!-- Emoji Section -->
+        <div class="post-section">
+          <div class="section-header" onclick="toggleEmojiPicker(event)">
+            <div class="section-left">
+              <i data-lucide="smile" class="section-icon"></i>
+              <span class="section-title">Add emoji</span>
+            </div>
+            <i data-lucide="chevron-right" class="chevron-icon" id="emojiChevron"></i>
+          </div>
+          <!-- Emoji Picker Container -->
+          <div id="emojiPickerContainer"></div>
+        </div>
 
         <!-- Location Section -->
         <div class="post-section">

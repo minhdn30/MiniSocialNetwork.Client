@@ -212,18 +212,14 @@ function getAspectRatioCSS(feedAspectRatio) {
 // Apply dominant color background to images
 function applyDominantColors(postEl) {
   const images = postEl.querySelectorAll(".media-track img");
-  console.log("🎨 applyDominantColors: Found", images.length, "images");
   
   images.forEach(async (img) => {
     try {
       if (!window.extractDominantColor) {
-        console.warn("❌ extractDominantColor not available");
         return;
       }
       
-      console.log("🔍 Extracting color from:", img.src);
       const color = await extractDominantColor(img.src);
-      console.log("✅ Extracted color:", color);
       
       // Set linear gradient background: dominant color -> dark
       img.style.background = `linear-gradient(135deg, ${color}, #1a1a1a)`;
@@ -232,7 +228,6 @@ function applyDominantColors(postEl) {
       const track = img.closest('.media-track');
       if (track) {
         track.style.background = `linear-gradient(135deg, ${color}, #1a1a1a)`;
-        console.log("✅ Applied gradient to track:", track.style.background);
       }
     } catch (e) {
       console.error("❌ Failed to extract color:", e);

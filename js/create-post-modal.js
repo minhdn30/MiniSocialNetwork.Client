@@ -43,7 +43,7 @@ let isProcessingCrop = false;
 let selectedPrivacy = 0;
 
 // Emoji picker instance
-let emojiPicker = null;
+
 
 // File size formatting moved to js/shared/file-utils.js
 
@@ -925,91 +925,31 @@ async function toggleEmojiPicker(event) {
   const container = document.getElementById("emojiPickerContainer");
   if (!container) return;
 
-  // If picker is already open, close it
-  if (container.classList.contains("show")) {
-    container.classList.remove("show");
-    setTimeout(() => {
-      container.innerHTML = "";
-      emojiPicker = null;
-    }, 200);
-    return;
-  }
-
-  // Create new picker
-  container.innerHTML = "";
-
-  // Check if EmojiPicker is loaded
-  if (typeof window.EmojiPicker === "undefined") {
-    // Show loading message
-    const loadingDiv = document.createElement("div");
-    loadingDiv.style.padding = "20px";
-    loadingDiv.style.textAlign = "center";
-    loadingDiv.style.color = "var(--text-secondary)";
-    loadingDiv.textContent = "Loading emoji picker...";
-    container.appendChild(loadingDiv);
-    container.classList.add("show");
-
-    // Wait a bit for the module to load
-    setTimeout(async () => {
-      if (typeof window.EmojiPicker !== "undefined") {
-        container.innerHTML = "";
-        await createEmojiPicker(container);
-      } else {
-        if (window.toastError) {
-          toastError("Failed to load emoji picker. Please refresh the page!");
-        }
-        container.classList.remove("show");
-      }
-    }, 1000);
-    return;
-  }
-
-  await createEmojiPicker(container);
-}
-
-// Create emoji picker instance
-async function createEmojiPicker(container) {
-  try {
-    const pickerOptions = {
-      onEmojiSelect: (emoji) => {
-        insertEmojiAtCursor(emoji.native);
-      },
-      theme: "dark",
-      previewPosition: "none",
-      skinTonePosition: "search",
-      maxFrequentRows: 2,
-    };
-
-    emojiPicker = new window.EmojiPicker(pickerOptions);
-    container.appendChild(emojiPicker);
-    container.classList.add("show");
-  } catch (error) {
-    console.error("Emoji picker error:", error);
-    if (window.toastError) {
-      toastError("Failed to initialize emoji picker!");
-    }
-    container.classList.remove("show");
-  }
-}
-
-// Insert emoji at cursor position in caption
-function insertEmojiAtCursor(emoji) {
+  const header = event.currentTarget;
   const captionInput = document.getElementById("postCaption");
-  if (!captionInput) return;
 
-  const start = captionInput.selectionStart;
-  const end = captionInput.selectionEnd;
-  const text = captionInput.value;
-
-  captionInput.value = text.substring(0, start) + emoji + text.substring(end);
-
-  // Move cursor after emoji
-  const newCursorPos = start + emoji.length;
-  captionInput.selectionStart = newCursorPos;
-  captionInput.selectionEnd = newCursorPos;
-
-  captionInput.focus();
-  updateCharCount();
+  // Check if closing
+  if (container.classList.contains("show")) {
+    if (window.EmojiUtils) {
+      window.EmojiUtils.closePicker(container);
+    } else {
+       // Fallback manually if util not loaded (should not happen if set up right)
+       container.classList.remove("show");
+       container.innerHTML = "";
+    }
+    if (header) header.classList.remove("expanded");
+  } else {
+    // Opening
+    if (window.EmojiUtils) {
+        await window.EmojiUtils.togglePicker(container, (emoji) => {
+            EmojiUtils.insertAtCursor(captionInput, emoji.native);
+            updateCharCount(); // App specific logic
+        });
+        if (header) header.classList.add("expanded");
+    } else {
+        console.error("EmojiUtils not found");
+    }
+  }
 }
 
 // ================= PRIVACY SELECTOR =================
@@ -1033,13 +973,22 @@ function togglePrivacyDropdown(event) {
   const isVisible = dropdown.classList.contains("show");
 
   // Close emoji picker if open
+  // Close emoji picker if open
   const emojiContainer = document.getElementById("emojiPickerContainer");
   if (emojiContainer && emojiContainer.classList.contains("show")) {
-    emojiContainer.classList.remove("show");
-    setTimeout(() => {
-      emojiContainer.innerHTML = "";
-      emojiPicker = null;
-    }, 200);
+    if (window.EmojiUtils) {
+        window.EmojiUtils.closePicker(emojiContainer);
+    } else {
+        emojiContainer.classList.remove("show");
+        setTimeout(() => { emojiContainer.innerHTML = ""; }, 200);
+    }
+    
+    // Reset chevron
+    const chevron = document.getElementById("emojiChevron");
+    if (chevron) {
+        const header = chevron.closest(".section-header");
+        if (header) header.classList.remove("expanded");
+    }
   }
 
   if (isVisible) {
@@ -1939,8 +1888,8 @@ document.addEventListener("click", (e) => {
   }
 
   // Close emoji picker if clicking outside
+  // Close emoji picker if clicking outside
   const emojiContainer = document.getElementById("emojiPickerContainer");
-  const emojiBtn = e.target.closest(".emoji-btn");
   const isInsideEmojiPicker =
     e.target.closest("#emojiPickerContainer") ||
     e.target.closest("em-emoji-picker");
@@ -1948,14 +1897,23 @@ document.addEventListener("click", (e) => {
   if (
     emojiContainer &&
     emojiContainer.classList.contains("show") &&
-    !emojiBtn &&
     !isInsideEmojiPicker
   ) {
-    emojiContainer.classList.remove("show");
-    setTimeout(() => {
-      emojiContainer.innerHTML = "";
-      emojiPicker = null;
-    }, 200);
+    if (window.EmojiUtils) {
+      window.EmojiUtils.closePicker(emojiContainer);
+    } else {
+      emojiContainer.classList.remove("show");
+      setTimeout(() => {
+        emojiContainer.innerHTML = "";
+      }, 200);
+    }
+    
+    // Reset chevron
+    const chevron = document.getElementById("emojiChevron");
+    if (chevron) {
+        const header = chevron.closest(".section-header");
+        if (header) header.classList.remove("expanded");
+    }
   }
 });
 
@@ -1978,11 +1936,19 @@ document.addEventListener("keydown", (e) => {
       // Close emoji picker if open
       const emojiContainer = document.getElementById("emojiPickerContainer");
       if (emojiContainer && emojiContainer.classList.contains("show")) {
-        emojiContainer.classList.remove("show");
-        setTimeout(() => {
-          emojiContainer.innerHTML = "";
-          emojiPicker = null;
-        }, 200);
+        if (window.EmojiUtils) {
+            window.EmojiUtils.closePicker(emojiContainer);
+        } else {
+            emojiContainer.classList.remove("show");
+            setTimeout(() => { emojiContainer.innerHTML = ""; }, 200);
+        }
+        
+        // Reset chevron
+        const chevron = document.getElementById("emojiChevron");
+        if (chevron) {
+            const header = chevron.closest(".section-header");
+            if (header) header.classList.remove("expanded");
+        }
         return;
       }
 
