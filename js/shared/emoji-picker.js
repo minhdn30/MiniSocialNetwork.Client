@@ -68,15 +68,24 @@ window.EmojiUtils = {
     togglePicker: async function (container, onSelect, options = {}) {
         if (!container) return null;
 
-        // If picker is already open, close it
-        if (container.classList.contains("show")) {
+        const isShowing = container.classList.contains("show");
+
+        // 1. Close ALL other open pickers first
+        const allPickers = document.querySelectorAll('.detail-emoji-picker.show, .reply-emoji-picker-container.show');
+        allPickers.forEach(p => {
+            if (p !== container) EmojiUtils.closePicker(p);
+        });
+
+        // 2. If this picker was already open, close it and stop
+        if (isShowing) {
             EmojiUtils.closePicker(container);
             return null;
         }
 
-        // Open picker
+        // 3. Open this picker
         return await EmojiUtils.createPicker(container, onSelect, options);
     },
+
 
     /**
      * Close the picker and clean up
@@ -203,16 +212,18 @@ window.EmojiUtils = {
      */
     setupClickOutsideHandler: function(containerSelector, triggerSelector) {
         document.addEventListener('click', (e) => {
-            const emojiContainer = document.querySelector(containerSelector);
-            const emojiTrigger = document.querySelector(triggerSelector);
+            // Support comma-separated selectors by appending .show to each part
+            const fullSelector = containerSelector.split(',').map(s => s.trim() + '.show').join(', ');
+            const containers = document.querySelectorAll(fullSelector);
             
-            // Check if emoji picker is open
-            if (emojiContainer && emojiContainer.classList.contains('show')) {
-                // Check if click is outside both the picker and the trigger button
-                if (!emojiContainer.contains(e.target) && !emojiTrigger?.contains(e.target)) {
-                    this.closePicker(emojiContainer);
+            containers.forEach(container => {
+                const isTrigger = e.target.closest(triggerSelector);
+                if (!container.contains(e.target) && !isTrigger) {
+                    this.closePicker(container);
                 }
-            }
+            });
         });
     }
+
+
 };

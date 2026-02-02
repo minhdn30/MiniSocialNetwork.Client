@@ -2,7 +2,10 @@
 <div id="postDetailModal" class="modal-overlay">
     <div class="modal-backdrop" onclick="closePostDetailModal()"></div>
     <div class="modal-card post-detail-card">
-
+        <!-- Main Loading Overlay -->
+        <div id="detailMainLoader" class="loading-overlay" style="display: none;">
+            <div class="spinner-large"></div>
+        </div>
 
         <!-- Split Layout -->
         <div class="post-detail-layout">
@@ -25,8 +28,8 @@
                         <div class="user-meta">
                             <div class="user-name-row">
                                 <span id="detailUsername" class="username"></span>
-                                <span id="detailTime" class="post-time"></span>
                             </div>
+                            <span id="detailTime" class="post-time"></span>
                             <span id="detailLocation" class="location"></span>
                         </div>
                     </div>
@@ -42,15 +45,8 @@
                         <div id="detailCaptionText" class="caption-text"></div>
                     </div>
 
-                    <!-- Comments List -->
-                    <div class="comments-list" id="detailCommentsList">
-                        <!-- Comments injected here -->
-                    </div>
-                    
-                    <!-- Loading State -->
-                    <div id="detailCommentsLoader" class="comments-loader" style="display: none;">
-                        <div class="spinner-small"></div>
-                    </div>
+                    <!-- Comments Section (Loaded from comment.html) -->
+                    <div id="commentSectionContainer"></div>
                 </div>
 
                 <!-- Footer: Actions & Input -->

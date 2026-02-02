@@ -67,7 +67,7 @@ function renderProfilePreview(data) {
     <div class="preview-header">
       <img src="${data.account.avatarUrl || APP_CONFIG.DEFAULT_AVATAR}" alt="avatar" />
       <div>
-        <div class="name">${data.account.fullName}</div>
+        <div class="name">${PostUtils.truncateName(data.account.fullName)}</div>
       </div>
     </div>
 

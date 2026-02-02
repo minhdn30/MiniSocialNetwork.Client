@@ -3,15 +3,17 @@ emoji-picker {
   --border-radius: 12px;
   --border-size: 1px;
   --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  --emoji-size: 1.75rem;
-  --num-columns: 8;
+  --emoji-size: 1.35rem;
+  --num-columns: 6;
   width: 100%;
-  max-width: 350px;
-  height: 400px;
+  max-width: 260px;
+  height: 280px;
   border: 1px solid var(--border-primary);
   border-radius: 12px;
   box-shadow: var(--shadow-lg);
 }
+
+
 
 /* Light mode */
 emoji-picker.light {

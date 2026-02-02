@@ -167,6 +167,12 @@
 .location { font-size: 12px; color: var(--text-secondary); display: block; }
 .more-options-btn { background: none; border: none; color: var(--text-primary); cursor: pointer; }
 
+/* Custom style for post-detail time - making it smaller since it's on a new line */
+#postDetailModal .post-time {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
 /* Caption Section */
 .caption-section {
   padding-bottom: 16px;
@@ -189,17 +195,7 @@
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
-
-.comment-item {
-  display: flex;
-  gap: 12px;
-}
-.comment-item .user-avatar.small { width: 32px; height: 32px; }
-.comment-content { font-size: 14px; line-height: 1.4; color: var(--text-primary); }
-.comment-content .username { margin-right: 4px; }
-.comment-meta { margin-top: 4px; font-size: 12px; color: var(--text-secondary); display: flex; gap: 12px; }
 
 /* Footer */
 .detail-footer {
@@ -228,7 +224,9 @@
   border-top: 1px solid var(--border-secondary);
   position: relative;
 }
+
 .emoji-trigger { cursor: pointer; color: var(--text-primary); }
+
 #detailCommentInput { 
     flex: 1; 
     background: none; 

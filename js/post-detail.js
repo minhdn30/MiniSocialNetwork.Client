@@ -2,11 +2,14 @@ const POST_DETAIL_MODAL_ID = "postDetailModal";
 let currentPostId = null;
 let currentPostCreatedAt = null;
 
+
+
 /* formatFullDateTime moved to shared/post-utils.js */
 
 // Open Modal
 async function openPostDetail(postId) {
     currentPostId = postId;
+    window.currentPostId = postId; // Ensure global access for CommentModule replies
     
     // 1. Check if modal exists, if not load it
     let modal = document.getElementById(POST_DETAIL_MODAL_ID);
@@ -23,14 +26,27 @@ async function openPostDetail(postId) {
     modal.classList.add("show");
     document.body.style.overflow = "hidden"; // Prevent background scroll
 
+    const mainLoader = document.getElementById("detailMainLoader");
+    if (mainLoader) mainLoader.style.display = "flex";
+
     try {
         const res = await apiFetch(`/Posts/${postId}`);
         if (!res.ok) throw new Error("Failed to load post");
         
         const data = await res.json();
         renderPostDetail(data);        
+        
+        if (mainLoader) mainLoader.style.display = "none";
+
+        
+        // Start loading comments via module
+        if (window.CommentModule) {
+            CommentModule.loadComments(postId, 1);
+        }
     } catch (err) {
+        if (mainLoader) mainLoader.style.display = "none";
         console.error(err);
+
         if(window.toastError) toastError("Could not load post details");
         closePostDetailModal();
     }
@@ -55,7 +71,10 @@ async function loadPostDetailHTML() {
 function closePostDetailModal() {
     // Check if comment input has content
     const commentInput = document.getElementById('detailCommentInput');
-    if (commentInput && commentInput.value.trim().length > 0) {
+    const hasUnsavedMain = commentInput && commentInput.value.trim().length > 0;
+    const hasUnsavedInline = window.CommentModule?.hasUnsavedReply();
+
+    if (hasUnsavedMain || hasUnsavedInline) {
         showDiscardCommentConfirmation();
         return;
     }
@@ -171,10 +190,16 @@ function resetPostDetailView() {
     const existingToggle = captionItem.querySelector(".caption-toggle");
     if (existingToggle) existingToggle.remove();
 
-    document.getElementById("detailCommentsList").innerHTML = "";
+
+    // Reset comment module state
+    if (window.CommentModule) {
+        CommentModule.resetState();
+    }
+    
     // Hide media container initially
     document.getElementById("detailMediaContainer").style.display = "flex"; 
 }
+
 
 // Render Post
 function renderPostDetail(post) {
@@ -183,8 +208,18 @@ function renderPostDetail(post) {
     const username = document.getElementById("detailUsername");
     const location = document.getElementById("detailLocation"); // Not in API, placeholder
 
+    // Enable Profile Preview
+    avatar.classList.add("post-avatar");
+    username.classList.add("post-username");
+    
+    const userInfo = avatar.closest(".user-info");
+    if (userInfo) {
+        userInfo.classList.add("post-user");
+        userInfo.dataset.accountId = post.owner.accountId;
+    }
+
     avatar.src = post.owner.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
-    username.textContent = post.owner.fullName || post.owner.username;
+    username.textContent = PostUtils.truncateName(post.owner.fullName || post.owner.username);
     
     // Header Options Button
     const moreBtn = document.querySelector("#postDetailModal .more-options-btn");
@@ -220,7 +255,7 @@ function renderPostDetail(post) {
     // Update timeago in header
     const timeEl = document.getElementById("detailTime");
     if (timeEl) {
-        timeEl.textContent = "• " + PostUtils.timeAgo(post.createdAt);
+        timeEl.textContent = PostUtils.timeAgo(post.createdAt);
         timeEl.title = PostUtils.formatFullDateTime(post.createdAt);
     }
     
@@ -260,14 +295,32 @@ function renderPostDetail(post) {
         // Render Medias
         post.medias.forEach(media => {
             const item = document.createElement("div");
-            item.className = `detail-media-item ${objectFitClass}`;
+            item.className = `detail-media-item ${objectFitClass} skeleton`; // Add skeleton initially
             
             if (media.type === 1) { // Video
-                 item.innerHTML = `<video src="${media.mediaUrl}" controls></video>`;
+                 const video = document.createElement("video");
+                 video.src = media.mediaUrl;
+                 video.controls = true;
+                 video.className = "img-loaded";
+                 
+                 video.onloadeddata = () => {
+                     item.classList.remove("skeleton");
+                     video.classList.add("show");
+                 };
+                 
+                 item.appendChild(video);
             } else { // Image
                 const img = document.createElement("img");
+                img.className = "img-loaded";
                 img.src = media.mediaUrl;
+                
+                img.onload = () => {
+                    item.classList.remove("skeleton");
+                    img.classList.add("show");
+                };
+                
                 item.appendChild(img);
+
                 
                 // Dominant Color BG if contain
                 if (objectFitClass === "contain" && window.extractDominantColor) {
@@ -395,6 +448,7 @@ async function handleLikePost(postId, btn, iconRef, countEl) {
 
 // Emoji Logic
 async function toggleDetailEmojiPicker(event) {
+    if (event) event.stopPropagation();
     const container = document.getElementById("detailEmojiPicker");
     const input = document.getElementById("detailCommentInput");
     
@@ -422,6 +476,11 @@ window.cancelDiscardComment = cancelDiscardComment;
 // Initialize click-outside handler when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     if (window.EmojiUtils) {
-        window.EmojiUtils.setupClickOutsideHandler('#detailEmojiPicker', '#postDetailModal .emoji-trigger');
+        // Broaden selectors to cover both main post detail and inline replies
+        window.EmojiUtils.setupClickOutsideHandler(
+            '.detail-emoji-picker, .reply-emoji-picker-container', 
+            '.emoji-trigger'
+        );
     }
 });
+

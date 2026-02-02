@@ -6,7 +6,7 @@
   border-radius: 16px;
   box-shadow: var(--shadow-lg);
   padding: 16px;
-  z-index: 9999;
+  z-index: 11000; /* Higher than post-detail-modal (10000) */
   transition:
     opacity var(--transition-normal),
     transform var(--transition-normal);
@@ -48,9 +48,6 @@
   font-weight: 600;
   font-size: 15px;
   color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* ===== Stats ===== */
@@ -147,7 +144,7 @@
 }
 
 /* Message */
-.btn-message {
+.btn-message, .btn-message svg {
   background: var(--accent-primary);
   color: var(--text-white);
 }
@@ -390,7 +387,7 @@
   bottom: 0;
   background: var(--overlay-bg);
   backdrop-filter: blur(4px);
-  z-index: 10000;
+  z-index: 12000; /* Highest priority */
   display: flex;
   align-items: center;
   justify-content: center;

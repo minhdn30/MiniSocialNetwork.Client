@@ -11,19 +11,82 @@
      * @param {string} dateStr 
      * @returns {string} Relative time string
      */
-    PostUtils.timeAgo = function(dateStr) {
+    PostUtils.timeAgo = function(dateStr, short = false) {
         const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
       
-        if (diff < 60) return "just now";
+        if (diff < 60) return short ? "now" : "just now";
       
         const minutes = Math.floor(diff / 60);
-        if (minutes < 60) return `${minutes} minute${minutes > 1 ? "s" : ""} ago`;
+        if (minutes < 60) return short ? `${minutes}m` : `${minutes} minute${minutes > 1 ? "s" : ""} ago`;
       
         const hours = Math.floor(minutes / 60);
-        if (hours < 24) return `${hours} hour${hours > 1 ? "s" : ""} ago`;
+        if (hours < 24) return short ? `${hours}h` : `${hours} hour${hours > 1 ? "s" : ""} ago`;
       
         const days = Math.floor(hours / 24);
-        return `${days} day${days > 1 ? "s" : ""} ago`;
+        if (days < 7) return short ? `${days}d` : `${days} day${days > 1 ? "s" : ""} ago`;
+        
+        const weeks = Math.floor(days / 7);
+        return short ? `${weeks}w` : `${weeks} week${weeks > 1 ? "s" : ""} ago`;
+    };
+
+    /**
+     * Setup comment content with truncation logic (similar to setupCaption)
+     * @param {HTMLElement} el 
+     * @param {string} fullContent 
+     * @param {number} maxLen 
+     */
+    PostUtils.setupCommentContent = function(el, fullContent, maxLen = APP_CONFIG.COMMENT_CONTENT_TRUNCATE_LENGTH) {
+        if (!fullContent || fullContent.length <= maxLen) {
+            el.textContent = fullContent || "";
+            return;
+        }
+
+        const truncatedContent = fullContent.substring(0, maxLen) + "...";
+        
+        el.innerHTML = "";
+        const textNode = document.createTextNode(truncatedContent);
+        el.appendChild(textNode);
+
+        const btn = document.createElement("span");
+        btn.className = "caption-toggle comment-toggle";
+        btn.textContent = "more";
+        btn.style.marginLeft = "4px";
+        
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            const isMore = btn.textContent === "more";
+            if (isMore) {
+                 textNode.textContent = fullContent;
+                 btn.textContent = "less";
+            } else {
+                 textNode.textContent = truncatedContent;
+                 btn.textContent = "more";
+            }
+        };
+
+        el.appendChild(btn);
+    };
+
+
+    /**
+     * Truncate name without cutting in the middle of a word
+     * @param {string} name - Full user name
+     * @param {number} maxLen - Max length before truncation
+     * @returns {string} Truncated name
+     */
+    PostUtils.truncateName = function(name, maxLen = window.APP_CONFIG?.MAX_NAME_DISPLAY_LENGTH || 25) {
+        if (typeof truncateSmart === 'function') {
+            return truncateSmart(name, maxLen);
+        }
+        
+        // Fallback if text-utils.js not loaded
+        if (!name || name.length <= maxLen) return name;
+        let truncated = name.substring(0, maxLen);
+        const lastSpace = truncated.lastIndexOf(' ');
+        if (lastSpace > 0) {
+            truncated = truncated.substring(0, lastSpace);
+        }
+        return truncated + "...";
     };
 
     /**

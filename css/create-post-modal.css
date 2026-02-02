@@ -111,35 +111,7 @@
   cursor: not-allowed;
 }
 
-.modal-next-btn.loading {
-  opacity: 0.7;
-  cursor: wait;
-  padding-right: 45px;
-}
-
-.modal-next-btn .btn-spinner {
-  display: none;
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: translateY(-50%) rotate(360deg);
-  }
-}
-
-.modal-next-btn.loading .btn-spinner {
-  display: block;
-}
+/* Loading styles handled by shared/loading.css */
 
 /* ================= MODAL CONTENT ================= */
 .modal-content {

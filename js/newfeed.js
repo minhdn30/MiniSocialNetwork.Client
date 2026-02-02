@@ -36,7 +36,7 @@ async function loadFeed() {
   // Chỉ hiện loader khi đã có bài viết (load more)
   // Mới vào trang (feed trống) -> Không hiện loader theo yêu cầu
   if (feedContainer.children.length > 0) {
-    loader.style.display = "block";
+    LoadingUtils.toggle(loader, true);
   }
 
   let url = `${API_BASE}/Posts/feed?limit=${LIMIT}`;
@@ -70,7 +70,7 @@ async function loadFeed() {
     console.error(err);
   } finally {
     isLoading = false;
-    loader.style.display = "none";
+    LoadingUtils.toggle(loader, false);
   }
 }
 
@@ -86,8 +86,10 @@ function renderFeed(posts) {
             <img class="post-avatar"
                  src="${post.author?.avatarUrl || APP_CONFIG.DEFAULT_AVATAR}"
                  alt="">
-            <span class="post-username">${post.author?.fullName || "Unknown"}</span>
-            <span class="post-time" title="${PostUtils.formatFullDateTime(post.createdAt)}">• ${PostUtils.timeAgo(post.createdAt)}</span>
+            <span class="post-username">${PostUtils.truncateName(post.author?.fullName || "Unknown")}</span>
+            <span class="post-time" 
+                  title="${PostUtils.formatFullDateTime(post.createdAt)}" 
+                  onclick="openPostDetail('${post.postId}')">• ${PostUtils.timeAgo(post.createdAt)}</span>
           </div>
           <div class="post-actions">
           ${
@@ -150,7 +152,9 @@ function renderFeed(posts) {
     }
     
     initMediaSlider(postEl);
+    setupMediaLoading(postEl);
     applyDominantColors(postEl);
+
     
     // Caption Logic
     const captionEl = postEl.querySelector(".post-caption");
@@ -174,13 +178,14 @@ function renderMedias(medias, postId) {
               // Kiểm tra Type để render đúng tag
               if (m.type === 1) {
                 // Video
-                return `<video src="${m.mediaUrl}" controls></video>`;
+                return `<div class="media-item skeleton"><video class="img-loaded" src="${m.mediaUrl}" controls></video></div>`;
               } else {
                 // Image (type === 0)
-                return `<img src="${m.mediaUrl}" />`;
+                return `<div class="media-item skeleton"><img class="img-loaded" src="${m.mediaUrl}" /></div>`;
               }
             })
             .join("")}
+
         </div>
 
         <button class="nav prev">‹</button>
@@ -209,7 +214,36 @@ function getAspectRatioCSS(feedAspectRatio) {
 }
 
 
+function setupMediaLoading(postEl) {
+  const mediaItems = postEl.querySelectorAll(".media-item");
+  mediaItems.forEach((item) => {
+    const media = item.querySelector("img, video");
+    if (!media) return;
+
+    const onLoaded = () => {
+      item.classList.remove("skeleton");
+      media.classList.add("show");
+    };
+
+    if (media.tagName === "IMG") {
+      if (media.complete) {
+        onLoaded();
+      } else {
+        media.onload = onLoaded;
+      }
+    } else if (media.tagName === "VIDEO") {
+      // Check if video is already ready
+      if (media.readyState >= 2) {
+        onLoaded();
+      } else {
+        media.onloadeddata = onLoaded;
+      }
+    }
+  });
+}
+
 // Apply dominant color background to images
+
 function applyDominantColors(postEl) {
   const images = postEl.querySelectorAll(".media-track img");
   

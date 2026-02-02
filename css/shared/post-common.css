@@ -33,10 +33,6 @@
   font-weight: 600;
   font-size: 15px;
   cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 200px;
   color: var(--text-primary);
 }
 
@@ -45,7 +41,9 @@
   font-size: 14px;
   white-space: nowrap;
   flex-shrink: 0;
+  cursor: pointer;
 }
+
 
 /* ===== Post Actions ===== */
 .post-actions {
@@ -122,6 +120,16 @@
   animation: heartUnpop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
+@keyframes heartBeat {
+  0% { transform: scale(1); }
+  25% { transform: scale(1.15); }
+  50% { transform: scale(1); }
+  75% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+
+
 /* ===== Caption Toggle (more/less) ===== */
 .caption-toggle {
   color: var(--text-tertiary);
@@ -160,3 +168,5 @@
 .post-add-comment input::placeholder {
   color: var(--text-tertiary);
 }
+
+

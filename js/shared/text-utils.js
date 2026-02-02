@@ -36,7 +36,7 @@ function unescapeHtml(text) {
 }
 
 /**
- * Truncate text with ellipsis
+ * Truncate text with ellipsis (basic)
  * @param {string} text - Text to truncate
  * @param {number} maxLength - Maximum length
  * @returns {string} Truncated text
@@ -44,6 +44,29 @@ function unescapeHtml(text) {
 function truncateText(text, maxLength) {
   if (!text || text.length <= maxLength) return text;
   return text.substring(0, maxLength) + "...";
+}
+
+/**
+ * Truncate text without cutting in the middle of a word (smart)
+ * @param {string} text - Text to truncate
+ * @param {number} maxLength - Maximum length
+ * @returns {string} Truncated text
+ */
+function truncateSmart(text, maxLength) {
+  if (!text || text.length <= maxLength) return text;
+
+  // Take a substring of maxLength
+  let truncated = text.substring(0, maxLength);
+
+  // Find the last space within this substring
+  const lastSpace = truncated.lastIndexOf(" ");
+
+  // If there's a space, truncate at the space to avoid cutting a word
+  if (lastSpace > 0) {
+    truncated = truncated.substring(0, lastSpace);
+  }
+
+  return truncated + "...";
 }
 
 /**

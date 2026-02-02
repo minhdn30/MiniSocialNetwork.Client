@@ -64,8 +64,10 @@ function loadCreatePostUserInfo() {
   }
 
   if (nameElement) {
-    nameElement.textContent =
-      fullname && fullname.trim() !== "" ? fullname : "User";
+    const rawName = fullname && fullname.trim() !== "" ? fullname : "User";
+    nameElement.textContent = window.PostUtils 
+      ? PostUtils.truncateName(rawName)
+      : rawName;
   }
 }
 
@@ -211,18 +213,9 @@ function setLoadingState(loading) {
 
   if (actionBtn) {
     if (loading) {
-      actionBtn.classList.add("loading");
-      actionBtn.disabled = true;
-
-      // Add spinner if not exists
-      if (!actionBtn.querySelector(".btn-spinner")) {
-        const spinner = document.createElement("div");
-        spinner.className = "btn-spinner";
-        actionBtn.appendChild(spinner);
-      }
+      LoadingUtils.setButtonLoading(actionBtn, true);
     } else {
-      actionBtn.classList.remove("loading");
-      actionBtn.disabled = false;
+      LoadingUtils.setButtonLoading(actionBtn, false);
     }
   }
 
