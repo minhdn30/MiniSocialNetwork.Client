@@ -54,20 +54,21 @@
                     <div class="post-actions">
                         <div class="left">
                             <div class="action-item" id="detailLikeBtn">
-                                <i data-lucide="heart" id="detailLikeIcon" class="react-icon"></i>
-                                <span class="count" id="detailLikeCount">0</span>
+                                <i data-lucide="heart" id="detailLikeIcon" class="react-icon hover-scale-sm"></i>
+                                <span class="count hover-scale-text" id="detailLikeCount">0</span>
                             </div>
                             <div class="action-item" id="detailCommentBtn" onclick="focusCommentInput()">
-                                <i data-lucide="message-circle"></i>
-                                <span class="count" id="detailCommentCount">0</span>
+                                <i data-lucide="message-circle" class="hover-scale-sm"></i>
+                                <span class="count hover-scale-text" id="detailCommentCount">0</span>
                             </div>
                             <div class="action-item">
-                                <i data-lucide="send"></i>
+                                <i data-lucide="send" class="hover-scale-sm"></i>
                             </div>
                         </div>
                         <div class="action-item bookmark-btn">
-                            <i data-lucide="bookmark"></i>
+                            <i data-lucide="bookmark" class="hover-scale-sm"></i>
                         </div>
+
                     </div>
                     
                     <!-- Add Comment Input -->
@@ -75,8 +76,10 @@
                         <div class="emoji-trigger" onclick="toggleDetailEmojiPicker(event)">
                             <i data-lucide="smile"></i>
                         </div>
-                        <input type="text" id="detailCommentInput" placeholder="Add a comment..." autocomplete="off">
-                        <button id="postCommentBtn" class="post-btn" disabled>Post</button>
+                        <textarea id="detailCommentInput" placeholder="Add a comment..." autocomplete="off" rows="1"></textarea>
+                        <button id="postCommentBtn" class="post-btn" disabled>
+                            <i data-lucide="arrow-up-circle"></i>
+                        </button>
                         
                          <!-- Emoji Picker Container (Absolute positioning) -->
                          <div id="detailEmojiPicker" class="detail-emoji-picker"></div>

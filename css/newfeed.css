@@ -3,6 +3,29 @@
   margin: 0 auto;
 }
 
+/* Realtime update animations (Sliding Counter) */
+.slide-up-out { animation: slide-up-out 0.2s ease-in forwards; }
+.slide-up-in { animation: slide-up-in 0.2s ease-out forwards; }
+.slide-down-out { animation: slide-down-out 0.2s ease-in forwards; }
+.slide-down-in { animation: slide-down-in 0.2s ease-out forwards; }
+
+@keyframes slide-up-out {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(-100%); opacity: 0; }
+}
+@keyframes slide-up-in {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes slide-down-out {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(100%); opacity: 0; }
+}
+@keyframes slide-down-in {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
 /* ===== Post ===== */
 .post {
   padding: 12px;

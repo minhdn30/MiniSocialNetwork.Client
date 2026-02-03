@@ -43,6 +43,11 @@ async function openPostDetail(postId) {
         if (window.CommentModule) {
             CommentModule.loadComments(postId, 1);
         }
+
+        // Join SignalR post group for realtime updates (experimental feature)
+        if (window.PostHub) {
+            await window.PostHub.joinPostGroup(postId);
+        }
     } catch (err) {
         if (mainLoader) mainLoader.style.display = "none";
         console.error(err);
@@ -62,6 +67,9 @@ async function loadPostDetailHTML() {
         
         // Initialize icons for the new content
         if(window.lucide) lucide.createIcons();
+        
+        // Setup comment input
+        setupCommentInput();
     } catch (error) {
         console.error("Error loading post detail template:", error);
     }
@@ -149,6 +157,11 @@ function performClosePostDetail() {
              
              window.PostUtils.syncPostFromDetail(currentPostId, rCount, isReacted, cCount, currentPostCreatedAt);
         }
+    }
+
+    // Leave SignalR post group (experimental feature)
+    if (currentPostId && window.PostHub) {
+        window.PostHub.leavePostGroup(currentPostId);
     }
 
     const modal = document.getElementById(POST_DETAIL_MODAL_ID);
@@ -349,7 +362,9 @@ function renderPostDetail(post) {
         if (clickedIcon) {
             handleLikePost(post.postId, likeBtn, likeIcon, likeCount);
         } else if (clickedCount) {
-            if (window.toastInfo) toastInfo("Feature coming soon: List of people who reacted");
+            if (window.InteractionModule) {
+                InteractionModule.openReactList(post.postId);
+            }
         }
     };
     
@@ -455,13 +470,84 @@ async function toggleDetailEmojiPicker(event) {
     if (window.EmojiUtils) {
         await EmojiUtils.togglePicker(container, (emoji) => {
             EmojiUtils.insertAtCursor(input, emoji.native);
+            autoResizeCommentInput();
         });
+    }
+}
+
+// Auto-resize comment input
+function autoResizeCommentInput() {
+    const input = document.getElementById("detailCommentInput");
+    if (input) {
+        input.style.height = 'auto';
+        input.style.height = input.scrollHeight + 'px';
     }
 }
 
 // Comment focus
 function focusCommentInput() {
     document.getElementById("detailCommentInput").focus();
+}
+
+// Submit main comment
+async function submitComment() {
+    const input = document.getElementById("detailCommentInput");
+    const btn = document.getElementById("postCommentBtn");
+    
+    if (!input || !btn || !currentPostId) return;
+    
+    const content = input.value.trim();
+    if (!content) return;
+    
+    // Disable input during submission
+    btn.disabled = true;
+    input.disabled = true;
+    
+    try {
+        // Use CommentModule to submit
+        const success = await window.CommentModule.submitMainComment(currentPostId, content);
+        
+        if (success) {
+            // Clear input
+            input.value = '';
+            input.style.height = 'auto';
+            btn.disabled = true;
+        }
+    } finally {
+        input.disabled = false;
+        btn.disabled = input.value.trim().length === 0;
+    }
+}
+
+// Setup comment input on modal load
+function setupCommentInput() {
+    const input = document.getElementById("detailCommentInput");
+    const btn = document.getElementById("postCommentBtn");
+    
+    if (!input || !btn) return;
+    
+    // Set maxlength
+    const maxLength = window.APP_CONFIG?.MAX_COMMENT_INPUT_LENGTH || 500;
+    input.setAttribute('maxlength', maxLength);
+    
+    // Auto-resize on input
+    input.oninput = () => {
+        btn.disabled = input.value.trim().length === 0;
+        autoResizeCommentInput();
+    };
+    
+    // Handle Enter key (Shift+Enter for new line, Enter to submit)
+    input.onkeydown = (e) => {
+        if (e.key === "Enter" && !e.shiftKey && !btn.disabled) {
+            e.preventDefault();
+            submitComment();
+        }
+    };
+    
+    // Handle button click
+    btn.onclick = () => {
+        submitComment();
+    };
 }
 
 

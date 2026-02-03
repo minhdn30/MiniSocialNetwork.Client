@@ -16,26 +16,10 @@ function setAccessToken(token) {
 }
 
 /**
- * Gọi API refresh-token
- * ⚠️ cookie refreshToken đã được backend set HttpOnly
+ * Note: refreshAccessToken is now provided globally by app.js
+ * We use window.refreshAccessToken() instead of a local duplicate
  */
-async function refreshAccessToken() {
-  const res = await fetch(`${API_BASE}/auth/refresh-token`, {
-    method: "POST",
-    credentials: "include", // bắt buộc để gửi cookie
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
 
-  if (!res.ok) {
-    throw new Error("Refresh token failed");
-  }
-
-  const data = await res.json();
-  setAccessToken(data.accessToken);
-  return data.accessToken;
-}
 
 /* =========================
    START HUB
@@ -78,7 +62,7 @@ async function startChatHub() {
     // Nếu do token hết hạn → refresh rồi connect lại
     if (err?.message?.includes("401")) {
       try {
-        await refreshAccessToken();
+        await window.refreshAccessToken();
       } catch {
         console.warn("🔐 Refresh token invalid → logout");
         logout(); // bạn đã có sẵn hàm này
@@ -103,7 +87,7 @@ async function startChatHub() {
     // Nếu start fail do 401 → refresh token
     if (err?.message?.includes("401")) {
       try {
-        await refreshAccessToken();
+        await window.refreshAccessToken();
       } catch {
         logout();
         return;

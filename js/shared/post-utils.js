@@ -41,7 +41,10 @@
             return;
         }
 
-        const truncatedContent = fullContent.substring(0, maxLen) + "...";
+        // Use truncateSmart to avoid cutting words
+        const truncatedContent = typeof truncateSmart === 'function' 
+            ? truncateSmart(fullContent, maxLen)
+            : fullContent.substring(0, maxLen) + "...";
         
         el.innerHTML = "";
         const textNode = document.createTextNode(truncatedContent);
@@ -50,7 +53,7 @@
         const btn = document.createElement("span");
         btn.className = "caption-toggle comment-toggle";
         btn.textContent = "more";
-        btn.style.marginLeft = "4px";
+        btn.style.display = "block";
         
         btn.onclick = (e) => {
             e.stopPropagation();
@@ -66,6 +69,7 @@
 
         el.appendChild(btn);
     };
+
 
 
     /**

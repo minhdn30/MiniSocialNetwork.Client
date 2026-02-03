@@ -1,0 +1,30 @@
+# Project Rules for MiniSocialNetwork
+
+## Backend Modification Policy
+
+**CRITICAL:** Backend code requires explicit approval before ANY modifications.
+
+### Rules:
+1. **READ ONLY by default** - All `.cs` files in `e:\PersonalProject\SocialNetwork\MiniSocialNetwork\`
+2. **MUST ASK** before:
+   - Modifying Controllers, Services, Repositories
+   - Changing API endpoints
+   - Updating Entity models
+   - Adding/removing files
+   - Database migrations
+
+3. **ALLOWED without asking:**
+   - Reading/analyzing backend code
+   - Explaining how backend works
+   - Suggesting improvements (but don't implement)
+
+### Workflow for Backend Changes:
+```
+Step 1: Analyze and propose: "I see we could add X to CommentsController. Should I?"
+Step 2: Wait for explicit approval: "OK, do it" / "No, keep it as is"
+Step 3: Only then make changes
+```
+
+### Frontend:
+- ✅ Free to modify (proactive fixes allowed)
+- ⚠️ Unless user explicitly says otherwise

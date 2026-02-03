@@ -78,6 +78,7 @@ function renderFeed(posts) {
   posts.forEach((post) => {
     const postEl = document.createElement("div");
     postEl.className = "post";
+    postEl.setAttribute("data-post-id", post.postId);
 
     // const isLong = post.content && post.content.length > 150; // Handled in setupCaption
     postEl.innerHTML = `
@@ -116,23 +117,23 @@ function renderFeed(posts) {
      data-reacted="${post.isReactedByCurrentUser}">
      
   <i data-lucide="heart"
-     class="react-icon ${post.isReactedByCurrentUser ? "reacted" : ""}">
+     class="react-icon ${post.isReactedByCurrentUser ? "reacted" : ""} hover-scale-sm">
   </i>
 
-  <span class="count">${post.reactCount}</span>
+  <span class="count hover-scale-text" onclick="event.stopPropagation(); window.InteractionModule?.openReactList('${post.postId}')">${post.reactCount}</span>
 </div>
 
 
             <div class="action-item" onclick="openPostDetail('${post.postId}')" style="cursor: pointer;">
-              <i data-lucide="message-circle"></i>
-              <span class="count">${post.commentCount}</span>
+              <i data-lucide="message-circle" class="hover-scale-sm"></i>
+              <span class="count hover-scale-text">${post.commentCount}</span>
             </div>
             <div class="action-item">
-              <i data-lucide="send"></i>
+              <i data-lucide="send" class="hover-scale-sm"></i>
             </div>
           </div>
           <div class="right action-item">
-            <i data-lucide="bookmark"></i>
+            <i data-lucide="bookmark" class="hover-scale-sm"></i>
           </div>
         </div>
       `;

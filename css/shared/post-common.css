@@ -85,16 +85,8 @@
   transition: transform var(--transition-fast) ease;
 }
 
-/* Hover effects - Individual Scaling (Icon) */
-.action-item svg:hover {
-  transform: scale(1.05);
-}
 
-/* React Count Scaling */
-.react-btn .count:hover, 
-#detailLikeBtn .count:hover {
-  transform: scale(1.05);
-}
+
 
 /* React Icon (Heart) States */
 .react-icon.reacted {

@@ -1,0 +1,235 @@
+﻿/* interaction utilities */
+.hover-scale-sm:hover, .hover-scale-sm i:hover, .hover-scale-sm svg:hover { transform: scale(1.1) !important; transition: transform 0.2s ease; }
+.hover-scale-sm:active, .hover-scale-sm i:active, .hover-scale-sm svg:active { transform: scale(0.95) rotate(15deg) !important; opacity: 0.8; }
+.hover-scale-text { display: inline-block; transition: transform var(--transition-fast) ease; }
+.hover-scale-text:hover { transform: scale(1.1) !important; }
+.hover-scale-text:active { transform: scale(0.9) !important; }
+
+/* Interaction Modal Styling - Premium Instagram Style */
+.interaction-modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 20000;
+    visibility: hidden;
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.interaction-modal.show {
+    visibility: visible;
+    opacity: 1;
+}
+
+.interaction-modal .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+}
+
+.interaction-modal .modal-content {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    height: 440px; /* Fixed height to prevent layout break */
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-lg);
+    transform: scale(0.9);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+
+.interaction-modal.show .modal-content {
+    transform: scale(1);
+}
+
+.interaction-modal .modal-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    background: var(--bg-secondary);
+    z-index: 2;
+}
+
+.interaction-modal .modal-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.interaction-modal .close-btn {
+    position: absolute;
+    right: 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background 0.2s;
+}
+
+.interaction-modal .close-btn:hover {
+    background: var(--bg-hover);
+}
+
+.interaction-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+}
+
+.interaction-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    gap: 12px;
+}
+
+.interaction-item .user-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0; /* Important for truncation */
+}
+
+.interaction-item .avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 1px solid var(--border-tertiary);
+}
+
+.interaction-item .name-box {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.interaction-item .fullname {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    /* Truncation logic */
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.interaction-item .follower-tag {
+    font-size: 12px;
+    color: var(--text-tertiary);
+}
+
+.interaction-item .action-box {
+    flex-shrink: 0;
+}
+
+.interaction-item .follow-btn {
+    width: 110px; /* Fixed width for perfect equality */
+    height: 32px;
+    padding: 0 4px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    background: var(--accent-secondary);
+    color: var(--text-white);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.interaction-item .follow-btn:hover {
+    background: var(--accent-secondary-hover);
+}
+
+.interaction-item .view-profile-btn {
+    background: var(--accent-primary);
+}
+
+.interaction-item .view-profile-btn:hover {
+    background: var(--accent-hover);
+}
+
+.interaction-item .follow-btn:active {
+    transform: scale(0.98);
+}
+
+.interaction-item .follow-btn.following {
+    background: var(--border-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+}
+
+/* Hover effect for following state */
+.interaction-item .follow-btn.following:hover {
+    background: var(--border-secondary);
+    color: var(--text-primary);
+    border-color: var(--border-secondary);
+}
+
+.interaction-loader {
+    width: 100%;
+    padding: 16px 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.loader-spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ================= CUSTOM SCROLLBAR (Match Post Detail) ================= */
+.interaction-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.interaction-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.interaction-list::-webkit-scrollbar-thumb {
+  background: var(--text-primary);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.interaction-list::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-primary);
+}
+
+body.light-mode .interaction-modal .modal-backdrop {
+    background: rgba(0, 0, 0, 0.5);
+}

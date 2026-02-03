@@ -6,7 +6,7 @@
   border-radius: 16px;
   box-shadow: var(--shadow-lg);
   padding: 16px;
-  z-index: 11000; /* Higher than post-detail-modal (10000) */
+  z-index: 30000; /* Higher than interaction modal (20000) */
   transition:
     opacity var(--transition-normal),
     transform var(--transition-normal);
@@ -387,7 +387,7 @@
   bottom: 0;
   background: var(--overlay-bg);
   backdrop-filter: blur(4px);
-  z-index: 12000; /* Highest priority */
+  z-index: 31000; /* Highest priority */
   display: flex;
   align-items: center;
   justify-content: center;

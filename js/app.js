@@ -4,6 +4,11 @@
 const app = document.getElementById("app");
 let refreshPromise = null;
 
+// Initialize global config from local storage
+if (window.APP_CONFIG) {
+  APP_CONFIG.CURRENT_USER_ID = localStorage.getItem("accountId");
+}
+
 /* =========================
    ROUTER
    ========================= */
@@ -229,3 +234,6 @@ function uploadFormDataWithProgress(url, formData, onProgress) {
     xhr.send(formData);
   });
 }
+
+// Export refreshAccessToken globally for reuse (e.g., SignalR)
+window.refreshAccessToken = refreshAccessToken;

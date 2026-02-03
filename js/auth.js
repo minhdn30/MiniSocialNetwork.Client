@@ -68,6 +68,7 @@ loginForm.addEventListener("submit", async (e) => {
     localStorage.setItem("accessToken", data.accessToken);
     localStorage.setItem("fullname", data.fullname || "");
     localStorage.setItem("avatarUrl", data.avatarUrl || "");
+    localStorage.setItem("accountId", data.accountId || "");
 
     showToast("Login successful!", "success");
     setTimeout(() => {
