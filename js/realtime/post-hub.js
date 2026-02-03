@@ -205,16 +205,6 @@ function updatePostReactCount(postId, newReactCount) {
     }
   }
 
-  // 1.1 Update in interaction (react list) modal if open
-  const interactModal = document.getElementById("interactionModal");
-  if (interactModal && interactModal.classList.contains("show")) {
-    // We need to check if this modal is for the right post
-    // InteractionModule usually stores currentPostId in its closure, 
-    // but we can check the window.InteractionModule if it's exposed or just checkpostId
-    if (window.InteractionModule && window.InteractionModule.getCurrentPostId() === postId) {
-        animateValue(document.getElementById("interactionTotalCount"), newReactCount);
-    }
-  }
 
   // 2. Also update in newsfeed if visible
   const feedPost = document.querySelector(`.post[data-post-id="${postId}"]`);

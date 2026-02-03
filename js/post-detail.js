@@ -181,7 +181,12 @@ function performClosePostDetail() {
         
         // Clear comment input
         const commentInput = document.getElementById('detailCommentInput');
-        if (commentInput) commentInput.value = '';
+        const postBtn = document.getElementById('postCommentBtn');
+        if (commentInput) {
+            commentInput.value = '';
+            commentInput.style.height = 'auto';
+        }
+        if (postBtn) postBtn.disabled = true;
     }
 }
 

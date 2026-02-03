@@ -90,9 +90,9 @@
 
 /* React Icon (Heart) States */
 .react-icon.reacted {
-  fill: #ff3040;
-  color: #ff3040;
-  stroke: #ff3040;
+  fill: var(--accent-primary);
+  color: var(--accent-primary);
+  stroke: var(--accent-primary);
   animation: heartPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 

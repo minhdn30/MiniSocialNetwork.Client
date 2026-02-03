@@ -160,7 +160,7 @@ const CommentModule = (function () {
                 <span class="comment-text"></span>
             </div>
             <div class="comment-footer">
-                <div class="comment-action-item like-btn ${isReacted ? "active" : ""}" onclick="CommentModule.handleLikeComment('${comment.commentId}', this)">
+                <div class="comment-action-item like-btn ${isReacted ? "active" : ""}" onclick="CommentModule.handleLikeComment('${comment.commentId}', this, event)">
                     <i data-lucide="heart" class="comment-react-icon react-icon ${isReacted ? "reacted" : ""} hover-scale-sm"></i>
                     <span class="comment-count react-count hover-scale-text">${comment.reactCount > 0 ? comment.reactCount : ""}</span>
                 </div>
@@ -170,7 +170,9 @@ const CommentModule = (function () {
                 </div>
             </div>
             <!-- Replies into separate list -->
-            <div class="replies-list-container" style="display: none;"></div>
+            <div class="replies-list-container" style="display: none;">
+                <div class="replies-list" data-parent-id="${comment.commentId}"></div>
+            </div>
             <!-- Reply form -->
             <div class="reply-form-container"></div>
         </div>
@@ -194,9 +196,22 @@ const CommentModule = (function () {
   /**
    * Handle liking a comment
    */
-  async function handleLikeComment(commentId, container) {
+  async function handleLikeComment(commentId, container, event) {
     const icon = container.querySelector(".react-icon");
     let countEl = container.querySelector(".react-count");
+
+    // Check if clicked the count specifically to open modal
+    if (event) {
+        const clickedCount = event.target.closest(".react-count");
+        if (clickedCount && window.InteractionModule) {
+            const currentCount = parseInt(countEl.textContent) || 0;
+            if (currentCount > 0) {
+                event.stopPropagation();
+                InteractionModule.openReactList(commentId, 'comment');
+                return;
+            }
+        }
+    }
 
     const isLiked = icon.classList.contains("reacted");
 
@@ -390,15 +405,15 @@ const CommentModule = (function () {
 
       if (window.toastSuccess) toastSuccess("Reply posted!");
       
+      const result = await response.json();
       container.innerHTML = ""; // Close form
-      
-      // Reload replies for this comment
+
       const commentItem = container.closest(".comment-item");
       const repliesContainer = commentItem?.querySelector(".replies-list-container");
+      
       if (repliesContainer) {
-        repliesContainer.innerHTML = "";
-        repliesContainer.classList.remove("loaded");
-        loadReplies(parentCommentId, 1);
+        repliesContainer.style.display = "flex";
+        injectNewReply(result);
       }
       
     } catch (err) {
@@ -464,11 +479,12 @@ const CommentModule = (function () {
     if (!item) return;
 
     const container = item.querySelector(".replies-list-container");
+    const repliesList = item.querySelector(".replies-list");
     const pageSize = window.APP_CONFIG?.REPLIES_PAGE_SIZE || 3;
 
     container.style.display = "flex";
 
-    if (page === 1) container.innerHTML = `<div class="replies-loading">Loading...</div>`;
+    if (page === 1) repliesList.innerHTML = `<div class="replies-loading">Loading...</div>`;
 
     try {
         const res = await apiFetch(`/Comments/replies/${commentId}?page=${page}&pageSize=${pageSize}`);
@@ -477,11 +493,11 @@ const CommentModule = (function () {
         const data = await res.json();
         const replies = data.items || [];
 
-        if (page === 1) container.innerHTML = "";
-        else container.querySelector(".replies-loading")?.remove();
+        if (page === 1) repliesList.innerHTML = "";
+        else repliesList.querySelector(".replies-loading")?.remove();
 
         replies.forEach(reply => {
-            container.appendChild(renderReplyItem(reply));
+            repliesList.appendChild(renderReplyItem(reply));
         });
 
         container.classList.add("loaded");
@@ -496,7 +512,7 @@ const CommentModule = (function () {
                 moreBtn.remove();
                 loadReplies(commentId, page + 1);
             };
-            container.appendChild(moreBtn);
+            repliesList.appendChild(moreBtn);
         }
 
         if (window.lucide) lucide.createIcons();
@@ -531,7 +547,7 @@ const CommentModule = (function () {
                 <span class="comment-text"></span>
             </div>
             <div class="comment-footer">
-                <div class="comment-action-item like-btn ${isReacted ? "active" : ""}" onclick="CommentModule.handleLikeComment('${reply.commentId}', this)">
+                <div class="comment-action-item like-btn ${isReacted ? "active" : ""}" onclick="CommentModule.handleLikeComment('${reply.commentId}', this, event)">
                     <i data-lucide="heart" class="comment-react-icon react-icon ${isReacted ? "reacted" : ""} hover-scale-sm"></i>
                     <span class="comment-count react-count hover-scale-text">${reply.reactCount > 0 ? reply.reactCount : ""}</span>
                 </div>
@@ -611,7 +627,7 @@ const CommentModule = (function () {
     const item = renderCommentItem(comment);
     
     // Highlight effect
-    item.style.backgroundColor = "var(--bg-secondary)";
+    item.style.backgroundColor = "var(--bg-active)";
     item.style.transition = "background-color 2s ease";
     
     list.prepend(item);
@@ -631,21 +647,28 @@ const CommentModule = (function () {
     const repliesList = document.querySelector(`.replies-list[data-parent-id="${reply.parentCommentId}"]`);
     if (!repliesList) return;
 
+    const container = repliesList.closest(".replies-list-container");
+    
     // Check if it's already there
-    if (document.querySelector(`.reply-item[data-comment-id="${reply.commentId}"]`)) return;
+    if (document.querySelector(`.reply-item[data-reply-id="${reply.commentId}"]`)) return;
 
     // Render item
     const item = renderReplyItem(reply);
 
     // Highlight effect
-    item.style.backgroundColor = "var(--bg-secondary)";
+    item.style.backgroundColor = "var(--bg-active)";
     item.style.transition = "background-color 2s ease";
+
+    // Show container if it was hidden
+    if (container) {
+        container.style.display = "flex";
+    }
 
     repliesList.appendChild(item);
 
     // Fade out highlight
     setTimeout(() => {
-      item.style.backgroundColor = "transparent";
+        item.style.backgroundColor = "transparent";
     }, 100);
 
     if (window.lucide) lucide.createIcons();

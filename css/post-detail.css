@@ -271,13 +271,29 @@
     color: var(--text-primary); 
     font-size: 14px;
     resize: none;
-    overflow-y: hidden;
+    overflow-y: auto;
     min-height: 20px;
     max-height: 100px;
     font-family: inherit;
     line-height: 1.4;
     word-wrap: break-word;
     overflow-wrap: break-word;
+}
+
+#detailCommentInput::-webkit-scrollbar {
+    width: 4px;
+}
+#detailCommentInput::-webkit-scrollbar-track {
+    background: transparent;
+}
+#detailCommentInput::-webkit-scrollbar-thumb,
+.reply-input::-webkit-scrollbar-thumb {
+    background: var(--text-tertiary);
+    border-radius: 10px;
+    cursor: pointer;
+}
+#detailCommentInput::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-primary);
 }
 .post-btn { 
     background: none; 

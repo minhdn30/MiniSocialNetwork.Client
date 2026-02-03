@@ -1,11 +1,12 @@
 /**
  * Interaction Module
- * Handles displaying list of people who reacted to posts
+ * Handles displaying list of people who reacted to posts or comments
  */
 
 const InteractionModule = (function () {
     let currentPage = 1;
-    let currentPostId = null;
+    let targetId = null;
+    let targetType = 'post'; // 'post' or 'comment'
     let hasNextPage = false;
     let isLoading = false;
     const PAGE_SIZE = window.APP_CONFIG?.INTERACTIONS_PAGE_SIZE || 10;
@@ -13,10 +14,13 @@ const InteractionModule = (function () {
     const MODAL_ID = "interactionModal";
 
     /**
-     * Open the react list modal for a post
+     * Open the react list modal
+     * @param {string} id - PostId or CommentId
+     * @param {string} type - 'post' or 'comment'
      */
-    async function openReactList(postId) {
-        currentPostId = postId;
+    async function openReactList(id, type = 'post') {
+        targetId = id;
+        targetType = type;
         currentPage = 1;
 
         // 1. Ensure modal exists
@@ -34,13 +38,13 @@ const InteractionModule = (function () {
         listContainer.innerHTML = "";
         
         // 3. Initial load
-        await loadReacts(postId, 1);
+        await loadReacts(targetId, 1);
     }
 
     /**
      * Load follows from API
      */
-    async function loadReacts(postId, page = 1) {
+    async function loadReacts(id, page = 1) {
         if (isLoading) return;
         
         const listContainer = document.getElementById("interactionList");
@@ -51,7 +55,11 @@ const InteractionModule = (function () {
         if (loader) loader.style.display = "flex";
 
         try {
-            const res = await apiFetch(`/Posts/${postId}/reacts?page=${page}&pageSize=${PAGE_SIZE}`);
+            const apiPath = targetType === 'comment' 
+                ? `/Comments/${id}/reacts` 
+                : `/Posts/${id}/reacts`;
+
+            const res = await apiFetch(`${apiPath}?page=${page}&pageSize=${PAGE_SIZE}`);
             if (!res.ok) throw new Error("Failed to load reacts");
 
             const data = await res.json();
@@ -69,7 +77,7 @@ const InteractionModule = (function () {
 
             // AUTO LOAD NEXT PAGE if container not full enough to scroll
             if (hasNextPage) {
-                checkNeedsMoreReacts(postId);
+                checkNeedsMoreReacts(id);
             }
 
         } catch (error) {
@@ -84,7 +92,7 @@ const InteractionModule = (function () {
     /**
      * Helper to ensure scrollbar appears if there's more content
      */
-    function checkNeedsMoreReacts(postId) {
+    function checkNeedsMoreReacts(id) {
         const listContainer = document.getElementById("interactionList");
         if (!listContainer) return;
 
@@ -94,7 +102,7 @@ const InteractionModule = (function () {
             
             // If the content is shorter than the scroll area, load more
             if (listContainer.scrollHeight <= listContainer.clientHeight + 20) {
-                loadReacts(postId, currentPage + 1);
+                loadReacts(id, currentPage + 1);
             }
         }, 150);
     }
@@ -156,7 +164,7 @@ const InteractionModule = (function () {
             const threshold = listContainer.scrollHeight - 30;
 
             if (scrollPos >= threshold) {
-                loadReacts(currentPostId, currentPage + 1);
+                loadReacts(targetId, currentPage + 1);
             }
         };
     }
@@ -255,23 +263,33 @@ const InteractionModule = (function () {
      * Sync the latest count from modal back to underlying newsfeed/detail UI
      */
     function syncCountToUI() {
-        if (!currentPostId) return;
+        if (!targetId) return;
         
         const countText = document.getElementById("interactionTotalCount")?.textContent;
         const newCount = parseInt(countText) || 0;
         
-        // Use the same logic as PostHub but directly
-        // 1. Update in post detail
-        const detailLikeCount = document.getElementById("detailLikeCount");
-        if (detailLikeCount && window.currentPostId === currentPostId) {
-            detailLikeCount.textContent = newCount;
-        }
+        if (targetType === 'post') {
+            // 1. Update in post detail
+            const detailLikeCount = document.getElementById("detailLikeCount");
+            if (detailLikeCount && window.currentPostId === targetId) {
+                detailLikeCount.textContent = newCount;
+            }
 
-        // 2. Update in newsfeed
-        const feedPost = document.querySelector(`.post[data-post-id="${currentPostId}"]`);
-        if (feedPost) {
-            const countEl = feedPost.querySelector(".react-btn .count");
-            if (countEl) countEl.textContent = newCount;
+            // 2. Update in newsfeed
+            const feedPost = document.querySelector(`.post[data-post-id="${targetId}"]`);
+            if (feedPost) {
+                const countEl = feedPost.querySelector(".react-btn .count");
+                if (countEl) countEl.textContent = newCount;
+            }
+        } else if (targetType === 'comment') {
+            // Update in comment list
+            const commentItem = document.querySelector(`.comment-item[data-comment-id="${targetId}"], .reply-item[data-comment-id="${targetId}"]`);
+            if (commentItem) {
+                const countEl = commentItem.querySelector(".react-count");
+                if (countEl) {
+                    countEl.textContent = newCount > 0 ? newCount : "";
+                }
+            }
         }
     }
 
@@ -286,7 +304,7 @@ const InteractionModule = (function () {
             
             modal.classList.remove("show");
             document.body.style.overflow = "";
-            currentPostId = null; // Reset
+            targetId = null; // Reset
         }
     }
 
@@ -323,8 +341,7 @@ const InteractionModule = (function () {
     return {
         openReactList,
         closeReactList,
-        handleFollow,
-        getCurrentPostId: () => currentPostId
+        handleFollow
     };
 })();
 
