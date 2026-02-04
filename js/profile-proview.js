@@ -92,7 +92,7 @@ function renderProfilePreview(data) {
           ? ""
           : data.recentPosts
               .map((p) => `
-                <div class="preview-media-item">
+                <div class="preview-media-item" onclick="if(window.InteractionModule) window.InteractionModule.closeReactList(); if(window.openPostDetail) window.openPostDetail('${p.postId}'); hidePreview();">
                   <img src="${p.mediaUrl}" alt="post">
                 </div>
               `)
@@ -299,12 +299,14 @@ function initProfilePreview() {
 window.initProfilePreview = initProfilePreview;
 
 /* ===== Follow/Unfollow ===== */
+/* ===== Follow/Unfollow ===== */
 async function toggleFollow(userId) {
   isFollowing = !isFollowing;
 
   const btn = document.getElementById("followBtn");
   if (!btn) return;
 
+  // Optimistic UI update for the preview button itself
   if (isFollowing) {
     btn.innerHTML = `
       <i data-lucide="check"></i>
@@ -323,17 +325,12 @@ async function toggleFollow(userId) {
     lucide.createIcons();
   }
 
-  // Call actual API
-  try {
-    if (isFollowing) {
-        await API.Follows.follow(userId);
-    } else {
-        await API.Follows.unfollow(userId);
-    }
-  } catch (err) {
-    console.error(err);
-    if (window.toastError) toastError("Failed to update follow status");
-    // Revert UI if needed (complex for this simple implementation)
+  // Call FollowModule to handle API and sync other UI
+  // Note: We already updated local button optimistically, but FollowModule also syncs feed
+  if (isFollowing) {
+     if (window.FollowModule) await FollowModule.followUser(userId);
+  } else {
+     if (window.FollowModule) await FollowModule.unfollowUser(userId);
   }
 }
 
@@ -410,3 +407,6 @@ function openChat(userId) {
   // TODO: Open chat with user
   console.log("Open chat with:", userId);
 }
+
+// Expose currentAccountId for external checks (e.g. from follow.js)
+window.getProfilePreviewAccountId = () => currentAccountId;

@@ -592,8 +592,9 @@ async function handleLikePost(postId, btn, iconRef, countEl) {
 
     try {
         const res = await apiFetch(`/Posts/${postId}/react`, { method: "POST" });
-        if (res.status === 403) {
+        if (res.status === 403 || res.status === 400) {
             PostUtils.hidePost(postId);
+            if (window.toastInfo) toastInfo("This post is no longer available.");
             return;
         }
         if (!res.ok) throw new Error("React failed");

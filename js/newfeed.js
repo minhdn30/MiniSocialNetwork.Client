@@ -91,7 +91,7 @@ function renderFeed(posts) {
           <div class="post-actions">
           ${
             !post.isOwner && !post.author.isFollowedByCurrentUser
-              ? `<button class="follow-btn" onclick="followUser('${post.author.accountId}', this)">
+              ? `<button class="follow-btn" onclick="FollowModule.followUser('${post.author.accountId}', this)">
            Follow
          </button>`
               : ""
@@ -408,7 +408,8 @@ document.addEventListener("click", async (e) => {
     // 2️⃣ Call API
     const res = await API.Posts.toggleReact(postId);
 
-    if (res.status === 403) {
+    if (res.status === 403 || res.status === 400) {
+      if (window.toastInfo) toastInfo("This post is no longer available.");
       PostUtils.hidePost(postId);
       return;
     }
@@ -442,37 +443,6 @@ document.addEventListener("DOMContentLoaded", () => {
   initProfilePreview();
 });
 
-/* ===== Follow / Unfollow from feed ===== */
-async function followUser(accountId, btn) {
-  if (btn) btn.disabled = true;
-  try {
-    const res = await API.Follows.follow(accountId);
-    if (!res.ok) throw new Error("Follow failed");
-    
-    if (window.toastSuccess) toastSuccess("Following");
-    if (btn) btn.remove(); // Or change state
-  } catch (err) {
-    console.error(err);
-    if (window.toastError) toastError("Failed to follow user");
-    if (btn) btn.disabled = false;
-  }
-}
-
-async function unfollowUser(accountId, btn) {
-  if (btn) btn.disabled = true;
-  try {
-    const res = await API.Follows.unfollow(accountId);
-    if (!res.ok) throw new Error("Unfollow failed");
-    
-    if (window.toastInfo) toastInfo("Unfollowed");
-    // Handle UI update
-  } catch (err) {
-    console.error(err);
-    if (window.toastError) toastError("Failed to unfollow user");
-    if (btn) btn.disabled = false;
-  }
-}
-
-// Export for global access
-window.followUser = followUser;
-window.unfollowUser = unfollowUser;
+// Export for global access (though FollowModule handles this now)
+// window.followUser = FollowModule.followUser;
+// window.unfollowUser = FollowModule.unfollowUser;

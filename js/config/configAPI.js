@@ -229,9 +229,9 @@
 
     Follows: {
       follow: (targetId) =>
-        apiFetch(`/Follows/follow/${targetId}`, { method: "POST" }),
+        apiFetch(`/Follows/${targetId}`, { method: "POST" }),
       unfollow: (targetId) =>
-        apiFetch(`/Follows/unfollow/${targetId}`, { method: "POST" }),
+        apiFetch(`/Follows/${targetId}`, { method: "DELETE" }),
     },
   };
 

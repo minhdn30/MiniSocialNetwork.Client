@@ -1176,6 +1176,27 @@ const CommentModule = (function () {
               if (window.toastInfo) toastInfo("The comment you were replying to has been deleted.");
           }
 
+          // If it was a reply, check if parent list is now empty or only has the 'Hide' button
+          if (isReply) {
+              const repliesList = el.closest(".replies-list");
+              if (repliesList) {
+                  // Wait for DOM update
+                  setTimeout(() => {
+                      const remainingItems = repliesList.querySelectorAll(".reply-item");
+                      if (remainingItems.length === 0) {
+                          // Hide the container if no replies left
+                          const container = repliesList.closest(".replies-list-container");
+                          if (container) {
+                              container.style.display = "none";
+                              container.classList.remove("loaded"); // Reset loaded state so it fetches again if new replies appear
+                              // Also clear contents (remove buttons)
+                              repliesList.innerHTML = "";
+                          }
+                      }
+                  }, 0);
+              }
+          }
+
           el.remove();
           console.log(`🗑️ Removed deleted ${isReply ? 'reply' : 'comment'} ${commentId} from UI`);
       }

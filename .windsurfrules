@@ -37,3 +37,19 @@ Step 3: Only then make changes
 - **FOLDER REQUIREMENT**: All code related to SignalR/Realtime functionality MUST be located in `js/realtime/`.
 - **ISOLATION REQUIREMENT**: SignalR features must be implemented as "Experimental" or "Optional". The application MUST remain fully functional even if the entire `js/realtime/` folder is deleted or if the SignalR scripts are removed from `index.html`.
 - **IMPLEMENTATION GUIDELINE**: Always use defensive checks (e.g., `if (window.PostHub)`) before calling any realtime functions from other parts of the application.
+
+## Commit Message Policy
+All commit messages must follow this format:
+`type(scope): description`
+
+- **Type**: Must be one of `feat`, `fix`, `refactor`, `docs`, `style`, `test`, `chore`.
+- **Scope**: The name of the feature or module affected (e.g., `post-detail`, `comments`, `auth`).
+- **Description**: A concise summary of changes since the last commit. Not too long, not too short.
+
+**Examples:**
+- `feat(post-detail): add edited status indicator to post detail view`
+- `fix(comments): fix input reset issue on modal close`
+
+## Git Workflow Policy
+- **WAIT FOR APPROVAL**: Do NOT automatically create commits. Use the `git commit` command ONLY when explicitly requested by the user.
+- **SUGGESTION**: You may suggest that a commit is ready and provide the proposed commit message, but wait for user confirmation before executing it.

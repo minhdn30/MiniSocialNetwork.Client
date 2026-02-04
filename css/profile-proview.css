@@ -93,6 +93,7 @@
   border-radius: 8px;
   background: var(--bg-hover);
   position: relative;
+  cursor: pointer;
 }
 
 .preview-media-item img {

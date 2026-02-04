@@ -29,23 +29,10 @@ function showPostOptions(postId, accountId, isOwnPost, isFollowing) {
       </button>
     `;
   } else {
-    const followOption = isFollowing
-      ? `
-        <button class="post-option" onclick="unfollowFromPost('${accountId}')">
-          <i data-lucide="user-minus"></i><span>Unfollow</span>
-        </button>
-      `
-      : `
-        <button class="post-option" onclick="followFromPost('${accountId}')">
-          <i data-lucide="user-plus"></i><span>Follow</span>
-        </button>
-      `;
-
     optionsHTML = `
       <button class="post-option post-option-danger" onclick="reportPost('${postId}')">
         <i data-lucide="flag"></i><span>Report</span>
       </button>
-      ${followOption}
       <button class="post-option" onclick="hidePost('${postId}')">
         <i data-lucide="eye-off"></i><span>Hide</span>
       </button>
@@ -99,8 +86,71 @@ function closePostOptions() {
 /* ===== Own post actions ===== */
 function deletePost(postId) {
   closePostOptions();
-  console.log("Delete post:", postId);
-  toastError("Post deleted (demo)");
+  showDeleteConfirm(postId);
+}
+
+function showDeleteConfirm(postId) {
+    const overlay = document.createElement("div");
+    overlay.className = "post-options-overlay";
+    overlay.id = "deletePostConfirmOverlay";
+
+    const popup = document.createElement("div");
+    popup.className = "post-options-popup";
+
+    popup.innerHTML = `
+        <div class="post-options-header">
+            <h3>Delete this post?</h3>
+            <p>This action cannot be undone.</p>
+        </div>
+        <button class="post-option post-option-danger" onclick="confirmDeletePost('${postId}')">
+            Delete
+        </button>
+        <button class="post-option post-option-cancel" onclick="closeDeleteConfirm()">
+            Cancel
+        </button>
+    `;
+
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
+
+    requestAnimationFrame(() => overlay.classList.add("show"));
+
+    overlay.onclick = (e) => {
+        if (e.target === overlay) closeDeleteConfirm();
+    };
+}
+
+function closeDeleteConfirm() {
+    const overlay = document.getElementById("deletePostConfirmOverlay");
+    if (overlay) {
+        overlay.classList.remove("show");
+        setTimeout(() => overlay.remove(), 200);
+    }
+}
+
+async function confirmDeletePost(postId) {
+    const btn = document.querySelector("#deletePostConfirmOverlay .post-option-danger");
+    if(btn) btn.disabled = true;
+
+    try {
+        const res = await API.Posts.delete(postId);
+        if (!res.ok) throw new Error("Failed to delete post");
+
+        closeDeleteConfirm();
+        
+        // Hide from UI (Modal + Feed)
+        if (window.PostUtils) {
+            PostUtils.hidePost(postId);
+        }
+        
+        if (window.toastSuccess) toastSuccess("Post deleted.");
+
+    } catch (err) {
+        console.error(err);
+        if (window.toastError) toastError("Could not delete post");
+        if(btn) btn.disabled = false;
+        closeDeleteConfirm();
+    }
 }
 
 function editPost(postId) {
@@ -233,3 +283,5 @@ window.showPostOptions = showPostOptions;
 window.closePostOptions = closePostOptions;
 window.showReportReasons = showReportReasons;
 window.submitReport = submitReport;
+window.confirmDeletePost = confirmDeletePost;
+window.closeDeleteConfirm = closeDeleteConfirm;

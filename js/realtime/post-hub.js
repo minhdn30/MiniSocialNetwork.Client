@@ -173,6 +173,16 @@ function setupPostHubHandlers() {
       console.log("📝 Post Updated:", updatedPost);
       handlePostUpdate(updatedPost);
   });
+
+  // Listen for deleted posts
+  postHubConnection.on("ReceiveDeletedPost", (postId) => {
+      console.log("🗑️ Post Deleted:", postId);
+      // Wait a bit to ensure smooth UX if user is the one deleting (race condition)
+      // Actually PostUtils.hidePost handles it gracefully if already closed
+      if (window.PostUtils) {
+          PostUtils.hidePost(postId);
+      }
+  });
 }
 
 /**
