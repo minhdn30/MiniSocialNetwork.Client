@@ -173,8 +173,12 @@ const CommentModule = (function () {
         <div class="comment-content-wrapper">
             <div class="comment-header">
                 <div class="post-user" data-account-id="${comment.owner.accountId}">
-                    <img class="comment-avatar post-avatar" src="${avatarUrl}" alt="avatar" />
-                    <span class="comment-username post-username">${PostUtils.truncateName(comment.owner.fullName || comment.owner.username)}</span>
+                    <a href="#/profile?id=${comment.owner.accountId}" style="text-decoration: none; display: block;" onclick="event.stopPropagation()">
+                        <img class="comment-avatar post-avatar" src="${avatarUrl}" alt="avatar" />
+                    </a>
+                    <a href="#/profile?id=${comment.owner.accountId}" style="text-decoration: none; color: inherit;" onclick="event.stopPropagation()">
+                        <span class="comment-username post-username">${PostUtils.truncateName(comment.owner.fullName || comment.owner.username)}</span>
+                    </a>
                 </div>
                 <div class="comment-header-right">
                     <span class="comment-time" title="${PostUtils.formatFullDateTime(comment.createdAt)}">${timeDisplay}</span>
@@ -627,8 +631,12 @@ const CommentModule = (function () {
         <div class="comment-content-wrapper">
             <div class="comment-header">
                 <div class="post-user" data-account-id="${reply.owner.accountId}">
-                    <img class="comment-avatar post-avatar" src="${avatarUrl}" alt="avatar" />
-                    <span class="comment-username post-username">${PostUtils.truncateName(reply.owner.fullName || reply.owner.username)}</span>
+                    <a href="#/profile?id=${reply.owner.accountId}" style="text-decoration: none; display: block;" onclick="event.stopPropagation()">
+                        <img class="comment-avatar post-avatar" src="${avatarUrl}" alt="avatar" />
+                    </a>
+                    <a href="#/profile?id=${reply.owner.accountId}" style="text-decoration: none; color: inherit;" onclick="event.stopPropagation()">
+                        <span class="comment-username post-username">${PostUtils.truncateName(reply.owner.fullName || reply.owner.username)}</span>
+                    </a>
                 </div>
                 <div class="comment-header-right">
                     <span class="comment-time" title="${PostUtils.formatFullDateTime(reply.createdAt)}">${timeDisplay}</span>

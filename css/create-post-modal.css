@@ -29,10 +29,11 @@
   }
 }
 
-.modal-container {
+#createPostModal .modal-container {
   background: var(--bg-primary);
   border-radius: 16px;
   width: 1020px;
+  max-width: 1020px;
   height: 700px;
   display: flex;
   flex-direction: column;
@@ -114,8 +115,12 @@
 /* Loading styles handled by shared/loading.css */
 
 /* ================= MODAL CONTENT ================= */
-.modal-content {
+#createPostModal .modal-content {
   display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  width: 100% !important;
+  max-width: none !important;
   flex: 1;
   overflow: hidden;
 }
@@ -136,8 +141,9 @@
   min-height: 400px;
 }
 
-.step1-media {
+#createPostModal .step1-media {
   flex: 1.5;
+  min-width: 0;
 }
 
 /* ================= MEDIA PLACEHOLDER ================= */
@@ -479,7 +485,7 @@
 }
 
 /* ================= STEP 1 RIGHT PANEL ================= */
-.step1-panel {
+.post-details-panel.step1-panel {
   width: 340px;
   background: var(--bg-primary);
   border-left: 1px solid var(--border-tertiary);
@@ -803,9 +809,9 @@
   object-fit: cover;
 }
 
-/* ================= DETAILS PANEL ================= */
-.post-details-panel {
+#createPostModal .post-details-panel {
   width: 400px;
+  flex-shrink: 0;
   background: var(--bg-primary);
   display: flex;
   flex-direction: column;
@@ -1291,4 +1297,5 @@
     transform: translateY(0);
   }
 }
+
 

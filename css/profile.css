@@ -1,0 +1,438 @@
+.profile-container {
+    max-width: 935px;
+    margin: 0 auto;
+    padding: 30px 20px 0;
+}
+
+/* ===== Profile Cover ===== */
+.profile-cover {
+    width: 100%;
+    height: 250px;
+    background-color: var(--bg-secondary);
+    overflow: hidden;
+    margin-bottom: 20px;
+    border-radius: 8px;
+    position: relative;
+}
+
+.profile-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* ===== Profile Header ===== */
+.profile-header {
+    display: flex;
+    margin-bottom: 44px;
+    gap: 30px;
+    align-items: flex-start;
+}
+
+.profile-avatar-container {
+    flex-shrink: 0;
+}
+
+.profile-avatar-wrapper {
+    position: relative;
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    padding: 3px;
+    background: var(--glass-border);
+}
+
+.profile-avatar-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    border: 2px solid var(--bg-primary);
+}
+
+.profile-info-container {
+    flex: 2;
+}
+
+.profile-username-row {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.profile-username {
+    font-size: 20px;
+    font-weight: 300;
+    color: var(--text-primary);
+}
+
+.profile-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-profile {
+    padding: 7px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.btn-edit-profile {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text-primary);
+}
+
+.btn-edit-profile:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.btn-follow-profile {
+    background: var(--accent-primary);
+    border: none;
+    color: white;
+}
+
+.btn-follow-profile:hover {
+    filter: brightness(1.1);
+}
+
+.btn-following-profile {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ===== Stats ===== */
+.profile-stats {
+    display: flex;
+    gap: 40px;
+    margin-bottom: 20px;
+    list-style: none;
+    padding: 0;
+}
+
+.profile-stats li {
+    font-size: 16px;
+    color: var(--text-primary);
+}
+
+.profile-stats b {
+    font-weight: 600;
+}
+
+.profile-bio {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    white-space: pre-wrap; /* Preserve newlines */
+}
+
+.profile-fullname {
+    font-weight: 600;
+    display: block;
+    margin-bottom: 4px;
+}
+
+/* ===== Edit Profile Modal ===== */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+}
+
+.modal-content {
+    background: var(--bg-primary);
+    width: 100%;
+    max-width: 500px;
+    border-radius: 12px;
+    border: 1px solid var(--glass-border);
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
+}
+
+.modal-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--glass-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-group label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+    background: var(--bg-secondary);
+    border: 1px solid var(--glass-border);
+    padding: 10px;
+    border-radius: 6px;
+    color: white;
+    font-family: inherit;
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.photo-upload-section {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.photo-preview {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--bg-secondary);
+    border: 1px solid var(--glass-border);
+}
+
+.cover-preview {
+    width: 120px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--glass-border);
+}
+
+.modal-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--glass-border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.btn-secondary {
+    background: transparent;
+    border: 1px solid var(--glass-border);
+    color: var(--text-primary);
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.btn-primary {
+    background: var(--accent-primary);
+    border: none;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+/* ===== Highlights Placeholder ===== */
+.profile-highlights {
+    display: flex;
+    gap: 18px;
+    padding: 0 0 44px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.highlight-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.highlight-circle {
+    width: 77px;
+    height: 77px;
+    border-radius: 50%;
+    padding: 3px;
+    border: 1px solid var(--glass-border);
+    background: var(--bg-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.highlight-circle i {
+    color: var(--text-tertiary);
+    width: 30px;
+    height: 30px;
+}
+
+.highlight-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* ===== Tabs ===== */
+.profile-tabs {
+    border-top: 1px solid var(--glass-border);
+    display: flex;
+    justify-content: center;
+    gap: 60px;
+}
+
+.profile-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 0;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-top: 1px solid transparent;
+    margin-top: -1px;
+    transition: all var(--transition-fast);
+}
+
+.profile-tab.active {
+    color: var(--text-primary);
+    border-top: 1px solid var(--text-primary);
+}
+
+.profile-tab i {
+    width: 14px;
+    height: 14px;
+}
+
+/* ===== Post Grid ===== */
+.profile-posts-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px; /* Instagram style gap is tiny */
+    margin-top: 20px;
+}
+
+.grid-post-item {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    cursor: pointer;
+    background: var(--bg-secondary);
+}
+
+.grid-post-item img,
+.grid-post-item video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.grid-post-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+    color: white;
+}
+
+.grid-post-item:hover .grid-post-overlay {
+    opacity: 1;
+}
+
+.overlay-stat {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 600;
+}
+
+.overlay-stat i {
+    width: 20px;
+    height: 20px;
+    fill: white;
+}
+
+.multi-media-icon {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    color: white;
+    filter: drop-shadow(0 0 4px rgba(0,0,0,0.5));
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+    .profile-header {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 20px;
+    }
+
+    .profile-stats {
+        justify-content: center;
+        gap: 20px;
+    }
+
+    .profile-tabs {
+        gap: 30px;
+    }
+
+    .profile-username-row {
+        flex-direction: column;
+        gap: 10px;
+    }
+}

@@ -67,8 +67,17 @@
         const clonedRes = res.clone();
         try {
             const data = await clonedRes.json();
-            if (data.message && data.message.toLowerCase().includes("reactivate")) {
-                handleGlobalReactivation(data.message);
+            // If the message contains status info, it's likely our AccountStatusMiddleware
+            if (data.message && (data.message.toLowerCase().includes("status") || data.message.toLowerCase().includes("reactivate"))) {
+                console.warn("🚫 Account restricted, logging out...");
+                localStorage.removeItem("accessToken");
+                localStorage.removeItem("accountId");
+                localStorage.removeItem("fullname");
+                localStorage.removeItem("avatarUrl");
+                
+                if (!window.location.pathname.includes("auth.html")) {
+                    window.location.href = "auth.html?reason=restricted";
+                }
             }
         } catch (e) {
             // Not JSON or no message
@@ -99,11 +108,14 @@
     }
   }
 
-  function uploadFormDataWithProgress(url, formData, onProgress) {
+  function uploadFormDataWithProgress(url, formData, onProgress, method = "POST") {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       const baseUrl = window.APP_CONFIG?.API_BASE || "http://localhost:5000/api";
-      xhr.open("POST", baseUrl + url);
+      // Hook into global loader
+      if (window.showGlobalLoader) window.showGlobalLoader(0);
+
+      xhr.open(method, baseUrl + url);
       xhr.withCredentials = true;
 
       const accessToken = localStorage.getItem("accessToken");
@@ -120,15 +132,22 @@
 
       xhr.onreadystatechange = function () {
         if (xhr.readyState === 4) {
+          if (window.hideGlobalLoader) window.hideGlobalLoader();
           const status = xhr.status;
           const text = xhr.responseText;
           const ok = status >= 200 && status < 300;
-
+          
           if (status === 403) {
              try {
                  const data = JSON.parse(text);
-                 if (data.message && data.message.toLowerCase().includes("reactivate")) {
-                     handleGlobalReactivation(data.message);
+                 if (data.message && (data.message.toLowerCase().includes("status") || data.message.toLowerCase().includes("reactivate"))) {
+                     localStorage.removeItem("accessToken");
+                     localStorage.removeItem("accountId");
+                     localStorage.removeItem("fullname");
+                     localStorage.removeItem("avatarUrl");
+                     if (!window.location.pathname.includes("auth.html")) {
+                        window.location.href = "auth.html?reason=restricted";
+                     }
                  }
              } catch(e) {}
           }
@@ -217,6 +236,8 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
         }),
+      getByAccountId: (accountId, page, pageSize) =>
+        apiFetch(`/Posts/profile/${accountId}?page=${page}&pageSize=${pageSize}`),
     },
 
     Comments: {
@@ -253,6 +274,10 @@
     Accounts: {
       getProfilePreview: (accountId) =>
         apiFetch(`/Accounts/profile-preview/${accountId}`),
+      getProfile: (accountId) =>
+        apiFetch(`/Accounts/profile/${accountId}`),
+      updateProfile: (accountId, formData) =>
+        uploadFormDataWithProgress(`/Accounts/profile/${accountId}`, formData, null, "PUT"),
       reactivate: () =>
         apiFetch(`/Accounts/reactivate`, { method: "POST" }),
     },
@@ -262,6 +287,10 @@
         apiFetch(`/Follows/${targetId}`, { method: "POST" }),
       unfollow: (targetId) =>
         apiFetch(`/Follows/${targetId}`, { method: "DELETE" }),
+      getFollowers: (accountId, page = 1, pageSize = 10) =>
+        apiFetch(`/Follows/${accountId}/followers?page=${page}&pageSize=${pageSize}`),
+      getFollowing: (accountId, page = 1, pageSize = 10) =>
+        apiFetch(`/Follows/${accountId}/following?page=${page}&pageSize=${pageSize}`),
     },
   };
 
@@ -309,4 +338,8 @@
   // Export internal helpers for SignalR or other modules if they rely on window naming
   window.apiFetch = apiFetch;
   window.refreshAccessToken = refreshAccessToken;
+  // Export
+  window.API = API;
+  window.uploadFormDataWithProgress = uploadFormDataWithProgress;
 })();
+

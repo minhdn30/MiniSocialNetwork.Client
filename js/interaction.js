@@ -280,9 +280,11 @@ const InteractionModule = (function () {
             if (wasFollowing) {
                 btn.classList.remove("following");
                 if (span) span.textContent = "Follow";
+                if (window.toastInfo) toastInfo("Unfollowed");
             } else {
                 btn.classList.add("following");
                 if (span) span.textContent = "Following";
+                if (window.toastSuccess) toastSuccess("Following");
             }
             
             // Sync with FollowModule if available

@@ -9,13 +9,19 @@ let cursorPostId = null;
 
 const LIMIT = APP_CONFIG.NEWSFEED_LIMIT;
 
-function initFeed() {
+function initFeed(shouldReload = true) {
   feedContainer = document.getElementById("feed");
   loader = document.getElementById("feed-loader");
 
   if (!feedContainer || !loader) {
     console.warn("Feed DOM not ready");
     return;
+  }
+  
+  // If we are restoring state and have content, don't reset
+  if (!shouldReload && feedContainer.children.length > 0 && cursorCreatedAt) {
+      console.log("Restoring feed state...");
+      return;
   }
 
   // reset state khi vào lại home
@@ -74,11 +80,15 @@ function renderFeed(posts) {
     postEl.innerHTML = `
         <div class="post-header">
           <div class="post-user" data-account-id="${post.author.accountId}">
-            <img class="post-avatar"
-                 src="${post.author?.avatarUrl || APP_CONFIG.DEFAULT_AVATAR}"
-                 alt="">
+            <a href="#/profile?id=${post.author.accountId}" style="text-decoration: none; display: block;">
+                <img class="post-avatar"
+                     src="${post.author?.avatarUrl || APP_CONFIG.DEFAULT_AVATAR}"
+                     alt="">
+            </a>
             <div class="user-meta">
-              <span class="post-username">${PostUtils.truncateName(post.author?.fullName || "Unknown")}</span>
+              <a href="#/profile?id=${post.author.accountId}" style="text-decoration: none; color: inherit;">
+                  <span class="post-username">${PostUtils.truncateName(post.author?.fullName || "Unknown")}</span>
+              </a>
               <div class="post-meta">
                 <span class="post-time" 
                       title="${PostUtils.formatFullDateTime(post.createdAt)}" 

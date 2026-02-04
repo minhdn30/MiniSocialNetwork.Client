@@ -357,6 +357,12 @@ function renderPostDetail(post) {
     avatar.src = post.owner.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
     username.textContent = PostUtils.truncateName(post.owner.fullName || post.owner.username);
     
+    // Update Hrefs for navigation
+    const avatarLink = document.getElementById("detailAvatarLink");
+    const usernameLink = document.getElementById("detailUsernameLink");
+    if (avatarLink) avatarLink.href = `#/profile?id=${post.owner.accountId}`;
+    if (usernameLink) usernameLink.href = `#/profile?id=${post.owner.accountId}`;
+    
     // Header Options Button
     const moreBtn = document.querySelector("#postDetailModal .more-options-btn");
     if (moreBtn) {

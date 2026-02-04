@@ -11,8 +11,8 @@
     <!-- Profile -->
     <a
       class="menu-item profile"
+      href="#/profile"
       data-route="/profile"
-      onclick="navigate(event, '/profile')"
     >
       <img id="sidebar-avatar" alt="avatar" />
       <span id="sidebar-name">User</span>
@@ -20,6 +20,7 @@
 
     <a
       class="menu-item active"
+      href="#/home"
       data-route="/home"
       onclick="navigate(event, '/home')"
     >
@@ -29,8 +30,8 @@
 
     <a
       class="menu-item"
+      href="#/search"
       data-route="/search"
-      onclick="navigate(event, '/search')"
     >
       <i data-lucide="search"></i>
       <span>Search</span>
@@ -38,8 +39,8 @@
 
     <a
       class="menu-item"
+      href="#/explore"
       data-route="/explore"
-      onclick="navigate(event, '/explore')"
     >
       <i data-lucide="compass"></i>
       <span>Explore</span>
@@ -47,8 +48,8 @@
 
     <a
       class="menu-item"
+      href="#/reels"
       data-route="/reels"
-      onclick="navigate(event, '/reels')"
     >
       <i data-lucide="clapperboard"></i>
       <span>Reels</span>
@@ -56,8 +57,8 @@
 
     <a
       class="menu-item"
+      href="#/messages"
       data-route="/messages"
-      onclick="navigate(event, '/messages')"
     >
       <i data-lucide="send"></i>
       <span>Messages</span>
@@ -66,8 +67,8 @@
 
     <a
       class="menu-item"
+      href="#/notifications"
       data-route="/notifications"
-      onclick="navigate(event, '/notifications')"
     >
       <i data-lucide="bell"></i>
       <span>Notifications</span>
@@ -118,7 +119,7 @@
           <span>Settings</span>
           <i data-lucide="chevron-right" class="chevron-icon"></i>
         </div>
-        <div class="dropdown-item" onclick="navigate(event, '/profile')">
+        <div class="dropdown-item" onclick="window.location.hash='#/profile'">
           <i data-lucide="user"></i>
           <span>Profile</span>
         </div>

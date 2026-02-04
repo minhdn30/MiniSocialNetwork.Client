@@ -189,34 +189,52 @@ document.addEventListener("click", (e) => {
   }
 });
 
+
 function setActiveSidebar(route) {
-  document
-    .querySelectorAll(".sidebar .menu-item[data-route]")
-    .forEach((item) => {
-      item.classList.toggle("active", item.dataset.route === route);
-    });
+  // Normalize route to plain path if needed, but hash logic is simpler
+  const currentHash = window.location.hash.slice(1).split("?")[0] || "/home";
+  // If route is passed, use it, otherwise detect from hash
+  const targetRoute = route || currentHash;
+
+  document.querySelectorAll(".sidebar .menu-item").forEach((item) => {
+      // Check both href and data-route
+      const href = item.getAttribute("href");
+      const isActive = href === `#${targetRoute}` || item.dataset.route === targetRoute;
+      item.classList.toggle("active", isActive);
+  });
 }
 
+// Global navigate function usually called by internal logic (deprecating direct usage in favor of href="#...")
 function navigate(e, route) {
-  e.preventDefault();
-
-  // Special handling for create post
+  // If it's a special action like create content, handle it specifically
   if (route === "/create/post") {
-    openCreatePostModal();
-    // Close dropdowns and collapse sidebar
-    closeAllDropdowns();
-    return;
+      e.preventDefault();
+      openCreatePostModal();
+      closeAllDropdowns();
+      return;
   }
-
-  // Set active sidebar
-  setActiveSidebar(route);
-
-  // Close dropdowns and collapse sidebar
-  closeAllDropdowns();
-
-  // TODO: logic SPA của bạn
-  // loadPage(route);
-  // history.pushState({}, "", route);
+  
+  // Special handling for Home (Refresh if already at Home)
+  if (route === "/home" || route === "/") {
+      const currentHash = window.location.hash;
+      // Check if we are already at home (empty hash, #/, or #/home)
+      const isAtHome = !currentHash || currentHash === "#/" || currentHash === "#/home";
+      
+      if (isAtHome) {
+          e.preventDefault();
+          if (window.reloadHome) window.reloadHome();
+          closeAllDropdowns(); // Ensure sidebar closes on mobile/collapsed
+          return;
+      }
+      // If not at home, standard href or hash change will handle it.
+      // But if this was called via onclick (like Logo), we need to manually set hash if not prevented.
+      // For Logo: onclick="navigate(event, '/home')"
+      // If we are NOT at home, we should proceed navigation.
+      // Since 'navigate' usually implies manual handling, let's set hash.
+      if (!e.defaultPrevented && !e.target.getAttribute("href")) {
+          window.location.hash = "#/home";
+      }
+  }
 }
 
 // Theme toggle functionality

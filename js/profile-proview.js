@@ -90,8 +90,6 @@ function renderProfilePreview(data) {
             <div class="name">${PostUtils.truncateName(data.account.fullName)}</div>
             ${statusBadge}
         </div>
-        ${data.account.status === 1 && data.isCurrentUser ? 
-            `<button class="btn-reactivate-link" onclick="reactivateFromPreview()">Reactivate account</button>` : ''}
       </div>
     </div>
 
@@ -422,8 +420,8 @@ function closeUnfollowConfirm(overlay) {
 
 /* ===== View Profile ===== */
 function viewProfile(userId) {
-  // TODO: Navigate to profile page
-  window.location.href = `/profile/${userId}`;
+  // Navigate to profile page using hash
+  window.location.hash = `#/profile?id=${userId}`;
 }
 
 /* ===== Open Chat ===== */
@@ -434,9 +432,3 @@ function openChat(userId) {
 
 // Expose currentAccountId for external checks (e.g. from follow.js)
 window.getProfilePreviewAccountId = () => currentAccountId;
-
-async function reactivateFromPreview() {
-    await window.reactivateAccountAction();
-    hidePreview();
-}
-window.reactivateFromPreview = reactivateFromPreview;

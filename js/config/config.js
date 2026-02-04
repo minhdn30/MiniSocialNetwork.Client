@@ -13,6 +13,7 @@ window.APP_CONFIG = {
   COMMENT_CONTENT_TRUNCATE_LENGTH: 100, // Chiều dài nội dung comment tối đa trước khi bị cắt (tương tự post caption)
   MAX_COMMENT_INPUT_LENGTH: 500, // Số ký tự tối đa khi nhập comment/reply
   INTERACTIONS_PAGE_SIZE: 10, // Số lượng người react load mỗi lần
+  PROFILE_POSTS_PAGE_SIZE: 12, // Số lượng post load mỗi lần ở trang cá nhân (nên là bội số của 3)
 };
 
 
