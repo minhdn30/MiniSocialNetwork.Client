@@ -80,17 +80,61 @@ function router() {
   // 4. Close Overlays
   closeAllOverlayModals();
 
+  // SPECIAL RULE: Do not cache/restore other people's profiles. 
+  // Always force fresh load (reset scroll) for them. Keep cache only for MY profile.
+  if (path === "/profile") {
+      const myId = localStorage.getItem("accountId");
+      let targetId = null;
+      
+      if (hash.includes("?id=")) {
+          targetId = hash.split("?id=")[1].split("&")[0];
+      } else if (hash.includes("/profile/") && hash.split("/profile/")[1]) {
+          targetId = hash.split("/profile/")[1].split("?")[0];
+      }
+
+      // If targetId exists (not empty) and is different from myId -> Update Strategy: CLEAR CACHE
+      if (targetId && myId && targetId.toLowerCase() !== myId.toLowerCase()) {
+          // console.log("[Router] Clearing cache for foreign profile to reset scroll");
+          PageCache.clear(nextKey);
+      }
+  }
+
   // 5. Try Restore
   if (PageCache.has(nextKey)) {
       const cached = PageCache.get(nextKey);
       
+      // CRITICAL FIX: Restore JS state data BEFORE restoring DOM.
+      // Restoring DOM triggers scroll events immediately, so state (currentProfileId) MUST be ready.
+      
+      // For Profile page, rely on the Permanent State Accessor because global hooks are cleared
+      if (path === "/profile" && window.ProfileState && cached.data) {
+          window.ProfileState.setPageData(cached.data);
+      } 
+      // Fallback for other pages or if setPageData is somehow available
+      else if (window.setPageData && cached.data) {
+          window.setPageData(cached.data);
+      }
+      
       // RESTORE DOM (PageCache.restore handles clearing and appending correctly)
       PageCache.restore(nextKey, app);
       
-      // Restore JS state data (important: hooks like setPageData are defined in page scripts
-      // which are already in the cached DOM fragment, so they become available after append)
-      if (window.setPageData && cached.data) {
-          window.setPageData(cached.data);
+      // If we are on profile page, we might need to manually trigger initiation logic 
+      // because initProfile() isn't called during restore.
+      if (path === "/profile" && window.initProfilePage && cached.data) {
+           // We might need to ensure listeners are re-attached or silent updates run
+           // But wait, initProfilePage calls restore() again? NO.
+           // Can we expose a function like window.onProfileRestored()?
+      }
+      
+      // But wait! If we just restore DOM, the listeners in initProfile (like event listeners) are goners?
+      // Actually, listeners attached to elements in DocumentFragment are PRESERVED! 
+      // That's the beauty of DocumentFragment.
+      // But global listeners (like window.scroll) are... well, window.scroll logic in profile.js is global.
+      
+      // One thing missing: Silent Update (fetching new stats).
+      // Profile.js has no way to know it was restored unless we tell it.
+      if (path === "/profile" && window.triggerProfileSilentUpdate) {
+          window.triggerProfileSilentUpdate();
       }
 
       setActiveSidebar(path);
@@ -158,10 +202,10 @@ async function loadProfilePage() {
     const hash = window.location.hash;
     const key = getCacheKey(hash);
 
-    // If we land on plain /profile, clear its cache to ensure it loads the current user
-    if (hash === "#/profile" || hash === "#/profile/") {
-        PageCache.clear(key);
-    }
+    // REMOVED: Do not clear cache here, let initProfilePage handle restore & silent update
+    // if (hash === "#/profile" || hash === "#/profile/") {
+    //     PageCache.clear(key);
+    // }
 
     await loadPage("profile");
     if (window.initProfilePage) {
@@ -180,6 +224,22 @@ window.reloadHome = reloadPage;
 
 window.addEventListener("hashchange", router);
 window.addEventListener("DOMContentLoaded", router);
+
+// CAPTURE SCROLL BEFORE NAVIGATION
+// This prevents the browser from resetting scroll to 0 during hashchange before we can save it.
+document.addEventListener("click", (e) => {
+    // Find closest anchor tag
+    const link = e.target.closest("a");
+    if (link) {
+        const href = link.getAttribute("href");
+        // Only snapshot for internal hash links
+        if (href && href.startsWith("#")) {
+             if (window.PageCache && typeof window.PageCache.snapshot === 'function') {
+                 window.PageCache.snapshot();
+             }
+        }
+    }
+}, true); // Use capture phase to run before other handlers
 
 /* =========================
    LOGOUT

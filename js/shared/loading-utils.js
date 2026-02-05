@@ -43,3 +43,54 @@ window.LoadingUtils = {
         el.style.display = visible ? "flex" : "none";
     }
 };
+
+/* =========================================
+   GLOBAL LOADER (Exposed to Window)
+   Used for blocking operations like Uploads
+   ========================================= */
+/* =========================================
+   GLOBAL LOADER (Exposed to Window)
+   Used for blocking operations like Uploads
+   ========================================= */
+(function() {
+    function createGlobalLoader() {
+        if (document.getElementById("globalUploadOverlay")) return;
+
+        const overlay = document.createElement("div");
+        overlay.id = "globalUploadOverlay";
+        overlay.className = "loading-overlay"; // Use shared CSS class
+        
+        // Force fixed position for global usage (override absolute)
+        Object.assign(overlay.style, {
+            position: "fixed",
+            zIndex: "999999",
+            background: "rgba(0, 0, 0, 0.5)", // Dark overlay
+            backdropFilter: "blur(2px)",
+            display: "none" // Hidden by default
+        });
+        
+        const spinner = document.createElement("div");
+        spinner.className = "spinner spinner-large"; // Match Newsfeed (large)
+        
+        // Remove manual color overrides to use CSS defaults (var(--accent-primary))
+        // This makes it look exactly like the feed loader
+        
+        overlay.appendChild(spinner);
+        document.body.appendChild(overlay);
+    }
+
+    window.showGlobalLoader = function() {
+        createGlobalLoader();
+        const overlay = document.getElementById("globalUploadOverlay");
+        if (overlay) {
+             overlay.style.display = "flex";
+        }
+    };
+
+    window.hideGlobalLoader = function() {
+        const overlay = document.getElementById("globalUploadOverlay");
+        if (overlay) {
+            overlay.style.display = "none";
+        }
+    };
+})();

@@ -5,6 +5,7 @@
 const PageCache = (function() {
     const _caches = new Map();
     let _lastScrollY = 0;
+    let _snapshotScrollY = null;
 
     // Track scroll position continuously to avoid losing it during navigation/hashreset
     window.addEventListener("scroll", () => {
@@ -13,6 +14,13 @@ const PageCache = (function() {
             _lastScrollY = window.scrollY;
         }
     }, { passive: true });
+
+    function snapshot() {
+        if (document.body.style.overflow !== "hidden") {
+            _snapshotScrollY = window.scrollY;
+            // console.log(`[PageCache] Snapshot taken: ${_snapshotScrollY}`);
+        }
+    }
 
     function clear(key) {
         if (_caches.has(key)) {
@@ -34,9 +42,17 @@ const PageCache = (function() {
             fragment.appendChild(container.firstChild);
         }
 
+        // Use snapshot if available, otherwise last tracked
+        // This failsafe protects against browser auto-scroll-to-top during hashchange
+        let finalScroll = _lastScrollY;
+        if (_snapshotScrollY !== null) {
+            finalScroll = _snapshotScrollY;
+            _snapshotScrollY = null; // Consume snapshot
+        }
+
         const state = {
             fragment: fragment,
-            scrollY: _lastScrollY, // Use the last tracked scroll position
+            scrollY: finalScroll, 
             data: data,
             timestamp: Date.now()
         };
@@ -82,7 +98,8 @@ const PageCache = (function() {
         has,
         clear,
         clearAll,
-        getKeys
+        getKeys,
+        snapshot
     };
 })();
 

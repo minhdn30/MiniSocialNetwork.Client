@@ -162,7 +162,7 @@ const InteractionModule = (function () {
             }
 
             row.innerHTML = `
-                <div class="user-info post-user" data-account-id="${item.accountId}">
+                <div class="user-info post-user" data-account-id="${item.accountId}" onclick="viewProfile('${item.accountId}')">
                     <img src="${avatarUrl}" class="avatar post-avatar" />
                     <div class="name-box">
                         <span class="fullname post-username" title="${fullName}">${PostUtils.truncateName(fullName)}</span>

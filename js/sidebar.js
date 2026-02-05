@@ -262,10 +262,16 @@ function navigate(e, route, clickedEl = null) {
 
   if (isSamePath) {
       e.preventDefault();
-      // If navigating to /profile from a profile with params, force reset to my profile
+      // If navigating to /profile FROM a profile with params (Foreign) TO my profile (No params)
+      // We should treat this as a Navigation, NOT a Reload.
       if (route === "/profile" && window.location.hash.includes("id=")) {
           window.location.hash = "#/profile";
+          // Do NOT call reloadPage() here, because reloadPage() clears the cache for #/profile!
+          // Just changing hash triggers the router, which will restore the cache properly.
+          closeAllDropdowns();
+          return;
       }
+      
       if (window.reloadPage) window.reloadPage();
       closeAllDropdowns();
       return;

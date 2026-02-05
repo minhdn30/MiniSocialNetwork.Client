@@ -126,11 +126,12 @@
      */
     FollowModule.syncFollowStatus = function(accountId, isFollowing, freshData = null) {
         // Normalize casing for freshData (handle both camelCase and PascalCase from BE)
+        let followers, following;
+        
         if (freshData) {
-            const followers = freshData.followers ?? freshData.Followers;
-            const following = freshData.following ?? freshData.Following;
-            if (followers !== undefined) freshData.followers = followers;
-            if (following !== undefined) freshData.following = following;
+            // Priority: Explicit Followers/Following from new API response
+            followers = freshData.followers ?? freshData.Followers;
+            following = freshData.following ?? freshData.Following;
         }
 
         // 1. Update Caches
@@ -145,10 +146,54 @@
                     });
                 }
             }
-            PageCache.clear(`#/profile?id=${accountId}`);
-            if (accountId == localStorage.getItem("accountId")) {
-                PageCache.clear("#/profile");
-                PageCache.clear("#/profile/");
+            // Only clear cache for OTHER profiles.
+            // For my own profile, we rely on silent update to preserve scroll position.
+            const myId = localStorage.getItem("accountId");
+            if (!myId || accountId.toLowerCase() !== myId.toLowerCase()) {
+                 PageCache.clear(`#/profile?id=${accountId}`);
+            } else {
+                // If it IS my profile, we update the CACHE directly so when we return, it shows fresh data immediately.
+                
+                // We need to check BOTH possible keys: with params and without
+                const possibleKeys = [
+                    `#/profile?id=${accountId}`,
+                    `#/profile` // Sometimes saved as this when accessing via sidebar
+                ];
+                
+                let patched = false;
+                
+                possibleKeys.forEach(key => {
+                    if (PageCache.has(key)) {
+                        try {
+                            const cached = PageCache.get(key);
+                            
+                            // PageCache stores 'fragment' (DocumentFragment)
+                            if (cached && cached.fragment) {
+                                let updated = false;
+                                
+                                // Query directly on the fragment
+                                if (followers !== undefined) {
+                                    const el = cached.fragment.querySelector("#profile-followers-count");
+                                    if (el) { 
+                                        el.textContent = followers; 
+                                        updated = true; 
+                                    }
+                                }
+                                if (following !== undefined) {
+                                    const el = cached.fragment.querySelector("#profile-following-count");
+                                    if (el) { el.textContent = following; updated = true; }
+                                }
+
+                                if (updated) {
+                                    patched = true;
+                                }
+                            }
+                        } catch (e) {
+                             console.warn(`Failed to patch profile cache (${key}):`, e);
+                        }
+                    }
+                });
+                
             }
         }
 
@@ -179,14 +224,14 @@
                  if (window.lucide) lucide.createIcons();
              }
 
-             // Update stats in preview
-             if (freshData) {
+             // Update stats in preview with animation
+             if (followers !== undefined || following !== undefined) {
                  const previewEl = document.querySelector(".profile-preview");
                  if (previewEl) {
                      const statNums = previewEl.querySelectorAll(".profile-preview-stats b");
                      if (statNums.length >= 3) {
-                         statNums[1].textContent = freshData.followers;
-                         statNums[2].textContent = freshData.following;
+                         if (followers !== undefined) PostUtils.animateCount(statNums[1], followers);
+                         if (following !== undefined) PostUtils.animateCount(statNums[2], following);
                      }
                  }
              }
@@ -194,7 +239,7 @@
 
         // 4. Update Main Profile Page
         if (typeof window.updateFollowStatus === 'function') {
-            window.updateFollowStatus(accountId, isFollowing, freshData);
+            window.updateFollowStatus(accountId, isFollowing, followers, following);
         }
 
         // 5. Update Interaction Modal

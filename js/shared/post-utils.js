@@ -332,6 +332,55 @@
         }
     };
 
+    /**
+     * Animate number count (reuse for Reacts, Follows, etc.)
+     * @param {HTMLElement} element 
+     * @param {number} targetValue 
+     * @param {number} duration 
+     */
+    PostUtils.animateCount = function(element, targetValue, duration = 300) {
+        if (!element) return;
+        
+        // Remove non-numeric characters (like 'K' or 'M' if exists later) for parsing, though we usually pass raw numbers
+        const currentText = element.textContent.replace(/[^0-9]/g, '');
+        const startValue = parseInt(currentText) || 0;
+        const diff = targetValue - startValue;
+
+        // If no change or invalid, just set text
+        if (diff === 0 || isNaN(diff)) {
+            element.textContent = targetValue;
+            element.dataset.value = targetValue;
+            return;
+        }
+
+        // Use dataset to store actual numeric value to prevent parsing errors during rapid updates
+        element.dataset.value = targetValue;
+
+        const startTime = performance.now();
+        
+        // Clear previous animation if exists
+        if (element._animId) cancelAnimationFrame(element._animId);
+
+        function update(currentTime) {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            
+            // Ease out quart
+            const ease = 1 - Math.pow(1 - progress, 4);
+            
+            const current = Math.round(startValue + (diff * ease));
+            element.textContent = current;
+
+            if (progress < 1) {
+                element._animId = requestAnimationFrame(update);
+            } else {
+                element.textContent = targetValue; // Ensure exact final value
+            }
+        }
+
+        element._animId = requestAnimationFrame(update);
+    };
+
     // Export to global scope
     global.PostUtils = PostUtils;
 
