@@ -262,41 +262,15 @@ const InteractionModule = (function () {
      * Perform the actual API call for follow/unfollow status
      */
     async function performFollowAction(accountId, btn, wasFollowing) {
-        if (btn.disabled) return;
-        btn.disabled = true;
+        if (!window.FollowModule) {
+            if (window.toastError) toastError("Follow module not loaded.");
+            return;
+        }
 
-        try {
-            const res = wasFollowing 
-                ? await API.Follows.unfollow(accountId)
-                : await API.Follows.follow(accountId);
-
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                console.error(`❌ Follow action failed. Status: ${res.status}`, data);
-                throw new Error(data.message || "Action failed");
-            }
-
-            const span = btn.querySelector("span");
-            if (wasFollowing) {
-                btn.classList.remove("following");
-                if (span) span.textContent = "Follow";
-                if (window.toastInfo) toastInfo("Unfollowed");
-            } else {
-                btn.classList.add("following");
-                if (span) span.textContent = "Following";
-                if (window.toastSuccess) toastSuccess("Following");
-            }
-            
-            // Sync with FollowModule if available
-            if (window.FollowModule && typeof window.FollowModule.syncFollowStatus === 'function') {
-                window.FollowModule.syncFollowStatus(accountId, !wasFollowing);
-            }
-        } catch (error) {
-            console.error("❌ Catch error in performFollowAction:", error);
-            const msg = error.message === "Action failed" ? "Failed to update follow status" : error.message;
-            if (window.toastError) toastError(msg);
-        } finally {
-            btn.disabled = false;
+        if (wasFollowing) {
+            await FollowModule.unfollowUser(accountId, btn);
+        } else {
+            await FollowModule.followUser(accountId, btn);
         }
     }
 

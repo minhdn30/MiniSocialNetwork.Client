@@ -252,9 +252,12 @@ function showPreview(mouseEvent) {
 }
 
 function hidePreview() {
-  previewEl.classList.add("hidden");
+  if (previewEl) previewEl.classList.add("hidden");
   currentAccountId = null;
+  clearTimeout(hoverTimer);
+  clearTimeout(hideTimer);
 }
+window.hidePreview = hidePreview;
 
 /* ===== Init hover ===== */
 function initProfilePreview() {
@@ -317,7 +320,7 @@ function initProfilePreview() {
 
       if (
         currentAccountId === accountId &&
-        !previewEl.classList.contains("hidden")
+        previewEl && !previewEl.classList.contains("hidden")
       ) {
         clearTimeout(hideTimer);
         return;
@@ -325,10 +328,17 @@ function initProfilePreview() {
 
       lastMouseEvent = e;
       clearTimeout(hideTimer);
+      clearTimeout(hoverTimer);
+      
+      currentAccountId = accountId; // Mark as pending
 
       hoverTimer = setTimeout(async () => {
         const data = await loadProfilePreview(accountId);
-        currentAccountId = accountId;
+        
+        // CRITICAL: Check if we still want this specific preview 
+        // (navigation or another hover might have cleared it)
+        if (currentAccountId !== accountId) return;
+
         renderProfilePreview(data);
         showPreview(lastMouseEvent);
       }, 400);
@@ -341,7 +351,16 @@ function initProfilePreview() {
       if (!avatar && !username) return;
 
       clearTimeout(hoverTimer);
-      hideTimer = setTimeout(hidePreview, 200);
+      hideTimer = setTimeout(hidePreview, 300);
+    });
+
+    // Global click listener to kill preview when navigating
+    document.addEventListener("click", (e) => {
+      const avatar = e.target.closest(".post-avatar");
+      const username = e.target.closest(".post-username");
+      if (avatar || username) {
+        hidePreview();
+      }
     });
   }
 
@@ -401,70 +420,20 @@ async function toggleFollow(userId) {
 /* ===== Toggle follow menu (dropdown) ===== */
 function toggleFollowMenu(event, userId) {
   event.stopPropagation();
-  showUnfollowConfirm(userId);
-}
-
-/* ===== Show unfollow confirmation popup ===== */
-function showUnfollowConfirm(userId) {
-  // Tạo overlay
-  const overlay = document.createElement("div");
-  overlay.className = "unfollow-overlay";
-
-  // Tạo popup
-  const popup = document.createElement("div");
-  popup.className = "unfollow-popup";
-
-  popup.innerHTML = `
-    <div class="unfollow-content">
-      <h3>Unfollow this account?</h3>
-      <p>You can always follow them again later.</p>
-    </div>
-    <div class="unfollow-actions">
-      <button class="unfollow-btn unfollow-confirm" id="unfollowConfirm">Unfollow</button>
-      <button class="unfollow-btn unfollow-cancel" id="unfollowCancel">Cancel</button>
-    </div>
-  `;
-
-  overlay.appendChild(popup);
-  document.body.appendChild(overlay);
-
-  // Trigger animation
-  requestAnimationFrame(() => {
-    overlay.classList.add("show");
-  });
-
-  // Handle Unfollow button
-  document.getElementById("unfollowConfirm").onclick = () => {
-    toggleFollow(userId);
-    closeUnfollowConfirm(overlay);
-  };
-
-  // Handle Cancel button
-  document.getElementById("unfollowCancel").onclick = () => {
-    closeUnfollowConfirm(overlay);
-  };
-
-  // Close when clicking overlay
-  overlay.onclick = (e) => {
-    if (e.target === overlay) {
-      closeUnfollowConfirm(overlay);
-    }
-  };
-}
-
-/* ===== Close unfollow confirmation popup ===== */
-function closeUnfollowConfirm(overlay) {
-  overlay.classList.remove("show");
-  setTimeout(() => {
-    overlay.remove();
-  }, 200);
+  if (window.FollowModule) {
+      FollowModule.showUnfollowConfirm(userId, event.currentTarget);
+  }
 }
 
 /* ===== View Profile ===== */
 function viewProfile(userId) {
+  // Hide preview immediately to prevent lingering UI
+  hidePreview();
+  
   // Navigate to profile page using hash
   window.location.hash = `#/profile?id=${userId}`;
 }
+window.viewProfile = viewProfile;
 
 /* ===== Open Chat ===== */
 function openChat(userId) {

@@ -13,19 +13,24 @@
     let currentProfileData = null;
 
     function initProfile() {
-        const hash = window.location.hash;
+        // Robust ID extraction
+        const hash = window.location.hash || "";
         let accountId = null;
 
         if (hash.includes("?")) {
             const queryString = hash.split("?")[1];
             const params = new URLSearchParams(queryString);
             accountId = params.get("id");
+        } else if (hash.includes("/profile/") && hash.split("/profile/")[1]) {
+            // Support #/profile/{id} format just in case
+            accountId = hash.split("/profile/")[1].split("?")[0];
         }
 
+        // Fallback to logged-in user if no ID in URL
         accountId = accountId || localStorage.getItem("accountId");
         
         if (!accountId) {
-            console.error("No account ID found");
+            console.warn("No account ID found in hash or localStorage");
             return;
         }
 
@@ -160,14 +165,17 @@
         if (actionBtn) {
             if (isOwner) {
                 actionBtn.innerHTML = `
-                    <button class="profile-btn profile-btn-edit" onclick="openEditProfile()" title="Edit Profile">
+                    <button class="profile-btn profile-btn-edit" onclick="openEditProfile()">
                         <i data-lucide="edit-3"></i>
+                        <span>Edit Profile</span>
                     </button>
-                    <button class="profile-btn profile-btn-secondary" id="profile-settings-btn" onclick="openProfileSettings()" title="Settings">
+                    <button class="profile-btn profile-btn-secondary" id="profile-settings-btn" onclick="openProfileSettings()">
                         <i data-lucide="settings"></i>
+                        <span>Settings</span>
                     </button>
-                    <button class="profile-btn profile-btn-secondary" onclick="openProfileMoreMenu()" title="More">
+                    <button class="profile-btn profile-btn-more" onclick="openProfileMoreMenu()">
                         <i data-lucide="more-horizontal"></i>
+                        <span>More</span>
                     </button>
                 `;
             } else {
@@ -175,16 +183,20 @@
                 const followIcon = isFollowed ? 'check' : 'user-plus';
                 const followText = isFollowed ? 'Following' : 'Follow';
                 
+                const profileId = info.accountId || info.id || currentProfileId;
+                
                 actionBtn.innerHTML = `
-                    <button class="profile-btn ${followBtnClass}" onclick="toggleFollowProfile('${info.accountId}')">
+                    <button class="profile-btn ${followBtnClass}" onclick="toggleFollowProfile('${profileId}')">
                         <i data-lucide="${followIcon}"></i>
                         <span>${followText}</span>
                     </button>
-                    <button class="profile-btn profile-btn-secondary" onclick="openMessage('${info.accountId}')" title="Message">
+                    <button class="profile-btn profile-btn-message" onclick="openMessage('${profileId}')">
                         <i data-lucide="send"></i>
+                        <span>Message</span>
                     </button>
-                    <button class="profile-btn profile-btn-secondary" onclick="openProfileMoreMenu()" title="More">
+                    <button class="profile-btn profile-btn-more" onclick="openProfileMoreMenu()">
                         <i data-lucide="more-horizontal"></i>
+                        <span>More</span>
                     </button>
                 `;
             }
@@ -388,26 +400,33 @@
 
     global.toggleFollowProfile = async function(accountId) {
         const btn = document.querySelector("#profile-action-btn .profile-btn-follow, #profile-action-btn .profile-btn-following");
-        if (window.LoadingUtils) LoadingUtils.setButtonLoading(btn, true);
+        if (!btn) return;
 
-        try {
-            const isFollowed = currentProfileData.isFollowedByCurrentUser;
-            let result;
-            if (isFollowed) {
-                result = await API.Follows.unfollow(accountId);
+        const isFollowed = btn.classList.contains("profile-btn-following");
+
+        if (isFollowed) {
+            if (window.FollowModule) {
+                FollowModule.showUnfollowConfirm(accountId, btn);
             } else {
-                result = await API.Follows.follow(accountId);
+                // Fallback if module is missing
+                global.toggleFollowAction(accountId, btn, true);
             }
+            return;
+        }
 
-            if (result.ok) {
-                currentProfileData.isFollowedByCurrentUser = !isFollowed;
-                currentProfileData.followerCount += isFollowed ? -1 : 1;
-                renderProfileHeader(currentProfileData);
-            }
-        } catch (err) {
-            console.error(err);
-        } finally {
-            if (window.LoadingUtils) LoadingUtils.setButtonLoading(btn, false);
+        global.toggleFollowAction(accountId, btn, false);
+    };
+
+    global.toggleFollowAction = async function(accountId, btn, isFollowed) {
+        if (!window.FollowModule) {
+            if (window.toastError) toastError("Follow module not loaded.");
+            return;
+        }
+
+        if (isFollowed) {
+            await FollowModule.unfollowUser(accountId, btn);
+        } else {
+            await FollowModule.followUser(accountId, btn);
         }
     };
 
@@ -424,5 +443,43 @@
     };
 
     global.initProfilePage = initProfile;
+    
+    // Expose currentProfileId for external synchronization (e.g. from FollowModule)
+    global.getProfileAccountId = () => currentProfileId;
+
+    global.updateFollowStatus = function(accountId, isFollowing, freshData = null) {
+        // 1. Invalidate cache for this specific profile hash whenever follow status changes
+        if (window.PageCache) {
+            const profileHash = `#/profile?id=${accountId}`;
+            PageCache.clear(profileHash);
+            if (accountId == localStorage.getItem("accountId")) {
+                PageCache.clear("#/profile");
+                PageCache.clear("#/profile/");
+            }
+        }
+
+        // 2. If the user is CURRENTLY viewing this profile, update the live DOM and state
+        if (currentProfileId == accountId && currentProfileData) {
+            // Robustly update all possible data fields
+            currentProfileData.isFollowedByCurrentUser = isFollowing;
+            
+            if (currentProfileData.followInfo) {
+                currentProfileData.followInfo.isFollowedByCurrentUser = isFollowing;
+                if (freshData) {
+                    currentProfileData.followInfo.followers = freshData.followers;
+                    currentProfileData.followInfo.following = freshData.following;
+                }
+            } else if (freshData) {
+                currentProfileData.followInfo = {
+                    isFollowedByCurrentUser: isFollowing,
+                    followers: freshData.followers,
+                    following: freshData.following
+                };
+            }
+            
+            // Re-render the entire header to ensure buttons, handlers, and counts are all in sync
+            renderProfileHeader(currentProfileData);
+        }
+    };
 
 })(window);

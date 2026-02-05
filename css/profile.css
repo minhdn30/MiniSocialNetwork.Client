@@ -102,8 +102,7 @@
     margin-left: -95px; /* Pull deep under avatar for merged look */
     margin-right: -40px; /* Stretch to edge */
     background: var(--bg-primary); 
-    padding-left: 80px; /* Clear the avatar circle */
-    padding-right: 24px; /* Reduced to bring buttons closer to the edge */
+    padding-left: 80px; /* Clear the avatar circle */ /* Close to the edge as requested */
     width: auto; /* Allow expansion to edge */
     z-index: 2;
     position: relative;
@@ -147,85 +146,104 @@
 
 .profile-actions {
     display: flex;
-    gap: 12px;
+    gap: 8px; /* Tighter gap like the image */
     margin-left: auto; /* Push buttons to the far right */
     align-items: center;
-    flex-shrink: 0; /* Prevent buttons from shrinking when name is long */
+    flex-shrink: 0;
 }
 
 .profile-btn {
-    min-width: 38px;
     height: 38px;
-    display: flex;
+    min-width: 38px;
+    max-width: 38px; /* Control size via max-width to enable smooth landing */
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    border-radius: 10px;
+    justify-content: flex-start;
+    border-radius: 12px;
     cursor: pointer;
-    transition: all var(--transition-fast);
     border: none;
-    padding: 0 12px; /* Add padding for buttons with text content */
+    background: transparent !important;
+    color: var(--text-primary);
+    padding: 0 10px; /* (38-18)/2 = 10px precisely centers the 18px icon */
+    transition: max-width 0.4s cubic-bezier(0.19, 1, 0.22, 1), 
+                padding 0.4s cubic-bezier(0.19, 1, 0.22, 1),
+                background-color 0.3s ease, 
+                color 0.3s ease,
+                transform 0.2s ease;
+    overflow: hidden;
+    white-space: nowrap;
+    outline: none;
 }
 
 .profile-btn i, .profile-btn svg {
     width: 18px;
     height: 18px;
+    flex-shrink: 0;
+    color: inherit;
+    transition: color 0.3s ease;
 }
 
-.profile-btn-secondary {
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-    color: var(--text-primary);
-    padding: 0; /* Tight icon-only padding */
-}
-
-.profile-btn-edit {
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-    color: var(--text-primary);
-}
-
-.profile-btn-edit:hover {
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.profile-btn-follow {
-    background: var(--accent-primary);
-    color: white;
+.profile-btn span {
+    display: block;
+    max-width: 0;
+    opacity: 0;
+    margin-left: 0;
+    font-size: 13px;
     font-weight: 600;
-    gap: 8px;
-    padding: 0 16px;
+    color: inherit;
+    transition: opacity 0.2s ease, max-width 0.4s cubic-bezier(0.19, 1, 0.22, 1), margin 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+    overflow: hidden;
+    pointer-events: none;
 }
 
-.profile-btn-following {
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-    color: var(--text-primary);
-    font-weight: 600;
-    gap: 8px;
-    padding: 0 16px;
+/* Hover State */
+.profile-btn:hover {
+    max-width: 200px; /* Allows the button to grow and show text */
+    padding: 0 14px;
 }
 
-#profile-settings-btn {
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-    color: var(--text-primary);
-    width: 38px;
-    height: 38px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-    cursor: pointer;
-    transition: all var(--transition-fast);
+.profile-btn:hover span {
+    max-width: 150px;
+    opacity: 1;
+    margin-left: 8px;
+}
+
+.profile-btn:active {
+    transform: scale(0.95);
+}
+
+/* Hover Background Colors */
+.profile-btn-edit:hover, 
+.profile-btn-message:hover {
+    background: var(--accent-primary) !important;
+    color: #ffffff !important;
+}
+
+.profile-btn-follow:hover {
+    background: var(--accent-secondary) !important;
+    color: #ffffff !important;
+}
+
+.profile-btn-following:hover,
+.profile-btn-secondary:hover,
+.profile-btn-more:hover {
+    background: var(--bg-active) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Baseline transparency cleanup */
+.profile-btn-edit, .profile-btn-message, .profile-btn-follow,
+.profile-btn-following, .profile-btn-secondary, .profile-btn-more {
+    background: transparent !important;
 }
 
 #profile-settings-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--bg-active);
+    color: var(--text-primary);
 }
 
 #profile-settings-btn i, #profile-settings-btn svg {
-    width: 18px;
-    height: 18px;
+    color: inherit;
 }
 
 /* ===== Stats ===== */

@@ -155,11 +155,12 @@ function loadPlaceholder(title, iconName) {
 }
 
 async function loadProfilePage() {
-    // If we land here but the hash is exactly #/profile (no params), 
-    // we ensure PageCache for 'profile' is cleared if we were just viewing someone else's profile
     const hash = window.location.hash;
+    const key = getCacheKey(hash);
+
+    // If we land on plain /profile, clear its cache to ensure it loads the current user
     if (hash === "#/profile" || hash === "#/profile/") {
-        PageCache.clear("profile");
+        PageCache.clear(key);
     }
 
     await loadPage("profile");
