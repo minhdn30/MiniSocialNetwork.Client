@@ -1,7 +1,7 @@
 <!-- Sidebar -->
 <aside class="sidebar">
   <!-- Logo -->
-  <div class="sidebar-logo" onclick="navigate(event, '/home')">
+  <div class="sidebar-logo" data-route="/home">
     <span class="logo-icon">☁</span>
     <span class="logo-text">CloudM</span>
   </div>
@@ -22,7 +22,6 @@
       class="menu-item active"
       href="#/home"
       data-route="/home"
-      onclick="navigate(event, '/home')"
     >
       <i data-lucide="home"></i>
       <span>Home</span>
@@ -119,7 +118,7 @@
           <span>Settings</span>
           <i data-lucide="chevron-right" class="chevron-icon"></i>
         </div>
-        <div class="dropdown-item" onclick="window.location.hash='#/profile'">
+        <div class="dropdown-item" data-route="/profile" onclick="navigate(event, '/profile')">
           <i data-lucide="user"></i>
           <span>Profile</span>
         </div>

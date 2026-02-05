@@ -25,6 +25,20 @@ async function loadSidebar() {
   setupAutoClose();
   // Load create post modal
   await loadCreatePostModal();
+
+  // Attach global navigation listener to sidebar menu items
+  document.getElementById("sidebar").addEventListener("click", (e) => {
+    const menuItem = e.target.closest(".menu-item, .dropdown-item");
+    if (menuItem && menuItem.dataset.route) {
+        if (!menuItem.getAttribute("onclick")) {
+            navigate(e, menuItem.dataset.route, menuItem);
+        }
+    }
+  });
+
+  // Set initial active state based on current hash after sidebar HTML is in DOM
+  const path = (window.location.hash || "#/home").slice(1).split("?")[0];
+  setActiveSidebar(path);
 }
 
 // THÊM MỚI: Tự động collapse sidebar khi chuột rời khỏi
@@ -191,50 +205,69 @@ document.addEventListener("click", (e) => {
 
 
 function setActiveSidebar(route) {
-  // Normalize route to plain path if needed, but hash logic is simpler
-  const currentHash = window.location.hash.slice(1).split("?")[0] || "/home";
-  // If route is passed, use it, otherwise detect from hash
-  const targetRoute = route || currentHash;
+  // Normalize route to plain path
+  let targetRoute = route || (window.location.hash || "#/home").slice(1).split("?")[0];
+  
+  // Ensure targetRoute starts with /
+  if (targetRoute && !targetRoute.startsWith("/")) {
+      targetRoute = "/" + targetRoute;
+  }
+
+  // Helper for home route equivalence
+  const isHome = (r) => r === "/" || r === "/home" || r === "";
 
   document.querySelectorAll(".sidebar .menu-item").forEach((item) => {
-      // Check both href and data-route
-      const href = item.getAttribute("href");
-      const isActive = href === `#${targetRoute}` || item.dataset.route === targetRoute;
+      const dataRoute = item.dataset.route;
+      const href = item.getAttribute("href")?.replace("#", "");
+
+      const isActive = (dataRoute === targetRoute) || 
+                       (href === targetRoute) ||
+                       (isHome(dataRoute) && isHome(targetRoute));
+
       item.classList.toggle("active", isActive);
   });
 }
 
-// Global navigate function usually called by internal logic (deprecating direct usage in favor of href="#...")
-function navigate(e, route) {
-  // If it's a special action like create content, handle it specifically
+// Global navigate function to handle page changes and reloads
+function navigate(e, route, clickedEl = null) {
+  const targetEl = clickedEl || e.currentTarget;
+  
+  // 1. Special actions
   if (route === "/create/post") {
       e.preventDefault();
-      openCreatePostModal();
+      if (window.openCreatePostModal) openCreatePostModal();
       closeAllDropdowns();
       return;
   }
   
-  // Special handling for Home (Refresh if already at Home)
-  if (route === "/home" || route === "/") {
-      const currentHash = window.location.hash;
-      // Check if we are already at home (empty hash, #/, or #/home)
-      const isAtHome = !currentHash || currentHash === "#/" || currentHash === "#/home";
-      
-      if (isAtHome) {
-          e.preventDefault();
-          if (window.reloadHome) window.reloadHome();
-          closeAllDropdowns(); // Ensure sidebar closes on mobile/collapsed
-          return;
-      }
-      // If not at home, standard href or hash change will handle it.
-      // But if this was called via onclick (like Logo), we need to manually set hash if not prevented.
-      // For Logo: onclick="navigate(event, '/home')"
-      // If we are NOT at home, we should proceed navigation.
-      // Since 'navigate' usually implies manual handling, let's set hash.
-      if (!e.defaultPrevented && !e.target.getAttribute("href")) {
-          window.location.hash = "#/home";
-      }
+  const currentHash = window.location.hash || "#/";
+  const targetHash = route.startsWith("#") ? route : `#${route}`;
+
+  // Helper to check if a hash is "Home"
+  const isHome = (h) => h === "#/" || h === "#/home" || h === "";
+  
+  // 2. Check if clicking same page (ignoring parameters for reload check) -> Force Reload
+  // Path-based same page check
+  const currentPath = currentHash.split("?")[0];
+  const targetPath = targetHash.split("?")[0];
+  const isSamePath = (currentPath === targetPath) || (isHome(currentPath) && isHome(targetPath));
+
+  if (isSamePath) {
+      e.preventDefault();
+      if (window.reloadPage) window.reloadPage();
+      closeAllDropdowns();
+      return;
   }
+
+  // 3. Different page: Navigate
+  // If this element doesn't have a native href, we set the hash manually
+  const hasHref = targetEl && targetEl.getAttribute("href");
+  if (!hasHref) {
+      window.location.hash = targetHash;
+  }
+  
+  // Sidebar logic
+  closeAllDropdowns();
 }
 
 // Theme toggle functionality

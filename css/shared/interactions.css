@@ -5,6 +5,32 @@
 .hover-scale-text:hover { transform: scale(1.1) !important; }
 .hover-scale-text:active { transform: scale(0.9) !important; }
 
+/* ================= RESPONSIVE ================= */
+@media (max-width: 768px) {
+    .interaction-modal .modal-content {
+        max-width: 100vw;
+        height: 100vh;
+        max-height: 100vh;
+        border-radius: 0 !important;
+        border: none !important;
+    }
+
+    .interaction-item .avatar {
+        width: 38px;
+        height: 38px;
+    }
+
+    .interaction-item .fullname {
+        font-size: 13px;
+    }
+
+    .interaction-item .follow-btn {
+        width: 90px;
+        height: 30px;
+        font-size: 13px;
+    }
+}
+
 /* Interaction Modal Styling - Premium Instagram Style */
 .interaction-modal {
     position: fixed;

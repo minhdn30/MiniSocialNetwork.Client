@@ -35,7 +35,7 @@ function renderProfilePreview(data) {
   if (data.isCurrentUser) {
     // Nếu là chính mình → chỉ hiện nút View Profile
     actionsHTML = `
-      <button class="btn btn-view-profile" onclick="viewProfile('${currentUserId}')">
+      <button class="profile-preview-btn profile-preview-btn-view-profile" onclick="viewProfile('${currentUserId}')">
         View Profile
       </button>
     `;
@@ -43,13 +43,13 @@ function renderProfilePreview(data) {
     // Nếu không phải chính mình → hiện Message + Follow/Following
     const followBtnHTML = data.isFollowedByCurrentUser
       ? `
-        <button class="btn btn-following" id="followBtn" onclick="toggleFollowMenu(event, '${currentUserId}')">
+        <button class="profile-preview-btn profile-preview-btn-following" id="followBtn" onclick="toggleFollowMenu(event, '${currentUserId}')">
           <i data-lucide="check"></i>
           <span>Following</span>
         </button>
       `
       : `
-        <button class="btn btn-follow" id="followBtn" onclick="toggleFollow('${currentUserId}')">
+        <button class="profile-preview-btn profile-preview-btn-follow" id="followBtn" onclick="toggleFollow('${currentUserId}')">
           Follow
         </button>
       `;
@@ -60,11 +60,11 @@ function renderProfilePreview(data) {
     const statusClass = isTargetActive ? "" : "disabled-action";
 
     actionsHTML = `
-      <button class="btn btn-message ${statusClass}" ${disabledAttr} onclick="openChat('${currentUserId}')">
+      <button class="profile-preview-btn profile-preview-btn-message ${statusClass}" ${disabledAttr} onclick="openChat('${currentUserId}')">
         <i data-lucide="send"></i>
         <span>Message</span>
       </button>
-      ${followBtnHTML.replace('class="btn', `class="btn ${statusClass}`).replace('onclick=', isTargetActive ? 'onclick=' : 'data-onclick=')}
+      ${followBtnHTML.replace('class="profile-preview-btn', `class="profile-preview-btn ${statusClass}`).replace('onclick=', isTargetActive ? 'onclick=' : 'data-onclick=')}
     `;
   }
 
@@ -83,17 +83,17 @@ function renderProfilePreview(data) {
   }
 
   previewEl.innerHTML = `
-    <div class="preview-header">
+    <div class="profile-preview-header">
       <img src="${data.account.avatarUrl || APP_CONFIG.DEFAULT_AVATAR}" alt="avatar" />
       <div>
-        <div class="name-container">
-            <div class="name">${PostUtils.truncateName(data.account.fullName)}</div>
+        <div class="profile-preview-name-container">
+            <div class="profile-preview-name">${PostUtils.truncateName(data.account.fullName)}</div>
             ${statusBadge}
         </div>
       </div>
     </div>
 
-    <div class="preview-stats">
+    <div class="profile-preview-stats">
       <div>
         <b>${data.postCount}</b>
         <span>Posts</span>
@@ -108,13 +108,13 @@ function renderProfilePreview(data) {
       </div>
     </div>
 
-    <div class="preview-medias">
+    <div class="profile-preview-medias">
       ${
         !data.recentPosts || data.recentPosts.length === 0
-          ? ""
+          ? `<div class="profile-preview-no-media">No recent posts</div>`
           : data.recentPosts
               .map((p) => `
-                <div class="preview-media-item" onclick="if(window.InteractionModule) window.InteractionModule.closeReactList(); if(window.openPostDetail) window.openPostDetail('${p.postId}'); hidePreview();">
+                <div class="profile-preview-media-item" onclick="if(window.InteractionModule) window.InteractionModule.closeReactList(); if(window.openPostDetail) window.openPostDetail('${p.postId}'); hidePreview();">
                   <img src="${p.mediaUrl}" alt="post">
                 </div>
               `)
@@ -122,7 +122,7 @@ function renderProfilePreview(data) {
       }
     </div>
 
-    <div class="profile-actions">
+    <div class="profile-preview-actions">
       ${actionsHTML}
     </div>
   `;
@@ -334,11 +334,11 @@ async function toggleFollow(userId) {
       <i data-lucide="check"></i>
       <span>Following</span>
     `;
-    btn.className = "btn btn-following";
+    btn.className = "profile-preview-btn profile-preview-btn-following";
     btn.onclick = (e) => toggleFollowMenu(e, userId);
   } else {
     btn.textContent = "Follow";
-    btn.className = "btn btn-follow";
+    btn.className = "profile-preview-btn profile-preview-btn-follow";
     btn.onclick = () => toggleFollow(userId);
   }
 

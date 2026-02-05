@@ -64,3 +64,76 @@ body {
   color: var(--accent-primary);
   letter-spacing: 0.3px;
 }
+
+/* ================= PLACEHOLDER PAGE ================= */
+.placeholder-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  width: 100%;
+  padding: 20px;
+  text-align: center;
+}
+
+.placeholder-content {
+  max-width: 450px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.placeholder-icon {
+  width: 120px;
+  height: 120px;
+  background: var(--bg-secondary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 4px solid var(--accent-primary);
+  box-shadow: 0 0 20px rgba(var(--accent-primary-rgb), 0.2);
+}
+
+.placeholder-icon i {
+  width: 50px;
+  height: 50px;
+  color: var(--accent-primary);
+}
+
+.placeholder-content h1 {
+  font-size: 32px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.placeholder-content p {
+  font-size: 16px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.placeholder-btn {
+  background: var(--accent-primary);
+  color: white;
+  border: none;
+  padding: 12px 32px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  margin-top: 10px;
+}
+
+.placeholder-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(var(--accent-primary-rgb), 0.4);
+}
+
+.placeholder-btn:active {
+  transform: translateY(0);
+}

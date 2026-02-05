@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <title>CloudM</title>
+    <link rel="icon" href="assets/images/favicon.png" />
+    <link rel="stylesheet" href="css/shared/theme.css" />
+    <link rel="stylesheet" href="css/shared/interactions.css" />
+    <link rel="stylesheet" href="css/shared/loading.css" />
+    <link rel="stylesheet" href="css/shared/truncate-text.css" />
+    <link rel="stylesheet" href="css/sidebar.css" />
+    <link rel="stylesheet" href="css/home.css" />
+    <link rel="stylesheet" href="css/story.css" />
+    <link rel="stylesheet" href="css/shared/post-common.css" />
+    <link rel="stylesheet" href="css/newfeed.css" />
+    <link rel="stylesheet" href="css/profile.css" />
+    <link rel="stylesheet" href="css/profile-proview.css" />
+    <link rel="stylesheet" href="css/post-option.css" />
+    <link rel="stylesheet" href="css/shared/toast.css" />
+    <link rel="stylesheet" href="css/create-post-modal.css" />
+    <link rel="stylesheet" href="css/post-detail.css" />
+    <link rel="stylesheet" href="css/comment.css" />
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="stylesheet" href="css/shared/emoji-picker.css" />
+  </head>
+  <body>
+    <aside id="sidebar"></aside>
+    <div id="app" class="main-content"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <script src="js/config/config.js"></script>
+    <script src="js/config/configAPI.js"></script>
+    <script src="js/shared/toast.js"></script>
+    <script src="js/shared/loading-utils.js"></script>
+    <script src="js/shared/post-utils.js"></script>
+    <script src="js/shared/image-utils.js"></script>
+    <script src="js/shared/file-utils.js"></script>
+    <script src="js/shared/text-utils.js"></script>
+    <script src="js/realtime/signalr.js"></script>
+    <script src="js/realtime/post-hub.js"></script>
+    <script src="js/interaction.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="js/sidebar.js"></script>
+    <script src="js/home.js"></script>
+    <script src="js/shared/post-utils.js"></script>
+    <script src="js/follow.js"></script>
+    <script src="js/profile-proview.js"></script>
+    <script src="js/newfeed.js"></script>
+    <script src="js/post-option.js"></script>
+    <script src="js/create-post-modal.js"></script>
+    <script src="js/comment.js"></script>
+    <script src="js/post-detail.js"></script>
+    <script src="js/shared/emoji-picker.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/profile.js"></script>
+  </body>
+</html>

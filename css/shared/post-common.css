@@ -307,3 +307,35 @@ svg {
 .privacy-option.active .privacy-check {
   opacity: 1;
 }
+
+/* ================= RESPONSIVE ================= */
+@media (max-width: 768px) {
+    .privacy-dropdown {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        top: auto;
+        min-width: 0;
+        width: 100%;
+        border-radius: 16px 16px 0 0;
+        transform: translateY(100%);
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .privacy-dropdown.show {
+        transform: translateY(0);
+    }
+
+    .privacy-option {
+        padding: 16px 20px;
+    }
+
+    .privacy-option-title {
+        font-size: 15px;
+    }
+
+    .privacy-option-desc {
+        font-size: 13px;
+    }
+}

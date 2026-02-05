@@ -1,7 +1,27 @@
 .profile-container {
-    max-width: 935px;
-    margin: 0 auto;
     padding: 30px 20px 0;
+    margin-left: 72px; /* Dành chỗ cho sidebar cố định */
+    width: calc(100% - 72px);
+    display: flex;
+    justify-content: center;
+    transition: all var(--transition-normal);
+}
+
+/* Khối bọc nội dung bên trong để giữ max-width và căn lề */
+.profile-content-wrapper {
+    width: 100%;
+    max-width: 935px;
+    display: flex;
+    flex-direction: column;
+}
+
+@media (max-width: 768px) {
+    .profile-container {
+        margin-left: 0;
+        width: 100%;
+        padding: 20px 10px 80px;
+        display: block; /* Trở về block trên mobile */
+    }
 }
 
 /* ===== Profile Cover ===== */
@@ -72,7 +92,7 @@
     gap: 8px;
 }
 
-.btn-profile {
+.profile-btn {
     padding: 7px 16px;
     border-radius: 8px;
     font-size: 14px;
@@ -81,27 +101,27 @@
     transition: all var(--transition-fast);
 }
 
-.btn-edit-profile {
+.profile-btn-edit {
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
     color: var(--text-primary);
 }
 
-.btn-edit-profile:hover {
+.profile-btn-edit:hover {
     background: rgba(255, 255, 255, 0.1);
 }
 
-.btn-follow-profile {
+.profile-btn-follow {
     background: var(--accent-primary);
     border: none;
     color: white;
 }
 
-.btn-follow-profile:hover {
+.profile-btn-follow:hover {
     filter: brightness(1.1);
 }
 
-.btn-following-profile {
+.profile-btn-following {
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
     color: var(--text-primary);
@@ -142,7 +162,7 @@
 }
 
 /* ===== Edit Profile Modal ===== */
-.modal-overlay {
+.profile-modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
@@ -156,7 +176,7 @@
     backdrop-filter: blur(4px);
 }
 
-.modal-content {
+.profile-modal-content {
     background: var(--bg-primary);
     width: 100%;
     max-width: 500px;
@@ -167,7 +187,7 @@
     max-height: 90vh;
 }
 
-.modal-header {
+.profile-modal-header {
     padding: 16px 20px;
     border-bottom: 1px solid var(--glass-border);
     display: flex;
@@ -175,19 +195,19 @@
     align-items: center;
 }
 
-.modal-header h3 {
+.profile-modal-header h3 {
     margin: 0;
     font-size: 18px;
 }
 
-.modal-close {
+.profile-modal-close {
     background: none;
     border: none;
     color: var(--text-primary);
     cursor: pointer;
 }
 
-.modal-body {
+.profile-modal-body {
     padding: 20px;
     overflow-y: auto;
     display: flex;
@@ -195,21 +215,21 @@
     gap: 16px;
 }
 
-.form-group {
+.profile-form-group {
     display: flex;
     flex-direction: column;
     gap: 8px;
 }
 
-.form-group label {
+.profile-form-group label {
     font-size: 14px;
     font-weight: 600;
     color: var(--text-secondary);
 }
 
-.form-group input,
-.form-group textarea,
-.form-group select {
+.profile-form-group input,
+.profile-form-group textarea,
+.profile-form-group select {
     background: var(--bg-secondary);
     border: 1px solid var(--glass-border);
     padding: 10px;
@@ -218,18 +238,18 @@
     font-family: inherit;
 }
 
-.form-group textarea {
+.profile-form-group textarea {
     resize: vertical;
     min-height: 80px;
 }
 
-.photo-upload-section {
+.profile-photo-upload {
     display: flex;
     gap: 20px;
     align-items: center;
 }
 
-.photo-preview {
+.profile-avatar-preview {
     width: 60px;
     height: 60px;
     border-radius: 50%;
@@ -238,7 +258,7 @@
     border: 1px solid var(--glass-border);
 }
 
-.cover-preview {
+.profile-cover-preview {
     width: 120px;
     height: 60px;
     object-fit: cover;
@@ -247,7 +267,7 @@
     border: 1px solid var(--glass-border);
 }
 
-.modal-footer {
+.profile-modal-footer {
     padding: 16px 20px;
     border-top: 1px solid var(--glass-border);
     display: flex;
@@ -255,7 +275,7 @@
     gap: 10px;
 }
 
-.btn-secondary {
+.profile-btn-secondary {
     background: transparent;
     border: 1px solid var(--glass-border);
     color: var(--text-primary);
@@ -264,7 +284,7 @@
     cursor: pointer;
 }
 
-.btn-primary {
+.profile-btn-primary {
     background: var(--accent-primary);
     border: none;
     color: white;
@@ -282,7 +302,7 @@
     scrollbar-width: none;
 }
 
-.highlight-item {
+.profile-highlight-item {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -291,7 +311,7 @@
     cursor: pointer;
 }
 
-.highlight-circle {
+.profile-highlight-circle {
     width: 77px;
     height: 77px;
     border-radius: 50%;
@@ -303,13 +323,13 @@
     justify-content: center;
 }
 
-.highlight-circle i {
+.profile-highlight-circle i {
     color: var(--text-tertiary);
     width: 30px;
     height: 30px;
 }
 
-.highlight-name {
+.profile-highlight-name {
     font-size: 12px;
     font-weight: 600;
     color: var(--text-primary);
@@ -357,7 +377,7 @@
     margin-top: 20px;
 }
 
-.grid-post-item {
+.profile-grid-item {
     position: relative;
     aspect-ratio: 1 / 1;
     overflow: hidden;
@@ -365,14 +385,14 @@
     background: var(--bg-secondary);
 }
 
-.grid-post-item img,
-.grid-post-item video {
+.profile-grid-item img,
+.profile-grid-item video {
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
 
-.grid-post-overlay {
+.profile-grid-overlay {
     position: absolute;
     top: 0;
     left: 0;
@@ -388,24 +408,25 @@
     color: white;
 }
 
-.grid-post-item:hover .grid-post-overlay {
+.profile-grid-item:hover .profile-grid-overlay {
     opacity: 1;
 }
 
-.overlay-stat {
+.profile-overlay-stat {
     display: flex;
     align-items: center;
     gap: 4px;
     font-weight: 600;
 }
 
-.overlay-stat i {
+.profile-overlay-stat i,
+.profile-overlay-stat svg {
     width: 20px;
     height: 20px;
     fill: white;
 }
 
-.multi-media-icon {
+.profile-multi-media-icon {
     position: absolute;
     top: 10px;
     right: 10px;
@@ -433,6 +454,21 @@
 
     .profile-username-row {
         flex-direction: column;
+        gap: 10px;
+    }
+
+    /* Edit Profile Modal Responsive */
+    .profile-modal-content {
+        max-width: 100vw;
+        height: 100vh;
+        max-height: 100vh;
+        border-radius: 0;
+        border: none;
+    }
+
+    .profile-photo-upload {
+        flex-direction: column;
+        align-items: flex-start;
         gap: 10px;
     }
 }

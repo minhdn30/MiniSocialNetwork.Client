@@ -1298,4 +1298,112 @@
   }
 }
 
+/* ================= COMPREHENSIVE RESPONSIVE ================= */
+
+/* Tablet & Smaller Desktops */
+@media (max-width: 1080px) {
+  #createPostModal .modal-container {
+    width: 95vw;
+    height: 90vh;
+  }
+}
+
+/* Mobile Devices */
+@media (max-width: 768px) {
+  #createPostModal .modal-container {
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+
+  #createPostModal .modal-content {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  #createPostModal .step1-media,
+  #createPostModal .step2-media {
+    flex: none;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    min-height: auto;
+  }
+
+  .post-media-container {
+    min-height: auto;
+  }
+
+  .post-details-panel.step1-panel,
+  .post-details-panel.step2-panel {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--border-tertiary);
+    flex: none;
+  }
+
+  .crop-info-panel {
+    padding: 16px;
+  }
+
+  .media-thumbnails {
+    bottom: 8px;
+    padding: 6px;
+  }
+
+  .thumbnail-item, .thumbnail-add {
+    width: 50px;
+    height: 50px;
+  }
+
+  .zoom-controls {
+    left: 10px;
+    padding: 8px;
+    width: 30px;
+  }
+
+  .zoom-slider {
+    height: 150px;
+  }
+
+  .modal-header {
+    padding: 12px 16px;
+  }
+
+  .create-post-user-info {
+    padding: 12px 16px;
+  }
+
+  .post-caption-container {
+    padding: 16px;
+  }
+
+  .post-caption-input {
+    min-height: 120px;
+  }
+}
+
+/* Landscape Mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+  #createPostModal .modal-container {
+    height: 100vh;
+  }
+  
+  #createPostModal .modal-content {
+    flex-direction: row;
+  }
+
+  #createPostModal .step1-media,
+  #createPostModal .step2-media {
+    height: 100%;
+    aspect-ratio: auto;
+  }
+
+  .post-details-panel {
+    width: 300px;
+    border-top: none;
+    border-left: 1px solid var(--border-tertiary);
+  }
+}
+
 

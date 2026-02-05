@@ -23,7 +23,7 @@
 }
 
 /* ===== Header ===== */
-.preview-header {
+.profile-preview-header {
   display: flex;
   gap: 12px;
   align-items: center;
@@ -31,7 +31,7 @@
   margin-bottom: 16px;
 }
 
-.preview-header img {
+.profile-preview-header img {
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -39,19 +39,19 @@
   flex-shrink: 0;
 }
 
-.preview-header > div {
+.profile-preview-header > div {
   flex: 1;
   min-width: 0;
 }
 
-.preview-header .name {
+.profile-preview-header .profile-preview-name {
   font-weight: 600;
   font-size: 15px;
   color: var(--text-primary);
 }
 
 /* ===== Stats ===== */
-.preview-stats {
+.profile-preview-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 4px;
@@ -60,33 +60,33 @@
   color: var(--text-primary);
 }
 
-.preview-stats > div {
+.profile-preview-stats > div {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
 }
 
-.preview-stats b {
+.profile-preview-stats b {
   font-weight: 600;
   color: var(--text-primary);
   font-size: 16px;
 }
 
-.preview-stats span {
+.profile-preview-stats span {
   color: var(--text-secondary);
   font-size: 15px;
 }
 
 /* ===== Media grid ===== */
-.preview-medias {
+.profile-preview-medias {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   margin-bottom: 16px;
 }
 
-.preview-media-item {
+.profile-preview-media-item {
   width: 100%;
   aspect-ratio: 1 / 1;
   overflow: hidden;
@@ -96,7 +96,7 @@
   cursor: pointer;
 }
 
-.preview-media-item img {
+.profile-preview-media-item img {
   position: absolute;
   top: 0;
   left: 0;
@@ -105,11 +105,11 @@
   object-fit: cover;
 }
 
-.preview-medias img {
+.profile-preview-medias img {
   display: block;
 }
 
-.no-media {
+.profile-preview-no-media {
   font-size: 13px;
   color: var(--text-tertiary);
   text-align: center;
@@ -118,12 +118,12 @@
 }
 
 /* ===== Actions ===== */
-.profile-actions {
+.profile-preview-actions {
   display: flex;
   gap: 8px;
 }
 
-.btn {
+.profile-preview-btn {
   flex: 1;
   padding: 8px 0;
   border-radius: 8px;
@@ -138,68 +138,68 @@
   gap: 4px;
 }
 
-.btn i {
+.profile-preview-btn i {
   width: 16px;
   height: 16px;
   stroke-width: 2;
 }
 
 /* Message */
-.btn-message, .btn-message svg {
+.profile-preview-btn-message, .profile-preview-btn-message svg {
   background: var(--accent-primary);
   color: var(--text-white);
 }
 
-.btn-message:hover {
+.profile-preview-btn-message:hover {
   background: var(--accent-hover);
 }
 
-.btn-message:active {
+.profile-preview-btn-message:active {
   background: var(--accent-active);
   transform: scale(0.98);
 }
 
 /* Follow */
-.btn-follow {
+.profile-preview-btn-follow {
   background: var(--accent-secondary);
   color: var(--text-white);
 }
 
-.btn-follow:hover {
+.profile-preview-btn-follow:hover {
   background: var(--accent-secondary-hover);
 }
 
-.btn-follow:active {
+.profile-preview-btn-follow:active {
   background: var(--accent-secondary-active);
   transform: scale(0.98);
 }
 
 /* Following */
-.btn-following {
+.profile-preview-btn-following {
   background: var(--border-primary);
   color: var(--text-primary);
 }
 
-.btn-following:hover {
+.profile-preview-btn-following:hover {
   background: var(--border-secondary);
 }
 
-.btn-following:active {
+.profile-preview-btn-following:active {
   background: var(--bg-hover);
   transform: scale(0.98);
 }
 
 /* View Profile */
-.btn-view-profile {
+.profile-preview-btn-view-profile {
   background: var(--accent-primary);
   color: var(--text-white);
 }
 
-.btn-view-profile:hover {
+.profile-preview-btn-view-profile:hover {
   background: var(--accent-hover);
 }
 
-.btn-view-profile:active {
+.profile-preview-btn-view-profile:active {
   background: var(--accent-active);
   transform: scale(0.98);
 }
@@ -211,7 +211,7 @@
     padding: 14px;
   }
 
-  .preview-header img {
+  .profile-preview-header img {
     width: 52px;
     height: 52px;
   }
@@ -228,40 +228,40 @@
     background: var(--overlay-blur);
   }
 
-  .preview-header {
+  .profile-preview-header {
     gap: 10px;
     margin-bottom: 14px;
   }
 
-  .preview-header img {
+  .profile-preview-header img {
     width: 48px;
     height: 48px;
   }
 
-  .preview-header .name {
+  .profile-preview-header .profile-preview-name {
     font-size: 14px;
   }
 
-  .preview-stats {
+  .profile-preview-stats {
     gap: 2px;
     margin-bottom: 10px;
     font-size: 13px;
   }
 
-  .preview-stats b {
+  .profile-preview-stats b {
     font-size: 14px;
   }
 
-  .preview-stats span {
+  .profile-preview-stats span {
     font-size: 12px;
   }
 
-  .preview-medias {
+  .profile-preview-medias {
     gap: 3px;
     margin-bottom: 14px;
   }
 
-  .preview-media-item {
+  .profile-preview-media-item {
     border-radius: 6px;
   }
 
@@ -270,28 +270,28 @@
     padding: 16px 0;
   }
 
-  .profile-actions {
+  .profile-preview-actions {
     gap: 6px;
   }
 
-  .btn {
+  .profile-preview-btn {
     padding: 10px 0;
     font-size: 13px;
     border-radius: 6px;
   }
 
-  .btn i {
+  .profile-preview-btn i {
     width: 14px;
     height: 14px;
   }
 
-  .btn .chevron-icon {
+  .profile-preview-btn .chevron-icon {
     width: 12px;
     height: 12px;
   }
 
   /* Larger tap targets for mobile */
-  .btn {
+  .profile-preview-btn {
     min-height: 36px;
   }
 }
@@ -303,30 +303,30 @@
     padding: 12px;
   }
 
-  .preview-header {
+  .profile-preview-header {
     gap: 8px;
     margin-bottom: 12px;
   }
 
-  .preview-header img {
+  .profile-preview-header img {
     width: 44px;
     height: 44px;
   }
 
-  .preview-stats {
+  .profile-preview-stats {
     margin-bottom: 8px;
   }
 
-  .preview-medias {
+  .profile-preview-medias {
     gap: 2px;
     margin-bottom: 12px;
   }
 
-  .profile-actions {
+  .profile-preview-actions {
     gap: 6px;
   }
 
-  .btn {
+  .profile-preview-btn {
     font-size: 12px;
     padding: 9px 0;
   }
@@ -338,11 +338,11 @@
     transform: none;
   }
 
-  .btn:active {
+  .profile-preview-btn:active {
     transform: scale(0.96);
   }
 
-  .btn {
+  .profile-preview-btn {
     -webkit-tap-highlight-color: transparent;
     user-select: none;
   }
@@ -362,7 +362,7 @@
     border: 2px solid var(--text-primary);
   }
 
-  .btn {
+  .profile-preview-btn {
     border: 1px solid currentColor;
   }
 }
@@ -370,7 +370,7 @@
 /* ===== Reduced motion ===== */
 @media (prefers-reduced-motion: reduce) {
   .profile-preview,
-  .btn {
+  .profile-preview-btn {
     transition: none;
   }
 

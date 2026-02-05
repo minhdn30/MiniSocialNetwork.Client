@@ -538,3 +538,67 @@ body.light-mode .toggle-switch {
 .toggle-switch.active .toggle-slider {
   transform: translateX(20px);
 }
+/* ================= RESPONSIVE (Mobile) ================= */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 100% !important;
+    height: 60px !important;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    flex-direction: row;
+    padding: 0 10px;
+    justify-content: space-around;
+    align-items: center;
+    border-top: 1px solid var(--border-tertiary);
+    border-right: none;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+  }
+
+  /* Hide Logo on mobile bottom bar */
+  .sidebar-logo {
+    display: none !important;
+  }
+
+  .sidebar-menu {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    justify-content: space-around;
+    align-items: center;
+  }
+
+  .menu-item {
+    padding: 8px;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    justify-content: center;
+  }
+
+  /* Hide labels on mobile bottom bar */
+  .menu-item span {
+    display: none !important;
+  }
+
+  /* Hide less important items on mobile */
+  .menu-item.messages,
+  .menu-item.notifications,
+  .menu-item.explore {
+    display: none;
+  }
+
+  .sidebar-footer {
+    display: none; /* Hide 'More' menu on mobile as it's complex */
+  }
+
+  .create-wrapper {
+      position: static;
+  }
+
+  .create-dropdown {
+      bottom: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+  }
+}

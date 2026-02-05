@@ -8,13 +8,11 @@
     let page = 1;
     let isLoading = false;
     let hasMore = true;
-    const PAGE_SIZE = APP_CONFIG.PROFILE_POSTS_PAGE_SIZE; // Use global config
+    const PAGE_SIZE = APP_CONFIG.PROFILE_POSTS_PAGE_SIZE; 
 
     let currentProfileData = null;
 
     function initProfile() {
-        // Extract params from Hash URL (e.g., #/profile?id=xyz)
-        // window.location.hash returns "#/profile?id=xyz"
         const hash = window.location.hash;
         let accountId = null;
 
@@ -24,18 +22,32 @@
             accountId = params.get("id");
         }
 
-        // Fallback to current user if no ID is passed
         accountId = accountId || localStorage.getItem("accountId");
         
         if (!accountId) {
-             window.location.href = "auth.html";
-             return;
+            console.error("No account ID found");
+            return;
         }
+
+        // Register state hooks for PageCache
+        window.getPageData = () => ({
+            currentProfileId,
+            page,
+            hasMore,
+            currentProfileData
+        });
+        window.setPageData = (data) => {
+            if (!data) return;
+            currentProfileId = data.currentProfileId;
+            page = data.page;
+            hasMore = data.hasMore;
+            currentProfileData = data.currentProfileData;
+        };
 
         currentProfileId = accountId;
         resetState();
         loadProfileData();
-        setupScrollListener();
+        // setupScrollListener is now global
         setupTabListeners();
         setupEditProfileListeners();
     }
@@ -44,115 +56,115 @@
         page = 1;
         isLoading = false;
         hasMore = true;
-        const grid = document.getElementById("profile-posts-grid");
-        if (grid) grid.innerHTML = "";
     }
 
+    // Scroll listener moved OUT of init to be always active (but checking current context)
+    const handleProfileScroll = () => {
+        const grid = document.getElementById("profile-posts-grid");
+        if (!grid || !document.body.contains(grid)) return;
+
+        if (isLoading || !hasMore) return;
+        if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500) {
+            loadPosts();
+        }
+    };
+    window.addEventListener("scroll", handleProfileScroll);
+
     async function loadProfileData() {
+        if (!currentProfileId) return;
+
         try {
             const res = await API.Accounts.getProfile(currentProfileId);
             if (!res.ok) {
-                if (res.status === 404) {
-                    toastError("Account not found");
-                }
+                if (window.toastError) toastError("Failed to load profile details.");
                 return;
             }
 
             const data = await res.json();
-            console.log("Profile Data:", data); // Debugging
-            currentProfileData = data; // Store for edit
+            currentProfileData = data;
             renderProfileHeader(data);
-            loadPosts(); // Initial posts fetch
-
+            loadPosts(); 
         } catch (err) {
-            console.error("Failed to load profile", err);
+            console.error(err);
         }
     }
 
     function renderProfileHeader(data) {
-        // Fallback for case sensitivity or missing data
-        const accountInfo = data.accountInfo || data.AccountInfo;
-        const followInfo = data.followInfo || data.FollowInfo;
-        const totalPosts = data.totalPosts !== undefined ? data.totalPosts : data.TotalPosts;
-        const isCurrentUser = data.isCurrentUser !== undefined ? data.isCurrentUser : data.IsCurrentUser;
+        const container = document.getElementById("profile-header-container");
+        if (!container) return;
 
-        if (!accountInfo) {
-            console.error("Missing accountInfo in data", data);
-            return;
-        }
-        
-        // Flatten/Normalize data provided by the API
-        const acc = accountInfo || {};
-        const follow = followInfo || {};
-        
-        const username = acc.username || acc.Username || "Unknown";
-        const fullName = acc.fullName || acc.FullName || "User";
-        const avatarUrl = acc.avatarUrl || acc.AvatarUrl || APP_CONFIG.DEFAULT_AVATAR;
-        const coverUrl = acc.coverUrl || acc.CoverUrl || "assets/gradients/orb-1.png";
-        const bio = acc.bio || acc.Bio || "";
-        
-        const followers = follow.followers !== undefined ? follow.followers : (follow.Followers || 0);
-        const following = follow.following !== undefined ? follow.following : (follow.Following || 0);
+        const info = data.account;
+        const isOwner = data.isCurrentUser;
+        const isFollowed = data.isFollowedByCurrentUser;
 
-        document.getElementById("profile-username").textContent = username;
-        document.getElementById("profile-fullname").textContent = fullName;
-        document.getElementById("profile-avatar").src = avatarUrl;
-        
-        // New fields
-        const coverImg = document.getElementById("profile-cover-img");
-        if(coverImg) coverImg.src = coverUrl;
-        
-        const bioEl = document.getElementById("profile-description");
-        if(bioEl) bioEl.textContent = bio;
+        // Cover & Avatar
+        document.getElementById("profile-cover").src = info.coverUrl || "assets/gradients/orb-1.png";
+        document.getElementById("profile-avatar").src = info.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
+        document.getElementById("profile-fullname").textContent = info.fullName;
+        document.getElementById("profile-bio").textContent = info.bio || "No bio yet.";
 
-        document.getElementById("profile-post-count").textContent = totalPosts;
-        document.getElementById("profile-follower-count").textContent = followers;
-        document.getElementById("profile-following-count").textContent = following;
-        
-        // Render actions
-        const actionsContainer = document.getElementById("profile-actions");
-        actionsContainer.innerHTML = "";
-        
-        const accountId = acc.accountId || acc.AccountId;
+        // Stats
+        document.getElementById("profile-posts-count").textContent = data.postCount;
+        document.getElementById("profile-followers-count").textContent = data.followerCount;
+        document.getElementById("profile-following-count").textContent = data.followingCount;
 
-        if (isCurrentUser) {
-            actionsContainer.innerHTML = `
-                <button class="btn-profile btn-edit-profile" onclick="openEditProfile()">Edit Profile</button>
-                <button class="btn-profile btn-edit-profile">View Archive</button>
+        // Action Buttons
+        const actionBtn = document.getElementById("profile-action-btn");
+        if (isOwner) {
+            actionBtn.innerHTML = `
+                <button class="profile-btn profile-btn-edit" onclick="openEditProfile()">
+                    <i data-lucide="edit-3"></i>
+                    <span>Edit Profile</span>
+                </button>
             `;
         } else {
-            const isFollowed = follow.isFollowedByCurrentUser !== undefined ? follow.isFollowedByCurrentUser : follow.IsFollowedByCurrentUser;
-            const followClass = isFollowed ? "btn-following-profile" : "btn-follow-profile";
-            const followText = isFollowed ? '<i data-lucide="check"></i><span>Following</span>' : "Follow";
-            
-            actionsContainer.innerHTML = `
-                <button class="btn-profile ${followClass}" id="mainFollowBtn" onclick="handleProfileFollow('${accountId}', this)">
-                    ${followText}
-                </button>
-                <button class="btn-profile btn-edit-profile" onclick="openMessage('${accountId}')">Message</button>
-            `;
+            if (isFollowed) {
+                actionBtn.innerHTML = `
+                    <button class="profile-btn profile-btn-following" onclick="toggleFollowProfile('${info.accountId}')">
+                        <i data-lucide="check"></i>
+                        <span>Following</span>
+                    </button>
+                    <button class="profile-btn profile-btn-secondary" onclick="openMessage('${info.accountId}')">
+                        <i data-lucide="message-circle"></i>
+                    </button>
+                `;
+            } else {
+                actionBtn.innerHTML = `
+                    <button class="profile-btn profile-btn-follow" onclick="toggleFollowProfile('${info.accountId}')">
+                        <i data-lucide="user-plus"></i>
+                        <span>Follow</span>
+                    </button>
+                    <button class="profile-btn profile-btn-secondary" onclick="openMessage('${info.accountId}')">
+                        <i data-lucide="message-circle"></i>
+                    </button>
+                `;
+            }
         }
-        
         if (window.lucide) lucide.createIcons();
     }
 
     async function loadPosts() {
         if (isLoading || !hasMore) return;
-        
         isLoading = true;
+
+        const grid = document.getElementById("profile-posts-grid");
         const loader = document.getElementById("profile-posts-loader");
-        if (loader) loader.style.display = "flex";
+
+        if (loader) loader.style.display = "block";
 
         try {
             const res = await API.Posts.getByAccountId(currentProfileId, page, PAGE_SIZE);
-            if (!res.ok) throw new Error("Load posts failed");
+            if (!res.ok) throw new Error("Failed to load posts");
 
             const data = await res.json();
-            renderPostGrid(data.items);
+            const items = data.items || data; // Fallback if it's already an array
 
+            if (!items || items.length < PAGE_SIZE) {
+                hasMore = false;
+            }
+
+            renderPosts(items);
             page++;
-            hasMore = data.items.length === PAGE_SIZE;
-
         } catch (err) {
             console.error(err);
         } finally {
@@ -161,36 +173,32 @@
         }
     }
 
-    function renderPostGrid(posts) {
+    function renderPosts(posts) {
         const grid = document.getElementById("profile-posts-grid");
         if (!grid) return;
 
+        if (page === 1) grid.innerHTML = "";
+
         posts.forEach(post => {
             const item = document.createElement("div");
-            item.className = "grid-post-item";
-            item.onclick = () => openPostDetail(post.postId);
-            
-            const thumbUrl = post.medias?.[0]?.mediaUrl || "";
-            const mediaType = post.medias?.[0]?.type;
-            // Handle both string "video" and Enum 1 (Video)
-            const isVideo = (typeof mediaType === 'string' && mediaType.includes("video")) || mediaType === 1;
-            const isMulti = post.mediaCount > 1;
+            item.className = "profile-grid-item";
+            item.onclick = () => {
+                if (window.openPostDetail) window.openPostDetail(post.postId);
+            };
+
+            const isMulti = post.medias && post.medias.length > 1;
+            const primaryMedia = post.medias && post.medias[0] ? post.medias[0].mediaUrl : "";
 
             item.innerHTML = `
-                ${isVideo 
-                    ? `<video src="${thumbUrl}"></video>` 
-                    : `<img src="${thumbUrl}" alt="post">`}
-                
-                ${isMulti ? `<div class="multi-media-icon"><i data-lucide="layers"></i></div>` : ""}
-                ${isVideo ? `<div class="multi-media-icon"><i data-lucide="video"></i></div>` : ""}
-
-                <div class="grid-post-overlay">
-                    <div class="overlay-stat">
-                        <i data-lucide="heart" style="fill: white;"></i>
+                <img src="${primaryMedia}" alt="post">
+                ${isMulti ? '<div class="profile-multi-media-icon"><i data-lucide="layers"></i></div>' : ''}
+                <div class="profile-grid-overlay">
+                    <div class="profile-overlay-stat">
+                        <i data-lucide="heart"></i>
                         <span>${post.reactCount}</span>
                     </div>
-                    <div class="overlay-stat">
-                        <i data-lucide="message-circle" style="fill: white;"></i>
+                    <div class="profile-overlay-stat">
+                        <i data-lucide="message-circle"></i>
                         <span>${post.commentCount}</span>
                     </div>
                 </div>
@@ -201,34 +209,19 @@
         if (window.lucide) lucide.createIcons();
     }
 
-    function setupScrollListener() {
-        window.onscroll = () => {
-            if (isLoading || !hasMore) return;
-            if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500) {
-                loadPosts();
-            }
-        };
-    }
-
+    // Tabs
     function setupTabListeners() {
-        const tabs = document.querySelectorAll(".profile-tab");
+        const tabs = document.querySelectorAll(".profile-tab-item");
         tabs.forEach(tab => {
-            tab.onclick = function() {
+            tab.onclick = () => {
                 tabs.forEach(t => t.classList.remove("active"));
-                this.classList.add("active");
-                // For now, only 'Posts' works as expected
-                const type = this.dataset.tab;
-                if (type === "posts") {
-                    resetState();
-                    loadPosts();
-                } else {
-                    document.getElementById("profile-posts-grid").innerHTML = `<div style="grid-column: 1/4; text-align: center; padding: 40px; color: var(--text-tertiary);">No ${type} yet.</div>`;
-                    hasMore = false;
-                }
+                tab.classList.add("active");
+                // TODO: Handle content switch (Posts, Reels, Saved, Tagged)
             };
         });
     }
 
+    // Edit Profile Modal logic ...
     function setupEditProfileListeners() {
         const avatarInput = document.getElementById("edit-avatar-input");
         const coverInput = document.getElementById("edit-cover-input");
@@ -237,28 +230,26 @@
             avatarInput.onchange = (e) => {
                 const file = e.target.files[0];
                 if (file) {
-                    document.getElementById("edit-avatar-preview").src = URL.createObjectURL(file);
+                    const reader = new FileReader();
+                    reader.onload = (re) => {
+                        document.getElementById("edit-avatar-preview").src = re.target.result;
+                    };
+                    reader.readAsDataURL(file);
                 }
             };
         }
+
         if (coverInput) {
             coverInput.onchange = (e) => {
                 const file = e.target.files[0];
                 if (file) {
-                    document.getElementById("edit-cover-preview").src = URL.createObjectURL(file);
+                    const reader = new FileReader();
+                    reader.onload = (re) => {
+                        document.getElementById("edit-cover-preview").src = re.target.result;
+                    };
+                    reader.readAsDataURL(file);
                 }
             };
-        }
-    }
-
-    // Handlers
-    global.handleProfileFollow = async function(accountId, btn) {
-        const isCurrentlyFollowing = btn.classList.contains("btn-following-profile");
-        
-        if (isCurrentlyFollowing) {
-            if (window.FollowModule) await window.FollowModule.unfollowUser(accountId);
-        } else {
-            if (window.FollowModule) await window.FollowModule.followUser(accountId);
         }
     }
 
@@ -266,21 +257,16 @@
         const modal = document.getElementById("edit-profile-modal");
         if (!modal || !currentProfileData) return;
 
-        const info = currentProfileData.accountInfo || currentProfileData.AccountInfo;
-        if (!info) return;
+        const info = currentProfileData.account;
+        document.getElementById("edit-fullname").value = info.fullName || "";
+        document.getElementById("edit-bio").value = info.bio || "";
+        document.getElementById("edit-phone").value = info.phone || "";
+        document.getElementById("edit-address").value = info.address || "";
+        document.getElementById("edit-gender").value = info.gender !== undefined ? info.gender : 0;
 
-        // Populate fields
-        document.getElementById("edit-fullname").value = info.fullName || info.FullName || "";
-        document.getElementById("edit-bio").value = info.bio || info.Bio || "";
-        document.getElementById("edit-phone").value = info.phone || info.Phone || "";
-        document.getElementById("edit-address").value = info.address || info.Address || "";
-        document.getElementById("edit-gender").value = (info.gender !== false && info.Gender !== false) ? "true" : "false"; // Default true
+        document.getElementById("edit-avatar-preview").src = info.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
+        document.getElementById("edit-cover-preview").src = info.coverUrl || "assets/gradients/orb-1.png";
 
-        // Images
-        document.getElementById("edit-avatar-preview").src = info.avatarUrl || info.AvatarUrl || APP_CONFIG.DEFAULT_AVATAR;
-        document.getElementById("edit-cover-preview").src = info.coverUrl || info.CoverUrl || "assets/gradients/orb-1.png";
-
-        // Reset inputs
         document.getElementById("edit-avatar-input").value = "";
         document.getElementById("edit-cover-input").value = "";
 
@@ -295,7 +281,9 @@
     global.saveProfileChanges = async function() {
         if (!currentProfileId) return;
         
-        const btn = document.querySelector("#edit-profile-modal .btn-primary");
+        const btn = document.querySelector("#edit-profile-modal .profile-btn-primary");
+        if (!btn) return;
+        
         const originalText = btn.textContent;
         btn.textContent = "Saving...";
         btn.disabled = true;
@@ -318,7 +306,7 @@
             if (res.ok) {
                 if (window.toastSuccess) toastSuccess("Profile updated successfully!");
                 closeEditProfile();
-                await loadProfileData(); // Reload UI
+                loadProfileData(); 
             } else {
                 const data = await res.json();
                 if (window.toastError) toastError(data.title || "Failed to update profile.");
@@ -332,9 +320,28 @@
         }
     };
 
+    global.toggleFollowProfile = async function(accountId) {
+        try {
+            const isFollowed = currentProfileData.isFollowedByCurrentUser;
+            let result;
+            if (isFollowed) {
+                result = await API.Follows.unfollow(accountId);
+            } else {
+                result = await API.Follows.follow(accountId);
+            }
+
+            if (result.ok) {
+                currentProfileData.isFollowedByCurrentUser = !isFollowed;
+                currentProfileData.followerCount += isFollowed ? -1 : 1;
+                renderProfileHeader(currentProfileData);
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
     global.openMessage = function(accountId) {
         if (window.toastInfo) toastInfo("Messaging feature coming soon!");
-        // Future: window.location.href = `/chat?user=${accountId}`;
     };
 
     global.initProfilePage = initProfile;

@@ -1,110 +1,112 @@
 <div class="profile-container">
-    <!-- Cover Image -->
-    <div class="profile-cover">
-        <img id="profile-cover-img" src="assets/gradients/orb-1.png" alt="Cover Image" onerror="this.style.display='none'">
-    </div>
-
-    <!-- Header Section -->
-    <header class="profile-header">
-        <div class="profile-avatar-container">
-            <div class="profile-avatar-wrapper">
-                <img id="profile-avatar" src="assets/default-avatar.png" alt="Profile Picture">
-            </div>
+    <div class="profile-content-wrapper">
+        <!-- Cover Image -->
+        <div class="profile-cover">
+            <img id="profile-cover-img" src="assets/gradients/orb-1.png" alt="Cover Image" onerror="this.style.display='none'">
         </div>
-        
-        <div class="profile-info-container">
-            <div class="profile-username-row">
-                <h2 class="profile-username" id="profile-username">username</h2>
-                <div class="profile-actions" id="profile-actions">
-                    <!-- Dynamic Buttons: Edit Profile or Follow/Message -->
+
+        <!-- Header Section -->
+        <header class="profile-header">
+            <div class="profile-avatar-container">
+                <div class="profile-avatar-wrapper">
+                    <img id="profile-avatar" src="assets/default-avatar.png" alt="Profile Picture">
                 </div>
-                <button class="icon-btn" id="profile-settings-btn">
-                    <i data-lucide="settings"></i>
-                </button>
             </div>
             
-            <ul class="profile-stats">
-                <li><b id="profile-post-count">0</b> posts</li>
-                <li><b id="profile-follower-count">0</b> followers</li>
-                <li><b id="profile-following-count">0</b> following</li>
-            </ul>
-            
-            <div class="profile-bio">
-                <span class="profile-fullname" id="profile-fullname">Full Name</span>
-                <p id="profile-description"></p>
+            <div class="profile-info-container">
+                <div class="profile-username-row">
+                    <h2 class="profile-username" id="profile-username">username</h2>
+                    <div class="profile-actions" id="profile-actions">
+                        <!-- Dynamic Buttons: Edit Profile or Follow/Message -->
+                    </div>
+                    <button class="icon-btn" id="profile-settings-btn">
+                        <i data-lucide="settings"></i>
+                    </button>
+                </div>
+                
+                <ul class="profile-stats">
+                    <li><b id="profile-post-count">0</b> posts</li>
+                    <li><b id="profile-follower-count">0</b> followers</li>
+                    <li><b id="profile-following-count">0</b> following</li>
+                </ul>
+                
+                <div class="profile-bio">
+                    <span class="profile-fullname" id="profile-fullname">Full Name</span>
+                    <p id="profile-description"></p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Highlights Placeholder (Demo Only) -->
+        <div class="profile-highlights">
+            <!-- Space for highlights -->
+        </div>
+
+        <!-- Content Tabs -->
+        <div class="profile-tabs">
+            <div class="profile-tab active" data-tab="posts">
+                <i data-lucide="grid"></i>
+                <span>Posts</span>
+            </div>
+            <div class="profile-tab" data-tab="saved">
+                <i data-lucide="bookmark"></i>
+                <span>Saved</span>
+            </div>
+            <div class="profile-tab" data-tab="tagged">
+                <i data-lucide="user-square"></i>
+                <span>Tagged</span>
             </div>
         </div>
-    </header>
 
-    <!-- Highlights Placeholder (Demo Only) -->
-    <div class="profile-highlights">
-        <!-- ... existing ... -->
-    </div>
+        <!-- Posts Grid -->
+        <div class="profile-posts-grid" id="profile-posts-grid"></div>
 
-    <!-- Content Tabs -->
-    <div class="profile-tabs">
-        <div class="profile-tab active" data-tab="posts">
-            <i data-lucide="grid"></i>
-            <span>Posts</span>
+        <!-- Load More Loader -->
+        <div id="profile-posts-loader" class="feed-loader" style="display: none;">
+            <div class="loader-spinner"></div>
         </div>
-        <div class="profile-tab" data-tab="saved">
-            <i data-lucide="bookmark"></i>
-            <span>Saved</span>
-        </div>
-        <div class="profile-tab" data-tab="tagged">
-            <i data-lucide="user-square"></i>
-            <span>Tagged</span>
-        </div>
-    </div>
-
-    <!-- Posts Grid -->
-    <div class="profile-posts-grid" id="profile-posts-grid"></div>
-
-    <!-- Load More Loader -->
-    <div id="profile-posts-loader" class="feed-loader" style="display: none;">
-        <div class="loader-spinner"></div>
     </div>
 
     <!-- Edit Profile Modal -->
-    <div class="modal-overlay" id="edit-profile-modal">
-        <div class="modal-content">
-            <div class="modal-header">
+    <div class="profile-modal-overlay" id="edit-profile-modal">
+        <div class="profile-modal-content">
+            <div class="profile-modal-header">
                 <h3>Edit Profile</h3>
-                <button class="modal-close" onclick="closeEditProfile()"><i data-lucide="x"></i></button>
+                <button class="profile-modal-close" onclick="closeEditProfile()"><i data-lucide="x"></i></button>
             </div>
-            <div class="modal-body">
-                <div class="photo-upload-section">
-                    <img src="" id="edit-avatar-preview" class="photo-preview">
-                    <div class="form-group">
+            <div class="profile-modal-body">
+                <div class="profile-photo-upload">
+                    <img src="" id="edit-avatar-preview" class="profile-avatar-preview">
+                    <div class="profile-form-group">
                         <label>Avatar</label>
                         <input type="file" id="edit-avatar-input" accept="image/*">
                     </div>
                 </div>
-                 <div class="photo-upload-section">
-                    <img src="" id="edit-cover-preview" class="cover-preview">
-                    <div class="form-group">
+                 <div class="profile-photo-upload">
+                    <img src="" id="edit-cover-preview" class="profile-cover-preview">
+                    <div class="profile-form-group">
                         <label>Cover Photo</label>
                         <input type="file" id="edit-cover-input" accept="image/*">
                     </div>
                 </div>
 
-                <div class="form-group">
+                <div class="profile-form-group">
                     <label>Full Name</label>
                     <input type="text" id="edit-fullname">
                 </div>
-                <div class="form-group">
+                <div class="profile-form-group">
                     <label>Bio</label>
                     <textarea id="edit-bio" rows="3"></textarea>
                 </div>
-                <div class="form-group">
+                <div class="profile-form-group">
                     <label>Phone</label>
                     <input type="text" id="edit-phone">
                 </div>
-                <div class="form-group">
+                <div class="profile-form-group">
                     <label>Address</label>
                     <input type="text" id="edit-address">
                 </div>
-                <div class="form-group">
+                <div class="profile-form-group">
                     <label>Gender</label>
                     <select id="edit-gender">
                         <option value="true">Male</option>
@@ -112,9 +114,9 @@
                     </select>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeEditProfile()">Cancel</button>
-                <button class="btn-primary" onclick="saveProfileChanges()">Save</button>
+            <div class="profile-modal-footer">
+                <button class="profile-btn-secondary" onclick="closeEditProfile()">Cancel</button>
+                <button class="profile-btn-primary" onclick="saveProfileChanges()">Save</button>
             </div>
         </div>
     </div>

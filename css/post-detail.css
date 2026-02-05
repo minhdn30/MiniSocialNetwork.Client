@@ -338,25 +338,76 @@
 }
 
 /* Responsive */
+@media (max-width: 1024px) {
+  .post-detail-card {
+    width: 95vw;
+    height: 90vh;
+  }
+}
+
 @media (max-width: 768px) {
+  #postDetailModal {
+    padding: 0;
+  }
+
   .post-detail-card {
     flex-direction: column;
-    height: 100%;
-    width: 100%;
-    max-height: none;
+    height: 100vh;
+    width: 100vw;
+    max-height: 100vh;
     border-radius: 0;
   }
+
+  .post-detail-layout {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
   .detail-media-container {
     width: 100%;
     height: auto;
-    aspect-ratio: 1/1; /* Force square on mobile usually */
+    aspect-ratio: 1/1;
+    min-width: 0;
     flex: none;
   }
+
   .detail-info-container {
     width: 100%;
     flex: 1;
     border-left: none;
+    min-width: 0;
   }
+
+  .modal-close-btn {
+    top: 5px;
+    right: 5px;
+    padding: 5px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 50%;
+  }
+
+  .detail-header {
+    padding: 10px 12px;
+  }
+
+  .detail-footer {
+    padding: 10px 12px;
+  }
+
+  .detail-body {
+    padding: 12px;
+  }
+}
+
+/* Edit Mode Responsive for Post Detail */
+@media (max-width: 768px) {
+    #postDetailModal .detail-mode-panel {
+        height: 100%;
+    }
+    
+    #postDetailModal .edit-panel-body {
+        padding-bottom: 80px; /* Space for keyboards or bottom safe area */
+    }
 }
 
 .detail-emoji-picker {
