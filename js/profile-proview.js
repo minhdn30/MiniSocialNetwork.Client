@@ -16,9 +16,22 @@ function createProfilePreview() {
 
 /* ===== Load data ===== */
 async function loadProfilePreview(accountId) {
+  // Show loading state
+  if (previewEl) {
+    previewEl.innerHTML = `
+      <div class="profile-preview-loading" style="height: 200px; display: flex; align-items: center; justify-content: center; background: var(--bg-secondary);">
+        <div class="spinner spinner-medium"></div>
+      </div>
+    `;
+    previewEl.classList.remove("hidden");
+  }
+
   const res = await API.Accounts.getProfilePreview(accountId);
 
-  if (!res.ok) return null;
+  if (!res.ok) {
+    if (previewEl) previewEl.classList.add("hidden");
+    return null;
+  }
   return await res.json();
 }
 
@@ -29,18 +42,18 @@ function renderProfilePreview(data) {
   currentUserId = data.account.accountId;
   isFollowing = data.isFollowedByCurrentUser ?? false;
 
-  // Render actions buttons based on conditions
-  let actionsHTML = "";
+  const avatarUrl = data.account.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
 
+  // Actions buttons
+  let actionsHTML = "";
   if (data.isCurrentUser) {
-    // Nếu là chính mình → chỉ hiện nút View Profile
     actionsHTML = `
       <button class="profile-preview-btn profile-preview-btn-view-profile" onclick="viewProfile('${currentUserId}')">
-        View Profile
+        <i data-lucide="user"></i>
+        <span>View Profile</span>
       </button>
     `;
   } else {
-    // Nếu không phải chính mình → hiện Message + Follow/Following
     const followBtnHTML = data.isFollowedByCurrentUser
       ? `
         <button class="profile-preview-btn profile-preview-btn-following" id="followBtn" onclick="toggleFollowMenu(event, '${currentUserId}')">
@@ -50,14 +63,14 @@ function renderProfilePreview(data) {
       `
       : `
         <button class="profile-preview-btn profile-preview-btn-follow" id="followBtn" onclick="toggleFollow('${currentUserId}')">
-          Follow
+          <i data-lucide="user-plus"></i>
+          <span>Follow</span>
         </button>
       `;
 
-    // Disable buttons if account is not active
-    const isTargetActive = data.account.status === 0; // Active = 0
-    const disabledAttr = isTargetActive ? "" : "disabled";
+    const isTargetActive = data.account.status === 0;
     const statusClass = isTargetActive ? "" : "disabled-action";
+    const disabledAttr = isTargetActive ? "" : "disabled";
 
     actionsHTML = `
       <button class="profile-preview-btn profile-preview-btn-message ${statusClass}" ${disabledAttr} onclick="openChat('${currentUserId}')">
@@ -68,68 +81,94 @@ function renderProfilePreview(data) {
     `;
   }
 
-  // Status Badge HTML
-  let statusBadge = "";
-  if (data.account.status !== 0) {
-      let statusText = "Unavailable";
-      let statusClass = "status-unavailable";
-      
-      if (data.account.status === 1) {
-          statusText = "Inactive";
-          statusClass = "status-inactive";
-      }
-
-      statusBadge = `<span class="user-status-badge ${statusClass}">${statusText}</span>`;
-  }
+  // Cover & Dynamic Background
+  const coverAreaId = `pp-cover-${currentUserId}`;
+  const coverImgHtml = data.account.coverUrl 
+    ? `<img src="${data.account.coverUrl}" alt="cover" onerror="this.style.display='none'">` 
+    : "";
 
   previewEl.innerHTML = `
-    <div class="profile-preview-header">
-      <img src="${data.account.avatarUrl || APP_CONFIG.DEFAULT_AVATAR}" alt="avatar" />
-      <div>
-        <div class="profile-preview-name-container">
-            <div class="profile-preview-name">${PostUtils.truncateName(data.account.fullName)}</div>
-            ${statusBadge}
+    <div class="profile-preview-cover" id="${coverAreaId}">
+        ${coverImgHtml}
+    </div>
+    <div class="profile-preview-content">
+        <div class="profile-preview-header" onclick="viewProfile('${currentUserId}')">
+            <div class="profile-preview-avatar-wrapper">
+                <img src="${avatarUrl}" alt="avatar">
+            </div>
+            <div class="profile-preview-info">
+                <div class="profile-preview-name" id="pp-fullname">${data.account.fullName}</div>
+            </div>
         </div>
-      </div>
-    </div>
 
-    <div class="profile-preview-stats">
-      <div>
-        <b>${data.postCount}</b>
-        <span>Posts</span>
-      </div>
-      <div>
-        <b>${data.followerCount}</b>
-        <span>Followers</span>
-      </div>
-      <div>
-        <b>${data.followingCount}</b>
-        <span>Following</span>
-      </div>
-    </div>
+        <div class="profile-preview-stats">
+            <div>
+                <b>${data.postCount}</b>
+                <span>Posts</span>
+            </div>
+            <div>
+                <b>${data.followerCount}</b>
+                <span>Followers</span>
+            </div>
+            <div>
+                <b>${data.followingCount}</b>
+                <span>Following</span>
+            </div>
+        </div>
 
-    <div class="profile-preview-medias">
-      ${
-        !data.recentPosts || data.recentPosts.length === 0
-          ? `<div class="profile-preview-no-media">No recent posts</div>`
-          : data.recentPosts
-              .map((p) => `
-                <div class="profile-preview-media-item" onclick="if(window.InteractionModule) window.InteractionModule.closeReactList(); if(window.openPostDetail) window.openPostDetail('${p.postId}'); hidePreview();">
-                  <img src="${p.mediaUrl}" alt="post">
-                </div>
-              `)
-              .join("")
-      }
-    </div>
+        <div class="profile-preview-medias">
+            ${
+              !data.recentPosts || data.recentPosts.length === 0
+                ? `<div class="profile-preview-no-media">No recent posts</div>`
+                : data.recentPosts
+                    .map((p) => `
+                      <div class="profile-preview-media-item" onclick="if(window.InteractionModule) window.InteractionModule.closeReactList(); if(window.openPostDetail) window.openPostDetail('${p.postId}'); hidePreview();">
+                        <img src="${p.mediaUrl}" alt="post">
+                      </div>
+                    `)
+                    .join("")
+            }
+        </div>
 
-    <div class="profile-preview-actions">
-      ${actionsHTML}
+        <div class="profile-preview-actions">
+            ${actionsHTML}
+        </div>
     </div>
   `;
 
-  // Re-initialize lucide icons
+  // Apply dynamic gradient to cover
+  const coverArea = document.getElementById(coverAreaId);
+  if (coverArea) {
+      if (avatarUrl && typeof extractDominantColor === 'function') {
+          extractDominantColor(avatarUrl).then(color => {
+              coverArea.style.background = `linear-gradient(135deg, var(--bg-primary) 0%, ${color} 100%)`;
+          }).catch(() => {
+              coverArea.style.background = "linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%)";
+          });
+      } else {
+          coverArea.style.background = "linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%)";
+      }
+  }
+
   if (window.lucide) {
     lucide.createIcons();
+  }
+
+  // Auto-shrink font for long names (Max 2 lines)
+  const nameEl = document.getElementById("pp-fullname");
+  if (nameEl) {
+      nameEl.style.fontSize = "16px"; // Reset to base
+      
+      // Use requestAnimationFrame to ensure layout width is calculated
+      requestAnimationFrame(() => {
+          let fontSize = 16;
+          // Threshold for 2 lines with 1.2 line-height: 16 * 1.2 * 2 = 38.4px. 
+          // We use 42px as a safe limit to account for padding/sub-pixel rendering.
+          while (nameEl.scrollHeight > 42 && fontSize > 12) {
+              fontSize -= 0.5;
+              nameEl.style.fontSize = fontSize + "px";
+          }
+      });
   }
 }
 
@@ -337,7 +376,10 @@ async function toggleFollow(userId) {
     btn.className = "profile-preview-btn profile-preview-btn-following";
     btn.onclick = (e) => toggleFollowMenu(e, userId);
   } else {
-    btn.textContent = "Follow";
+    btn.innerHTML = `
+      <i data-lucide="user-plus"></i>
+      <span>Follow</span>
+    `;
     btn.className = "profile-preview-btn profile-preview-btn-follow";
     btn.onclick = () => toggleFollow(userId);
   }

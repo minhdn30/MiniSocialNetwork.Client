@@ -2,7 +2,7 @@
     <div class="profile-content-wrapper">
         <!-- Cover Image -->
         <div class="profile-cover">
-            <img id="profile-cover-img" src="assets/gradients/orb-1.png" alt="Cover Image" onerror="this.style.display='none'">
+            <img id="profile-cover-img" src="assets/gradients/orb-1.png" alt="Cover Image">
         </div>
 
         <!-- Header Section -->
@@ -14,25 +14,21 @@
             </div>
             
             <div class="profile-info-container">
-                <div class="profile-username-row">
-                    <h2 class="profile-username" id="profile-username">username</h2>
-                    <div class="profile-actions" id="profile-actions">
-                        <!-- Dynamic Buttons: Edit Profile or Follow/Message -->
+                <div class="profile-name-row">
+                    <h1 class="profile-fullname-header" id="profile-fullname-header">Full Name</h1>
+                    <div class="profile-actions" id="profile-action-btn">
+                        <!-- All buttons (Edit/Follow, Message/Settings, More) will be rendered here dynamically -->
                     </div>
-                    <button class="icon-btn" id="profile-settings-btn">
-                        <i data-lucide="settings"></i>
-                    </button>
                 </div>
                 
                 <ul class="profile-stats">
-                    <li><b id="profile-post-count">0</b> posts</li>
-                    <li><b id="profile-follower-count">0</b> followers</li>
-                    <li><b id="profile-following-count">0</b> following</li>
+                    <li><span class="stat-count" id="profile-posts-count">0</span> <span class="stat-label">posts</span></li>
+                    <li><span class="stat-count" id="profile-followers-count">0</span> <span class="stat-label">followers</span></li>
+                    <li><span class="stat-count" id="profile-following-count">0</span> <span class="stat-label">following</span></li>
                 </ul>
                 
-                <div class="profile-bio">
-                    <span class="profile-fullname" id="profile-fullname">Full Name</span>
-                    <p id="profile-description"></p>
+                <div class="profile-bio-section">
+                    <div id="profile-bio-text" class="profile-bio-text">No bio yet.</div>
                 </div>
             </div>
         </header>

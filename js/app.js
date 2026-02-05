@@ -155,6 +155,13 @@ function loadPlaceholder(title, iconName) {
 }
 
 async function loadProfilePage() {
+    // If we land here but the hash is exactly #/profile (no params), 
+    // we ensure PageCache for 'profile' is cleared if we were just viewing someone else's profile
+    const hash = window.location.hash;
+    if (hash === "#/profile" || hash === "#/profile/") {
+        PageCache.clear("profile");
+    }
+
     await loadPage("profile");
     if (window.initProfilePage) {
         window.initProfilePage();
@@ -180,9 +187,15 @@ function clearSessionAndRedirect() {
   localStorage.removeItem("accessToken");
   localStorage.removeItem("avatarUrl");
   localStorage.removeItem("fullname");
+  localStorage.removeItem("accountId");
   PageCache.clearAll();
   window.location.href = "/auth.html";
 }
+
+// Global logout function callable from sidebar or elsewhere
+window.logout = function() {
+    clearSessionAndRedirect();
+};
 
 /* =========================
    BOOTSTRAP

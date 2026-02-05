@@ -1,18 +1,24 @@
+/* Reset common elements for profile page */
 .profile-container {
-    padding: 30px 20px 0;
-    margin-left: 72px; /* Dành chỗ cho sidebar cố định */
-    width: calc(100% - 72px);
-    display: flex;
-    justify-content: center;
+    margin: 0 !important;
+    padding: 0 !important;
+    margin-left: 72px !important; /* Dành chỗ cho sidebar cố định */
+    width: calc(100% - 72px) !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: flex-start !important;
     transition: all var(--transition-normal);
+    position: relative;
+    top: 0;
 }
 
-/* Khối bọc nội dung bên trong để giữ max-width và căn lề */
 .profile-content-wrapper {
     width: 100%;
-    max-width: 935px;
+    max-width: 935px; /* Standard Instagram-style width */
     display: flex;
     flex-direction: column;
+    margin: 0 auto !important;
+    padding: 0 !important;
 }
 
 @media (max-width: 768px) {
@@ -27,39 +33,50 @@
 /* ===== Profile Cover ===== */
 .profile-cover {
     width: 100%;
-    height: 250px;
-    background-color: var(--bg-secondary);
+    aspect-ratio: 15 / 5; /* Maintain ratio even without image */
+    background: var(--bg-secondary); /* Default theme-aware fallback */
     overflow: hidden;
-    margin-bottom: 20px;
-    border-radius: 8px;
+    margin-bottom: 0px; /* Removed margin to allow seamless cut-through */
+    border-radius: 0 0 12px 12px;
     position: relative;
+    line-height: 0;
 }
 
 .profile-cover img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: block;
+    transition: transform var(--transition-normal);
+}
+
+.profile-cover:hover img {
+    transform: scale(1.02);
 }
 
 /* ===== Profile Header ===== */
 .profile-header {
     display: flex;
-    margin-bottom: 44px;
+    margin-bottom: 30px;
     gap: 30px;
-    align-items: flex-start;
+    align-items: flex-start; /* Align tops to allow independent positioning */
+    margin-top: -84px; /* Half of avatar height (168px / 2) */
+    position: relative;
+    padding: 0 40px;
 }
 
 .profile-avatar-container {
     flex-shrink: 0;
+    z-index: 10;
 }
 
 .profile-avatar-wrapper {
     position: relative;
-    width: 150px;
-    height: 150px;
+    width: 168px;
+    height: 168px;
     border-radius: 50%;
-    padding: 3px;
-    background: var(--glass-border);
+    padding: 4px;
+    background: var(--bg-primary);
 }
 
 .profile-avatar-wrapper img {
@@ -67,38 +84,98 @@
     height: 100%;
     object-fit: cover;
     border-radius: 50%;
-    border: 2px solid var(--bg-primary);
 }
 
 .profile-info-container {
-    flex: 2;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
 }
 
-.profile-username-row {
+.profile-name-row {
     display: flex;
     align-items: center;
     gap: 20px;
-    margin-bottom: 20px;
+    height: 64px; /* Sleeker strip height */
+    margin-top: 52px; /* Centers the 64px row on the 168px avatar (84 - 32 = 52) */
+    margin-left: -95px; /* Pull deep under avatar for merged look */
+    margin-right: -40px; /* Stretch to edge */
+    background: var(--bg-primary); 
+    padding-left: 80px; /* Clear the avatar circle */
+    padding-right: 24px; /* Reduced to bring buttons closer to the edge */
+    width: auto; /* Allow expansion to edge */
+    z-index: 2;
+    position: relative;
+    /* overflow: hidden removed to allow fillets to show */
 }
 
-.profile-username {
-    font-size: 20px;
-    font-weight: 300;
+/* Inverted Corner (Fillet) for the intersection with cover */
+.profile-name-row::before,
+.profile-name-row::after {
+    content: "";
+    position: absolute;
+    bottom: 100%; /* Sit on top of the row's edge */
+    width: 12px;
+    height: 12px;
+    pointer-events: none;
+}
+
+.profile-name-row::before {
+    left: 0;
+    /* Concave scoop pointing towards the avatar - matched to 12px cover radius */
+    background: radial-gradient(circle at 100% 0%, transparent 12px, var(--bg-primary) 13px);
+}
+
+.profile-name-row::after {
+    right: 0;
+    /* Concave scoop pointing towards the right edge - matched to 12px cover radius */
+    background: radial-gradient(circle at 0% 0%, transparent 12px, var(--bg-primary) 13px);
+}
+
+.profile-fullname-header {
+    font-size: 32px;
     color: var(--text-primary);
+    margin: 0;
+    letter-spacing: -1px;
+    line-height: 1;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+    display: block;
 }
 
 .profile-actions {
     display: flex;
-    gap: 8px;
+    gap: 12px;
+    margin-left: auto; /* Push buttons to the far right */
+    align-items: center;
+    flex-shrink: 0; /* Prevent buttons from shrinking when name is long */
 }
 
 .profile-btn {
-    padding: 7px 16px;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 600;
+    min-width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
     cursor: pointer;
     transition: all var(--transition-fast);
+    border: none;
+    padding: 0 12px; /* Add padding for buttons with text content */
+}
+
+.profile-btn i, .profile-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.profile-btn-secondary {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text-primary);
+    padding: 0; /* Tight icon-only padding */
 }
 
 .profile-btn-edit {
@@ -113,28 +190,50 @@
 
 .profile-btn-follow {
     background: var(--accent-primary);
-    border: none;
     color: white;
-}
-
-.profile-btn-follow:hover {
-    filter: brightness(1.1);
+    font-weight: 600;
+    gap: 8px;
+    padding: 0 16px;
 }
 
 .profile-btn-following {
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
     color: var(--text-primary);
+    font-weight: 600;
+    gap: 8px;
+    padding: 0 16px;
+}
+
+#profile-settings-btn {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text-primary);
+    width: 38px;
+    height: 38px;
     display: flex;
     align-items: center;
-    gap: 4px;
+    justify-content: center;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+#profile-settings-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+#profile-settings-btn i, #profile-settings-btn svg {
+    width: 18px;
+    height: 18px;
 }
 
 /* ===== Stats ===== */
 .profile-stats {
     display: flex;
-    gap: 40px;
-    margin-bottom: 20px;
+    gap: 48px;
+    margin-top: 24px; /* Give space from the horizontal name strip */
+    margin-bottom: 24px;
     list-style: none;
     padding: 0;
 }
@@ -142,23 +241,34 @@
 .profile-stats li {
     font-size: 16px;
     color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
 }
 
-.profile-stats b {
-    font-weight: 600;
-}
-
-.profile-bio {
-    font-size: 14px;
-    line-height: 1.5;
+.stat-count {
+    font-weight: 800;
+    font-size: 18px;
     color: var(--text-primary);
-    white-space: pre-wrap; /* Preserve newlines */
 }
 
-.profile-fullname {
-    font-weight: 600;
-    display: block;
-    margin-bottom: 4px;
+.stat-label {
+    font-size: 14px;
+    color: var(--text-secondary);
+    text-transform: capitalize;
+}
+
+.profile-bio-section {
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--text-primary);
+    margin-top: 10px; /* Small gap from stats */
+}
+
+.profile-bio-text {
+    white-space: pre-wrap;
+    color: var(--text-secondary);
+    max-width: 600px;
 }
 
 /* ===== Edit Profile Modal ===== */
@@ -440,21 +550,49 @@
         flex-direction: column;
         align-items: center;
         text-align: center;
-        gap: 20px;
+        gap: 16px;
+        margin-top: -80px; /* Pull up to align avatar center with cover bottom (20px margin + 60px radius) */
+        padding: 0 20px;
+    }
+
+    .profile-avatar-wrapper {
+        width: 120px;
+        height: 120px;
+    }
+
+    .profile-info-container {
+        padding-bottom: 0;
+    }
+
+    .profile-name-row {
+        flex-direction: column;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .profile-fullname-header {
+        font-size: 22px;
     }
 
     .profile-stats {
         justify-content: center;
-        gap: 20px;
+        gap: 24px;
+        width: 100%;
+        border-top: 1px solid var(--glass-border);
+        border-bottom: 1px solid var(--glass-border);
+        padding: 12px 0;
     }
 
-    .profile-tabs {
-        gap: 30px;
+    .profile-stats li {
+        align-items: center;
     }
 
-    .profile-username-row {
-        flex-direction: column;
-        gap: 10px;
+    .stat-count {
+        font-size: 16px;
+    }
+
+    .stat-label {
+        font-size: 12px;
     }
 
     /* Edit Profile Modal Responsive */

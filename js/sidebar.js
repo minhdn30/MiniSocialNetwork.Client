@@ -213,6 +213,9 @@ function setActiveSidebar(route) {
       targetRoute = "/" + targetRoute;
   }
 
+  // Check if we are currently viewing someone else's profile (has query params)
+  const isViewingOtherProfile = window.location.hash.includes("?");
+
   // Helper for home route equivalence
   const isHome = (r) => r === "/" || r === "/home" || r === "";
 
@@ -220,9 +223,14 @@ function setActiveSidebar(route) {
       const dataRoute = item.dataset.route;
       const href = item.getAttribute("href")?.replace("#", "");
 
-      const isActive = (dataRoute === targetRoute) || 
+      let isActive = (dataRoute === targetRoute) || 
                        (href === targetRoute) ||
                        (isHome(dataRoute) && isHome(targetRoute));
+
+      // Special case: Profile button only active if it's our OWN profile (no params)
+      if (dataRoute === "/profile" && isViewingOtherProfile) {
+          isActive = false;
+      }
 
       item.classList.toggle("active", isActive);
   });
@@ -254,6 +262,10 @@ function navigate(e, route, clickedEl = null) {
 
   if (isSamePath) {
       e.preventDefault();
+      // If navigating to /profile from a profile with params, force reset to my profile
+      if (route === "/profile" && window.location.hash.includes("id=")) {
+          window.location.hash = "#/profile";
+      }
       if (window.reloadPage) window.reloadPage();
       closeAllDropdowns();
       return;

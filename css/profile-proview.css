@@ -1,19 +1,18 @@
 .profile-preview {
   position: absolute;
-  width: 340px;
+  width: 320px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: 16px;
   box-shadow: var(--shadow-lg);
-  padding: 16px;
-  z-index: 30000; /* Higher than interaction modal (20000) */
-  transition:
-    opacity var(--transition-normal),
-    transform var(--transition-normal);
+  padding: 0; /* Remove padding for cover image */
+  z-index: 30000;
+  transition: opacity var(--transition-normal), transform var(--transition-normal);
   color: var(--text-primary);
   opacity: 1;
   transform: scale(1);
   transform-origin: top left;
+  overflow: hidden;
 }
 
 .profile-preview.hidden {
@@ -22,33 +21,89 @@
   pointer-events: none;
 }
 
-/* ===== Header ===== */
+/* ===== Cover & Header Area ===== */
+.profile-preview-cover {
+    width: 100%;
+    height: 100px;
+    background: var(--bg-tertiary);
+    position: relative;
+    overflow: hidden;
+}
+
+.profile-preview-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.profile-preview-content {
+    padding: 16px;
+    padding-top: 0;
+    position: relative;
+}
+
 .profile-preview-header {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  cursor: pointer;
-  margin-bottom: 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: flex-start; /* Fix the top position so it grows downwards only */
+    gap: 0; /* Merge bodies */
+    cursor: pointer;
 }
 
-.profile-preview-header img {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
+.profile-preview-avatar-wrapper {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    border: 4px solid var(--bg-secondary);
+    background: var(--bg-secondary);
+    margin-top: -34px;
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+    z-index: 3; /* Ensure avatar is on top of the merged name badge */
 }
 
-.profile-preview-header > div {
-  flex: 1;
-  min-width: 0;
+.profile-preview-avatar-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
-.profile-preview-header .profile-preview-name {
-  font-weight: 600;
-  font-size: 15px;
-  color: var(--text-primary);
+.profile-preview-info {
+    flex: 1;
+    margin-top: -18px; /* Fixed top position: centers 1-line name with avatar center (34px - 16px/2 - 10px padding = ~18px) */
+    margin-left: -20px; /* Pull deeper under avatar as requested */
+    margin-right: -16px; /* Stretch to the right edge of the card */
+    min-width: 0;
+    position: relative;
+    z-index: 2;
 }
+
+.profile-preview-name {
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--text-primary);
+    line-height: 1.2;
+    background: var(--bg-secondary);
+    padding: 10px 16px 10px 24px; /* Reduced gap to bring name closer to avatar */
+    border-radius: 0; /* Remove rounding so it hits the edge flush */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    width: 100%;
+    position: relative;
+    white-space: normal; /* Allow wrapping */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: font-size 0.15s ease;
+}
+
+.profile-preview-username {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
 
 /* ===== Stats ===== */
 .profile-preview-stats {
@@ -121,6 +176,7 @@
 .profile-preview-actions {
   display: flex;
   gap: 8px;
+  margin-top: 16px; /* Added spacing from media grid */
 }
 
 .profile-preview-btn {
@@ -138,15 +194,20 @@
   gap: 4px;
 }
 
-.profile-preview-btn i {
+.profile-preview-btn i, .profile-preview-btn svg {
   width: 16px;
   height: 16px;
   stroke-width: 2;
 }
 
 /* Message */
-.profile-preview-btn-message, .profile-preview-btn-message svg {
+.profile-preview-btn-message {
   background: var(--accent-primary);
+}
+
+.profile-preview-btn-message, 
+.profile-preview-btn-message i, 
+.profile-preview-btn-message svg {
   color: var(--text-white);
 }
 
@@ -162,6 +223,11 @@
 /* Follow */
 .profile-preview-btn-follow {
   background: var(--accent-secondary);
+}
+
+.profile-preview-btn-follow, 
+.profile-preview-btn-follow i, 
+.profile-preview-btn-follow svg {
   color: var(--text-white);
 }
 
@@ -177,6 +243,11 @@
 /* Following */
 .profile-preview-btn-following {
   background: var(--border-primary);
+}
+
+.profile-preview-btn-following, 
+.profile-preview-btn-following i, 
+.profile-preview-btn-following svg {
   color: var(--text-primary);
 }
 
@@ -192,6 +263,11 @@
 /* View Profile */
 .profile-preview-btn-view-profile {
   background: var(--accent-primary);
+}
+
+.profile-preview-btn-view-profile,
+.profile-preview-btn-view-profile i,
+.profile-preview-btn-view-profile svg {
   color: var(--text-white);
 }
 

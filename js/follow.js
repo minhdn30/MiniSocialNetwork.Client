@@ -77,14 +77,18 @@
                         <i data-lucide="check"></i>
                         <span>Following</span>
                      `;
-                     previewBtn.className = "btn btn-following";
+                     previewBtn.className = "profile-preview-btn profile-preview-btn-following";
                      
-                     // Reset onclick to same handler (visual update only)
                      if (window.lucide) lucide.createIcons();
                  } else {
                      // Change to "Follow"
-                     previewBtn.textContent = "Follow";
-                     previewBtn.className = "btn btn-follow";
+                     previewBtn.innerHTML = `
+                        <i data-lucide="user-plus"></i>
+                        <span>Follow</span>
+                     `;
+                     previewBtn.className = "profile-preview-btn profile-preview-btn-follow";
+                     
+                     if (window.lucide) lucide.createIcons();
                  }
              }
         }

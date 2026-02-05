@@ -73,6 +73,10 @@
     async function loadProfileData() {
         if (!currentProfileId) return;
 
+        // Use LoadingUtils if available
+        const mainContent = document.querySelector(".profile-content-wrapper");
+        if (window.LoadingUtils) LoadingUtils.toggle("profile-posts-loader", true);
+
         try {
             const res = await API.Accounts.getProfile(currentProfileId);
             if (!res.ok) {
@@ -86,60 +90,122 @@
             loadPosts(); 
         } catch (err) {
             console.error(err);
+        } finally {
+            if (window.LoadingUtils) LoadingUtils.toggle("profile-posts-loader", false);
         }
     }
 
     function renderProfileHeader(data) {
-        const container = document.getElementById("profile-header-container");
-        if (!container) return;
+        // Find elements
+        const coverImg = document.getElementById("profile-cover-img");
+        const avatarImg = document.getElementById("profile-avatar");
+        const fullNameHeader = document.getElementById("profile-fullname-header");
+        const bioText = document.getElementById("profile-bio-text");
+        const postCount = document.getElementById("profile-posts-count");
+        const followersCount = document.getElementById("profile-followers-count");
+        const followingCount = document.getElementById("profile-following-count");
+        const actionBtn = document.getElementById("profile-action-btn");
 
-        const info = data.account;
+        if (!data) return;
+
+        const info = data.accountInfo || data.account; // Handle potential naming variations
+        const followInfo = data.followInfo || {};
         const isOwner = data.isCurrentUser;
-        const isFollowed = data.isFollowedByCurrentUser;
+        const isFollowed = followInfo.isFollowedByCurrentUser ?? data.isFollowedByCurrentUser;
 
         // Cover & Avatar
-        document.getElementById("profile-cover").src = info.coverUrl || "assets/gradients/orb-1.png";
-        document.getElementById("profile-avatar").src = info.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
-        document.getElementById("profile-fullname").textContent = info.fullName;
-        document.getElementById("profile-bio").textContent = info.bio || "No bio yet.";
+        const avatarUrl = info.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
+        const profileCover = document.querySelector(".profile-cover");
+
+        if (avatarImg) avatarImg.src = avatarUrl;
+
+        if (coverImg) {
+            if (info.coverUrl) {
+                coverImg.src = info.coverUrl;
+                coverImg.style.display = "block";
+                coverImg.onerror = function() {
+                    this.style.display = "none";
+                };
+            } else {
+                coverImg.style.display = "none";
+            }
+        }
+
+        // Dynamic Background based on Avatar
+        if (profileCover) {
+            if (avatarUrl && typeof extractDominantColor === 'function') {
+                extractDominantColor(avatarUrl).then(color => {
+                    profileCover.style.background = `linear-gradient(135deg, var(--bg-primary) 0%, ${color} 100%)`;
+                }).catch(() => {
+                    // Fallback to theme-aware default gradient
+                    profileCover.style.background = "linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%)";
+                });
+            } else {
+                profileCover.style.background = "linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%)";
+            }
+        }
+        
+        // Use FullName in the prominent header position as requested
+        if (fullNameHeader) fullNameHeader.textContent = info.fullName || "User";
+        
+        // Bio
+        if (bioText) bioText.textContent = info.bio || "No bio yet.";
 
         // Stats
-        document.getElementById("profile-posts-count").textContent = data.postCount;
-        document.getElementById("profile-followers-count").textContent = data.followerCount;
-        document.getElementById("profile-following-count").textContent = data.followingCount;
+        if (postCount) postCount.textContent = data.totalPosts ?? data.postCount ?? 0;
+        if (followersCount) followersCount.textContent = followInfo.followers ?? data.followerCount ?? 0;
+        if (followingCount) followingCount.textContent = followInfo.following ?? data.followingCount ?? 0;
 
         // Action Buttons
-        const actionBtn = document.getElementById("profile-action-btn");
-        if (isOwner) {
-            actionBtn.innerHTML = `
-                <button class="profile-btn profile-btn-edit" onclick="openEditProfile()">
-                    <i data-lucide="edit-3"></i>
-                    <span>Edit Profile</span>
-                </button>
-            `;
-        } else {
-            if (isFollowed) {
+        if (actionBtn) {
+            if (isOwner) {
                 actionBtn.innerHTML = `
-                    <button class="profile-btn profile-btn-following" onclick="toggleFollowProfile('${info.accountId}')">
-                        <i data-lucide="check"></i>
-                        <span>Following</span>
+                    <button class="profile-btn profile-btn-edit" onclick="openEditProfile()" title="Edit Profile">
+                        <i data-lucide="edit-3"></i>
                     </button>
-                    <button class="profile-btn profile-btn-secondary" onclick="openMessage('${info.accountId}')">
-                        <i data-lucide="message-circle"></i>
+                    <button class="profile-btn profile-btn-secondary" id="profile-settings-btn" onclick="openProfileSettings()" title="Settings">
+                        <i data-lucide="settings"></i>
+                    </button>
+                    <button class="profile-btn profile-btn-secondary" onclick="openProfileMoreMenu()" title="More">
+                        <i data-lucide="more-horizontal"></i>
                     </button>
                 `;
             } else {
+                const followBtnClass = isFollowed ? 'profile-btn-following' : 'profile-btn-follow';
+                const followIcon = isFollowed ? 'check' : 'user-plus';
+                const followText = isFollowed ? 'Following' : 'Follow';
+                
                 actionBtn.innerHTML = `
-                    <button class="profile-btn profile-btn-follow" onclick="toggleFollowProfile('${info.accountId}')">
-                        <i data-lucide="user-plus"></i>
-                        <span>Follow</span>
+                    <button class="profile-btn ${followBtnClass}" onclick="toggleFollowProfile('${info.accountId}')">
+                        <i data-lucide="${followIcon}"></i>
+                        <span>${followText}</span>
                     </button>
-                    <button class="profile-btn profile-btn-secondary" onclick="openMessage('${info.accountId}')">
-                        <i data-lucide="message-circle"></i>
+                    <button class="profile-btn profile-btn-secondary" onclick="openMessage('${info.accountId}')" title="Message">
+                        <i data-lucide="send"></i>
+                    </button>
+                    <button class="profile-btn profile-btn-secondary" onclick="openProfileMoreMenu()" title="More">
+                        <i data-lucide="more-horizontal"></i>
                     </button>
                 `;
             }
+            lucide.createIcons();
         }
+
+        // Auto-shrink font size for long names
+        if (fullNameHeader) {
+            fullNameHeader.style.fontSize = "32px"; // Reset
+            
+            // Wait for next frame to get accurate widths
+            requestAnimationFrame(() => {
+                let fontSize = 32;
+                // ClientWidth is the boundary, ScrollWidth is the content size
+                while (fullNameHeader.scrollWidth > fullNameHeader.clientWidth && fontSize > 14) {
+                    fontSize -= 1; 
+                    fullNameHeader.style.fontSize = fontSize + "px";
+                }
+            });
+        }
+        
         if (window.lucide) lucide.createIcons();
     }
 
@@ -321,6 +387,9 @@
     };
 
     global.toggleFollowProfile = async function(accountId) {
+        const btn = document.querySelector("#profile-action-btn .profile-btn-follow, #profile-action-btn .profile-btn-following");
+        if (window.LoadingUtils) LoadingUtils.setButtonLoading(btn, true);
+
         try {
             const isFollowed = currentProfileData.isFollowedByCurrentUser;
             let result;
@@ -337,11 +406,21 @@
             }
         } catch (err) {
             console.error(err);
+        } finally {
+            if (window.LoadingUtils) LoadingUtils.setButtonLoading(btn, false);
         }
     };
 
     global.openMessage = function(accountId) {
         if (window.toastInfo) toastInfo("Messaging feature coming soon!");
+    };
+
+    global.openProfileSettings = function() {
+        if (window.toastInfo) toastInfo("Settings feature coming soon!");
+    };
+
+    global.openProfileMoreMenu = function() {
+        if (window.toastInfo) toastInfo("More options coming soon!");
     };
 
     global.initProfilePage = initProfile;

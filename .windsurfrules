@@ -53,3 +53,12 @@ All commit messages must follow this format:
 ## Git Workflow Policy
 - **WAIT FOR APPROVAL**: Do NOT automatically create commits. Use the `git commit` command ONLY when explicitly requested by the user.
 - **SUGGESTION**: You may suggest that a commit is ready and provide the proposed commit message, but wait for user confirmation before executing it.
+
+## Code Inheritance and Safety
+- **INHERITANCE PRIORITY**: New features and code must prioritize inheriting existing functions, CSS variables, and utility classes to maintain consistency.
+- **ZERO SIDE EFFECTS**: Modifications or newly added code MUST NOT break or negatively affect any existing legacy functionality. Always ensure backward compatibility and use isolated styles if necessary.
+
+## Lucide Icon Styling
+- **TAG REQUIREMENT**: When styling Lucide icons (`data-lucide`), you MUST apply CSS rules to both the `i` tag (initial placeholder) and the `svg` tag (rendered element).
+- **PURPOSE**: This ensures consistent coloring, sizing, and stroke-width before and after Lucide re-renders the icons.
+- **EXAMPLE**: `.btn i, .btn svg { color: blue; }`

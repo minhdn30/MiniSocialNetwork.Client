@@ -92,7 +92,7 @@
   position: relative;
 }
 
-.menu-item svg {
+.menu-item i, .menu-item svg {
   width: 24px;
   height: 24px;
   stroke: var(--text-primary);
@@ -100,7 +100,7 @@
   transition: stroke-width var(--transition-fast);
 }
 
-.menu-item.active svg {
+.menu-item.active i, .menu-item.active svg {
   stroke-width: 2.8;
   stroke: var(--accent-primary);
 }
@@ -239,7 +239,7 @@
   transform: translateX(3px);
 }
 
-.create-dropdown .dropdown-item svg {
+.create-dropdown .dropdown-item i, .create-dropdown .dropdown-item svg {
   width: 20px;
   height: 20px;
 }
@@ -303,7 +303,7 @@
   animation-delay: 0.23s;
 }
 
-.dropdown-item.danger svg {
+.dropdown-item.danger i, .dropdown-item.danger svg {
   color: var(--danger-alt);
 }
 .dropdown-item.danger {
@@ -419,7 +419,7 @@
   pointer-events: none;
 }
 
-.back-button svg {
+.back-button i, .back-button svg {
   width: 20px;
   height: 20px;
 }
@@ -493,7 +493,7 @@ body.light-mode .settings-dropdown .dropdown-item {
   transform: translateX(3px);
   transition: all var(--transition-normal);
 }
-.settings-dropdown .dropdown-item svg {
+.settings-dropdown .dropdown-item i, .settings-dropdown .dropdown-item svg {
   width: 20px;
   height: 20px;
 }
