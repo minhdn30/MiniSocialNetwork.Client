@@ -152,7 +152,7 @@ const InteractionModule = (function () {
             
             let actionBtnHtml = "";
             if (item.accountId === APP_CONFIG.CURRENT_USER_ID) {
-                actionBtnHtml = `<button class="follow-btn view-profile-btn" onclick="viewProfile('${item.accountId}')"><span>View Profile</span></button>`;
+                actionBtnHtml = `<button class="follow-btn view-profile-btn" onclick="viewProfile('${item.username}')"><span>View Profile</span></button>`;
             } else {
                 if (item.isFollowing) {
                     actionBtnHtml = `<button class="follow-btn following" onclick="InteractionModule.handleFollow('${item.accountId}', this)"><span>Following</span></button>`;
@@ -162,10 +162,10 @@ const InteractionModule = (function () {
             }
 
             row.innerHTML = `
-                <div class="user-info post-user" data-account-id="${item.accountId}" onclick="viewProfile('${item.accountId}')">
+                <div class="user-info post-user" data-account-id="${item.accountId}" onclick="viewProfile('${item.username}')">
                     <img src="${avatarUrl}" class="avatar post-avatar" />
                     <div class="name-box">
-                        <span class="fullname post-username" title="${fullName}">${PostUtils.truncateName(fullName)}</span>
+                        <span class="fullname post-username" title="${item.fullName}">${PostUtils.truncateName(item.username || item.fullName)}</span>
                         ${item.isFollower ? '<span class="follower-tag">Follows you</span>' : ''}
                     </div>
                 </div>

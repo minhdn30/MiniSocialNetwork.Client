@@ -138,7 +138,7 @@
         if (window.PageCache) {
             if (PageCache.has("home")) {
                 const homeCache = PageCache.get("home");
-                if (homeCache.data && homeCache.data.posts) {
+                if (homeCache.data && homeCache.data.posts && isFollowing !== undefined) {
                     homeCache.data.posts.forEach(post => {
                         if (post.author && post.author.accountId == accountId) {
                             post.author.isFollowedByCurrentUser = isFollowing;
@@ -148,16 +148,22 @@
             }
             // Only clear cache for OTHER profiles.
             // For my own profile, we rely on silent update to preserve scroll position.
+            // 1. Update Caches
             const myId = localStorage.getItem("accountId");
-            if (!myId || accountId.toLowerCase() !== myId.toLowerCase()) {
+            const myUsername = localStorage.getItem("username");
+            const isMe = accountId.toLowerCase() === myId?.toLowerCase();
+
+            if (!isMe) {
+                 // Foreign Profile: Router handles clearing cache on entry.
+                 // We can optionally clear common keys if we have them.
                  PageCache.clear(`#/profile?id=${accountId}`);
+                 PageCache.clear(`#/profile/${accountId}`);
             } else {
                 // If it IS my profile, we update the CACHE directly so when we return, it shows fresh data immediately.
-                
-                // We need to check BOTH possible keys: with params and without
                 const possibleKeys = [
-                    `#/profile?id=${accountId}`,
-                    `#/profile` // Sometimes saved as this when accessing via sidebar
+                    `#/profile`,
+                    `#/profile/`,
+                    `#/profile/${myUsername}`
                 ];
                 
                 let patched = false;
@@ -198,11 +204,13 @@
         }
 
         // 2. Update Newsfeed Buttons
-        updateFeedButtons(accountId, isFollowing, document);
-        if (window.PageCache && PageCache.has("home")) {
-            const homeCache = PageCache.get("home");
-            if (homeCache.fragment) {
-                updateFeedButtons(accountId, isFollowing, homeCache.fragment);
+        if (isFollowing !== undefined) {
+            updateFeedButtons(accountId, isFollowing, document);
+            if (window.PageCache && PageCache.has("home")) {
+                const homeCache = PageCache.get("home");
+                if (homeCache.fragment) {
+                    updateFeedButtons(accountId, isFollowing, homeCache.fragment);
+                }
             }
         }
 
@@ -211,7 +219,7 @@
             window.getProfilePreviewAccountId() === accountId) {
             
              const previewBtn = document.getElementById("followBtn");
-             if (previewBtn) {
+             if (previewBtn && isFollowing !== undefined) {
                  if (isFollowing) {
                      previewBtn.innerHTML = `<i data-lucide="check"></i><span>Following</span>`;
                      previewBtn.className = "profile-preview-btn profile-preview-btn-following";
@@ -244,7 +252,7 @@
 
         // 5. Update Interaction Modal
         const interactionModal = document.getElementById("interactionModal");
-        if (interactionModal && interactionModal.classList.contains("show")) {
+        if (interactionModal && interactionModal.classList.contains("show") && isFollowing !== undefined) {
             const row = interactionModal.querySelector(`.user-info[data-account-id="${accountId}"]`);
             if (row) {
                 const actionBox = row.nextElementSibling;

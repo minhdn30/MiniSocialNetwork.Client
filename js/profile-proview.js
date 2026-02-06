@@ -48,7 +48,7 @@ function renderProfilePreview(data) {
   let actionsHTML = "";
   if (data.isCurrentUser) {
     actionsHTML = `
-      <button class="profile-preview-btn profile-preview-btn-view-profile" onclick="viewProfile('${currentUserId}')">
+      <button class="profile-preview-btn profile-preview-btn-view-profile" onclick="viewProfile('${data.account.username}')">
         <i data-lucide="user"></i>
         <span>View Profile</span>
       </button>
@@ -92,12 +92,13 @@ function renderProfilePreview(data) {
         ${coverImgHtml}
     </div>
     <div class="profile-preview-content">
-        <div class="profile-preview-header" onclick="viewProfile('${currentUserId}')">
+        <div class="profile-preview-header" onclick="viewProfile('${data.account.username}')">
             <div class="profile-preview-avatar-wrapper">
                 <img src="${avatarUrl}" alt="avatar">
             </div>
             <div class="profile-preview-info">
-                <div class="profile-preview-name" id="pp-fullname">${data.account.fullName}</div>
+                <div class="profile-preview-name" id="pp-username" style="line-height: 1.2; padding-bottom: 2px; margin-bottom: 0;">${data.account.username}</div>
+                <div class="profile-preview-fullname-small" style="font-size: 13px; color: var(--text-secondary); background: var(--bg-secondary); padding: 0 16px 10px 24px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.4;">${data.account.fullName}</div>
             </div>
         </div>
 
@@ -116,19 +117,21 @@ function renderProfilePreview(data) {
             </div>
         </div>
 
-        <div class="profile-preview-medias">
-            ${
-              !data.recentPosts || data.recentPosts.length === 0
-                ? `<div class="profile-preview-no-media">No recent posts</div>`
-                : data.recentPosts
-                    .map((p) => `
-                      <div class="profile-preview-media-item" onclick="if(window.InteractionModule) window.InteractionModule.closeReactList(); if(window.openPostDetail) window.openPostDetail('${p.postId}'); hidePreview();">
-                        <img src="${p.mediaUrl}" alt="post">
-                      </div>
-                    `)
-                    .join("")
-            }
-        </div>
+        ${
+          data.recentPosts && data.recentPosts.length > 0
+            ? `
+            <div class="profile-preview-medias">
+                ${data.recentPosts
+                  .map((p) => `
+                    <div class="profile-preview-media-item" onclick="if(window.InteractionModule) window.InteractionModule.closeReactList(); if(window.openPostDetail) window.openPostDetail('${p.postId}'); hidePreview();">
+                      <img src="${p.mediaUrl}" alt="post">
+                    </div>
+                  `)
+                  .join("")}
+            </div>
+            `
+            : ""
+        }
 
         <div class="profile-preview-actions">
             ${actionsHTML}
@@ -155,7 +158,7 @@ function renderProfilePreview(data) {
   }
 
   // Auto-shrink font for long names (Max 2 lines)
-  const nameEl = document.getElementById("pp-fullname");
+  const nameEl = document.getElementById("pp-username");
   if (nameEl) {
       nameEl.style.fontSize = "16px"; // Reset to base
       
@@ -426,12 +429,12 @@ function toggleFollowMenu(event, userId) {
 }
 
 /* ===== View Profile ===== */
-function viewProfile(userId) {
+function viewProfile(username) {
   // Hide preview immediately to prevent lingering UI
   hidePreview();
   
   // Navigate to profile page using hash
-  window.location.hash = `#/profile?id=${userId}`;
+  window.location.hash = `#/profile/${username}`;
 }
 window.viewProfile = viewProfile;
 

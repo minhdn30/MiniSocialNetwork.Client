@@ -97,8 +97,11 @@
     display: flex;
     align-items: center;
     gap: 20px;
-    height: 64px; /* Sleeker strip height */
-    margin-top: 52px; /* Centers the 64px row on the 168px avatar (84 - 32 = 52) */
+    height: auto; /* Allow height to adapt to title column */
+    min-height: 64px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    margin-top: 52px;
     margin-left: -95px; /* Pull deep under avatar for merged look */
     margin-right: -40px; /* Stretch to edge */
     background: var(--bg-primary); 
@@ -132,16 +135,32 @@
     background: radial-gradient(circle at 0% 0%, transparent 12px, var(--bg-primary) 13px);
 }
 
-.profile-fullname-header {
-    font-size: 32px;
-    color: var(--text-primary);
-    margin: 0;
-    letter-spacing: -1px;
-    line-height: 1;
-    white-space: nowrap;
+.profile-title-col {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
     flex: 1;
     min-width: 0;
-    display: block;
+}
+
+.profile-username-header {
+    font-size: 28px; /* Slightly smaller for better balance with fullname */
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.profile-fullname-label {
+    font-weight: 400; /* Regular weight for a modern look */
+    font-size: 15px;
+    color: var(--text-secondary); /* Less prominent than username */
+    margin-top: 10px; /* Tăng khoảng cách so với username */
+    line-height: 1.2;
 }
 
 .profile-actions {
@@ -292,9 +311,9 @@
     font-size: 15px;
     line-height: 1.6;
     color: var(--text-primary);
-    margin-top: 16px; /* Hơi kéo lên một chút cho gần Name Row */
-    margin-left: -95px; /* Cùng margin-left với profile-name-row */
-    padding-left: 80px; /* Cùng padding-left với profile-name-row để thẳng hàng chữ */
+    margin-top: 14px; /* Tăng khoảng cách so với khối tên */
+    margin-left: -95px;
+    padding-left: 80px;
 }
 
 .profile-bio-text {
@@ -304,6 +323,29 @@
     color: var(--text-secondary);
     width: 750px; /* Chiều ngang cố định */
     max-width: 100%; /* Đảm bảo responsive trên màn hình nhỏ */
+}
+
+.profile-details-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+    margin-left: -95px;
+    padding-left: 80px;
+}
+
+.profile-detail-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.profile-detail-item i {
+    width: 16px;
+    height: 16px;
+    color: var(--text-tertiary);
 }
 
 /* ===== Edit Profile Modal ===== */
@@ -623,7 +665,7 @@
         display: none;
     }
 
-    .profile-fullname-header {
+    .profile-username-header {
         font-size: 22px;
     }
 
@@ -661,6 +703,20 @@
         width: auto;
         max-width: 100%;
         text-align: center;
+    }
+
+    .profile-details-section {
+        margin-left: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        margin-top: 15px;
+    }
+
+    .profile-detail-item {
+        font-size: 13px;
     }
 
     /* Edit Profile Modal Responsive */

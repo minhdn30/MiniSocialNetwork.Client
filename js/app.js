@@ -82,18 +82,25 @@ function router() {
 
   // SPECIAL RULE: Do not cache/restore other people's profiles. 
   // Always force fresh load (reset scroll) for them. Keep cache only for MY profile.
-  if (path === "/profile") {
+  if (path.startsWith("/profile")) {
       const myId = localStorage.getItem("accountId");
+      const myUsername = localStorage.getItem("username");
       let targetId = null;
       
       if (hash.includes("?id=")) {
           targetId = hash.split("?id=")[1].split("&")[0];
+      } else if (hash.includes("?u=")) {
+          targetId = hash.split("?u=")[1].split("&")[0];
       } else if (hash.includes("/profile/") && hash.split("/profile/")[1]) {
           targetId = hash.split("/profile/")[1].split("?")[0];
       }
 
-      // If targetId exists (not empty) and is different from myId -> Update Strategy: CLEAR CACHE
-      if (targetId && myId && targetId.toLowerCase() !== myId.toLowerCase()) {
+      // If targetId exists (not empty) and is different from myId AND myUsername -> Update Strategy: CLEAR CACHE
+      const isMe = !targetId || 
+                   (myId && targetId.toLowerCase() === myId.toLowerCase()) || 
+                   (myUsername && targetId.toLowerCase() === myUsername.toLowerCase());
+
+      if (!isMe) {
           // console.log("[Router] Clearing cache for foreign profile to reset scroll");
           PageCache.clear(nextKey);
       }
@@ -107,7 +114,7 @@ function router() {
       // Restoring DOM triggers scroll events immediately, so state (currentProfileId) MUST be ready.
       
       // For Profile page, rely on the Permanent State Accessor because global hooks are cleared
-      if (path === "/profile" && window.ProfileState && cached.data) {
+      if (path.startsWith("/profile") && window.ProfileState && cached.data) {
           window.ProfileState.setPageData(cached.data);
       } 
       // Fallback for other pages or if setPageData is somehow available
@@ -118,22 +125,9 @@ function router() {
       // RESTORE DOM (PageCache.restore handles clearing and appending correctly)
       PageCache.restore(nextKey, app);
       
-      // If we are on profile page, we might need to manually trigger initiation logic 
-      // because initProfile() isn't called during restore.
-      if (path === "/profile" && window.initProfilePage && cached.data) {
-           // We might need to ensure listeners are re-attached or silent updates run
-           // But wait, initProfilePage calls restore() again? NO.
-           // Can we expose a function like window.onProfileRestored()?
-      }
-      
-      // But wait! If we just restore DOM, the listeners in initProfile (like event listeners) are goners?
-      // Actually, listeners attached to elements in DocumentFragment are PRESERVED! 
-      // That's the beauty of DocumentFragment.
-      // But global listeners (like window.scroll) are... well, window.scroll logic in profile.js is global.
-      
       // One thing missing: Silent Update (fetching new stats).
       // Profile.js has no way to know it was restored unless we tell it.
-      if (path === "/profile" && window.triggerProfileSilentUpdate) {
+      if (path.startsWith("/profile") && window.triggerProfileSilentUpdate) {
           window.triggerProfileSilentUpdate();
       }
 
@@ -144,15 +138,17 @@ function router() {
   // 6. Fresh Load
   app.innerHTML = "";
   window.scrollTo(0, 0);
+  
+  if (path.startsWith("/profile")) {
+      loadProfilePage();
+      setActiveSidebar(path); 
+      return; 
+  }
 
   switch (path) {
     case "/":
     case "/home":
       loadHome();
-      break;
-
-    case "/profile":
-      loadProfilePage();
       break;
 
     case "/search":

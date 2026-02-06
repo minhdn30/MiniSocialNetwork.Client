@@ -51,6 +51,7 @@ let selectedPrivacy = 0;
 function loadCreatePostUserInfo() {
   const avatarUrl = localStorage.getItem("avatarUrl");
   const fullname = localStorage.getItem("fullname");
+  const username = localStorage.getItem("username");
 
   const avatarElement = document.getElementById("post-user-avatar");
   const nameElement = document.getElementById("post-user-name");
@@ -64,10 +65,10 @@ function loadCreatePostUserInfo() {
   }
 
   if (nameElement) {
-    const rawName = fullname && fullname.trim() !== "" ? fullname : "User";
+    const display = username || fullname || "User";
     nameElement.textContent = window.PostUtils 
-      ? PostUtils.truncateName(rawName)
-      : rawName;
+      ? PostUtils.truncateName(display)
+      : display;
   }
 }
 
@@ -87,7 +88,6 @@ function openCreatePostModal() {
   imageOffsetY = 0;
   isDragging = false;
   isProcessingCrop = false;
-  selectedPrivacy = parseInt(localStorage.getItem("defaultPostPrivacy") || 0);
 
   modal.classList.add("show");
   document.body.style.overflow = "hidden";
@@ -954,10 +954,12 @@ async function toggleEmojiPicker(event) {
 
 // ================= PRIVACY SELECTOR =================
 
-// Reset privacy selector to default (Public)
+// Reset privacy selector to default
 function resetPrivacySelector() {
-  selectedPrivacy = 0;
-  updatePrivacyUI(0);
+  let defaultPrivacy = parseInt(localStorage.getItem("defaultPostPrivacy"));
+  if (isNaN(defaultPrivacy)) defaultPrivacy = 0;
+  selectedPrivacy = defaultPrivacy;
+  updatePrivacyUI(defaultPrivacy);
 }
 
 // Toggle privacy dropdown

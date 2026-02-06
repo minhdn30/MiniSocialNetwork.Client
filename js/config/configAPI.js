@@ -182,11 +182,11 @@
     upload: uploadFormDataWithProgress,
 
     Auth: {
-      login: (username, password) =>
-        apiFetch("/Auths/login-with-username", {
+      login: (email, password) =>
+        apiFetch("/Auths/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password }),
+          body: JSON.stringify({ email, password }),
           skipAuth: true,
         }),
       register: (data) =>
@@ -276,6 +276,8 @@
         apiFetch(`/Accounts/profile-preview/${accountId}`),
       getProfile: (accountId) =>
         apiFetch(`/Accounts/profile/${accountId}`),
+      getProfileByUsername: (username) =>
+        apiFetch(`/Accounts/profile/username/${username}`),
       updateProfile: (formData) =>
         uploadFormDataWithProgress("/Accounts/profile", formData, null, "PATCH"),
       updateSettings: (data) =>

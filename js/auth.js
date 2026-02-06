@@ -37,11 +37,11 @@ const loginForm = document.querySelector(".sign-in-container form");
 loginForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  const username = document.getElementById("login-username").value.trim();
+  const email = document.getElementById("login-email").value.trim();
   const password = document.getElementById("login-password").value.trim();
 
-  if (!username) {
-    showToast("Username is required.", "error");
+  if (!email) {
+    showToast("Email is required.", "error");
     return;
   }
   if (!password) {
@@ -50,7 +50,7 @@ loginForm.addEventListener("submit", async (e) => {
   }
 
   try {
-    const res = await API.Auth.login(username, password);
+    const res = await API.Auth.login(email, password);
 
     const data = await res.json();
 
@@ -63,9 +63,10 @@ loginForm.addEventListener("submit", async (e) => {
     // Lưu token + thông tin
     localStorage.setItem("accessToken", data.accessToken);
     localStorage.setItem("fullname", data.fullname || "");
+    localStorage.setItem("username", data.username || "");
     localStorage.setItem("avatarUrl", data.avatarUrl || "");
     localStorage.setItem("accountId", data.accountId || "");
-    localStorage.setItem("defaultPostPrivacy", data.defaultPostPrivacy || 0);
+    localStorage.setItem("defaultPostPrivacy", data.defaultPostPrivacy ?? data.DefaultPostPrivacy ?? 0);
 
     // Check Account Status
     if (data.status === 1) { // Inactive

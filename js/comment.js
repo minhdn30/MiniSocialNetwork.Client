@@ -173,11 +173,11 @@ const CommentModule = (function () {
         <div class="comment-content-wrapper">
             <div class="comment-header">
                 <div class="post-user" data-account-id="${comment.owner.accountId}">
-                    <a href="#/profile?id=${comment.owner.accountId}" style="text-decoration: none; display: block;" onclick="event.stopPropagation()">
+                    <a href="#/profile/${comment.owner.username}" style="text-decoration: none; display: block;" onclick="event.stopPropagation()">
                         <img class="comment-avatar post-avatar" src="${avatarUrl}" alt="avatar" />
                     </a>
-                    <a href="#/profile?id=${comment.owner.accountId}" style="text-decoration: none; color: inherit;" onclick="event.stopPropagation()">
-                        <span class="comment-username post-username">${PostUtils.truncateName(comment.owner.fullName || comment.owner.username)}</span>
+                    <a href="#/profile/${comment.owner.username}" style="text-decoration: none; color: inherit; display: flex; align-items: center;" onclick="event.stopPropagation()">
+                        <span class="comment-username post-username" style="line-height: 1;">${PostUtils.truncateName(comment.owner.username || comment.owner.fullName)}</span>
                     </a>
                 </div>
                 <div class="comment-header-right">
@@ -631,11 +631,11 @@ const CommentModule = (function () {
         <div class="comment-content-wrapper">
             <div class="comment-header">
                 <div class="post-user" data-account-id="${reply.owner.accountId}">
-                    <a href="#/profile?id=${reply.owner.accountId}" style="text-decoration: none; display: block;" onclick="event.stopPropagation()">
+                    <a href="#/profile/${reply.owner.username}" style="text-decoration: none; display: block;" onclick="event.stopPropagation()">
                         <img class="comment-avatar post-avatar" src="${avatarUrl}" alt="avatar" />
                     </a>
-                    <a href="#/profile?id=${reply.owner.accountId}" style="text-decoration: none; color: inherit;" onclick="event.stopPropagation()">
-                        <span class="comment-username post-username">${PostUtils.truncateName(reply.owner.fullName || reply.owner.username)}</span>
+                    <a href="#/profile/${reply.owner.username}" style="text-decoration: none; color: inherit; display: flex; align-items: center;" onclick="event.stopPropagation()">
+                        <span class="comment-username post-username" style="line-height: 1;">${PostUtils.truncateName(reply.owner.username || reply.owner.fullName)}</span>
                     </a>
                 </div>
                 <div class="comment-header-right">

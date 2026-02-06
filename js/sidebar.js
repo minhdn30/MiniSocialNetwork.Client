@@ -5,6 +5,7 @@ async function loadSidebar() {
 
   const avatarUrl = localStorage.getItem("avatarUrl");
   const fullname = localStorage.getItem("fullname");
+  const username = localStorage.getItem("username");
 
   const avatarElement = document.getElementById("sidebar-avatar");
   const nameElement = document.getElementById("sidebar-name");
@@ -15,8 +16,8 @@ async function loadSidebar() {
     avatarElement.src = avatarUrl;
   }
 
-  nameElement.textContent =
-    fullname && fullname.trim() !== "" ? fullname : "User";
+  // Display Username as primary identifier
+  nameElement.textContent = username || fullname || "User";
 
   // Load theme preference
   loadThemePreference();
@@ -213,8 +214,20 @@ function setActiveSidebar(route) {
       targetRoute = "/" + targetRoute;
   }
 
-  // Check if we are currently viewing someone else's profile (has query params)
-  const isViewingOtherProfile = window.location.hash.includes("?");
+  const myId = localStorage.getItem("accountId")?.toLowerCase();
+  const myUsername = localStorage.getItem("username")?.toLowerCase();
+
+  // Helper to check if a route belongs to ME
+  const isMyProfile = (r) => {
+      if (r === "/profile") return true; // #/profile
+      if (!r.startsWith("/profile/")) return false;
+      const param = r.replace("/profile/", "").toLowerCase();
+      return param === myId || param === myUsername;
+  };
+
+  // Check if we are currently viewing someone else's profile
+  const hash = window.location.hash || "";
+  const isViewingOtherProfile = (hash.includes("/profile/") || hash.includes("/profile?")) && !isMyProfile(targetRoute);
 
   // Helper for home route equivalence
   const isHome = (r) => r === "/" || r === "/home" || r === "";
@@ -225,7 +238,8 @@ function setActiveSidebar(route) {
 
       let isActive = (dataRoute === targetRoute) || 
                        (href === targetRoute) ||
-                       (isHome(dataRoute) && isHome(targetRoute));
+                       (isHome(dataRoute) && isHome(targetRoute)) ||
+                       (dataRoute === "/profile" && isMyProfile(targetRoute));
 
       // Special case: Profile button only active if it's our OWN profile (no params)
       if (dataRoute === "/profile" && isViewingOtherProfile) {
@@ -262,12 +276,10 @@ function navigate(e, route, clickedEl = null) {
 
   if (isSamePath) {
       e.preventDefault();
-      // If navigating to /profile FROM a profile with params (Foreign) TO my profile (No params)
+      // If navigating to /profile FROM a foreign profile TO my profile
       // We should treat this as a Navigation, NOT a Reload.
-      if (route === "/profile" && window.location.hash.includes("id=")) {
+      if (route === "/profile" && isViewingOtherProfile) {
           window.location.hash = "#/profile";
-          // Do NOT call reloadPage() here, because reloadPage() clears the cache for #/profile!
-          // Just changing hash triggers the router, which will restore the cache properly.
           closeAllDropdowns();
           return;
       }

@@ -104,6 +104,13 @@
         joinGroup: async function(accountId) {
              if (!accountId) return;
              
+             // Ensure it's a GUID before invoking server method
+             const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(accountId);
+             if (!isGuid) {
+                 // console.warn(`[UserHub] Skip JoinGroup: ${accountId} is not a valid GUID`);
+                 return;
+             }
+
             if (!connection || connection.state !== "Connected") {
                 console.log(`[UserHub] Connection not ready, queueing join for Account-${accountId}`);
                 UserHub.pendingJoins.add(accountId);
@@ -124,6 +131,12 @@
          * Leave an account group
          */
         leaveGroup: async function(accountId) {
+             if (!accountId) return;
+
+             // Ensure it's a GUID before invoking server method
+             const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(accountId);
+             if (!isGuid) return;
+
              // If we leave, also check pending to remove if not yet processed
              if (UserHub.pendingJoins.has(accountId)) {
                  UserHub.pendingJoins.delete(accountId);

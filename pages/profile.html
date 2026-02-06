@@ -15,7 +15,10 @@
             
             <div class="profile-info-container">
                 <div class="profile-name-row">
-                    <h1 class="profile-fullname-header" id="profile-fullname-header">Full Name</h1>
+                    <div class="profile-title-col">
+                        <h1 class="profile-username-header" id="profile-username-header">username</h1>
+                        <div id="profile-fullname" class="profile-fullname-label">Display Name</div>
+                    </div>
                     <div class="profile-actions" id="profile-action-btn">
                         <!-- All buttons (Edit/Follow, Message/Settings, More) will be rendered here dynamically -->
                     </div>
@@ -23,6 +26,17 @@
                 
                 <div class="profile-bio-section">
                     <div id="profile-bio-text" class="profile-bio-text"></div>
+                </div>
+
+                <div class="profile-details-section">
+                    <div class="profile-detail-item" id="profile-detail-phone-wrapper" style="display: none;">
+                        <i data-lucide="phone"></i>
+                        <span id="profile-detail-phone"></span>
+                    </div>
+                    <div class="profile-detail-item" id="profile-detail-address-wrapper" style="display: none;">
+                        <i data-lucide="map-pin"></i>
+                        <span id="profile-detail-address"></span>
+                    </div>
                 </div>
             </div>
         </header>

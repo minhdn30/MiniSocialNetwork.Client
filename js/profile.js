@@ -106,6 +106,9 @@
         // console.log(`[Profile] Switching currentProfileId from ${currentProfileId} to ${accountId}`);
         currentProfileId = accountId;
         
+        // Block other loading calls until we have the real GUID
+        isLoading = true;
+
         // Force scroll to top for fresh load to prevent any lingering scroll position
         window.scrollTo(0, 0);
         
@@ -126,12 +129,12 @@
 
         // Reset Header UI placeholders to prevent confusing user with old data while loading
         const avatarImg = document.getElementById("profile-avatar");
-        const fullNameHeader = document.getElementById("profile-fullname-header");
+        const fullNameLabel = document.getElementById("profile-fullname");
         const bioText = document.getElementById("profile-bio-text");
         const coverImg = document.getElementById("profile-cover-img");
         
         if (avatarImg) avatarImg.src = APP_CONFIG.DEFAULT_AVATAR;
-        if (fullNameHeader) fullNameHeader.textContent = "Loading...";
+        if (fullNameLabel) fullNameLabel.textContent = "Loading...";
         if (bioText) bioText.textContent = "";
     const bioSection = document.querySelector(".profile-bio-section");
     const statsEl = document.querySelector(".profile-stats");
@@ -179,15 +182,47 @@
     };
 
     async function loadProfileData(isSilent = false) {
-        if (!currentProfileId) return;
-
+        // Parse "u" parameter from URL query string
+        const hash = window.location.hash;
+        const params = new URLSearchParams(hash.split("?")[1] || "");
+        let usernameParam = params.get("u");
+        
+        // Check for /profile/username path format
+        if (!usernameParam && hash.includes("#/profile/")) {
+             const parts = hash.split("#/profile/");
+             if (parts.length > 1) {
+                 // Remove any query params that might follow
+                 const potentialParam = parts[1].split("?")[0];
+                 // Ensure it is NOT a GUID (if it's a GUID, let logic below handle it via currentProfileId)
+                 const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(potentialParam);
+                 if (!isGuid) {
+                     usernameParam = potentialParam;
+                 }
+             }
+        }
+        
         // Use LoadingUtils if available
         const mainContent = document.querySelector(".profile-content-wrapper");
         
         if (window.LoadingUtils) LoadingUtils.toggle("profile-posts-loader", true);
 
         try {
-            const res = await API.Accounts.getProfile(currentProfileId);
+            let res;
+            if (usernameParam) {
+                 res = await API.Accounts.getProfileByUsername(usernameParam);
+            } else if (currentProfileId) {
+                // Fallback: If currentProfileId is set (could be ID or Username if extracted loosely)
+                // We should try to determine if it is a GUID
+                const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentProfileId);
+                if (isGuid) {
+                     res = await API.Accounts.getProfile(currentProfileId);
+                } else {
+                     // Assume it's a username if not a GUID
+                     res = await API.Accounts.getProfileByUsername(currentProfileId);
+                }
+            } else {
+                 return;
+            }
             if (!res.ok) {
                 if (window.toastError) toastError("Failed to load profile details.");
                 return;
@@ -195,6 +230,20 @@
 
             const data = await res.json();
             
+            // Defensively handle both camelCase and PascalCase
+            const accountInfo = data.accountInfo || data.AccountInfo || data.account || data.Account || {};
+            const realGuid = accountInfo.accountId || accountInfo.AccountId || accountInfo.id || accountInfo.Id;
+
+            // If loaded by username, update currentProfileId
+            if (realGuid) {
+                currentProfileId = realGuid;
+                // Also update window._lastVisitedProfileId to ensure groups are managed correctly
+                if (window.UserHub && currentProfileId !== localStorage.getItem("accountId")) {
+                     UserHub.joinGroup(currentProfileId);
+                     window._lastVisitedProfileId = currentProfileId;
+                }
+            }
+
             if (isSilent) {
                 // Background update: Only update stats and internal data
                 currentProfileData = data;
@@ -204,15 +253,15 @@
                 currentProfileData = data;
                 
                 // Update local storage if viewing my own profile
-                if (data.isCurrentUser && data.settings) {
-                    localStorage.setItem("defaultPostPrivacy", data.settings.defaultPostPrivacy ?? 0);
+                const settings = data.settings || data.Settings;
+                if (data.isCurrentUser && settings) {
+                    localStorage.setItem("defaultPostPrivacy", settings.defaultPostPrivacy ?? settings.DefaultPostPrivacy ?? 0);
                 }
                 
                 renderProfileHeader(data);
                 
-                // Only load posts if we are strictly on the main profile tab (empty hash param for tab)
-                // If user is on 'saved' or 'tagged', those handle their own loading.
-                // But simplified: just load posts default for now.
+                // Now that we have the GUID, we can load posts
+                isLoading = false;
                 loadPosts(); 
             }
 
@@ -223,6 +272,7 @@
                 if(contentEl) contentEl.innerHTML = `<div class="error-message">Failed to load profile. <button onclick="loadProfileData()">Retry</button></div>`;
             }
         } finally {
+            isLoading = false;
             if (window.LoadingUtils) LoadingUtils.toggle("profile-posts-loader", false);
         }
     }
@@ -262,7 +312,8 @@
         // Find elements
         const coverImg = document.getElementById("profile-cover-img");
         const avatarImg = document.getElementById("profile-avatar");
-        const fullNameHeader = document.getElementById("profile-fullname-header");
+        const usernameHeader = document.getElementById("profile-username-header");
+        const fullNameLabel = document.getElementById("profile-fullname");
         const bioText = document.getElementById("profile-bio-text");
         const postCount = document.getElementById("profile-posts-count");
         const followersCount = document.getElementById("profile-followers-count");
@@ -308,28 +359,60 @@
             }
         }
         
-        // Use FullName in the prominent header position as requested
-        if (fullNameHeader) fullNameHeader.textContent = info.fullName || "User";
+        // Use Username in the prominent header position
+        if (usernameHeader) usernameHeader.textContent = info.username || "user";
         
+        // FullName label: Bold line above bio
+        if (fullNameLabel) fullNameLabel.textContent = info.fullName || "";
+
         // Bio: Hide if empty
         const bioSection = document.querySelector(".profile-bio-section");
         const statsEl = document.querySelector(".profile-stats");
         
         if (bioSection) {
-            if (info.bio && info.bio.trim() !== "") {
-                if (bioText) bioText.textContent = info.bio;
+            const hasFullName = info.fullName && info.fullName.trim() !== "";
+            const hasBio = info.bio && info.bio.trim() !== "";
+
+            if (hasFullName || hasBio) {
+                if (bioText) bioText.textContent = info.bio || "";
                 bioSection.style.display = "block";
                 if (statsEl) statsEl.classList.remove("stats-no-bio");
+                
+                // Show/hide specific elements inside
+                if (fullNameLabel) fullNameLabel.style.display = hasFullName ? "block" : "none";
+                if (bioText) bioText.style.display = hasBio ? "block" : "none";
             } else {
                 bioSection.style.display = "none";
                 if (statsEl) statsEl.classList.add("stats-no-bio");
             }
         }
 
-        // Stats
         if (postCount) postCount.textContent = data.totalPosts ?? data.postCount ?? 0;
         if (followersCount) followersCount.textContent = followInfo.followers ?? data.followerCount ?? 0;
         if (followingCount) followingCount.textContent = followInfo.following ?? data.followingCount ?? 0;
+
+        // Details: Phone, Address
+        const phoneEl = document.getElementById("profile-detail-phone");
+        const addressEl = document.getElementById("profile-detail-address");
+        const phoneWrapper = document.getElementById("profile-detail-phone-wrapper");
+        const addressWrapper = document.getElementById("profile-detail-address-wrapper");
+
+        if (phoneEl && phoneWrapper) {
+            if (info.phone) {
+                phoneEl.textContent = info.phone;
+                phoneWrapper.style.display = "flex";
+            } else {
+                phoneWrapper.style.display = "none";
+            }
+        }
+        if (addressEl && addressWrapper) {
+            if (info.address) {
+                addressEl.textContent = info.address;
+                addressWrapper.style.display = "flex";
+            } else {
+                addressWrapper.style.display = "none";
+            }
+        }
 
         // Action Buttons
         if (actionBtn) {
@@ -373,17 +456,17 @@
             lucide.createIcons();
         }
 
-        // Auto-shrink font size for long names
-        if (fullNameHeader) {
-            fullNameHeader.style.fontSize = "32px"; // Reset
+        // Auto-shrink font size for long usernames
+        if (usernameHeader) {
+            usernameHeader.style.fontSize = "32px"; // Reset
             
             // Wait for next frame to get accurate widths
             requestAnimationFrame(() => {
                 let fontSize = 32;
                 // ClientWidth is the boundary, ScrollWidth is the content size
-                while (fullNameHeader.scrollWidth > fullNameHeader.clientWidth && fontSize > 14) {
+                while (usernameHeader.scrollWidth > usernameHeader.clientWidth && fontSize > 14) {
                     fontSize -= 1; 
-                    fullNameHeader.style.fontSize = fontSize + "px";
+                    usernameHeader.style.fontSize = fontSize + "px";
                 }
             });
         }
@@ -405,6 +488,14 @@
         if (loader) loader.style.display = "block";
 
         try {
+            // Safeguard: Ensure we have a GUID and not a username
+            const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(fetchForId);
+            if (!isGuid) {
+                // console.warn(`[Profile] Cannot load posts: ${fetchForId} is not a valid GUID yet.`);
+                isLoading = false;
+                return;
+            }
+
             const res = await API.Posts.getByAccountId(fetchForId, page, PAGE_SIZE);
             
             // RACECONDITION FIX: 
@@ -551,7 +642,7 @@
         document.getElementById("edit-bio").value = info.bio || "";
         document.getElementById("edit-phone").value = info.phone || "";
         document.getElementById("edit-address").value = info.address || "";
-        document.getElementById("edit-gender").value = info.gender !== undefined ? info.gender.toString() : "true";
+        document.getElementById("edit-gender").value = (info.gender !== null && info.gender !== undefined) ? info.gender.toString() : "true";
 
         document.getElementById("edit-avatar-preview").src = info.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
         document.getElementById("edit-cover-preview").src = info.coverUrl || "assets/gradients/orb-1.png";
@@ -701,8 +792,9 @@
                     currentProfileData.settings = newSettings;
                     
                     // Update global default for post creation
-                    if (newSettings && newSettings.defaultPostPrivacy !== undefined) {
-                        localStorage.setItem("defaultPostPrivacy", newSettings.defaultPostPrivacy);
+                    const val = newSettings.defaultPostPrivacy ?? newSettings.DefaultPostPrivacy;
+                    if (val !== undefined) {
+                        localStorage.setItem("defaultPostPrivacy", val);
                     }
                 }
 
@@ -733,31 +825,39 @@
         // If it is my profile, keep cache to preserve scroll position when I return.
         // The 'silent update' in initProfile will handle the data refresh.
         const myId = localStorage.getItem("accountId");
+        const myUsername = localStorage.getItem("username");
         // Case-insensitive check
-        if (!myId || accountId.toLowerCase() !== myId.toLowerCase()) {
-            if (window.PageCache) {
-                const profileHash = `#/profile?id=${accountId}`;
-                PageCache.clear(profileHash);
-            }
+        const isMe = accountId.toLowerCase() === myId?.toLowerCase() || accountId.toLowerCase() === myUsername?.toLowerCase();
+
+        if (window.PageCache && !isMe) {
+            // Clear all possible profile keys for this account
+            PageCache.clear(`#/profile?id=${accountId}`);
+            PageCache.clear(`#/profile/${accountId}`);
+            // Note: We don't know the username of others easily here, 
+            // but app.js clears it on entry anyway.
         } 
 
         // 2. If the user is CURRENTLY viewing this profile, update the live DOM and state
         if (currentProfileId == accountId && currentProfileData) {
             // Update internal state
-            currentProfileData.isFollowedByCurrentUser = isFollowing;
-            
-            if (currentProfileData.followInfo) {
-                currentProfileData.followInfo.isFollowedByCurrentUser = isFollowing;
-                if (followers !== undefined) currentProfileData.followInfo.followers = followers;
-                if (following !== undefined) currentProfileData.followInfo.following = following;
-            } else {
-                 if (followers !== undefined || following !== undefined) {
+            if (isFollowing !== undefined) {
+                currentProfileData.isFollowedByCurrentUser = isFollowing;
+                
+                if (currentProfileData.followInfo) {
+                    currentProfileData.followInfo.isFollowedByCurrentUser = isFollowing;
+                } else {
                     currentProfileData.followInfo = {
                         isFollowedByCurrentUser: isFollowing,
                         followers: followers ?? 0,
                         following: following ?? 0
                     };
-                 }
+                }
+            }
+
+            // Always update counts if provided
+            if (currentProfileData.followInfo) {
+                if (followers !== undefined) currentProfileData.followInfo.followers = followers;
+                if (following !== undefined) currentProfileData.followInfo.following = following;
             }
             
             // Animate Stats directly
@@ -775,7 +875,7 @@
 
             // Update Action Button
             const actionBtn = document.getElementById("profile-action-btn");
-            if (actionBtn) {
+            if (actionBtn && isFollowing !== undefined) {
                  const followBtn = actionBtn.querySelector(".profile-btn-follow, .profile-btn-following");
                  if (followBtn) {
                      // Check if state actually matches 'isFollowing'
@@ -783,13 +883,13 @@
                      if (btnIsFollowing !== isFollowing) {
                          // Swap state
                          if (isFollowing) {
-                             followBtn.classList.remove("profile-btn-follow");
-                             followBtn.classList.add("profile-btn-following");
-                             followBtn.innerHTML = `<i data-lucide="check"></i><span>Following</span>`;
+                             followBtn.innerHTML = '<i data-lucide="user-check"></i><span>Following</span>';
+                             followBtn.className = "profile-btn profile-btn-following";
+                             followBtn.onclick = (e) => FollowModule.showUnfollowConfirm(accountId, e.currentTarget);
                          } else {
-                             followBtn.classList.remove("profile-btn-following");
-                             followBtn.classList.add("profile-btn-follow");
-                             followBtn.innerHTML = `<i data-lucide="user-plus"></i><span>Follow</span>`;
+                             followBtn.innerHTML = '<i data-lucide="user-plus"></i><span>Follow</span>';
+                             followBtn.className = "profile-btn profile-btn-follow";
+                             followBtn.onclick = () => FollowModule.followUser(accountId, followBtn);
                          }
                          if (window.lucide) lucide.createIcons();
                      }

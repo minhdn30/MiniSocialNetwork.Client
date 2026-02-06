@@ -164,13 +164,6 @@
   display: block;
 }
 
-.profile-preview-no-media {
-  font-size: 13px;
-  color: var(--text-tertiary);
-  text-align: center;
-  grid-column: span 3;
-  padding: 20px 0;
-}
 
 /* ===== Actions ===== */
 .profile-preview-actions {

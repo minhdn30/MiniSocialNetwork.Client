@@ -92,14 +92,14 @@
       postEl.innerHTML = `
           <div class="post-header">
             <div class="post-user" data-account-id="${post.author.accountId}">
-              <a href="#/profile?id=${post.author.accountId}" style="text-decoration: none; display: block;">
+              <a href="#/profile/${post.author.username}" style="text-decoration: none; display: block;">
                   <img class="post-avatar"
                        src="${post.author?.avatarUrl || APP_CONFIG.DEFAULT_AVATAR}"
                        alt="">
               </a>
               <div class="user-meta">
-                <a href="#/profile?id=${post.author.accountId}" style="text-decoration: none; color: inherit;">
-                    <span class="post-username">${PostUtils.truncateName(post.author?.fullName || "Unknown")}</span>
+                <a href="#/profile/${post.author.username}" style="text-decoration: none; color: inherit;">
+                    <span class="post-username">${PostUtils.truncateName(post.author?.username || post.author?.fullName || "User")}</span>
                 </a>
                 <div class="post-meta">
                   <span class="post-time" 
