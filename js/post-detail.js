@@ -14,9 +14,12 @@ if (!window.PostEdit) {
 }
 
 // Open Modal
-async function openPostDetail(postId) {
-    // Check if we have data with PostCode available. If not, we still use ID
-    // but the API will return PostCode for history push.
+// Open Modal
+async function openPostDetail(postId, postCode = null) {
+    // If postCode is provided (from UI), push URL immediately for better UX
+    if (postCode && !window.location.hash.includes("/p/")) {
+        history.pushState({ postCode: postCode }, "", `#/p/${postCode}`);
+    }
     
     // 1. Check if modal exists
     let modal = document.getElementById(POST_DETAIL_MODAL_ID);
@@ -26,7 +29,7 @@ async function openPostDetail(postId) {
     }
 
     resetPostDetailView();
-    modal.classList.add("show");
+    if (modal) modal.classList.add("show");
     document.body.style.overflow = "hidden";
 
     const mainLoader = document.getElementById("detailMainLoader");
@@ -42,11 +45,11 @@ async function openPostDetail(postId) {
         currentPostId = data.postId;
         window.currentPostId = data.postId;
 
-        // Push History with PostCode
-        if (!window.location.hash.includes("/p/")) {
-            history.pushState({ postCode: data.postCode }, "", `#/p/${data.postCode}`);
+        // Push History with PostCode (if not already done or if different)
+        if (!window.location.hash.includes(`/p/${data.postCode}`)) {
+             history.replaceState({ postCode: data.postCode }, "", `#/p/${data.postCode}`);
         }
-
+        
         renderPostDetail(data);        
         if (mainLoader) mainLoader.style.display = "none";
 
@@ -96,9 +99,12 @@ async function openPostDetailByCode(postCode) {
     } catch (err) {
         if (mainLoader) mainLoader.style.display = "none";
         console.error(err);
+        
+        // If it's a direct link to a post, show error page
         if (window.location.hash.startsWith("#/p/")) {
-             window.location.hash = "#/home";
+             window.showErrorPage("Post not found", "The post you are looking for doesn't exist or you don't have permission to view it.");
         }
+        
         closePostDetailModal();
     }
 }

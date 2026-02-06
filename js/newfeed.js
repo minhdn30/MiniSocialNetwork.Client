@@ -104,7 +104,7 @@
                 <div class="post-meta">
                   <span class="post-time" 
                         title="${PostUtils.formatFullDateTime(post.createdAt)}" 
-                        onclick="openPostDetail('${post.postId}')">${PostUtils.timeAgo(post.createdAt)}</span>
+                        onclick="openPostDetail('${post.postId}', '${post.postCode}')">${PostUtils.timeAgo(post.createdAt)}</span>
                   <span>•</span>
                   ${PostUtils.renderPrivacyBadge(post.privacy)}
                 </div>
@@ -142,7 +142,7 @@
   </div>
 
 
-              <div class="action-item" onclick="openPostDetail('${post.postId}')" style="cursor: pointer;">
+              <div class="action-item" onclick="openPostDetail('${post.postId}', '${post.postCode}')" style="cursor: pointer;">
                 <i data-lucide="message-circle" class="hover-scale-sm"></i>
                 <span class="count hover-scale-text">${post.commentCount}</span>
               </div>

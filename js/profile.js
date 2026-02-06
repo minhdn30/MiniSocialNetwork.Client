@@ -542,7 +542,7 @@
             item.className = "profile-grid-item skeleton"; 
             item.dataset.postId = post.postId;
             item.onclick = () => {
-                if (window.openPostDetail) window.openPostDetail(post.postId);
+                if (window.openPostDetail) window.openPostDetail(post.postId, post.postCode);
             };
 
             const isMulti = (post.mediaCount ?? (post.medias?.length ?? 0)) > 1;

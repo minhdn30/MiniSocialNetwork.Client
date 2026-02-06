@@ -185,11 +185,25 @@ function router() {
       break;
 
     default:
-      loadHome();
+      showErrorPage("404", "Sorry, the page you are looking for doesn't exist or has been removed.");
   }
   
   setActiveSidebar(path);
 }
+
+async function showErrorPage(title, message) {
+    app.innerHTML = ""; // Clear current
+    await loadPage("error");
+    
+    const titleEl = document.getElementById("error-title");
+    const msgEl = document.getElementById("error-message");
+    
+    if (titleEl) titleEl.innerText = title === "404" ? "Page not found" : title;
+    if (msgEl) msgEl.innerText = message;
+    
+    if (window.lucide) lucide.createIcons();
+}
+window.showErrorPage = showErrorPage;
 
 function loadPlaceholder(title, iconName) {
     app.innerHTML = `
