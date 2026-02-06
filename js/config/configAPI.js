@@ -276,8 +276,14 @@
         apiFetch(`/Accounts/profile-preview/${accountId}`),
       getProfile: (accountId) =>
         apiFetch(`/Accounts/profile/${accountId}`),
-      updateProfile: (accountId, formData) =>
-        uploadFormDataWithProgress(`/Accounts/profile/${accountId}`, formData, null, "PUT"),
+      updateProfile: (formData) =>
+        uploadFormDataWithProgress("/Accounts/profile", formData, null, "PATCH"),
+      updateSettings: (data) =>
+        apiFetch("/Accounts/settings", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }),
       reactivate: () =>
         apiFetch(`/Accounts/reactivate`, { method: "POST" }),
     },

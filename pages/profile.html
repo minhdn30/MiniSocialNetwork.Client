@@ -117,4 +117,78 @@
             </div>
         </div>
     </div>
+
+    <!-- Privacy Settings Modal -->
+    <div class="profile-modal-overlay" id="profile-settings-modal">
+        <div class="profile-modal-content">
+            <div class="profile-modal-header">
+                <h3>Privacy Settings</h3>
+                <button class="profile-modal-close" onclick="closeProfileSettings()"><i data-lucide="x"></i></button>
+            </div>
+            <div class="profile-modal-body">
+                <div class="profile-privacy-section" style="border-top: none; padding-top: 0; margin-top: 0;">
+                    <div class="profile-form-group-row">
+                        <div class="form-group-item">
+                            <label>Email Privacy</label>
+                            <select id="setting-privacy-email">
+                                <option value="0">Public</option>
+                                <option value="1">Follow Only</option>
+                                <option value="2">Private</option>
+                            </select>
+                        </div>
+                        <div class="form-group-item">
+                            <label>Phone Privacy</label>
+                            <select id="setting-privacy-phone">
+                                <option value="0">Public</option>
+                                <option value="1">Follow Only</option>
+                                <option value="2">Private</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="profile-form-group-row">
+                        <div class="form-group-item">
+                            <label>Address Privacy</label>
+                            <select id="setting-privacy-address">
+                                <option value="0">Public</option>
+                                <option value="1">Follow Only</option>
+                                <option value="2">Private</option>
+                            </select>
+                        </div>
+                        <div class="form-group-item">
+                            <label>Default Post Privacy</label>
+                            <select id="setting-privacy-post">
+                                <option value="0">Public</option>
+                                <option value="1">Follow Only</option>
+                                <option value="2">Private</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="profile-form-group-row">
+                        <div class="form-group-item">
+                            <label>Followers List</label>
+                            <select id="setting-privacy-followers">
+                                <option value="0">Public</option>
+                                <option value="1">Follow Only</option>
+                                <option value="2">Private</option>
+                            </select>
+                        </div>
+                        <div class="form-group-item">
+                            <label>Following List</label>
+                            <select id="setting-privacy-following">
+                                <option value="0">Public</option>
+                                <option value="1">Follow Only</option>
+                                <option value="2">Private</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="profile-modal-footer">
+                <button class="profile-btn-secondary" onclick="closeProfileSettings()">Cancel</button>
+                <button class="profile-btn-primary" onclick="saveProfileSettings()">Save Settings</button>
+            </div>
+        </div>
+    </div>
 </div>

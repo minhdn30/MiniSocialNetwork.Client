@@ -87,7 +87,7 @@ function openCreatePostModal() {
   imageOffsetY = 0;
   isDragging = false;
   isProcessingCrop = false;
-  selectedPrivacy = 0;
+  selectedPrivacy = parseInt(localStorage.getItem("defaultPostPrivacy") || 0);
 
   modal.classList.add("show");
   document.body.style.overflow = "hidden";

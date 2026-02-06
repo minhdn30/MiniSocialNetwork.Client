@@ -202,6 +202,12 @@
             } else {
                 // Full render
                 currentProfileData = data;
+                
+                // Update local storage if viewing my own profile
+                if (data.isCurrentUser && data.settings) {
+                    localStorage.setItem("defaultPostPrivacy", data.settings.defaultPostPrivacy ?? 0);
+                }
+                
                 renderProfileHeader(data);
                 
                 // Only load posts if we are strictly on the main profile tab (empty hash param for tab)
@@ -540,11 +546,12 @@
 
         const info = currentProfileData.accountInfo || currentProfileData.account;
         if (!info) return;
+        
         document.getElementById("edit-fullname").value = info.fullName || "";
         document.getElementById("edit-bio").value = info.bio || "";
         document.getElementById("edit-phone").value = info.phone || "";
         document.getElementById("edit-address").value = info.address || "";
-        document.getElementById("edit-gender").value = info.gender !== undefined ? info.gender : 0;
+        document.getElementById("edit-gender").value = info.gender !== undefined ? info.gender.toString() : "true";
 
         document.getElementById("edit-avatar-preview").src = info.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
         document.getElementById("edit-cover-preview").src = info.coverUrl || "assets/gradients/orb-1.png";
@@ -584,7 +591,7 @@
             const coverFile = document.getElementById("edit-cover-input").files[0];
             if (coverFile) formData.append("CoverImage", coverFile);
 
-            const res = await API.Accounts.updateProfile(currentProfileId, formData);
+            const res = await API.Accounts.updateProfile(formData);
             if (res.ok) {
                 if (window.toastSuccess) toastSuccess("Profile updated successfully!");
                 closeEditProfile();
@@ -639,7 +646,80 @@
     };
 
     global.openProfileSettings = function() {
-        if (window.toastInfo) toastInfo("Settings feature coming soon!");
+        const modal = document.getElementById("profile-settings-modal");
+        if (!modal || !currentProfileData) return;
+
+        const info = currentProfileData.accountInfo || currentProfileData.account;
+        if (!info) return;
+        
+        const settings = currentProfileData.settings || info.settings || {};
+
+        document.getElementById("setting-privacy-email").value = settings.emailPrivacy ?? 0;
+        document.getElementById("setting-privacy-phone").value = settings.phonePrivacy ?? 0;
+        document.getElementById("setting-privacy-address").value = settings.addressPrivacy ?? 0;
+        document.getElementById("setting-privacy-post").value = settings.defaultPostPrivacy ?? 0;
+        document.getElementById("setting-privacy-followers").value = settings.followerPrivacy ?? 0;
+        document.getElementById("setting-privacy-following").value = settings.followingPrivacy ?? 0;
+
+        modal.style.display = "flex";
+    };
+
+    global.closeProfileSettings = function() {
+        const modal = document.getElementById("profile-settings-modal");
+        if (modal) modal.style.display = "none";
+    };
+
+    global.saveProfileSettings = async function() {
+        if (!currentProfileId) return;
+        
+        const btn = document.querySelector("#profile-settings-modal .profile-btn-primary");
+        if (!btn) return;
+        
+        const originalText = btn.textContent;
+        btn.textContent = "Saving...";
+        btn.disabled = true;
+
+        try {
+            const data = {
+                EmailPrivacy: parseInt(document.getElementById("setting-privacy-email").value),
+                PhonePrivacy: parseInt(document.getElementById("setting-privacy-phone").value),
+                AddressPrivacy: parseInt(document.getElementById("setting-privacy-address").value),
+                DefaultPostPrivacy: parseInt(document.getElementById("setting-privacy-post").value),
+                FollowerPrivacy: parseInt(document.getElementById("setting-privacy-followers").value),
+                FollowingPrivacy: parseInt(document.getElementById("setting-privacy-following").value)
+            };
+
+            const res = await API.Accounts.updateSettings(data);
+            if (res.ok) {
+                const newSettings = await res.json();
+                if (window.toastSuccess) toastSuccess("Privacy settings updated successfully!");
+                
+                // Update local data
+                if (currentProfileData) {
+                    if (currentProfileData.accountInfo) currentProfileData.accountInfo.settings = newSettings;
+                    else if (currentProfileData.account) currentProfileData.account.settings = newSettings;
+                    currentProfileData.settings = newSettings;
+                    
+                    // Update global default for post creation
+                    if (newSettings && newSettings.defaultPostPrivacy !== undefined) {
+                        localStorage.setItem("defaultPostPrivacy", newSettings.defaultPostPrivacy);
+                    }
+                }
+
+                closeProfileSettings();
+                // Optionally reload profile data to see effects of privacy changes if viewing own profile
+                loadProfileData(); 
+            } else {
+                const data = await res.json();
+                if (window.toastError) toastError(data.title || "Failed to update settings.");
+            }
+        } catch (err) {
+            console.error(err);
+            if (window.toastError) toastError("An error occurred while saving.");
+        } finally {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
     };
 
     global.openProfileMoreMenu = function() {

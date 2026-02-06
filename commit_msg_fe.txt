@@ -1,0 +1,7 @@
+feat(profile): separate profile and privacy settings modals
+
+- Split edit profile modal into distinct Profile Info and Privacy Settings modals.
+- Add UI for managing privacy settings (Email, Phone, Address, Post, Followers, Following).
+- Update API integration to handle separate account information and settings endpoints.
+- Implement synchronization of DefaultPostPrivacy from backend to create-post UI.
+- Ensure local storage is updated with the latest privacy settings during navigation.

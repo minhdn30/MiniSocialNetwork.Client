@@ -65,6 +65,7 @@ loginForm.addEventListener("submit", async (e) => {
     localStorage.setItem("fullname", data.fullname || "");
     localStorage.setItem("avatarUrl", data.avatarUrl || "");
     localStorage.setItem("accountId", data.accountId || "");
+    localStorage.setItem("defaultPostPrivacy", data.defaultPostPrivacy || 0);
 
     // Check Account Status
     if (data.status === 1) { // Inactive
