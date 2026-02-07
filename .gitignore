@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# AI Agent & Skills
+.agent/
+.gemini/
+.claude/
+.codex/
+.cursor/
+.windsurfrules
+project_rules.md
+
+# Logs and system files
+*.log
+.DS_Store
+dist/
+build/
+coverage/
+.env*
+!README.md

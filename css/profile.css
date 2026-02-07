@@ -751,6 +751,50 @@
     white-space: pre-wrap;
 }
 
+/* Privacy Toggle Styles */
+.privacy-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.privacy-input-wrapper input {
+    flex: 1;
+    padding-right: 46px !important;
+}
+
+.privacy-toggle-btn {
+    position: absolute;
+    right: 8px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    z-index: 2;
+}
+
+.privacy-toggle-btn:hover {
+    background: var(--bg-hover);
+    color: var(--accent-primary);
+    transform: scale(1.05);
+}
+
+.privacy-toggle-btn.public { color: var(--accent-primary); }
+.privacy-toggle-btn.follow { color: #ff9f43; } /* Orange for Follow */
+.privacy-toggle-btn.private { color: var(--text-tertiary); }
+
+.privacy-toggle-btn i, .privacy-toggle-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
 /* Bio Input Wrapper with Emoji Button */
 .bio-input-wrapper {
     position: relative;

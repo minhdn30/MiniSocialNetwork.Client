@@ -93,10 +93,25 @@
     -webkit-box-orient: vertical;
     width: 100%;
     position: relative;
-    white-space: normal; /* Allow wrapping */
+    white-space: normal;
     overflow: hidden;
     text-overflow: ellipsis;
     transition: font-size 0.15s ease;
+    margin-bottom: 0;
+    line-height: 1.2;
+    padding-bottom: 2px;
+}
+
+.profile-preview-fullname-small {
+    font-size: 13px;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    padding: 0 16px 10px 24px;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.4;
 }
 
 .profile-preview-username {
@@ -276,92 +291,77 @@
 /* ===== Responsive Tablet ===== */
 @media (max-width: 1024px) {
   .profile-preview {
-    width: 320px;
-    padding: 14px;
+    width: 300px;
   }
 
-  .profile-preview-header img {
-    width: 52px;
-    height: 52px;
+  .profile-preview-avatar-wrapper {
+    width: 60px;
+    height: 60px;
+    margin-top: -30px;
+  }
+
+  .profile-preview-info {
+    margin-top: -15px;
   }
 }
 
 /* ===== Responsive Mobile ===== */
 @media (max-width: 768px) {
   .profile-preview {
-    width: calc(100vw - 24px);
-    max-width: 360px;
-    padding: 14px;
+    width: calc(100vw - 32px);
+    max-width: 340px;
     border-radius: 12px;
-    backdrop-filter: blur(10px);
-    background: var(--overlay-blur);
+    background: var(--bg-secondary);
   }
 
-  .profile-preview-header {
-    gap: 10px;
-    margin-bottom: 14px;
+  .profile-preview-cover {
+    height: 80px;
   }
 
-  .profile-preview-header img {
-    width: 48px;
-    height: 48px;
+  .profile-preview-avatar-wrapper {
+    width: 56px;
+    height: 56px;
+    margin-top: -28px;
+    border-width: 3px;
   }
 
-  .profile-preview-header .profile-preview-name {
-    font-size: 14px;
+  .profile-preview-info {
+    margin-top: -14px;
+    margin-left: -16px;
+  }
+
+  .profile-preview-name {
+    font-size: 15px;
+    padding: 8px 16px 8px 20px;
+  }
+
+  .profile-preview-fullname-small {
+     padding: 0 16px 8px 20px !important;
+     font-size: 12px !important;
   }
 
   .profile-preview-stats {
-    gap: 2px;
+    gap: 4px;
     margin-bottom: 10px;
-    font-size: 13px;
   }
 
   .profile-preview-stats b {
-    font-size: 14px;
+    font-size: 15px;
   }
 
   .profile-preview-stats span {
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .profile-preview-medias {
-    gap: 3px;
-    margin-bottom: 14px;
-  }
-
-  .profile-preview-media-item {
-    border-radius: 6px;
-  }
-
-  .no-media {
-    font-size: 12px;
-    padding: 16px 0;
-  }
-
-  .profile-preview-actions {
     gap: 6px;
+    margin-bottom: 12px;
   }
 
   .profile-preview-btn {
-    padding: 10px 0;
+    padding: 8px 0;
     font-size: 13px;
-    border-radius: 6px;
-  }
-
-  .profile-preview-btn i {
-    width: 14px;
-    height: 14px;
-  }
-
-  .profile-preview-btn .chevron-icon {
-    width: 12px;
-    height: 12px;
-  }
-
-  /* Larger tap targets for mobile */
-  .profile-preview-btn {
-    min-height: 36px;
+    min-height: 38px;
   }
 }
 

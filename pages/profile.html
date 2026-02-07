@@ -140,11 +140,21 @@
                         </div>
                         <div class="profile-form-group">
                             <label>Phone Number</label>
-                            <input type="text" id="edit-phone" placeholder="+84 123 456 789">
+                            <div class="privacy-input-wrapper">
+                                <input type="text" id="edit-phone" placeholder="+84 123 456 789">
+                                <button type="button" class="privacy-toggle-btn" id="toggle-phone-privacy" title="Change Phone Privacy">
+                                    <i data-lucide="globe"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="profile-form-group">
                             <label>Address</label>
-                            <input type="text" id="edit-address" placeholder="Enter your address">
+                            <div class="privacy-input-wrapper">
+                                <input type="text" id="edit-address" placeholder="Enter your address">
+                                <button type="button" class="privacy-toggle-btn" id="toggle-address-privacy" title="Change Address Privacy">
+                                    <i data-lucide="globe"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="profile-form-group">
                             <label>Gender</label>

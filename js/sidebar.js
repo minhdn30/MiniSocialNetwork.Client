@@ -231,17 +231,16 @@ function setActiveSidebar(route) {
   const myId = localStorage.getItem("accountId")?.toLowerCase();
   const myUsername = localStorage.getItem("username")?.toLowerCase();
 
-  // Helper to check if a route belongs to ME
-  const isMyProfile = (r) => {
-      if (r === "/profile") return true; // #/profile
+  // Helper inside to check if a route belongs to ME
+  const isRouteMine = (r) => {
+      if (r === "/profile") return true;
       if (!r.startsWith("/profile/")) return false;
       const param = r.replace("/profile/", "").toLowerCase();
       return param === myId || param === myUsername;
   };
 
-  // Check if we are currently viewing someone else's profile
   const hash = window.location.hash || "";
-  const isViewingOtherProfile = (hash.includes("/profile/") || hash.includes("/profile?")) && !isMyProfile(targetRoute);
+  const isViewingOtherProfile = (hash.includes("/profile/") || hash.includes("/profile?")) && !isRouteMine(targetRoute);
 
   // Helper for home route equivalence
   const isHome = (r) => r === "/" || r === "/home" || r === "";
@@ -253,7 +252,7 @@ function setActiveSidebar(route) {
       let isActive = (dataRoute === targetRoute) || 
                        (href === targetRoute) ||
                        (isHome(dataRoute) && isHome(targetRoute)) ||
-                       (dataRoute === "/profile" && isMyProfile(targetRoute));
+                       (dataRoute === "/profile" && isRouteMine(targetRoute));
 
       // Special case: Profile button only active if it's our OWN profile (no params)
       if (dataRoute === "/profile" && isViewingOtherProfile) {
@@ -290,8 +289,20 @@ function navigate(e, route, clickedEl = null) {
 
   if (isSamePath) {
       e.preventDefault();
-      // If navigating to /profile FROM a foreign profile TO my profile
-      // We should treat this as a Navigation, NOT a Reload.
+
+      // Fix ReferenceError: Check if we are currently on a foreign profile
+      const myId = localStorage.getItem("accountId")?.toLowerCase();
+      const myUsername = localStorage.getItem("username")?.toLowerCase();
+      const isRouteMine = (r) => {
+          if (r === "/profile") return true;
+          if (!r.startsWith("/profile/")) return false;
+          const param = r.replace("/profile/", "").toLowerCase();
+          return param === myId || param === myUsername;
+      };
+      
+      const currentPathOnly = currentHash.slice(1).split("?")[0];
+      const isViewingOtherProfile = (currentHash.includes("/profile/") || currentHash.includes("/profile?")) && !isRouteMine(currentPathOnly);
+
       if (route === "/profile" && isViewingOtherProfile) {
           window.location.hash = "#/profile";
           closeAllDropdowns();
