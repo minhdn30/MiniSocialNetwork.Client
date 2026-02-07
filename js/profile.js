@@ -648,6 +648,37 @@
     let selectedCoverFile = null;
     let shouldDeleteCover = false;
 
+    let currentPhonePrivacy = 0;
+    let currentAddressPrivacy = 0;
+
+    const PRIVACY_CONFIG = {
+        0: { icon: "globe", next: 1, class: "public", title: "Public" },
+        1: { icon: "users", next: 2, class: "follow", title: "Follow Only" },
+        2: { icon: "lock", next: 0, class: "private", title: "Private" }
+    };
+
+    function updatePrivacyUI(type) {
+        const value = type === 'phone' ? currentPhonePrivacy : currentAddressPrivacy;
+        const btn = document.getElementById(`toggle-${type}-privacy`);
+        if (!btn) return;
+
+        const config = PRIVACY_CONFIG[value];
+        btn.innerHTML = `<i data-lucide="${config.icon}"></i>`;
+        btn.className = `privacy-toggle-btn ${config.class}`;
+        btn.title = `Current: ${config.title} (Click to change)`;
+        
+        if (window.lucide) lucide.createIcons();
+    }
+
+    function togglePrivacy(type) {
+        if (type === 'phone') {
+            currentPhonePrivacy = PRIVACY_CONFIG[currentPhonePrivacy].next;
+        } else {
+            currentAddressPrivacy = PRIVACY_CONFIG[currentAddressPrivacy].next;
+        }
+        updatePrivacyUI(type);
+    }
+
     function setMaxLengthsFromConfig() {
         // Set maxlength from APP_CONFIG
         const fullnameInput = document.getElementById("edit-fullname");
@@ -824,6 +855,13 @@
 
         // Initial background update
         updateEditCoverBackground();
+
+        // Setup Privacy Toggles
+        const phoneToggle = document.getElementById("toggle-phone-privacy");
+        if (phoneToggle) phoneToggle.onclick = () => togglePrivacy('phone');
+
+        const addressToggle = document.getElementById("toggle-address-privacy");
+        if (addressToggle) addressToggle.onclick = () => togglePrivacy('address');
     }
 
     function hasProfileChanges() {
@@ -840,10 +878,10 @@
             phone !== (originalProfileData.phone || "") ||
             address !== (originalProfileData.address || "") ||
             gender !== (originalProfileData.gender || "") ||
-            selectedAvatarFile !== null ||
-            shouldDeleteAvatar ||
             selectedCoverFile !== null ||
-            shouldDeleteCover
+            shouldDeleteCover ||
+            currentPhonePrivacy !== (originalProfileData.phonePrivacy || 0) ||
+            currentAddressPrivacy !== (originalProfileData.addressPrivacy || 0)
         );
     }
 
@@ -935,8 +973,16 @@
             address: info.address || "",
             gender: (info.gender !== null && info.gender !== undefined) ? info.gender.toString() : "",
             avatar: info.avatarUrl || info.avatar || window.APP_CONFIG.DEFAULT_AVATAR,
-            cover: info.coverUrl || info.cover || ""
+            cover: info.coverUrl || info.cover || "",
+            phonePrivacy: currentProfileData.settings?.phonePrivacy ?? 0,
+            addressPrivacy: currentProfileData.settings?.addressPrivacy ?? 0
         };
+
+        currentPhonePrivacy = originalProfileData.phonePrivacy;
+        currentAddressPrivacy = originalProfileData.addressPrivacy;
+
+        updatePrivacyUI('phone');
+        updatePrivacyUI('address');
 
         // Populate form
         document.getElementById("edit-fullname").value = originalProfileData.fullName;
@@ -1074,6 +1120,8 @@
             formData.append("Phone", phone);
             formData.append("Address", address);
             formData.append("Gender", gender);
+            formData.append("PhonePrivacy", currentPhonePrivacy);
+            formData.append("AddressPrivacy", currentAddressPrivacy);
 
             // Avatar changes
             if (shouldDeleteAvatar) {
@@ -1305,7 +1353,18 @@
             }
         }
     };
+    
+    // Expose ProfilePage module for external updates (e.g., SignalR)
+    global.ProfilePage = {
+        init: initProfile,
+        getAccountId: () => currentProfileId,
+        getData: () => currentProfileData,
+        setData: (data) => { currentProfileData = data; },
+        renderHeader: () => renderProfileHeader(currentProfileData),
+        prependPost: prependPostToProfile
+    };
 
+    // Keep legacy exports for compatibility if needed
     global.initProfilePage = initProfile;
     global.getProfileAccountId = () => currentProfileId;
     global.prependPostToProfile = prependPostToProfile;

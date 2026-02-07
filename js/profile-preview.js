@@ -87,7 +87,7 @@ function renderProfilePreview(data) {
     ? `<img src="${data.account.coverUrl}" alt="cover" onerror="this.style.display='none'">` 
     : "";
 
-  previewEl.innerHTML = `
+    previewEl.innerHTML = `
     <div class="profile-preview-cover" id="${coverAreaId}">
         ${coverImgHtml}
     </div>
@@ -97,8 +97,8 @@ function renderProfilePreview(data) {
                 <img src="${avatarUrl}" alt="avatar">
             </div>
             <div class="profile-preview-info">
-                <div class="profile-preview-name" id="pp-username" style="line-height: 1.2; padding-bottom: 2px; margin-bottom: 0;">${data.account.username}</div>
-                <div class="profile-preview-fullname-small" style="font-size: 13px; color: var(--text-secondary); background: var(--bg-secondary); padding: 0 16px 10px 24px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.4;">${data.account.fullName}</div>
+                <div class="profile-preview-name" id="pp-username">${data.account.username}</div>
+                <div class="profile-preview-fullname-small">${data.account.fullName}</div>
             </div>
         </div>
 

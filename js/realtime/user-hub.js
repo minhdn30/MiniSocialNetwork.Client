@@ -82,6 +82,76 @@
                 }
             });
 
+            // Listen for profile data updates
+            connection.on("ReceiveProfileUpdate", (account) => {
+                console.log("👤 [UserHub] Profile updated:", account);
+                
+                if (!window.ProfilePage) return;
+                
+                const currentProfileId = window.ProfilePage.getAccountId();
+                const accountId = account.accountId || account.AccountId;
+                
+                if (currentProfileId && accountId && currentProfileId.toLowerCase() !== accountId.toLowerCase()) {
+                    return;
+                }
+
+                console.log("🔄 [UserHub] Applying realtime update for:", account.username || account.Username);
+
+                const myId = localStorage.getItem("accountId");
+                const isMe = accountId.toLowerCase() === myId?.toLowerCase();
+                
+                let safeAccount = { ...account };
+                let currentProfileData = window.ProfilePage.getData();
+
+                if (!isMe && currentProfileData) {
+                    const isFollowed = currentProfileData?.followInfo?.isFollowedByCurrentUser ?? currentProfileData?.isFollowedByCurrentUser ?? false;
+                    const settings = account.settings || account.Settings || {};
+                    
+                    safeAccount.email = null;
+                    const phonePrivacy = settings.phonePrivacy ?? settings.PhonePrivacy ?? 0;
+                    const addressPrivacy = settings.addressPrivacy ?? settings.AddressPrivacy ?? 0;
+
+                    const canSeePhone = phonePrivacy === 0 || (phonePrivacy === 1 && isFollowed);
+                    if (!canSeePhone) safeAccount.phone = null;
+                    
+                    const canSeeAddress = addressPrivacy === 0 || (addressPrivacy === 1 && isFollowed);
+                    if (!canSeeAddress) safeAccount.address = null;
+                }
+
+                if (currentProfileData) {
+                    const info = currentProfileData.accountInfo || currentProfileData.account;
+                    if (info) {
+                        info.fullName = account.fullName || account.FullName || info.fullName;
+                        info.avatarUrl = account.avatarUrl || account.AvatarUrl || info.avatarUrl;
+                        info.coverUrl = account.coverUrl || account.CoverUrl || info.coverUrl;
+                        info.bio = account.bio || account.Bio || info.bio;
+                        info.phone = safeAccount.phone || safeAccount.Phone || null;
+                        info.address = safeAccount.address || safeAccount.Address || null;
+                        info.username = account.username || account.Username || info.username;
+                    }
+                    if (account.settings || account.Settings) {
+                        currentProfileData.settings = account.settings || account.Settings;
+                    }
+                    
+                    window.ProfilePage.setData(currentProfileData);
+                    window.ProfilePage.renderHeader();
+                }
+
+                if (isMe) {
+                    const avatar = account.avatarUrl || account.AvatarUrl || "";
+                    const fullname = account.fullName || account.FullName || "";
+                    const username = account.username || account.Username || "";
+
+                    localStorage.setItem("avatarUrl", avatar);
+                    localStorage.setItem("fullname", fullname);
+                    localStorage.setItem("username", username);
+                    
+                    if (window.updateSidebarInfo) {
+                        window.updateSidebarInfo(avatar, username || fullname);
+                    }
+                }
+            });
+
             // 3. Start connection
             try {
                 await connection.start();

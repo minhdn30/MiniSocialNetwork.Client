@@ -280,7 +280,7 @@ function clearSessionAndRedirect() {
   localStorage.removeItem("fullname");
   localStorage.removeItem("accountId");
   PageCache.clearAll();
-  window.location.href = "/auth.html";
+  window.location.href = "auth.html";
 }
 
 // Global logout function callable from sidebar or elsewhere

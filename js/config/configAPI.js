@@ -102,7 +102,7 @@
       // Refresh failed or expired
       localStorage.removeItem("accessToken");
       if (!window.location.pathname.includes("auth.html")) {
-        window.location.href = "/auth.html";
+        window.location.href = "auth.html";
       }
       throw err;
     }

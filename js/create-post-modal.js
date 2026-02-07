@@ -44,7 +44,6 @@ let selectedPrivacy = 0;
 
 // Emoji picker instance
 
-
 // File size formatting moved to js/shared/file-utils.js
 
 // Load user info for create post modal
@@ -66,7 +65,7 @@ function loadCreatePostUserInfo() {
 
   if (nameElement) {
     const display = username || fullname || "User";
-    nameElement.textContent = window.PostUtils 
+    nameElement.textContent = window.PostUtils
       ? PostUtils.truncateName(display)
       : display;
   }
@@ -95,12 +94,13 @@ function openCreatePostModal() {
   loadCreatePostUserInfo();
   resetPrivacySelector();
   showMediaPlaceholder();
-  
+
   // Init caption limit
   const captionInput = document.getElementById("postCaption");
   const maxCharCount = document.getElementById("maxCharCount");
   if (captionInput) captionInput.maxLength = APP_CONFIG.MAX_POST_CONTENT_LENGTH;
-  if (maxCharCount) maxCharCount.textContent = APP_CONFIG.MAX_POST_CONTENT_LENGTH;
+  if (maxCharCount)
+    maxCharCount.textContent = APP_CONFIG.MAX_POST_CONTENT_LENGTH;
 
   lucide.createIcons();
 }
@@ -565,26 +565,26 @@ function saveCropData() {
     // Calculate crop coordinates in original image
     const container = document.getElementById("mediaZoomContainer");
     if (!container) return;
-    
+
     const containerRect = container.getBoundingClientRect();
-    
+
     // VALIDATION: Don't save if container has no size (hidden/not rendered)
     if (containerRect.width <= 0 || containerRect.height <= 0) {
       console.warn("saveCropData: Container has no size, skipping save");
       return;
     }
-    
+
     // VALIDATION: Don't save if image dimensions are not set
     if (!imageNaturalWidth || !imageNaturalHeight) {
       console.warn("saveCropData: Image dimensions not set, skipping save");
       return;
     }
-    
+
     const centerX = containerRect.width / 2;
     const centerY = containerRect.height / 2;
 
     const finalScale = displayScale * zoomLevel;
-    
+
     // VALIDATION: Prevent division by zero
     if (finalScale <= 0) {
       console.warn("saveCropData: Invalid scale, skipping save");
@@ -606,12 +606,18 @@ function saveCropData() {
     let cropY_px = (cropTop - imgTop) / finalScale;
     let cropWidth_px = cropFrameSize.width / finalScale;
     let cropHeight_px = cropFrameSize.height / finalScale;
-    
+
     // CLAMP: Ensure crop coordinates are within valid bounds
     cropX_px = Math.max(0, Math.min(cropX_px, imageNaturalWidth));
     cropY_px = Math.max(0, Math.min(cropY_px, imageNaturalHeight));
-    cropWidth_px = Math.max(1, Math.min(cropWidth_px, imageNaturalWidth - cropX_px));
-    cropHeight_px = Math.max(1, Math.min(cropHeight_px, imageNaturalHeight - cropY_px));
+    cropWidth_px = Math.max(
+      1,
+      Math.min(cropWidth_px, imageNaturalWidth - cropX_px),
+    );
+    cropHeight_px = Math.max(
+      1,
+      Math.min(cropHeight_px, imageNaturalHeight - cropY_px),
+    );
 
     // Normalize to 0-1 range based on image dimensions
     const cropX_norm = cropX_px / imageNaturalWidth;
@@ -785,7 +791,6 @@ function resetPostForm() {
     });
   }
 
-
   // Clear the array
   mediaFiles = [];
   currentMediaIndex = 0;
@@ -881,13 +886,13 @@ async function handleMediaUpload(event) {
 
     // Create Object URL instead of base64 - much more memory efficient
     const objectUrl = URL.createObjectURL(file);
-    
+
     // Extract dominant color using object URL
     const dominantColor = await extractDominantColor(objectUrl);
 
     const mediaData = {
-      data: objectUrl,        // Now stores Object URL instead of base64
-      file: file,             // Keep original file for upload
+      data: objectUrl, // Now stores Object URL instead of base64
+      file: file, // Keep original file for upload
       type: "image",
       cropData: null,
       dominantColor: dominantColor,
@@ -910,7 +915,6 @@ async function handleMediaUpload(event) {
 
   event.target.value = "";
 }
-
 
 // Update character count
 function updateCharCount() {
@@ -960,21 +964,21 @@ async function toggleEmojiPicker(event) {
     if (window.EmojiUtils) {
       window.EmojiUtils.closePicker(container);
     } else {
-       // Fallback manually if util not loaded (should not happen if set up right)
-       container.classList.remove("show");
-       container.innerHTML = "";
+      // Fallback manually if util not loaded (should not happen if set up right)
+      container.classList.remove("show");
+      container.innerHTML = "";
     }
     if (header) header.classList.remove("expanded");
   } else {
     // Opening
     if (window.EmojiUtils) {
-        await window.EmojiUtils.togglePicker(container, (emoji) => {
-            EmojiUtils.insertAtCursor(captionInput, emoji.native);
-            updateCharCount(); // App specific logic
-        });
-        if (header) header.classList.add("expanded");
+      await window.EmojiUtils.togglePicker(container, (emoji) => {
+        EmojiUtils.insertAtCursor(captionInput, emoji.native);
+        updateCharCount(); // App specific logic
+      });
+      if (header) header.classList.add("expanded");
     } else {
-        console.error("EmojiUtils not found");
+      console.error("EmojiUtils not found");
     }
   }
 }
@@ -1006,17 +1010,19 @@ function togglePrivacyDropdown(event) {
   const emojiContainer = document.getElementById("emojiPickerContainer");
   if (emojiContainer && emojiContainer.classList.contains("show")) {
     if (window.EmojiUtils) {
-        window.EmojiUtils.closePicker(emojiContainer);
+      window.EmojiUtils.closePicker(emojiContainer);
     } else {
-        emojiContainer.classList.remove("show");
-        setTimeout(() => { emojiContainer.innerHTML = ""; }, 200);
+      emojiContainer.classList.remove("show");
+      setTimeout(() => {
+        emojiContainer.innerHTML = "";
+      }, 200);
     }
-    
+
     // Reset chevron
     const chevron = document.getElementById("emojiChevron");
     if (chevron) {
-        const header = chevron.closest(".section-header");
-        if (header) header.classList.remove("expanded");
+      const header = chevron.closest(".section-header");
+      if (header) header.classList.remove("expanded");
     }
   }
 
@@ -1024,7 +1030,9 @@ function togglePrivacyDropdown(event) {
     dropdown.classList.remove("show");
   } else {
     // Position dropdown relative to privacy selector button
-    const privacySelector = document.querySelector("#createPostModal .privacy-selector");
+    const privacySelector = document.querySelector(
+      "#createPostModal .privacy-selector",
+    );
     if (privacySelector) {
       const rect = privacySelector.getBoundingClientRect();
       dropdown.style.top = rect.bottom + 8 + "px";
@@ -1130,7 +1138,7 @@ async function submitPost() {
       const m = mediaFiles[i];
 
       const filename = m.file && m.file.name ? m.file.name : `image_${i}.png`;
-      
+
       // If has crop data, create cropped image (returns base64) and convert to blob
       // Otherwise, use original file directly (more efficient)
       if (m.cropData) {
@@ -1154,7 +1162,6 @@ async function submitPost() {
         formData.append("MediaFiles", m.file, filename);
       }
     }
-
 
     // Debug log: show what we're sending
     const serverPreview = {
@@ -1197,41 +1204,44 @@ async function submitPost() {
 
       // Immediately inject into Newsfeed and Profile (No refresh needed)
       if (data) {
-          // Map PostDetailResponse structure from API to what the UI expects (PostFeedModel/PostItem)
-          const postToPrepend = {
-              ...data,
-              // Backend returns 'owner' but UI expects 'author'
-              author: data.owner ? {
-                  accountId: data.owner.accountId,
-                  username: data.owner.username,
-                  fullName: data.owner.fullName,
-                  avatarUrl: data.owner.avatarUrl,
-                  isFollowedByCurrentUser: data.owner.isFollowedByCurrentUser || false
-              } : null,
-              // UI expects 'reactCount' and 'commentCount'
-              reactCount: data.totalReacts || 0,
-              commentCount: data.totalComments || 0,
-              // Set isAuthor manually for immediate UI logic if needed
-              isOwner: true 
-          };
+        // Map PostDetailResponse structure from API to what the UI expects (PostFeedModel/PostItem)
+        const postToPrepend = {
+          ...data,
+          // Backend returns 'owner' but UI expects 'author'
+          author: data.owner
+            ? {
+                accountId: data.owner.accountId,
+                username: data.owner.username,
+                fullName: data.owner.fullName,
+                avatarUrl: data.owner.avatarUrl,
+                isFollowedByCurrentUser:
+                  data.owner.isFollowedByCurrentUser || false,
+              }
+            : null,
+          // UI expects 'reactCount' and 'commentCount'
+          reactCount: data.totalReacts || 0,
+          commentCount: data.totalComments || 0,
+          // Set isAuthor manually for immediate UI logic if needed
+          isOwner: true,
+        };
 
-          if (window.prependPostToFeed) window.prependPostToFeed(postToPrepend);
-          if (window.prependPostToProfile) window.prependPostToProfile(postToPrepend);
+        if (window.prependPostToFeed) window.prependPostToFeed(postToPrepend);
+        if (window.prependPostToProfile)
+          window.prependPostToProfile(postToPrepend);
       }
 
       // Open the newly created post using postCode (SEO-friendly URL)
       if (data && data.postCode && window.openPostDetailByCode) {
-         // Small delay to ensure clean modal transition
-         setTimeout(() => {
-            window.openPostDetailByCode(data.postCode);
-         }, 100); 
+        // Small delay to ensure clean modal transition
+        setTimeout(() => {
+          window.openPostDetailByCode(data.postCode);
+        }, 100);
       } else if (data && data.postId && window.openPostDetail) {
-         // Fallback to postId if postCode not available
-         setTimeout(() => {
-            window.openPostDetail(data.postId);
-         }, 100);
+        // Fallback to postId if postCode not available
+        setTimeout(() => {
+          window.openPostDetail(data.postId);
+        }, 100);
       }
-
     } else if (res.status === 401) {
       if (window.toastError) toastError("Unauthorized. Please login again.");
     } else {
@@ -1709,23 +1719,33 @@ function createCleanCroppedImage(media) {
       const cropData = media.cropData;
       const naturalWidth = img.naturalWidth;
       const naturalHeight = img.naturalHeight;
-      
+
       // VALIDATION: Ensure we have valid image dimensions
       if (!naturalWidth || !naturalHeight) {
-        console.warn("createCleanCroppedImage: Invalid image dimensions, using original");
+        console.warn(
+          "createCleanCroppedImage: Invalid image dimensions, using original",
+        );
         resolve(media.data);
         return;
       }
-      
+
       // CLAMP: Ensure crop coordinates are within valid bounds
       let cropX = Math.max(0, Math.min(cropData.cropX_px, naturalWidth - 1));
       let cropY = Math.max(0, Math.min(cropData.cropY_px, naturalHeight - 1));
-      let cropWidth = Math.max(1, Math.min(cropData.cropWidth_px, naturalWidth - cropX));
-      let cropHeight = Math.max(1, Math.min(cropData.cropHeight_px, naturalHeight - cropY));
-      
+      let cropWidth = Math.max(
+        1,
+        Math.min(cropData.cropWidth_px, naturalWidth - cropX),
+      );
+      let cropHeight = Math.max(
+        1,
+        Math.min(cropData.cropHeight_px, naturalHeight - cropY),
+      );
+
       // VALIDATION: Ensure canvas has valid size
       if (cropWidth < 1 || cropHeight < 1) {
-        console.warn("createCleanCroppedImage: Invalid crop dimensions, using original");
+        console.warn(
+          "createCleanCroppedImage: Invalid crop dimensions, using original",
+        );
         resolve(media.data);
         return;
       }
@@ -1746,21 +1766,22 @@ function createCleanCroppedImage(media) {
         0,
         0,
         canvas.width,
-        canvas.height
+        canvas.height,
       );
 
       resolve(canvas.toDataURL("image/jpeg", 0.92));
     };
-    
-    img.onerror = function() {
-      console.warn("createCleanCroppedImage: Failed to load image, using original");
+
+    img.onerror = function () {
+      console.warn(
+        "createCleanCroppedImage: Failed to load image, using original",
+      );
       resolve(media.data);
     };
-    
+
     img.src = media.data;
   });
 }
-
 
 // Create cropped image canvas - FIXED FOR ORIGINAL RATIO
 function createCroppedImage(media) {
@@ -1953,12 +1974,12 @@ document.addEventListener("click", (e) => {
         emojiContainer.innerHTML = "";
       }, 200);
     }
-    
+
     // Reset chevron
     const chevron = document.getElementById("emojiChevron");
     if (chevron) {
-        const header = chevron.closest(".section-header");
-        if (header) header.classList.remove("expanded");
+      const header = chevron.closest(".section-header");
+      if (header) header.classList.remove("expanded");
     }
   }
 });
@@ -1983,17 +2004,19 @@ document.addEventListener("keydown", (e) => {
       const emojiContainer = document.getElementById("emojiPickerContainer");
       if (emojiContainer && emojiContainer.classList.contains("show")) {
         if (window.EmojiUtils) {
-            window.EmojiUtils.closePicker(emojiContainer);
+          window.EmojiUtils.closePicker(emojiContainer);
         } else {
-            emojiContainer.classList.remove("show");
-            setTimeout(() => { emojiContainer.innerHTML = ""; }, 200);
+          emojiContainer.classList.remove("show");
+          setTimeout(() => {
+            emojiContainer.innerHTML = "";
+          }, 200);
         }
-        
+
         // Reset chevron
         const chevron = document.getElementById("emojiChevron");
         if (chevron) {
-            const header = chevron.closest(".section-header");
-            if (header) header.classList.remove("expanded");
+          const header = chevron.closest(".section-header");
+          if (header) header.classList.remove("expanded");
         }
         return;
       }
