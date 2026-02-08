@@ -271,7 +271,7 @@ const FollowListModule = (function () {
                     <div class="modal-search-bar">
                         <div class="search-input-wrapper">
                             <i data-lucide="search" class="search-icon"></i>
-                            <input type="text" id="followSearchInput" placeholder="Search accounts..." autocomplete="off">
+                            <input type="text" id="followSearchInput" placeholder="Search by name or username..." autocomplete="off">
                         </div>
                         <button id="followSortBtn" class="sort-toggle-btn" title="Sort by latest" onclick="FollowListModule.toggleSort()">
                             <i data-lucide="arrow-up-down"></i>

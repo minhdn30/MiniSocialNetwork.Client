@@ -162,17 +162,12 @@
 }
 
 .interaction-item .follower-tag {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-tertiary);
-    background: var(--bg-hover);
-    padding: 1px 6px;
-    border-radius: 4px;
+    padding: 0;
     width: fit-content;
-    margin-top: 3px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    border: 1px solid var(--border-primary);
+    margin-top: 2px;
+    font-weight: 500;
 }
 
 .interaction-item .action-box {
@@ -187,7 +182,7 @@
     font-weight: 700;
     border: none;
     cursor: pointer;
-    background: var(--accent-secondary);
+    background: var(--accent-primary);
     color: var(--text-white);
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
@@ -212,15 +207,15 @@
 }
 
 .interaction-item .follow-btn:hover {
-    background: var(--accent-secondary-hover);
+    background: var(--accent-hover);
 }
 
 .interaction-item .view-profile-btn {
-    background: var(--accent-primary);
+    background: var(--accent-secondary);
 }
 
 .interaction-item .view-profile-btn:hover {
-    background: var(--accent-hover);
+    background: var(--accent-secondary-hover);
 }
 
 .interaction-item .follow-btn:active {

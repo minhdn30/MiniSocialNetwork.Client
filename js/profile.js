@@ -441,7 +441,7 @@
                         <i data-lucide="edit-3"></i>
                         <span>Edit Profile</span>
                     </button>
-                    <button class="profile-btn profile-btn-secondary" id="profile-settings-btn" onclick="openProfileSettings()">
+                    <button class="profile-btn profile-btn-secondary" id="profile-settings-btn" onclick="window.location.hash='#/account-settings'">
                         <i data-lucide="settings"></i>
                         <span>Settings</span>
                     </button>
@@ -1273,83 +1273,6 @@
         if (window.toastInfo) toastInfo("Messaging feature coming soon!");
     };
 
-    global.openProfileSettings = function() {
-        const modal = document.getElementById("profile-settings-modal");
-        if (!modal || !currentProfileData) return;
-
-        const info = currentProfileData.accountInfo || currentProfileData.account;
-        if (!info) return;
-        
-        const settings = currentProfileData.settings || info.settings || {};
-
-        document.getElementById("setting-privacy-email").value = settings.emailPrivacy ?? 0;
-        document.getElementById("setting-privacy-phone").value = settings.phonePrivacy ?? 0;
-        document.getElementById("setting-privacy-address").value = settings.addressPrivacy ?? 0;
-        document.getElementById("setting-privacy-post").value = settings.defaultPostPrivacy ?? 0;
-        document.getElementById("setting-privacy-followers").value = settings.followerPrivacy ?? 0;
-        document.getElementById("setting-privacy-following").value = settings.followingPrivacy ?? 0;
-
-        modal.style.display = "flex";
-    };
-
-    global.closeProfileSettings = function() {
-        const modal = document.getElementById("profile-settings-modal");
-        if (modal) modal.style.display = "none";
-    };
-
-    global.saveProfileSettings = async function() {
-        if (!currentProfileId) return;
-        
-        const btn = document.querySelector("#profile-settings-modal .profile-btn-primary");
-        if (!btn) return;
-        
-        const originalText = btn.textContent;
-        btn.textContent = "Saving...";
-        btn.disabled = true;
-
-        try {
-            const data = {
-                EmailPrivacy: parseInt(document.getElementById("setting-privacy-email").value),
-                PhonePrivacy: parseInt(document.getElementById("setting-privacy-phone").value),
-                AddressPrivacy: parseInt(document.getElementById("setting-privacy-address").value),
-                DefaultPostPrivacy: parseInt(document.getElementById("setting-privacy-post").value),
-                FollowerPrivacy: parseInt(document.getElementById("setting-privacy-followers").value),
-                FollowingPrivacy: parseInt(document.getElementById("setting-privacy-following").value)
-            };
-
-            const res = await API.Accounts.updateSettings(data);
-            if (res.ok) {
-                const newSettings = await res.json();
-                if (window.toastSuccess) toastSuccess("Privacy settings updated successfully!");
-                
-                // Update local data
-                if (currentProfileData) {
-                    if (currentProfileData.accountInfo) currentProfileData.accountInfo.settings = newSettings;
-                    else if (currentProfileData.account) currentProfileData.account.settings = newSettings;
-                    currentProfileData.settings = newSettings;
-                    
-                    // Update global default for post creation
-                    const val = newSettings.defaultPostPrivacy ?? newSettings.DefaultPostPrivacy;
-                    if (val !== undefined) {
-                        localStorage.setItem("defaultPostPrivacy", val);
-                    }
-                }
-
-                closeProfileSettings();
-                // Optionally reload profile data to see effects of privacy changes if viewing own profile
-                loadProfileData(); 
-            } else {
-                const data = await res.json();
-                if (window.toastError) toastError(data.title || "Failed to update settings.");
-            }
-        } catch (err) {
-            console.error(err);
-            if (window.toastError) toastError("An error occurred while saving.");
-        } finally {
-            btn.textContent = originalText;
-            btn.disabled = false;
-        }
-    };
 
     global.openProfileMoreMenu = function() {
         if (window.toastInfo) toastInfo("More options coming soon!");

@@ -315,14 +315,38 @@ function navigate(e, route, clickedEl = null) {
   }
 
   // 3. Different page: Navigate
-  // If this element doesn't have a native href, we set the hash manually
   const hasHref = targetEl && targetEl.getAttribute("href");
-  if (!hasHref) {
-      window.location.hash = targetHash;
-  }
   
-  // Sidebar logic
-  closeAllDropdowns();
+  // NORMALIZE navigation function
+  const executeFinalNavigation = () => {
+    // Clear account settings cache if we are leaving it
+    if (window.location.hash === "#/account-settings") {
+        if (window.PageCache) PageCache.clear("#/account-settings");
+    }
+    
+    // Manually update hash since we might have prevented default
+    if (window.location.hash !== targetHash) {
+        window.location.hash = targetHash;
+    }
+    
+    window.onbeforeunload = null; // Clear guard
+    closeAllDropdowns();
+  };
+
+  // INTERCEPT: Check for dirty Account Settings
+  if (window.location.hash === "#/account-settings" && window.getAccountSettingsModified && window.getAccountSettingsModified()) {
+      e.preventDefault(); // CHẶN NGAY việc trình duyệt tự thay đổi hash
+      
+      if (window.showDiscardAccountSettingsConfirmation) {
+          window.showDiscardAccountSettingsConfirmation(
+              () => executeFinalNavigation(), // On Discard: Go ahead
+              () => { /* On Keep: Do nothing, already prevented default */ }
+          );
+          return;
+      }
+  }
+
+  executeFinalNavigation();
 }
 
 // Theme toggle functionality
@@ -383,12 +407,6 @@ function openPrivacySettings(e) {
   e.stopPropagation();
   console.log("Open privacy settings");
   // TODO: Implement privacy settings
-}
-
-function openAccountSettings(e) {
-  e.stopPropagation();
-  console.log("Open account settings");
-  // TODO: Implement account settings
 }
 
 function openHelp(e) {

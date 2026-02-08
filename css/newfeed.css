@@ -211,7 +211,7 @@
 
 /* Hover effects moved to shared */
 .follow-btn {
-  background: var(--accent-secondary);
+  background: var(--accent-primary);
   color: #fff;
   padding: 4px 12px;
   border-radius: 6px;
@@ -233,7 +233,7 @@
 }
 
 .follow-btn:hover {
-  background: var(--accent-secondary-hover);
+  background: var(--accent-hover);
 }
 
 .follow-btn:active {

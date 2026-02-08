@@ -80,8 +80,11 @@ function router() {
 
   // 1. Save previous page state
   if (lastHash && prevKey !== nextKey) {
-      const pageData = window.getPageData ? window.getPageData() : null;
-      PageCache.save(prevKey, app, pageData);
+      // SKIP SAVING for account-settings to ensure it always resets
+      if (prevKey !== "#/account-settings") {
+          const pageData = window.getPageData ? window.getPageData() : null;
+          PageCache.save(prevKey, app, pageData);
+      }
   }
 
   // 2. Clear current hooks for next page
@@ -198,6 +201,10 @@ function router() {
       loadPlaceholder("Notifications", "bell");
       break;
 
+    case "/account-settings":
+      loadAccountSettings();
+      break;
+
     default:
       showErrorPage("404", "Sorry, the page you are looking for doesn't exist or has been removed.");
   }
@@ -247,6 +254,14 @@ async function loadProfilePage() {
     await loadPage("profile");
     if (window.initProfilePage) {
         window.initProfilePage();
+    }
+}
+
+async function loadAccountSettings() {
+    PageCache.clear("#/account-settings");
+    await loadPage("account-settings");
+    if (window.initAccountSettings) {
+        window.initAccountSettings();
     }
 }
 

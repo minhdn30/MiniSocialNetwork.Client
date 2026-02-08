@@ -1,0 +1,80 @@
+<div class="acc-settings-container">
+    <div class="acc-settings-content">
+        <!-- Header -->
+        <div class="acc-settings-header">
+            <h1>Account Settings</h1>
+            <p class="acc-settings-subtitle">Manage your privacy and account preferences</p>
+        </div>
+
+        <!-- Settings List -->
+        <div class="acc-settings-list">
+            <!-- Phone Privacy -->
+            <div class="acc-setting-item">
+                <div class="acc-setting-top-row">
+                    <div class="acc-setting-title">Phone Number Privacy</div>
+                    <span class="acc-privacy-label" id="label-phone-privacy">Private</span>
+                    <button class="acc-privacy-toggle-btn" id="btn-phone-privacy" data-setting="phone">
+                        <i data-lucide="lock"></i>
+                    </button>
+                </div>
+                <div class="acc-setting-description">Control who can see your phone number on your profile</div>
+            </div>
+
+            <!-- Address Privacy -->
+            <div class="acc-setting-item">
+                <div class="acc-setting-top-row">
+                    <div class="acc-setting-title">Address Privacy</div>
+                    <span class="acc-privacy-label" id="label-address-privacy">Private</span>
+                    <button class="acc-privacy-toggle-btn" id="btn-address-privacy" data-setting="address">
+                        <i data-lucide="lock"></i>
+                    </button>
+                </div>
+                <div class="acc-setting-description">Choose who can view your address information</div>
+            </div>
+
+            <!-- Default Post Privacy -->
+            <div class="acc-setting-item">
+                <div class="acc-setting-top-row">
+                    <div class="acc-setting-title">Default Post Privacy</div>
+                    <span class="acc-privacy-label" id="label-post-privacy">Public</span>
+                    <button class="acc-privacy-toggle-btn" id="btn-post-privacy" data-setting="post">
+                        <i data-lucide="globe"></i>
+                    </button>
+                </div>
+                <div class="acc-setting-description">Set the default visibility for your new posts. You can change this for each post individually.</div>
+            </div>
+
+            <!-- Followers List Privacy -->
+            <div class="acc-setting-item">
+                <div class="acc-setting-top-row">
+                    <div class="acc-setting-title">Followers List Visibility</div>
+                    <span class="acc-privacy-label" id="label-followers-privacy">Public</span>
+                    <button class="acc-privacy-toggle-btn" id="btn-followers-privacy" data-setting="followers">
+                        <i data-lucide="globe"></i>
+                    </button>
+                </div>
+                <div class="acc-setting-description">Decide who can see the list of people following you</div>
+            </div>
+
+            <!-- Following List Privacy -->
+            <div class="acc-setting-item">
+                <div class="acc-setting-top-row">
+                    <div class="acc-setting-title">Following List Visibility</div>
+                    <span class="acc-privacy-label" id="label-following-privacy">Public</span>
+                    <button class="acc-privacy-toggle-btn" id="btn-following-privacy" data-setting="following">
+                        <i data-lucide="globe"></i>
+                    </button>
+                </div>
+                <div class="acc-setting-description">Control who can see the list of people you follow</div>
+            </div>
+        </div>
+
+        <!-- Save Button Section -->
+        <div class="acc-settings-footer">
+            <button class="acc-settings-save-btn" id="save-settings-btn" onclick="saveAccountSettings()">
+                <i data-lucide="check"></i>
+                <span>Save</span>
+            </button>
+        </div>
+    </div>
+</div>

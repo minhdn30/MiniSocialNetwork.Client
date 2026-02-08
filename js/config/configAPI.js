@@ -281,6 +281,7 @@
         apiFetch(`/Accounts/profile/username/${username}`),
       updateProfile: (formData) =>
         uploadFormDataWithProgress("/Accounts/profile", formData, null, "PATCH"),
+      getSettings: () => apiFetch("/Accounts/settings"),
       updateSettings: (data) =>
         apiFetch("/Accounts/settings", {
           method: "PATCH",

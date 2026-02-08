@@ -232,14 +232,18 @@
 }
 
 /* Hover Background Colors */
-.profile-btn-edit:hover, 
-.profile-btn-message:hover {
+.profile-btn-edit:hover {
     background: var(--accent-primary) !important;
     color: #ffffff !important;
 }
 
-.profile-btn-follow:hover {
+.profile-btn-message:hover {
     background: var(--accent-secondary) !important;
+    color: #ffffff !important;
+}
+
+.profile-btn-follow:hover {
+    background: var(--accent-hover) !important;
     color: #ffffff !important;
 }
 

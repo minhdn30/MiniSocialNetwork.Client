@@ -213,7 +213,7 @@
 
 /* Message */
 .profile-preview-btn-message {
-  background: var(--accent-primary);
+  background: var(--accent-secondary);
 }
 
 .profile-preview-btn-message, 
@@ -223,17 +223,17 @@
 }
 
 .profile-preview-btn-message:hover {
-  background: var(--accent-hover);
+  background: var(--accent-secondary-hover);
 }
 
 .profile-preview-btn-message:active {
-  background: var(--accent-active);
+  background: var(--accent-secondary-active);
   opacity: 0.8;
 }
 
 /* Follow */
 .profile-preview-btn-follow {
-  background: var(--accent-secondary);
+  background: var(--accent-primary);
 }
 
 .profile-preview-btn-follow, 
@@ -243,11 +243,11 @@
 }
 
 .profile-preview-btn-follow:hover {
-  background: var(--accent-secondary-hover);
+  background: var(--accent-hover);
 }
 
 .profile-preview-btn-follow:active {
-  background: var(--accent-secondary-active);
+  background: var(--accent-active);
   opacity: 0.8;
 }
 
@@ -273,7 +273,7 @@
 
 /* View Profile */
 .profile-preview-btn-view-profile {
-  background: var(--accent-primary);
+  background: var(--accent-secondary);
 }
 
 .profile-preview-btn-view-profile,
@@ -283,11 +283,11 @@
 }
 
 .profile-preview-btn-view-profile:hover {
-  background: var(--accent-hover);
+  background: var(--accent-secondary-hover);
 }
 
 .profile-preview-btn-view-profile:active {
-  background: var(--accent-active);
+  background: var(--accent-secondary-active);
   opacity: 0.8;
 }
 
