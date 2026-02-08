@@ -120,7 +120,7 @@ async function openPostDetail(postId, postCode = null, navContext = null, naviga
              history.replaceState({ postCode: data.postCode }, "", `#/p/${data.postCode}`);
         }
         
-        renderPostDetail(data);        
+        renderPostDetail(data, navigateDirection);        
         if (mainLoader) mainLoader.style.display = "none";
 
         if (window.CommentModule) {
@@ -587,14 +587,24 @@ async function navigateToPost(direction) {
         input.value = '';
     });
     
+    // Get new post info
+    const newPost = postList[newIndex];
+    if (!newPost) return;
+
     // Update context
     navigationContext.currentIndex = newIndex;
     
-    // Get new post info
-    const newPost = postList[newIndex];
-    
-    // Open new post with updated context and direction for auto-skip
-    openPostDetail(newPost.postId, newPost.postCode, navigationContext, direction);
+    // Trigger transition animation
+    const layout = document.querySelector('.post-detail-layout');
+    if (layout) {
+        layout.classList.add(`nav-slide-out-${direction}`);
+    }
+
+    // Delay slightly to let animation finish before loading next
+    setTimeout(() => {
+        // Open new post with updated context and direction for auto-skip
+        openPostDetail(newPost.postId, newPost.postCode, navigationContext, direction);
+    }, 250);
 }
 
 // Export for HTML onclick
@@ -637,6 +647,12 @@ function resetPostDetailView() {
     // Hide media container initially
     document.getElementById("detailMediaContainer").style.display = "flex"; 
 
+    // Clear navigation transitions
+    const layout = document.querySelector('.post-detail-layout');
+    if (layout) {
+        layout.classList.remove('nav-slide-out-next', 'nav-slide-out-prev', 'nav-slide-in-next', 'nav-slide-in-prev');
+    }
+
     // Reset to View Mode Panel
     const viewPanel = document.getElementById("detailViewPanel");
     const editPanel = document.getElementById("detailEditPanel");
@@ -646,7 +662,16 @@ function resetPostDetailView() {
 
 
 // Render Post
-function renderPostDetail(post) {
+function renderPostDetail(post, navigateDirection = null) {
+    const layout = document.querySelector('.post-detail-layout');
+    if (layout && navigateDirection) {
+        // Clean up any old animation classes
+        layout.classList.remove('nav-slide-out-next', 'nav-slide-out-prev');
+        
+        // Setup the "in" position instantly
+        layout.classList.add(`nav-slide-in-${navigateDirection}`);
+    }
+
     // 1. Header Info
     const avatar = document.getElementById("detailAvatar");
     const username = document.getElementById("detailUsername");
@@ -834,6 +859,16 @@ function renderPostDetail(post) {
     
     // Lucide icons
     if(window.lucide) lucide.createIcons();
+
+    // Final step for navigation animation (slide in to center)
+    if (layout && navigateDirection) {
+        // Double RAF ensures the "in" position is applied before we trigger the transition
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                layout.classList.remove(`nav-slide-in-${navigateDirection}`);
+            });
+        });
+    }
 }
 
 // Slider Logic

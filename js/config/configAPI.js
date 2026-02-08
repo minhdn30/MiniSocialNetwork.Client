@@ -296,10 +296,18 @@
         apiFetch(`/Follows/${targetId}`, { method: "POST" }),
       unfollow: (targetId) =>
         apiFetch(`/Follows/${targetId}`, { method: "DELETE" }),
-      getFollowers: (accountId, page = 1, pageSize = 10) =>
-        apiFetch(`/Follows/${accountId}/followers?page=${page}&pageSize=${pageSize}`),
-      getFollowing: (accountId, page = 1, pageSize = 10) =>
-        apiFetch(`/Follows/${accountId}/following?page=${page}&pageSize=${pageSize}`),
+      getFollowers: (accountId, request) => {
+        let url = `/Follows/followers?accountId=${accountId}&page=${request.page}&pageSize=${request.pageSize}`;
+        if (request.keyword) url += `&keyword=${encodeURIComponent(request.keyword)}`;
+        if (request.sortByCreatedASC !== undefined && request.sortByCreatedASC !== null) url += `&sortByCreatedASC=${request.sortByCreatedASC}`;
+        return apiFetch(url);
+      },
+      getFollowing: (accountId, request) => {
+        let url = `/Follows/following?accountId=${accountId}&page=${request.page}&pageSize=${request.pageSize}`;
+        if (request.keyword) url += `&keyword=${encodeURIComponent(request.keyword)}`;
+        if (request.sortByCreatedASC !== undefined && request.sortByCreatedASC !== null) url += `&sortByCreatedASC=${request.sortByCreatedASC}`;
+        return apiFetch(url);
+      },
     },
   };
 

@@ -19,4 +19,5 @@ window.APP_CONFIG = {
   MAX_PROFILE_BIO_LENGTH: 200, // Số ký tự tối đa cho Bio
   MAX_PROFILE_PHONE_LENGTH: 15, // Số ký tự tối đa cho Phone
   MAX_PROFILE_ADDRESS_LENGTH: 100, // Số ký tự tối đa cho Address
+  FOLLOW_LIST_PAGE_SIZE: 15, // Số lượng người trong danh sách followers/following load mỗi lần
 };

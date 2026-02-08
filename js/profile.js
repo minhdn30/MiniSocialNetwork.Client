@@ -120,6 +120,7 @@
         // setupScrollListener is now global
         setupTabListeners();
         setupEditProfileListeners();
+        setupFollowStatsListeners();
     }
 
     function resetState() {
@@ -1422,7 +1423,7 @@
                      if (btnIsFollowing !== isFollowing) {
                          // Swap state
                          if (isFollowing) {
-                             followBtn.innerHTML = '<i data-lucide="user-check"></i><span>Following</span>';
+                             followBtn.innerHTML = '<i data-lucide="check"></i><span>Following</span>';
                              followBtn.className = "profile-btn profile-btn-following";
                              followBtn.onclick = (e) => FollowModule.showUnfollowConfirm(accountId, e.currentTarget);
                          } else {
@@ -1437,6 +1438,33 @@
         }
     };
     
+    function setupFollowStatsListeners() {
+        const stats = document.querySelector(".profile-stats");
+        if (!stats) return;
+
+        // stats.children -> [posts, followers, following]
+        const followersLi = stats.children[1];
+        const followingLi = stats.children[2];
+
+        if (followersLi) {
+            followersLi.style.cursor = "pointer";
+            followersLi.onclick = () => {
+                if (window.FollowListModule && currentProfileId) {
+                    FollowListModule.openFollowList(currentProfileId, 'followers');
+                }
+            };
+        }
+
+        if (followingLi) {
+            followingLi.style.cursor = "pointer";
+            followingLi.onclick = () => {
+                if (window.FollowListModule && currentProfileId) {
+                    FollowListModule.openFollowList(currentProfileId, 'following');
+                }
+            };
+        }
+    }
+
     // Expose ProfilePage module for external updates (e.g., SignalR)
     global.ProfilePage = {
         init: initProfile,

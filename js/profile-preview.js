@@ -430,8 +430,13 @@ function toggleFollowMenu(event, userId) {
 
 /* ===== View Profile ===== */
 function viewProfile(username) {
-  // Hide preview immediately to prevent lingering UI
-  hidePreview();
+  // Close all possible overlays (Follow list, React list, Create Post, etc.)
+  if (window.closeAllOverlayModals) {
+      window.closeAllOverlayModals();
+  } else {
+      // Fallback if app.js not ready/available correctly
+      hidePreview();
+  }
   
   // Navigate to profile page using hash
   window.location.hash = `#/profile/${username}`;

@@ -63,12 +63,11 @@
 }
 
 .post-more:hover {
-  transform: scale(1.05);
+  opacity: 0.8;
 }
 
 .post-more:active {
   opacity: 0.5;
-  transform: scale(0.95);
 }
 
 .post-more i {
@@ -212,17 +211,33 @@
 
 /* Hover effects moved to shared */
 .follow-btn {
-  background: none;
-  margin-top: 3px;
-  border: none;
-  color: var(--accent-primary);
+  background: var(--accent-secondary);
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all var(--transition-normal);
   flex-shrink: 0;
 }
 
+.follow-btn i, .follow-btn svg {
+  width: 14px;
+  height: 14px;
+  color: #fff;
+}
+
 .follow-btn:hover {
-  transform: scale(1.05);
+  background: var(--accent-secondary-hover);
+}
+
+.follow-btn:active {
+  opacity: 0.8;
 }
 
 /* ===============================

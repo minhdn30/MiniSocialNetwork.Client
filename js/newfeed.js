@@ -122,8 +122,9 @@
             ${
               !post.isOwner && !post.author.isFollowedByCurrentUser
                 ? `<button class="follow-btn" onclick="FollowModule.followUser('${post.author.accountId}', this)">
-             Follow
-           </button>`
+                    <i data-lucide="user-plus"></i>
+                    <span>Follow</span>
+                   </button>`
                 : ""
             }
             <button class="post-more" onclick="showPostOptions('${post.postId}', '${post.author.accountId}', ${post.isOwner}, ${post.author.isFollowedByCurrentUser})">

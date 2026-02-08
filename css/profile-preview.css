@@ -228,7 +228,7 @@
 
 .profile-preview-btn-message:active {
   background: var(--accent-active);
-  transform: scale(0.98);
+  opacity: 0.8;
 }
 
 /* Follow */
@@ -248,7 +248,7 @@
 
 .profile-preview-btn-follow:active {
   background: var(--accent-secondary-active);
-  transform: scale(0.98);
+  opacity: 0.8;
 }
 
 /* Following */
@@ -268,7 +268,7 @@
 
 .profile-preview-btn-following:active {
   background: var(--bg-hover);
-  transform: scale(0.98);
+  opacity: 0.8;
 }
 
 /* View Profile */
@@ -288,7 +288,7 @@
 
 .profile-preview-btn-view-profile:active {
   background: var(--accent-active);
-  transform: scale(0.98);
+  opacity: 0.8;
 }
 
 /* ===== Responsive Tablet ===== */

@@ -45,6 +45,13 @@ function closeAllOverlayModals() {
           window.InteractionModule.closeReactList();
       }
   }
+
+  if (window.FollowListModule && typeof window.FollowListModule.closeFollowList === 'function') {
+      const followModal = document.getElementById("followListModal");
+      if (followModal && followModal.classList.contains("show")) {
+          window.FollowListModule.closeFollowList();
+      }
+  }
   
   document.body.style.overflow = "";
 }

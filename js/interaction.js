@@ -17,18 +17,9 @@ const InteractionModule = (function () {
      * Private helper to fetch data from API
      */
     async function _fetchPage(id, page) {
-        const res = targetType === 'comment' 
+        return targetType === 'comment' 
             ? await API.Comments.getReacts(id, page, PAGE_SIZE)
             : await API.Posts.getReacts(id, page, PAGE_SIZE);
-
-        if (res.status === 403) {
-            PostUtils.hidePost(window.currentPostId || id);
-            throw new Error("FORBIDDEN");
-        }
-
-        if (!res.ok) throw new Error("Failed to load reacts");
-
-        return await res.json();
     }
 
     /**
@@ -42,9 +33,21 @@ const InteractionModule = (function () {
         currentPage = 1;
 
         try {
-            // 1. First fetch to verify and get initial data (Optimized: reuse this data)
-            const data = await _fetchPage(id, 1);
+            // 1. First fetch to verify and get initial data
+            const res = await _fetchPage(id, 1);
             
+            if (res.status === 403) {
+                if (window.toastError) toastError("You don't have permission to view this list");
+                return;
+            }
+            if (res.status === 404) {
+                 if (window.toastError) toastError("Content not found");
+                 return;
+            }
+            if (!res.ok) throw new Error("Load failed");
+
+            const data = await res.json();
+            if (!data) return;          
             if (!data.totalItems || data.totalItems === 0) {
                 if (window.toastInfo) toastInfo("No one has reacted yet");
                 return;
@@ -62,10 +65,7 @@ const InteractionModule = (function () {
             document.body.style.overflow = "hidden";
             
             const listContainer = document.getElementById("interactionList");
-            const totalText = document.getElementById("interactionTotalCount");
-            
-            listContainer.innerHTML = "";
-            if (totalText) totalText.textContent = data.totalItems;
+            if (listContainer) listContainer.innerHTML = "";
 
             // 4. Handle rendering first page and state update
             _handleDataResponse(data, listContainer);
@@ -92,7 +92,9 @@ const InteractionModule = (function () {
         if (loader) loader.style.display = "flex";
 
         try {
-            const data = await _fetchPage(id, page);
+            const res = await _fetchPage(id, page);
+            if (!res.ok) throw new Error("Load more failed");
+            const data = await res.json();
             _handleDataResponse(data, listContainer);
         } catch (error) {
             console.error(error);
@@ -148,16 +150,27 @@ const InteractionModule = (function () {
             row.className = "interaction-item";
             
             const avatarUrl = item.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
-            const fullName = item.fullName || item.username;
             
             let actionBtnHtml = "";
             if (item.accountId === APP_CONFIG.CURRENT_USER_ID) {
-                actionBtnHtml = `<button class="follow-btn view-profile-btn" onclick="viewProfile('${item.username}')"><span>View Profile</span></button>`;
+                actionBtnHtml = `
+                    <button class="follow-btn view-profile-btn" onclick="viewProfile('${item.username}')">
+                        <i data-lucide="user"></i>
+                        <span>View Profile</span>
+                    </button>`;
             } else {
                 if (item.isFollowing) {
-                    actionBtnHtml = `<button class="follow-btn following" onclick="InteractionModule.handleFollow('${item.accountId}', this)"><span>Following</span></button>`;
+                    actionBtnHtml = `
+                        <button class="follow-btn following" onclick="InteractionModule.handleFollow('${item.accountId}', this)">
+                            <i data-lucide="check"></i>
+                            <span>Following</span>
+                        </button>`;
                 } else {
-                    actionBtnHtml = `<button class="follow-btn" onclick="InteractionModule.handleFollow('${item.accountId}', this)"><span>Follow</span></button>`;
+                    actionBtnHtml = `
+                        <button class="follow-btn" onclick="InteractionModule.handleFollow('${item.accountId}', this)">
+                            <i data-lucide="user-plus"></i>
+                            <span>Follow</span>
+                        </button>`;
                 }
             }
 
@@ -165,7 +178,8 @@ const InteractionModule = (function () {
                 <div class="user-info post-user" data-account-id="${item.accountId}" onclick="viewProfile('${item.username}')">
                     <img src="${avatarUrl}" class="avatar post-avatar" />
                     <div class="name-box">
-                        <span class="fullname post-username" title="${item.fullName}">${PostUtils.truncateName(item.username || item.fullName)}</span>
+                        <span class="fullname post-username" title="${item.fullName}">${PostUtils.truncateName(item.username)}</span>
+                        <span class="username-subtext">${item.fullName || ''}</span>
                         ${item.isFollower ? '<span class="follower-tag">Follows you</span>' : ''}
                     </div>
                 </div>
@@ -328,7 +342,7 @@ const InteractionModule = (function () {
                 <div class="modal-backdrop" onclick="InteractionModule.closeReactList()"></div>
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h3>Reactions (<span id="interactionTotalCount">0</span>)</h3>
+                        <h3>Reactions</h3>
                         <button class="close-btn" onclick="InteractionModule.closeReactList()">
                             <i data-lucide="x"></i>
                         </button>

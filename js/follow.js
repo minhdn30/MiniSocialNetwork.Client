@@ -255,25 +255,31 @@
             window.updateFollowStatus(accountId, isFollowing, followers, following);
         }
 
-        // 5. Update Interaction Modal
-        const interactionModal = document.getElementById("interactionModal");
-        if (interactionModal && interactionModal.classList.contains("show") && isFollowing !== undefined) {
-            const row = interactionModal.querySelector(`.user-info[data-account-id="${accountId}"]`);
-            if (row) {
-                const actionBox = row.nextElementSibling;
-                const btn = actionBox?.querySelector(".follow-btn");
-                if (btn && !btn.classList.contains("view-profile-btn")) {
-                    const span = btn.querySelector("span");
-                    if (isFollowing) {
-                        btn.classList.add("following");
-                        if (span) span.textContent = "Following";
-                    } else {
-                        btn.classList.remove("following");
-                        if (span) span.textContent = "Follow";
+        // 5. Update Interaction & Follow List Modals
+        const modals = [
+            document.getElementById("interactionModal"),
+            document.getElementById("followListModal")
+        ];
+
+        modals.forEach(modal => {
+            if (modal && modal.classList.contains("show") && isFollowing !== undefined) {
+                const rows = modal.querySelectorAll(`.user-info[data-account-id="${accountId}"]`);
+                rows.forEach(row => {
+                    const actionBox = row.nextElementSibling;
+                    const btn = actionBox?.querySelector(".follow-btn");
+                    if (btn && !btn.classList.contains("view-profile-btn")) {
+                        if (isFollowing) {
+                            btn.classList.add("following");
+                            btn.innerHTML = '<i data-lucide="check"></i> <span>Following</span>';
+                        } else {
+                            btn.classList.remove("following");
+                            btn.innerHTML = '<i data-lucide="user-plus"></i> <span>Follow</span>';
+                        }
+                        if (window.lucide) lucide.createIcons();
                     }
-                }
+                });
             }
-        }
+        });
     };
 
     function updateFeedButtons(accountId, isFollowing, root = document) {
@@ -289,8 +295,9 @@
                 if (!followBtn) {
                     followBtn = document.createElement("button");
                     followBtn.className = "follow-btn";
-                    followBtn.innerHTML = "<span>Follow</span>";
+                    followBtn.innerHTML = '<i data-lucide="user-plus"></i> <span>Follow</span>';
                     followBtn.onclick = function() { FollowModule.followUser(accountId, this); };
+                    if (window.lucide) lucide.createIcons();
                     const moreBtn = actionsDiv.querySelector(".post-more");
                     if (moreBtn) actionsDiv.insertBefore(followBtn, moreBtn);
                     else actionsDiv.appendChild(followBtn);
