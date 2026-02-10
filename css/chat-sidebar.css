@@ -86,7 +86,7 @@ body.chat-sidebar-open #sidebar.expanded ~ .main-content {
 }
 
 .chat-icon-btn:hover {
-    background: var(--bg-hover);
+    background: transparent;
 }
 
 .chat-search-container {
@@ -186,7 +186,6 @@ body.chat-sidebar-open #sidebar.expanded ~ .main-content {
 
 /* Active conversation text styling */
 .chat-item.active .chat-name {
-    color: var(--accent-primary, #3b82f6);
     font-weight: 700;
 }
 
@@ -330,6 +329,13 @@ body.chat-sidebar-open #sidebar.expanded ~ .main-content {
 .chat-mini-seen-avatar:hover {
     transform: scale(1.2);
     z-index: 10;
+}
+
+.chat-seen-more {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    margin-left: 4px;
 }
 
 /* Custom Scrollbar for Chat Panel (Matched with post-detail) */

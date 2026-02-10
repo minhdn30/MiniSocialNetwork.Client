@@ -74,6 +74,16 @@ async function loadGlobalMessageBadge() {
   }
 }
 
+// Debounced refresh to avoid spamming API
+let globalUnreadRefreshTimer = null;
+function scheduleGlobalUnreadRefresh(delay = 1000) {
+  clearTimeout(globalUnreadRefreshTimer);
+  globalUnreadRefreshTimer = setTimeout(() => {
+    loadGlobalMessageBadge();
+  }, delay);
+}
+window.scheduleGlobalUnreadRefresh = scheduleGlobalUnreadRefresh;
+
 /**
  * Set the global Messages badge to an exact value.
  */
@@ -94,11 +104,8 @@ function setGlobalMessageBadge(count) {
  * Adjust the global Messages badge by a delta (+1 or -1).
  */
 function updateGlobalMessageBadge(delta) {
-  const badge = document.getElementById('messages-badge');
-  if (!badge) return;
-  const current = parseInt(badge.dataset.count || '0', 10);
-  const newCount = Math.max(0, current + delta);
-  setGlobalMessageBadge(newCount);
+  // Deprecated: use server-backed refresh for correctness
+  scheduleGlobalUnreadRefresh();
 }
 
 // THÊM MỚI: Tự động collapse sidebar khi chuột rời khỏi

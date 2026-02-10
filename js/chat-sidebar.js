@@ -231,7 +231,7 @@ const ChatSidebar = {
                     previewText = `You: ${previewText}`;
                 } else if (conv.isGroup) {
                     const sender = conv.lastMessage.sender;
-                    const senderName = sender.nickname || sender.nickname || sender.fullName || sender.username || 'User';
+                    const senderName = sender.nickname || sender.username || sender.fullName || 'User';
                     previewText = `${senderName}: ${previewText}`;
                 }
             }
@@ -248,6 +248,8 @@ const ChatSidebar = {
             // --- Seen Avatars Logic ---
             let seenHtml = '';
             if (!unread && lastMsgSenderId === myId && conv.lastMessageSeenBy && conv.lastMessageSeenBy.length > 0) {
+                const seenCount = conv.lastMessageSeenCount || conv.lastMessageSeenBy.length;
+                const extraCount = Math.max(0, seenCount - conv.lastMessageSeenBy.length);
                 seenHtml = `
                     <div class="chat-seen-avatars">
                         ${conv.lastMessageSeenBy.map(m => `
@@ -255,6 +257,7 @@ const ChatSidebar = {
                                  title="Seen by ${escapeHtml(m.displayName)}" 
                                  class="chat-mini-seen-avatar">
                         `).join('')}
+                        ${extraCount > 0 ? `<span class="chat-seen-more">+${extraCount}</span>` : ''}
                     </div>
                 `;
             }

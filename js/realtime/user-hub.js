@@ -236,9 +236,9 @@
                         window.toastInfo(`💬 ${senderName}: ${content}`);
                     }
 
-                    // Update global badge (+1)
-                    if (typeof updateGlobalMessageBadge === 'function') {
-                        updateGlobalMessageBadge(1);
+                    // Refresh global badge (server authoritative)
+                    if (typeof scheduleGlobalUnreadRefresh === 'function') {
+                        scheduleGlobalUnreadRefresh();
                     }
                 }
 

@@ -4,6 +4,9 @@
  */
 const ChatWindow = {
     openChats: new Map(), // conversationId -> DOM elements
+    maxOpenChats: 3,
+    retryFiles: new Map(), // tempId -> File[]
+    pendingSeenByConv: new Map(),
     
     init() {
         if (!document.getElementById('chat-container')) {
@@ -12,63 +15,153 @@ const ChatWindow = {
             container.className = 'chat-window-container'; // Better class name
             document.body.appendChild(container);
         }
-        this.listenForMessages();
+
+        // Click outside to lose focus
+        document.addEventListener('mousedown', (e) => {
+            // If click is NOT inside a chat-box, remove focus from all
+            if (!e.target.closest('.chat-box')) {
+                document.querySelectorAll('.chat-box.is-focused').forEach(b => b.classList.remove('is-focused'));
+            }
+        });
+
+        this.registerRealtimeHandlers();
     },
 
-    listenForMessages() {
-        if (window.chatHubConnection) {
-            window.chatHubConnection.on('ReceiveNewMessage', (msg) => {
-                const convId = msg.conversationId;
-                if (this.openChats.has(convId)) {
-                    // De-duplication check
-                    if (msg.messageId && document.querySelector(`#chat-messages-${convId} [data-message-id="${msg.messageId}"]`)) {
-                        return;
-                    }
+    registerRealtimeHandlers() {
+        if (this._realtimeBound) return;
+        this._realtimeBound = true;
 
-                    // Try to merge with optimistic bubble
-                    const myId = (localStorage.getItem('accountId') || '').toLowerCase();
-                    const senderId = (msg.sender?.accountId || '').toLowerCase();
-                    if (senderId === myId) {
-                        const msgContainer = document.getElementById(`chat-messages-${convId}`);
-                        const optimisticMsg = msgContainer?.querySelector(`.msg-bubble-wrapper.sent[data-status="pending"], .msg-bubble-wrapper.sent[data-status="sent"]`);
-                        if (optimisticMsg) {
-                            const content = optimisticMsg.querySelector('.msg-bubble')?.innerText.trim();
-                            if (content === msg.content?.trim()) {
-                                optimisticMsg.dataset.messageId = msg.messageId;
-                                delete optimisticMsg.dataset.status;
-                                optimisticMsg.querySelector('.msg-status')?.remove();
-                                if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
-                                    window.ChatSidebar.incrementUnread(convId, msg);
-                                }
-                                return;
-                            }
-                        }
-                    }
-
-                    this.appendMessage(convId, msg);
-                    
-                    // DO NOT mark as seen immediately. Only when focused/clicked.
-                    // However, if the window IS already focused, we can seen it.
-                    const chatBox = document.getElementById(`chat-box-${convId}`);
-                    if (chatBox && chatBox.classList.contains('is-focused')) {
-                        this.markConversationSeen(convId, msg.messageId);
-                    }
-                }
-            });
-
-            // 2. Member Seen Status Update
-            window.chatHubConnection.on('MemberSeen', (data) => {
-                const convId = data.ConversationId || data.conversationId;
-                const accId = data.AccountId || data.accountId;
-                const msgId = data.LastSeenMessageId || data.lastSeenMessageId;
-
-                if (this.openChats.has(convId)) {
-                    this.moveSeenAvatar(convId, accId, msgId);
-                }
-            });
-        } else {
-            setTimeout(() => this.listenForMessages(), 1000);
+        if (window.ChatRealtime && typeof window.ChatRealtime.onMessage === 'function') {
+            window.ChatRealtime.onMessage((msg) => this.handleRealtimeMessage(msg));
         }
+        if (window.ChatRealtime && typeof window.ChatRealtime.onSeen === 'function') {
+            window.ChatRealtime.onSeen((data) => this.handleMemberSeen(data));
+        }
+    },
+
+    queuePendingSeen(conversationId, messageId, accountId, memberInfo = null) {
+        if (!conversationId || !messageId || !accountId) return;
+        const convId = conversationId.toString().toLowerCase();
+        const msgId = messageId.toString().toLowerCase();
+        let convMap = this.pendingSeenByConv.get(convId);
+        if (!convMap) {
+            convMap = new Map();
+            this.pendingSeenByConv.set(convId, convMap);
+        }
+        let arr = convMap.get(msgId);
+        if (!arr) {
+            arr = [];
+            convMap.set(msgId, arr);
+        }
+        arr.push({ accountId, memberInfo });
+    },
+
+    applyPendingSeenForMessage(conversationId, messageId) {
+        if (!conversationId || !messageId) return;
+        const convId = conversationId.toString().toLowerCase();
+        const msgId = messageId.toString().toLowerCase();
+        const convMap = this.pendingSeenByConv.get(convId);
+        if (!convMap) return;
+        const arr = convMap.get(msgId);
+        if (!arr || arr.length === 0) return;
+        convMap.delete(msgId);
+        arr.forEach(item => {
+            this.moveSeenAvatar(conversationId, item.accountId, msgId, item.memberInfo);
+        });
+        if (convMap.size === 0) {
+            this.pendingSeenByConv.delete(convId);
+        }
+    },
+
+    getOpenChatId(convId) {
+        if (!convId) return null;
+        if (this.openChats.has(convId)) return convId;
+        const target = convId.toLowerCase();
+        for (const id of this.openChats.keys()) {
+            if (id.toLowerCase() === target) return id;
+        }
+        return null;
+    },
+
+    handleRealtimeMessage(msg) {
+        const convIdRaw = msg.ConversationId || msg.conversationId;
+        const convId = this.getOpenChatId(convIdRaw);
+        if (!convId) return;
+
+        const messageIdRaw = msg.MessageId || msg.messageId;
+        const messageId = messageIdRaw ? messageIdRaw.toString().toLowerCase() : null;
+        const tempId = msg.TempId || msg.tempId;
+        const rawSenderId = msg.Sender?.AccountId || msg.sender?.accountId || msg.SenderId || msg.senderId || '';
+        const senderId = rawSenderId.toLowerCase();
+        const content = (msg.Content || msg.content || '').trim();
+
+        // De-duplication check
+        if (messageId && document.querySelector(`#chat-messages-${convId} [data-message-id="${messageId}"]`)) {
+            return;
+        }
+        if (tempId && document.querySelector(`#chat-messages-${convId} [data-temp-id="${tempId}"]`)) {
+            return;
+        }
+
+        const myId = (localStorage.getItem('accountId') || '').toLowerCase();
+        if (senderId === myId) {
+            const msgContainer = document.getElementById(`chat-messages-${convId}`);
+            const optimisticMsg = msgContainer?.querySelector(`.msg-bubble-wrapper.sent[data-status="pending"], .msg-bubble-wrapper.sent[data-status="sent"]`);
+            if (optimisticMsg) {
+                const optContent = optimisticMsg.querySelector('.msg-bubble')?.innerText.trim();
+                if (optContent === content) {
+                    if (messageId) optimisticMsg.dataset.messageId = messageId;
+                    delete optimisticMsg.dataset.status;
+                    optimisticMsg.querySelector('.msg-status')?.remove();
+
+                    const seenRow = optimisticMsg.querySelector('.msg-seen-row');
+                    if (seenRow && messageId) seenRow.id = `seen-row-${messageId}`;
+
+                    if (messageId) {
+                        this.applyPendingSeenForMessage(convId, messageId);
+                    }
+                    if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
+                        window.ChatSidebar.incrementUnread(convId, msg);
+                    }
+                    return;
+                }
+            }
+        } else {
+            // Incoming message from others: clear "Sent" status
+            const msgContainer = document.getElementById(`chat-messages-${convId}`);
+            msgContainer?.querySelectorAll('.msg-bubble-wrapper.sent[data-status="sent"]').forEach(el => {
+                el.removeAttribute('data-status');
+                el.querySelector('.msg-status')?.remove();
+            });
+        }
+
+        this.appendMessage(convId, msg);
+        if (messageId) {
+            this.applyPendingSeenForMessage(convId, messageId);
+        }
+
+        // DO NOT mark as seen immediately. Only when focused/clicked.
+        const chatBox = document.getElementById(`chat-box-${convId}`);
+        if (chatBox) {
+            if (chatBox.classList.contains('is-focused')) {
+                const lastId = messageId || this.getLastMessageId(convId);
+                if (lastId) this.markConversationSeen(convId, lastId);
+            } else if (senderId !== myId) {
+                // If not focused and received from others, mark as unread visually
+                chatBox.classList.add('has-unread');
+            }
+        }
+    },
+
+    handleMemberSeen(data) {
+        const convIdRaw = data.ConversationId || data.conversationId;
+        const convId = this.getOpenChatId(convIdRaw);
+        if (!convId) return;
+
+        const accId = data.AccountId || data.accountId;
+        const msgIdRaw = data.LastSeenMessageId || data.lastSeenMessageId;
+        const msgId = msgIdRaw ? msgIdRaw.toString().toLowerCase() : msgIdRaw;
+        this.moveSeenAvatar(convId, accId, msgId);
     },
 
     /**
@@ -79,15 +172,18 @@ const ChatWindow = {
         const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(conversationId);
         if (!isGuid) return;
 
-        if (window.chatHubConnection && window.chatHubConnection.state === signalR.HubConnectionState.Connected) {
-            window.chatHubConnection.invoke('SeenConversation', conversationId, messageId)
+        const normMessageId = messageId ? messageId.toString().toLowerCase() : null;
+        if (!normMessageId) return;
+
+        if (window.ChatRealtime && typeof window.ChatRealtime.seenConversation === 'function') {
+            window.ChatRealtime.seenConversation(conversationId, normMessageId)
                 .then(() => {
                     if (window.ChatSidebar) {
                         const conv = window.ChatSidebar.conversations.find(c => c.conversationId === conversationId);
                         const wasUnread = conv && conv.unreadCount > 0;
                         window.ChatSidebar.clearUnread(conversationId);
-                        if (wasUnread && typeof updateGlobalMessageBadge === 'function') {
-                            updateGlobalMessageBadge(-1);
+                        if (wasUnread && typeof scheduleGlobalUnreadRefresh === 'function') {
+                            scheduleGlobalUnreadRefresh();
                         }
                     }
                 })
@@ -125,16 +221,22 @@ const ChatWindow = {
     moveSeenAvatar(conversationId, accountId, messageId, memberInfo = null) {
         const msgContainer = document.getElementById(`chat-messages-${conversationId}`);
         if (!msgContainer) return;
+        const myId = (localStorage.getItem('accountId') || '').toLowerCase();
+        if ((accountId || '').toLowerCase() === myId) return;
 
         // Resolve info from metadata if missing (realtime event)
         if (!memberInfo) {
             const chatObj = this.openChats.get(conversationId);
+            const targetId = accountId.toLowerCase();
             if (chatObj?.metaData?.memberSeenStatuses) {
-                const member = chatObj.metaData.memberSeenStatuses.find(m => m.accountId === accountId);
+                const member = chatObj.metaData.memberSeenStatuses.find(m => {
+                    const mId = (m.accountId || m.AccountId || '').toLowerCase();
+                    return mId === targetId;
+                });
                 if (member) {
                     memberInfo = {
-                        avatar: member.avatarUrl,
-                        name: member.displayName
+                        avatar: member.avatarUrl || member.AvatarUrl,
+                        name: member.displayName || member.DisplayName
                     };
                 }
             }
@@ -146,15 +248,43 @@ const ChatWindow = {
             existing.remove();
         }
 
-        // 2. Find target seen-row
-        const targetRow = msgContainer.querySelector(`#seen-row-${messageId}`);
-        if (!targetRow) return;
+        // 2. Find target bubble (by messageId), then pick correct seen-row
+        const normMessageId = messageId ? messageId.toString().toLowerCase() : messageId;
+        let bubbleWrapper = normMessageId ? msgContainer.querySelector(`.msg-bubble-wrapper[data-message-id="${normMessageId}"]`) : null;
+        let targetRow = bubbleWrapper?.querySelector('.msg-seen-row') || null;
 
-        // 2.5 Logic Fix: Only show Member X's avatar under messages NOT sent by Member X
-        const bubbleWrapper = targetRow.closest('.msg-bubble-wrapper');
-        const messageSenderId = bubbleWrapper?.dataset.senderId;
-        if (messageSenderId === accountId) {
+        // If target isn't our message (or row missing), move to latest previous message sent by us
+        if (!bubbleWrapper || (bubbleWrapper.dataset.senderId || '').toLowerCase() !== myId) {
+            let cursor = bubbleWrapper ? bubbleWrapper.previousElementSibling : null;
+            // If bubbleWrapper is null, start from LAST element in container
+            if (!cursor && !bubbleWrapper) {
+                cursor = msgContainer.lastElementChild;
+            }
+            while (cursor) {
+                if (cursor.classList?.contains('msg-bubble-wrapper')) {
+                    const senderId = (cursor.dataset.senderId || '').toLowerCase();
+                    if (senderId === myId) {
+                        targetRow = cursor.querySelector('.msg-seen-row');
+                        break;
+                    }
+                }
+                cursor = cursor.previousElementSibling;
+            }
+        }
+
+        if (!targetRow) {
+            this.queuePendingSeen(conversationId, normMessageId || messageId, accountId, memberInfo);
             return;
+        }
+
+        // Remove "Sent" status on the message that is now seen
+        const statusEl = targetRow.closest('.msg-bubble-wrapper')?.querySelector('.msg-status');
+        if (statusEl) {
+            statusEl.remove();
+        }
+        const statusBubble = targetRow.closest('.msg-bubble-wrapper');
+        if (statusBubble?.dataset?.status === 'sent') {
+            statusBubble.removeAttribute('data-status');
         }
 
         // 3. Create or reconstruct avatar
@@ -182,7 +312,8 @@ const ChatWindow = {
             if (member.accountId === myId) return;
             if (!member.lastSeenMessageId) return;
             
-            this.moveSeenAvatar(conversationId, member.accountId, member.lastSeenMessageId, {
+            const lastSeenId = member.lastSeenMessageId ? member.lastSeenMessageId.toString().toLowerCase() : member.lastSeenMessageId;
+            this.moveSeenAvatar(conversationId, member.accountId, lastSeenId, {
                 avatar: member.avatarUrl,
                 name: member.displayName
             });
@@ -196,26 +327,22 @@ const ChatWindow = {
         if (this.openChats.has(convId)) {
             const chatBox = this.openChats.get(convId).element;
             chatBox.classList.add('show');
-            chatBox.classList.remove('minimized');
+            this.focusChat(convId);
             return;
         }
 
-        if (this.openChats.size >= 3) {
+        if (this.openChats.size >= this.maxOpenChats) {
             const firstId = this.openChats.keys().next().value;
             this.closeChat(firstId);
         }
 
         this.renderChatBox(conv);
-        this.loadInitialMessages(convId);
 
-        if (window.chatHubConnection && window.chatHubConnection.state === signalR.HubConnectionState.Connected) {
-            // Validate if convId is a real GUID before joining
-            const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(convId);
-            if (isGuid) {
-                window.chatHubConnection.invoke("JoinConversation", convId)
-                    .then(() => console.log(`✅ Joined Conv-${convId} group`))
-                    .catch(err => console.error("Error joining conversation group:", err));
-            }
+        const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(convId);
+        if (isGuid && window.ChatRealtime && typeof window.ChatRealtime.joinConversation === 'function') {
+            window.ChatRealtime.joinConversation(convId)
+                .then(() => console.log(`✅ Joined Conv-${convId} group`))
+                .catch(err => console.error("Error joining conversation group:", err));
         }
     },
 
@@ -257,20 +384,10 @@ const ChatWindow = {
         const chatBox = document.createElement('div');
         chatBox.className = 'chat-box';
         chatBox.id = `chat-box-${conv.conversationId}`;
-        chatBox.onclick = () => {
-            if (!chatBox.classList.contains('is-focused')) {
-                // Focus this window
-                document.querySelectorAll('.chat-box').forEach(b => b.classList.remove('is-focused'));
-                chatBox.classList.add('is-focused');
-                
-                // Mark as seen on focus
-                const lastId = this.getLastMessageId(conv.conversationId);
-                if (lastId) this.markConversationSeen(conv.conversationId, lastId);
-            }
-        };
+        chatBox.onclick = () => this.focusChat(conv.conversationId);
 
         chatBox.innerHTML = `
-            <div class="chat-box-header" onclick="ChatWindow.toggleMinimize('${conv.conversationId}')">
+            <div class="chat-box-header" onclick="event.stopPropagation(); ChatWindow.toggleMinimize('${conv.conversationId}')">
                 <div class="chat-header-info">
                     <div class="chat-header-avatar">
                         <img src="${avatar}" alt="${name}" onerror="this.src='${APP_CONFIG.DEFAULT_AVATAR}'">
@@ -296,8 +413,11 @@ const ChatWindow = {
                 </div>
             </div>
             <div class="chat-input-area">
+                <div class="chat-window-attachment-preview" id="chat-window-preview-${conv.conversationId}"></div>
                 <div class="chat-input-wrapper">
-                    <button class="chat-add-media-btn"><i data-lucide="plus"></i></button>
+                    <button class="chat-add-media-btn" onclick="event.stopPropagation(); ChatWindow.openFilePicker('${conv.conversationId}')">
+                        <i data-lucide="plus"></i>
+                    </button>
                     <div class="chat-input-field" contenteditable="true" placeholder="Type a message..." 
                          oninput="ChatWindow.handleInput(this, '${conv.conversationId}')"
                          onkeydown="ChatWindow.handleKeyDown(event, '${conv.conversationId}')"></div>
@@ -308,6 +428,7 @@ const ChatWindow = {
                         </button>
                     </div>
                 </div>
+                <input type="file" id="chat-file-input-${conv.conversationId}" class="chat-window-file-input" multiple accept="image/*,video/*">
             </div>
         `;
 
@@ -319,29 +440,78 @@ const ChatWindow = {
             data: conv,
             page: 1,
             hasMore: true,
-            isLoading: false
+            isLoading: false,
+            pendingFiles: []
         });
+
+        const fileInput = chatBox.querySelector(`#chat-file-input-${conv.conversationId}`);
+        if (fileInput) {
+            fileInput.onchange = () => {
+                const files = fileInput.files;
+                if (files && files.length > 0) {
+                    this.handleMediaUpload(conv.conversationId, files);
+                    fileInput.value = '';
+                }
+            };
+        }
         lucide.createIcons();
         this.loadInitialMessages(conv.conversationId);
+        // Initial focus
+        setTimeout(() => this.focusChat(conv.conversationId), 100);
     },
 
     toggleMinimize(id) {
         const chat = this.openChats.get(id);
-        if (chat) chat.element.classList.toggle('minimized');
+        if (chat) {
+            chat.element.classList.toggle('minimized');
+            if (!chat.element.classList.contains('minimized')) {
+                this.focusChat(id);
+            } else {
+                // If minimized, explicitly remove focus
+                chat.element.classList.remove('is-focused');
+            }
+        }
+    },
+
+    focusChat(id) {
+        const chat = this.openChats.get(id);
+        if (!chat) return;
+        const chatBox = chat.element;
+        
+        // Remove unread state
+        chatBox.classList.remove('has-unread');
+        
+        // Remove focus from all others
+        document.querySelectorAll('.chat-box.is-focused').forEach(b => {
+             if (b !== chatBox) b.classList.remove('is-focused');
+        });
+
+        if (!chatBox.classList.contains('is-focused')) {
+            chatBox.classList.add('is-focused');
+            
+            // Mark as seen on focus
+            const lastId = this.getLastMessageId(id);
+            if (lastId) this.markConversationSeen(id, lastId);
+        }
+
+        // Auto-focus input if not minimized
+        const inputField = chatBox.querySelector('.chat-input-field');
+        if (inputField && !chatBox.classList.contains('minimized')) {
+            inputField.focus();
+        }
     },
 
     closeChat(id) {
         const chat = this.openChats.get(id);
         if (chat) {
+            this.pendingSeenByConv.delete(id.toLowerCase());
             // Leave the SignalR group
-            if (window.chatHubConnection && window.chatHubConnection.state === signalR.HubConnectionState.Connected) {
-                // Only leave if not open in ChatPage
-                const isOpenInPage = window.ChatPage && window.ChatPage.currentChatId === id;
-                if (!isOpenInPage) {
-                    window.chatHubConnection.invoke("LeaveConversation", id)
-                        .then(() => console.log(`👋 Left Conv-${id} group`))
-                        .catch(err => console.error("Error leaving conversation group:", err));
-                }
+            // Only leave if not open in ChatPage
+            const isOpenInPage = window.ChatPage && window.ChatPage.currentChatId === id;
+            if (!isOpenInPage && window.ChatRealtime && typeof window.ChatRealtime.leaveConversation === 'function') {
+                window.ChatRealtime.leaveConversation(id)
+                    .then(() => console.log(`👋 Left Conv-${id} group`))
+                    .catch(err => console.error("Error leaving conversation group:", err));
             }
 
             chat.element.classList.remove('show');
@@ -352,9 +522,14 @@ const ChatWindow = {
         }
     },
 
+    closeAll() {
+        for (const id of Array.from(this.openChats.keys())) {
+            this.closeChat(id);
+        }
+    },
+
     handleInput(field, id) {
-        const sendBtn = document.getElementById(`send-btn-${id}`);
-        sendBtn.disabled = field.innerText.trim().length === 0;
+        this.updateSendButtonState(id);
         
         // Toggle 'expanded' class based on field height
         const wrapper = field.closest('.chat-input-wrapper');
@@ -369,6 +544,84 @@ const ChatWindow = {
             event.preventDefault();
             this.sendMessage(id);
         }
+    },
+
+    openFilePicker(id) {
+        const input = document.getElementById(`chat-file-input-${id}`);
+        if (input) input.click();
+    },
+
+    updateSendButtonState(id) {
+        const chat = this.openChats.get(id);
+        if (!chat) return;
+        const inputField = chat.element.querySelector('.chat-input-field');
+        const sendBtn = document.getElementById(`send-btn-${id}`);
+        const hasText = inputField?.innerText.trim().length > 0;
+        const hasFiles = chat.pendingFiles && chat.pendingFiles.length > 0;
+        if (sendBtn) sendBtn.disabled = !(hasText || hasFiles);
+    },
+
+    handleMediaUpload(id, files) {
+        const chat = this.openChats.get(id);
+        if (!chat || !files || files.length === 0) return;
+
+        const maxFiles = window.APP_CONFIG?.MAX_CHAT_MEDIA_FILES || 5;
+        const maxSizeMB = window.APP_CONFIG?.MAX_CHAT_FILE_SIZE_MB || 10;
+        const currentCount = chat.pendingFiles.length;
+
+        if (currentCount + files.length > maxFiles) {
+            if (window.toastError) window.toastError(`Maximum ${maxFiles} files allowed`);
+            return;
+        }
+
+        const validFiles = [];
+        for (let file of files) {
+            if (file.size > maxSizeMB * 1024 * 1024) {
+                if (window.toastError) window.toastError(`File "${file.name}" is too large (Max ${maxSizeMB}MB)`);
+                continue;
+            }
+            validFiles.push(file);
+        }
+
+        if (validFiles.length === 0) return;
+
+        chat.pendingFiles.push(...validFiles);
+        this.updateAttachmentPreview(id);
+        this.updateSendButtonState(id);
+    },
+
+    updateAttachmentPreview(id) {
+        const chat = this.openChats.get(id);
+        if (!chat) return;
+
+        const previewEl = document.getElementById(`chat-window-preview-${id}`);
+        if (!previewEl) return;
+        previewEl.innerHTML = '';
+
+        chat.pendingFiles.forEach((file, index) => {
+            const isVideo = file.type.startsWith('video/');
+            const url = URL.createObjectURL(file);
+
+            const item = document.createElement('div');
+            item.className = 'chat-window-preview-item';
+            item.innerHTML = `
+                ${isVideo ? `<video src="${url}"></video>` : `<img src="${url}" alt="preview">`}
+                <div class="chat-window-preview-remove" onclick="ChatWindow.removeAttachment('${id}', ${index})">
+                    <i data-lucide="x"></i>
+                </div>
+            `;
+            previewEl.appendChild(item);
+        });
+
+        if (window.lucide) lucide.createIcons();
+    },
+
+    removeAttachment(id, index) {
+        const chat = this.openChats.get(id);
+        if (!chat) return;
+        chat.pendingFiles.splice(index, 1);
+        this.updateAttachmentPreview(id);
+        this.updateSendButtonState(id);
     },
 
     async loadInitialMessages(id) {
@@ -395,6 +648,8 @@ const ChatWindow = {
                 let lastTime = null;
 
                 messages.forEach((m, idx) => {
+                    if (!m.messageId && m.MessageId) m.messageId = m.MessageId.toString().toLowerCase();
+                    if (!m.sentAt && m.SentAt) m.sentAt = m.SentAt;
                     m.isOwn = m.sender?.accountId === myId;
 
                     // Time separator (same logic as chat-page: 15 min gap)
@@ -411,7 +666,7 @@ const ChatWindow = {
 
                     const senderAvatar = !m.isOwn ? (m.sender?.avatarUrl || '') : '';
                     const authorName = isGroup && !m.isOwn
-                        ? (m.sender?.nickname || m.sender?.fullName || m.sender?.username || '')
+                        ? (m.sender?.nickname || m.sender?.username || m.sender?.fullName || '')
                         : '';
 
                     const html = ChatCommon.renderMessageBubble(m, {
@@ -499,6 +754,8 @@ const ChatWindow = {
                 let lastTime = null;
 
                 messages.forEach((m, idx) => {
+                    if (!m.messageId && m.MessageId) m.messageId = m.MessageId.toString().toLowerCase();
+                    if (!m.sentAt && m.SentAt) m.sentAt = m.SentAt;
                     m.isOwn = m.sender?.accountId === myId;
 
                     const currentTime = new Date(m.sentAt);
@@ -514,7 +771,7 @@ const ChatWindow = {
 
                     const senderAvatar = !m.isOwn ? (m.sender?.avatarUrl || '') : '';
                     const authorName = isGroup && !m.isOwn
-                        ? (m.sender?.nickname || m.sender?.fullName || m.sender?.username || '')
+                        ? (m.sender?.nickname || m.sender?.username || m.sender?.fullName || '')
                         : '';
 
                     html += ChatCommon.renderMessageBubble(m, {
@@ -547,9 +804,13 @@ const ChatWindow = {
         if (!msgContainer || !chat) return;
 
         const isGroup = chat.data.isGroup;
-        const myId = localStorage.getItem('accountId');
+        const myId = (localStorage.getItem('accountId') || '').toLowerCase();
+        
         if (msg.isOwn === undefined) {
-            msg.isOwn = msg.sender?.accountId === myId;
+            msg.isOwn = (msg.sender?.accountId || msg.senderId || '').toLowerCase() === myId;
+        }
+        if (!msg.messageId && msg.MessageId) {
+            msg.messageId = msg.MessageId.toString().toLowerCase();
         }
 
         // Time separator
@@ -561,13 +822,16 @@ const ChatWindow = {
             msgContainer.insertAdjacentHTML('beforeend', ChatCommon.renderChatSeparator(msg.sentAt));
         }
 
-        // Determine grouping with the last message in the container
+        // Determine grouping
         const prevSenderId = lastMsgEl ? lastMsgEl.dataset.senderId : null;
         const groupGap = window.APP_CONFIG?.CHAT_GROUPING_GAP || 2 * 60 * 1000;
-        const sameSender = prevSenderId && prevSenderId === (msg.sender?.accountId || myId);
+        
+        let senderId = (msg.sender?.accountId || msg.SenderId || msg.senderId || '').toLowerCase();
+        if (!senderId && msg.isOwn) senderId = myId;
+        
+        const sameSender = prevSenderId && prevSenderId === senderId;
         const closeTime = prevTime && (currentTime - prevTime < groupGap);
         const groupedWithPrev = sameSender && closeTime;
-
         const groupPos = groupedWithPrev ? 'last' : 'single';
 
         // Update previous message
@@ -586,9 +850,8 @@ const ChatWindow = {
 
         const senderAvatar = !msg.isOwn ? (msg.sender?.avatarUrl || '') : '';
         const authorName = isGroup && !msg.isOwn
-            ? (msg.sender?.nickname || msg.sender?.fullName || msg.sender?.username || '')
+            ? (msg.sender?.nickname || msg.sender?.username || msg.sender?.fullName || '')
             : '';
-        if (!msg.sender?.accountId) msg.senderId = myId;
 
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = ChatCommon.renderMessageBubble(msg, {
@@ -600,16 +863,13 @@ const ChatWindow = {
 
         const bubble = tempDiv.firstElementChild;
         bubble.dataset.sentAt = msg.sentAt;
-        bubble.dataset.senderId = msg.sender?.accountId || myId;
+        bubble.dataset.senderId = senderId;
         
-        // track temp id and status for optimistic UI
-        if (msg.tempId) {
-            bubble.dataset.tempId = msg.tempId;
-        }
+        if (msg.tempId) bubble.dataset.tempId = msg.tempId;
+        if (msg.messageId) bubble.dataset.messageId = msg.messageId;
+
         if (msg.status) {
             bubble.dataset.status = msg.status;
-            
-            // render initial status immediately
             const statusEl = document.createElement('div');
             statusEl.className = 'msg-status';
             
@@ -623,11 +883,13 @@ const ChatWindow = {
                 statusEl.className += ' msg-status-failed';
                 statusEl.textContent = 'Failed to send. Click to retry.';
             }
-            
             bubble.appendChild(statusEl);
         }
         
         msgContainer.appendChild(bubble);
+        if (msg.messageId) {
+            this.applyPendingSeenForMessage(id, msg.messageId);
+        }
         msgContainer.scrollTop = msgContainer.scrollHeight;
     },
 
@@ -637,16 +899,37 @@ const ChatWindow = {
         
         const inputField = chat.element.querySelector('.chat-input-field');
         const content = inputField.innerText.trim();
+        const hasText = content.length > 0;
+        const hasFiles = chat.pendingFiles && chat.pendingFiles.length > 0;
         
-        if (!content) return;
+        if (!hasText && !hasFiles) return;
 
         // generate temp message id for tracking
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         
+        // optimistic ui - include local media previews if any
+        const filesToSend = [...(chat.pendingFiles || [])];
+        const medias = filesToSend.map(file => ({
+            mediaUrl: URL.createObjectURL(file),
+            mediaType: file.type.startsWith('video/') ? 1 : 0
+        }));
+
+        if (filesToSend.length > 0) {
+            this.retryFiles.set(tempId, filesToSend);
+        }
+
+        // New outgoing message: clear any previous "Sent" indicators
+        const msgContainer = document.getElementById(`chat-messages-${id}`);
+        msgContainer?.querySelectorAll('.msg-bubble-wrapper.sent[data-status="sent"]').forEach(el => {
+            el.removeAttribute('data-status');
+            el.querySelector('.msg-status')?.remove();
+        });
+
         // optimistic ui - show message immediately with pending state
         this.appendMessage(id, { 
             tempId,
-            content, 
+            content: hasText ? content : '', 
+            medias: medias.length > 0 ? medias : null,
             sentAt: new Date(), 
             isOwn: true,
             status: 'pending'  // pending, sent, failed
@@ -664,11 +947,16 @@ const ChatWindow = {
         inputField.innerText = '';
         inputField.focus();
         
-        const sendBtn = document.getElementById(`send-btn-${id}`);
-        if (sendBtn) sendBtn.disabled = true;
+        // Clear pending files and preview
+        chat.pendingFiles = [];
+        this.updateAttachmentPreview(id);
+        this.updateSendButtonState(id);
 
         const formData = new FormData();
-        formData.append('Content', content);
+        if (hasText) formData.append('Content', content);
+        filesToSend.forEach(file => {
+            formData.append('MediaFiles', file);
+        });
 
         try {
             let res;
@@ -698,6 +986,7 @@ const ChatWindow = {
                 
                 // update message to sent status
                 this.updateMessageStatus(id, tempId, 'sent', content, msg.messageId);
+                this.retryFiles.delete(tempId);
                 
                 // if it was a 'new-' chat, update to real conversationId
                 if (id.startsWith('new-')) {
@@ -712,18 +1001,58 @@ const ChatWindow = {
                     chat.element.id = `chat-box-${realId}`;
                     const msgContainer = chat.element.querySelector('.chat-messages');
                     if (msgContainer) msgContainer.id = `chat-messages-${realId}`;
-                    
+
+                    const sendBtn = chat.element.querySelector('.chat-send-btn');
                     if (sendBtn) sendBtn.id = `send-btn-${realId}`;
-                    
+
+                    const fileInput = chat.element.querySelector('.chat-window-file-input');
+                    if (fileInput) {
+                        fileInput.id = `chat-file-input-${realId}`;
+                        fileInput.onchange = () => {
+                            const files = fileInput.files;
+                            if (files && files.length > 0) {
+                                this.handleMediaUpload(realId, files);
+                                fileInput.value = '';
+                            }
+                        };
+                    }
+
+                    const preview = chat.element.querySelector('.chat-window-attachment-preview');
+                    if (preview) preview.id = `chat-window-preview-${realId}`;
+
                     // update handlers
-                    chat.element.querySelector('.chat-box-header').onclick = () => this.toggleMinimize(realId);
-                    chat.element.querySelector('.chat-input-field').onkeydown = (e) => this.handleKeyDown(e, realId);
-                    chat.element.querySelector('.chat-input-field').oninput = (e) => this.handleInput(e, realId);
-                    chat.element.querySelector('.chat-send-btn').onclick = () => this.sendMessage(realId);
+                    const header = chat.element.querySelector('.chat-box-header');
+                    if (header) header.onclick = () => this.toggleMinimize(realId);
+
+                    const minimizeBtn = chat.element.querySelector('.chat-header-actions .chat-btn:not(.close)');
+                    if (minimizeBtn) minimizeBtn.onclick = (event) => {
+                        event.stopPropagation();
+                        this.toggleMinimize(realId);
+                    };
+
+                    const closeBtn = chat.element.querySelector('.chat-header-actions .chat-btn.close');
+                    if (closeBtn) closeBtn.onclick = (event) => {
+                        event.stopPropagation();
+                        this.closeChat(realId);
+                    };
+
+                    const addMediaBtn = chat.element.querySelector('.chat-add-media-btn');
+                    if (addMediaBtn) addMediaBtn.onclick = (event) => {
+                        event.stopPropagation();
+                        this.openFilePicker(realId);
+                    };
+
+                    const inputField = chat.element.querySelector('.chat-input-field');
+                    if (inputField) {
+                        inputField.onkeydown = (e) => this.handleKeyDown(e, realId);
+                        inputField.oninput = (e) => this.handleInput(e, realId);
+                    }
+
+                    if (sendBtn) sendBtn.onclick = () => this.sendMessage(realId);
 
                     // Join the SignalR group for the newly created conversation
-                    if (window.chatHubConnection && window.chatHubConnection.state === signalR.HubConnectionState.Connected) {
-                        window.chatHubConnection.invoke("JoinConversation", realId)
+                    if (window.ChatRealtime && typeof window.ChatRealtime.joinConversation === 'function') {
+                        window.ChatRealtime.joinConversation(realId)
                             .then(() => console.log(`✅ Joined Conv-${realId} group`))
                             .catch(err => console.error("Error joining conversation group:", err));
                     }
@@ -744,11 +1073,20 @@ const ChatWindow = {
         
         const msgEl = msgContainer.querySelector(`[data-temp-id="${tempId}"]`);
         if (!msgEl) return;
-        
+
         msgEl.dataset.status = status;
+        if (status === 'sent') {
+            this.retryFiles.delete(tempId);
+        }
         
         if (realMessageId) {
-            msgEl.dataset.messageId = realMessageId;
+            const normRealId = realMessageId ? realMessageId.toString().toLowerCase() : null;
+            if (normRealId) msgEl.dataset.messageId = normRealId;
+            const seenRow = msgEl.querySelector('.msg-seen-row');
+            if (seenRow && normRealId) seenRow.id = `seen-row-${normRealId}`;
+            if (normRealId) {
+                this.applyPendingSeenForMessage(chatId, normRealId);
+            }
         }
         
         // Remove existing status indicators from THIS bubble
@@ -799,7 +1137,11 @@ const ChatWindow = {
         if (!chat) return;
         
         const formData = new FormData();
-        formData.append('Content', content);
+        const files = this.retryFiles.get(tempId) || [];
+        const hasText = content && content.trim().length > 0;
+        if (!hasText && files.length === 0) return;
+        if (hasText) formData.append('Content', content);
+        files.forEach(file => formData.append('MediaFiles', file));
         
         try {
             let res;
@@ -822,6 +1164,7 @@ const ChatWindow = {
             if (res.ok) {
                 const msg = await res.json();
                 this.updateMessageStatus(chatId, tempId, 'sent', content, msg.messageId);
+                this.retryFiles.delete(tempId);
             } else {
                 this.updateMessageStatus(chatId, tempId, 'failed', content);
             }

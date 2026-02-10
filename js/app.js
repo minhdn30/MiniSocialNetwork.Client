@@ -80,6 +80,11 @@ function closeAllOverlayModals() {
       window.closeChatSidebar();
   }
 
+  // Chat Windows (Floating) - Close all if entering Chat Page
+  if (window.location.hash.startsWith('#/messages') && window.ChatWindow && typeof window.ChatWindow.closeAll === 'function') {
+      window.ChatWindow.closeAll();
+  }
+
   // SignalR Cleanup (Leave groups when navigating away)
   if (!window.location.hash.startsWith('#/messages')) {
       if (window.ChatPage && typeof window.ChatPage.leaveCurrentConversation === 'function') {

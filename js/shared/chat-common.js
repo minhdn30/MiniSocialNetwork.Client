@@ -64,6 +64,9 @@ const ChatCommon = {
         const isOwn = msg.isOwn;
         const isReceived = !isOwn;
         const wrapperClass = isOwn ? 'sent' : 'received';
+        const rawMessageId = msg.messageId || msg.MessageId || '';
+        const messageId = rawMessageId ? rawMessageId.toString().toLowerCase() : '';
+        const dataMessageIdAttr = messageId ? ` data-message-id="${messageId}"` : '';
 
         // --- Media ---
         const allMedias = msg.medias || msg.Medias || [];
@@ -115,8 +118,12 @@ const ChatCommon = {
             : '';
 
         // --- Build HTML ---
+        const seenRowHtml = isOwn
+            ? `<div class="msg-seen-row"${messageId ? ` id="seen-row-${messageId}"` : ''}></div>`
+            : '';
+
         return `
-            <div class="msg-bubble-wrapper ${wrapperClass} msg-group-${groupPos}" data-sent-at="${msg.sentAt || ''}" data-sender-id="${msg.sender?.accountId || msg.senderId || ''}">
+            <div class="msg-bubble-wrapper ${wrapperClass} msg-group-${groupPos}" data-sent-at="${msg.sentAt || ''}" data-sender-id="${msg.sender?.accountId || msg.senderId || ''}"${dataMessageIdAttr}>
                 ${authorHtml}
                 <div class="msg-row">
                     ${avatarHtml}
@@ -125,7 +132,7 @@ const ChatCommon = {
                         ${msg.content ? `<div class="msg-bubble">${escapeHtml(msg.content)}</div>` : ''}
                     </div>
                 </div>
-                <div class="msg-seen-row" id="seen-row-${msg.messageId}"></div>
+                ${seenRowHtml}
             </div>
         `;
     },

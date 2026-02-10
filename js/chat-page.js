@@ -11,8 +11,14 @@ const ChatPage = {
     pageSize: window.APP_CONFIG?.CHATPAGE_MESSAGES_PAGE_SIZE || 20,
     currentMetaData: null,
     pendingFiles: [], // Store files before sending
+    pendingSeenByConv: new Map(),
 
     async init() {
+        // Close all roaming chat windows when entering Chat Page to avoid redundancy
+        if (window.ChatWindow && typeof window.ChatWindow.closeAll === 'function') {
+            window.ChatWindow.closeAll();
+        }
+
         // Cleanup old group if exists (prevent leaks across re-initializations)
         if (this.currentChatId) {
             this.leaveCurrentConversation();
@@ -29,7 +35,7 @@ const ChatPage = {
         this.attachEventListeners();
         this.initScrollListener();
         this.handleUrlNavigation();
-        this.listenForMessages();
+        this.registerRealtimeHandlers();
     },
 
     cacheElements() {
@@ -129,6 +135,40 @@ const ChatPage = {
         }
     },
 
+    queuePendingSeen(conversationId, messageId, accountId, memberInfo = null) {
+        if (!conversationId || !messageId || !accountId) return;
+        const convId = conversationId.toString().toLowerCase();
+        const msgId = messageId.toString().toLowerCase();
+        let convMap = this.pendingSeenByConv.get(convId);
+        if (!convMap) {
+            convMap = new Map();
+            this.pendingSeenByConv.set(convId, convMap);
+        }
+        let arr = convMap.get(msgId);
+        if (!arr) {
+            arr = [];
+            convMap.set(msgId, arr);
+        }
+        arr.push({ accountId, memberInfo });
+    },
+
+    applyPendingSeenForMessage(conversationId, messageId) {
+        if (!conversationId || !messageId) return;
+        const convId = conversationId.toString().toLowerCase();
+        const msgId = messageId.toString().toLowerCase();
+        const convMap = this.pendingSeenByConv.get(convId);
+        if (!convMap) return;
+        const arr = convMap.get(msgId);
+        if (!arr || arr.length === 0) return;
+        convMap.delete(msgId);
+        arr.forEach(item => {
+            this.moveSeenAvatar(item.accountId, msgId, item.memberInfo);
+        });
+        if (convMap.size === 0) {
+            this.pendingSeenByConv.delete(convId);
+        }
+    },
+
     initScrollListener() {
         const msgContainer = document.getElementById('chat-view-messages');
         if (!msgContainer) return;
@@ -152,17 +192,20 @@ const ChatPage = {
         const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(conversationId);
         if (!isGuid) return;
 
-        if (window.chatHubConnection && window.chatHubConnection.state === signalR.HubConnectionState.Connected) {
-            window.chatHubConnection.invoke('SeenConversation', conversationId, messageId)
+        const normMessageId = messageId ? messageId.toString().toLowerCase() : null;
+        if (!normMessageId) return;
+
+        if (window.ChatRealtime && typeof window.ChatRealtime.seenConversation === 'function') {
+            window.ChatRealtime.seenConversation(conversationId, normMessageId)
                 .then(() => {
                     if (window.ChatSidebar) {
                         // Check if conversation was actually unread before clearing
                         const conv = window.ChatSidebar.conversations.find(c => c.conversationId === conversationId);
                         const wasUnread = conv && conv.unreadCount > 0;
                         window.ChatSidebar.clearUnread(conversationId);
-                        // Decrement global badge only if it was unread
-                        if (wasUnread && typeof updateGlobalMessageBadge === 'function') {
-                            updateGlobalMessageBadge(-1);
+                        // Refresh global badge only if it was unread
+                        if (wasUnread && typeof scheduleGlobalUnreadRefresh === 'function') {
+                            scheduleGlobalUnreadRefresh();
                         }
                     }
                 })
@@ -198,91 +241,110 @@ const ChatPage = {
         setTimeout(doScroll, 300);
     },
 
-    listenForMessages() {
-        if (!window.chatHubConnection) {
-            setTimeout(() => this.listenForMessages(), 1000);
-            return;
+    registerRealtimeHandlers() {
+        if (this._realtimeBound) return;
+        this._realtimeBound = true;
+
+        if (window.ChatRealtime && typeof window.ChatRealtime.onMessage === 'function') {
+            window.ChatRealtime.onMessage((msg) => this.handleRealtimeMessage(msg));
         }
+        if (window.ChatRealtime && typeof window.ChatRealtime.onSeen === 'function') {
+            window.ChatRealtime.onSeen((data) => this.handleMemberSeen(data));
+        }
+    },
 
-        // 1. Receive New Message
-        window.chatHubConnection.off('ReceiveNewMessage');
-        window.chatHubConnection.on('ReceiveNewMessage', (msg) => {
-            // --- ROBUST PROPERTY RESOLUTION ---
-            const convId = (msg.ConversationId || msg.conversationId || '').toLowerCase();
-            const messageId = msg.MessageId || msg.messageId;
-            const tempId = msg.TempId || msg.tempId;
-            const rawSenderId = msg.Sender?.AccountId || msg.sender?.accountId || msg.SenderId || msg.senderId || '';
-            const senderId = rawSenderId.toLowerCase();
-            const content = (msg.Content || msg.content || '').trim();
+    handleRealtimeMessage(msg) {
+        // --- ROBUST PROPERTY RESOLUTION ---
+        const convId = (msg.ConversationId || msg.conversationId || '').toLowerCase();
+        const messageIdRaw = msg.MessageId || msg.messageId;
+        const messageId = messageIdRaw ? messageIdRaw.toString().toLowerCase() : null;
+        const tempId = msg.TempId || msg.tempId;
+        const rawSenderId = msg.Sender?.AccountId || msg.sender?.accountId || msg.SenderId || msg.senderId || '';
+        const senderId = rawSenderId.toLowerCase();
+        const content = (msg.Content || msg.content || '').trim();
 
-            const myId = (localStorage.getItem('accountId') || '').toLowerCase();
+        const myId = (localStorage.getItem('accountId') || '').toLowerCase();
 
-            if (this.currentChatId?.toLowerCase() === convId) {
-                // 1. Check if message already exists in DOM (by real ID)
-                if (messageId && document.querySelector(`[data-message-id="${messageId}"]`)) {
-                    return;
-                }
+        if (this.currentChatId?.toLowerCase() === convId) {
+            // 1. Check if message already exists in DOM (by real ID)
+            if (messageId && document.querySelector(`[data-message-id="${messageId}"]`)) {
+                return;
+            }
 
-                // 2. Check tempId duplication
-                if (tempId && document.querySelector(`[data-temp-id="${tempId}"]`)) {
-                    return;
-                }
+            // 2. Check tempId duplication
+            if (tempId && document.querySelector(`[data-temp-id="${tempId}"]`)) {
+                return;
+            }
 
-                // 3. Merge check for our own messages
-                if (senderId === myId) {
-                    const msgContainer = document.getElementById('chat-view-messages');
-                    const optimisticMsgs = msgContainer?.querySelectorAll('.msg-bubble-wrapper.sent[data-status="pending"]');
-                    let matched = false;
-                    
-                    if (optimisticMsgs) {
-                        for (let opt of optimisticMsgs) {
-                            const optContent = opt.querySelector('.msg-bubble')?.innerText.trim();
-                            if (optContent === content) {
-                                opt.dataset.messageId = messageId;
-                                delete opt.dataset.status;
-                                opt.querySelector('.msg-status')?.remove();
-                                
-                                const seenRow = opt.querySelector('.msg-seen-row');
-                                if (seenRow) seenRow.id = `seen-row-${messageId}`;
+            // 3. Merge check for our own messages
+            if (senderId === myId) {
+                const msgContainer = document.getElementById('chat-view-messages');
+                const optimisticMsgs = msgContainer?.querySelectorAll('.msg-bubble-wrapper.sent[data-status="pending"]');
+                let matched = false;
+                
+                if (optimisticMsgs) {
+                    for (let opt of optimisticMsgs) {
+                        const optContent = opt.querySelector('.msg-bubble')?.innerText.trim();
+                        if (optContent === content) {
+                            if (messageId) opt.dataset.messageId = messageId;
+                            delete opt.dataset.status;
+                            opt.querySelector('.msg-status')?.remove();
+                            
+                            const seenRow = opt.querySelector('.msg-seen-row');
+                            if (seenRow && messageId) seenRow.id = `seen-row-${messageId}`;
 
-                                this.markConversationSeen(convId, messageId);
-                                if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
-                                    window.ChatSidebar.incrementUnread(convId, msg);
-                                }
-                                matched = true;
-                                break;
+                            this.markConversationSeen(convId, messageId);
+                            if (messageId) {
+                                this.applyPendingSeenForMessage(convId, messageId);
                             }
+                            if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
+                                window.ChatSidebar.incrementUnread(convId, msg);
+                            }
+                            matched = true;
+                            break;
                         }
                     }
-                    if (matched) return; 
                 }
-
-                this.appendMessage(msg);
-                this.markConversationSeen(convId, messageId);
-                
-                if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
-                    window.ChatSidebar.incrementUnread(convId, msg);
-                }
+                if (matched) return; 
             } else {
-                if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
-                    window.ChatSidebar.incrementUnread(convId, msg);
-                }
+                // Incoming message from others: clear "Sent" status
+                const msgContainer = document.getElementById('chat-view-messages');
+                msgContainer?.querySelectorAll('.msg-bubble-wrapper.sent[data-status="sent"]').forEach(el => {
+                    el.removeAttribute('data-status');
+                    el.querySelector('.msg-status')?.remove();
+                });
             }
-        });
 
-        // 2. Member Seen Status Update
-        window.chatHubConnection.off('MemberSeen');
-        window.chatHubConnection.on('MemberSeen', (data) => {
-            console.log("Realtime Seen Event received:", data);
-            // Handle both PascalCase (SignalR default) and camelCase
-            const convId = data.ConversationId || data.conversationId;
-            const accId = data.AccountId || data.accountId;
-            const msgId = data.LastSeenMessageId || data.lastSeenMessageId;
-
-            if (this.currentChatId === convId) {
-                this.moveSeenAvatar(accId, msgId);
+            this.appendMessage(msg);
+            if (messageId) {
+                this.applyPendingSeenForMessage(convId, messageId);
             }
-        });
+            const lastId = messageId || this.getLastMessageId();
+            if (lastId) this.markConversationSeen(convId, lastId);
+            
+            if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
+                window.ChatSidebar.incrementUnread(convId, msg);
+            }
+        } else {
+            if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
+                window.ChatSidebar.incrementUnread(convId, msg);
+            }
+        }
+    },
+
+    handleMemberSeen(data) {
+        // Handle both PascalCase (SignalR default) and camelCase
+        const convId = data.ConversationId || data.conversationId;
+        const accId = data.AccountId || data.accountId;
+        const msgIdRaw = data.LastSeenMessageId || data.lastSeenMessageId;
+        const msgId = msgIdRaw ? msgIdRaw.toString().toLowerCase() : msgIdRaw;
+
+        const currentNorm = (this.currentChatId || '').toLowerCase();
+        const eventNorm = (convId || '').toLowerCase();
+
+        if (currentNorm === eventNorm) {
+            this.moveSeenAvatar(accId, msgId);
+        }
     },
 
     /**
@@ -290,14 +352,15 @@ const ChatPage = {
      */
     updateMemberSeenStatuses(meta) {
         if (!meta || !meta.memberSeenStatuses) return;
-        console.log("Initial Seen Statuses from Metadata:", meta.memberSeenStatuses);
+
         const myId = localStorage.getItem('accountId');
 
         meta.memberSeenStatuses.forEach(member => {
             if (member.accountId === myId) return; 
             if (!member.lastSeenMessageId) return;
             
-            this.moveSeenAvatar(member.accountId, member.lastSeenMessageId, {
+            const lastSeenId = member.lastSeenMessageId ? member.lastSeenMessageId.toString().toLowerCase() : member.lastSeenMessageId;
+            this.moveSeenAvatar(member.accountId, lastSeenId, {
                 avatar: member.avatarUrl,
                 name: member.displayName
             });
@@ -336,19 +399,44 @@ const ChatPage = {
             existing.remove();
         }
 
-        // 3. Find target seen-row (Match by real messageId)
-        const targetRow = document.getElementById(`seen-row-${messageId}`);
+        // 3. Find target bubble (by messageId), then pick correct seen-row
+        const normMessageId = messageId ? messageId.toString().toLowerCase() : messageId;
+        let bubbleWrapper = normMessageId ? document.querySelector(`.msg-bubble-wrapper[data-message-id="${normMessageId}"]`) : null;
+        let targetRow = bubbleWrapper?.querySelector('.msg-seen-row') || null;
+
+        // If target isn't our message (or row missing), move to latest previous message sent by us
+        if (!bubbleWrapper || (bubbleWrapper.dataset.senderId || '').toLowerCase() !== myId) {
+            let cursor = bubbleWrapper ? bubbleWrapper.previousElementSibling : null;
+            // If bubbleWrapper is null, start from LAST element in container
+            if (!cursor && !bubbleWrapper) {
+                const msgContainer = document.getElementById('chat-view-messages');
+                cursor = msgContainer?.lastElementChild;
+            }
+            while (cursor) {
+                if (cursor.classList?.contains('msg-bubble-wrapper')) {
+                    const senderId = (cursor.dataset.senderId || '').toLowerCase();
+                    if (senderId === myId) {
+                        targetRow = cursor.querySelector('.msg-seen-row');
+                        break;
+                    }
+                }
+                cursor = cursor.previousElementSibling;
+            }
+        }
+
         if (!targetRow) {
-            console.warn(`Target seen-row not found for message: ${messageId}.`);
+            this.queuePendingSeen(this.currentChatId, normMessageId || messageId, accountId, memberInfo);
             return;
         }
 
-        // 3.5. LOGIC FIX: Only show Member X's avatar under messages NOT sent by Member X
-        const bubbleWrapper = targetRow.closest('.msg-bubble-wrapper');
-        const messageSenderId = bubbleWrapper?.dataset.senderId;
-        if (messageSenderId === accountId) {
-            // Member is just seeing their own message, don't show avatar here
-            return;
+        // 3.5 Remove "Sent" status on the message that is now seen
+        const statusEl = targetRow.closest('.msg-bubble-wrapper')?.querySelector('.msg-status');
+        if (statusEl) {
+            statusEl.remove();
+        }
+        const statusBubble = targetRow.closest('.msg-bubble-wrapper');
+        if (statusBubble?.dataset?.status === 'sent') {
+            statusBubble.removeAttribute('data-status');
         }
 
         // 4. Create avatar element
@@ -376,16 +464,15 @@ const ChatPage = {
     leaveCurrentConversation() {
         if (this.currentChatId) {
             const oldId = this.currentChatId;
+            this.pendingSeenByConv.delete(oldId.toLowerCase());
             
-            if (window.chatHubConnection && window.chatHubConnection.state === signalR.HubConnectionState.Connected) {
-                // Only leave if not open in any floating ChatWindow
-                const isOpenInWindow = window.ChatWindow && window.ChatWindow.openChats && window.ChatWindow.openChats.has(oldId);
-                
-                if (!isOpenInWindow) {
-                    window.chatHubConnection.invoke("LeaveConversation", oldId)
-                        .then(() => console.log(`👋 Left Conv-${oldId} group`))
-                        .catch(err => console.error("Error leaving conversation group:", err));
-                }
+            // Only leave if not open in any floating ChatWindow
+            const isOpenInWindow = window.ChatWindow && window.ChatWindow.openChats && window.ChatWindow.openChats.has(oldId);
+            
+            if (!isOpenInWindow && window.ChatRealtime && typeof window.ChatRealtime.leaveConversation === 'function') {
+                window.ChatRealtime.leaveConversation(oldId)
+                    .then(() => console.log(`👋 Left Conv-${oldId} group`))
+                    .catch(err => console.error("Error leaving conversation group:", err));
             }
             this.currentChatId = null;
         }
@@ -394,10 +481,14 @@ const ChatPage = {
     async loadConversation(conversationId) {
         if (!conversationId) return;
         
-        // 1. If clicking the same conversation, don't re-join or re-render everything
+        // 1. If clicking the same conversation, skip only when it already has content
         if (this.currentChatId === conversationId) {
-            console.log("Already in this conversation, skipping re-load.");
-            return;
+            const msgContainer = document.getElementById('chat-view-messages');
+            const hasMessages = !!msgContainer?.querySelector('.msg-bubble-wrapper');
+            if (hasMessages || this.isLoading) {
+                console.log("Already in this conversation, skipping re-load.");
+                return;
+            }
         }
 
         // 2. Increment generation to cancel any in-flight requests from previous conversation
@@ -408,15 +499,15 @@ const ChatPage = {
         const msgContainer = document.getElementById('chat-view-messages');
         if (msgContainer) msgContainer.innerHTML = '';
         
-        if (this.currentChatId && window.chatHubConnection) {
-            console.log("leaving group", this.currentChatId);
-            window.chatHubConnection.invoke('LeaveConversation', this.currentChatId);
+        if (this.currentChatId && window.ChatRealtime && typeof window.ChatRealtime.leaveConversation === 'function') {
+            console.log("🚪 Leaving group", this.currentChatId);
+            window.ChatRealtime.leaveConversation(this.currentChatId).catch(err => console.error("Error leaving conversation group:", err));
         }
 
         this.currentChatId = conversationId;
         this.currentMetaData = null;
         this.messages = [];
-        this.pageIndex = 1;
+        this.page = 1;
         this.hasMore = true;
         this.isLoading = false;
         
@@ -442,13 +533,10 @@ const ChatPage = {
         if (this._loadGeneration !== gen) return;
 
         // Join the SignalR group for this conversation
-        if (window.chatHubConnection && window.chatHubConnection.state === signalR.HubConnectionState.Connected) {
-            const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(conversationId);
-            if (isGuid) {
-                window.chatHubConnection.invoke("JoinConversation", conversationId)
-                    .then(() => console.log(`✅ Joined Conv-${conversationId} group`))
-                    .catch(err => console.error("Error joining conversation group:", err));
-            }
+        if (window.ChatRealtime && typeof window.ChatRealtime.joinConversation === 'function') {
+            window.ChatRealtime.joinConversation(conversationId)
+                .then(() => console.log(`✅ Joined Conv-${conversationId} group`))
+                .catch(err => console.error("Error joining conversation group:", err));
         }
     },
 
@@ -544,6 +632,12 @@ const ChatPage = {
                     if (data.metaData) {
                         setTimeout(() => this.updateMemberSeenStatuses(data.metaData), 200);
                     }
+
+                    // Auto mark seen when opening chat-page
+                    const lastId = this.getLastMessageId();
+                    if (lastId) {
+                        this.markConversationSeen(id, lastId);
+                    }
                 }
 
                 this.page++;
@@ -567,6 +661,10 @@ const ChatPage = {
         messages.forEach((m, idx) => {
             // Support both camelCase and PascalCase for medias
             if (!m.medias && m.Medias) m.medias = m.Medias;
+
+            // Normalize casing for ids/timestamps
+            if (!m.messageId && m.MessageId) m.messageId = m.MessageId.toString().toLowerCase();
+            if (!m.sentAt && m.SentAt) m.sentAt = m.SentAt;
             
             m.isOwn = (m.sender?.accountId || m.senderId) === myId;
 
@@ -585,7 +683,7 @@ const ChatPage = {
             const senderAvatar = !m.isOwn ? avatarRaw : '';
             
             const authorName = isGroup && !m.isOwn
-                ? (m.sender?.nickname || m.sender?.Nickname || m.sender?.fullName || m.sender?.FullName || m.sender?.username || '')
+                ? (m.sender?.nickname || m.sender?.Nickname || m.sender?.username || m.sender?.Username || m.sender?.fullName || m.sender?.FullName || '')
                 : '';
 
             html += ChatCommon.renderMessageBubble(m, {
@@ -610,13 +708,19 @@ const ChatPage = {
         
         // --- ROBUST PROPERTY RESOLUTION ---
         const rawSenderId = msg.Sender?.AccountId || msg.sender?.accountId || msg.SenderId || msg.senderId || '';
-        const senderId = rawSenderId.toLowerCase();
+        let senderId = rawSenderId.toLowerCase();
         
         // If it's an optimistic message (no senderId yet), it MUST be own
         const isOwn = (senderId === myId) || (msg.tempId && !senderId);
         msg.isOwn = isOwn;
 
-        const messageId = msg.MessageId || msg.messageId;
+        // FIX: Ensure optimistic messages have the correct senderId for seen-avatar fallback
+        if (isOwn && !senderId) {
+            senderId = myId;
+        }
+
+        const messageIdRaw = msg.MessageId || msg.messageId;
+        const messageId = messageIdRaw ? messageIdRaw.toString().toLowerCase() : null;
         const tempId = msg.TempId || msg.tempId;
 
         // Time separator
@@ -658,7 +762,7 @@ const ChatPage = {
         const avatarRaw = msg.Sender?.AvatarUrl || msg.sender?.avatarUrl || msg.sender?.AvatarUrl || '';
         const senderAvatar = !isOwn ? avatarRaw : '';
         
-        const authorRaw = msg.Sender?.DisplayName || msg.sender?.displayName || msg.sender?.nickname || msg.sender?.fullName || msg.sender?.username || '';
+        const authorRaw = msg.sender?.nickname || msg.sender?.Nickname || msg.sender?.username || msg.sender?.Username || msg.sender?.fullName || msg.sender?.FullName || '';
         const authorName = isGroup && !isOwn ? authorRaw : '';
         
         // Ensure msg.sender object exists for renderMessageBubble if missing
@@ -666,7 +770,7 @@ const ChatPage = {
             msg.sender = { accountId: senderId, avatarUrl: avatarRaw };
         }
         if (!msg.sentAt) msg.sentAt = sentAt;
-        if (!msg.messageId) msg.messageId = messageId;
+        if (!msg.messageId && messageId) msg.messageId = messageId;
 
         const div = document.createElement('div');
         div.innerHTML = ChatCommon.renderMessageBubble(msg, {
@@ -707,6 +811,9 @@ const ChatPage = {
         }
         
         msgContainer.appendChild(bubble);
+        if (messageId) {
+            this.applyPendingSeenForMessage(this.currentChatId, messageId);
+        }
         msgContainer.scrollTop = msgContainer.scrollHeight;
     },
 
@@ -723,6 +830,13 @@ const ChatPage = {
             mediaUrl: URL.createObjectURL(file), // Local preview link
             mediaType: file.type.startsWith('video/') ? 1 : 0
         }));
+
+        // New outgoing message: clear any previous "Sent" indicators
+        const msgContainer = document.getElementById('chat-view-messages');
+        msgContainer?.querySelectorAll('.msg-bubble-wrapper.sent[data-status="sent"]').forEach(el => {
+            el.removeAttribute('data-status');
+            el.querySelector('.msg-status')?.remove();
+        });
 
         // optimistic ui - show message immediately with pending state
         this.appendMessage({ 
@@ -785,7 +899,7 @@ const ChatPage = {
             
             if (res.ok) {
                 const msg = await res.json();
-                this.updateMessageStatus(tempId, 'sent', content, msg.messageId);
+                this.updateMessageStatus(tempId, 'sent', content, msg?.messageId || msg?.MessageId);
             } else {
                 this.updateMessageStatus(tempId, 'failed', content);
             }
@@ -897,10 +1011,14 @@ const ChatPage = {
 
         bubble.dataset.status = status;
         if (realId) {
-            bubble.dataset.messageId = realId;
+            const normRealId = realId ? realId.toString().toLowerCase() : null;
+            if (normRealId) bubble.dataset.messageId = normRealId;
             // SYNC SEEN ROW ID: This is critical so moveSeenAvatar can find it!
             const seenRow = bubble.querySelector('.msg-seen-row');
-            if (seenRow) seenRow.id = `seen-row-${realId}`;
+            if (seenRow && normRealId) seenRow.id = `seen-row-${normRealId}`;
+            if (normRealId) {
+                this.applyPendingSeenForMessage(this.currentChatId, normRealId);
+            }
         }
         
         // Remove existing status indicators from THIS bubble
@@ -964,7 +1082,7 @@ const ChatPage = {
             
             if (res.ok) {
                 const msg = await res.json();
-                this.updateMessageStatus(tempId, 'sent', content, msg.messageId);
+                this.updateMessageStatus(tempId, 'sent', content, msg?.messageId || msg?.MessageId);
             } else {
                 this.updateMessageStatus(tempId, 'failed', content);
             }
