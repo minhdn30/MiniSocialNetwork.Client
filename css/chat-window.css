@@ -376,6 +376,7 @@ body.is-dragging-chat #chat-windows-stack {
     gap: 2px;
     background: var(--bg-primary);
     min-height: 0;
+    overflow-x: hidden;
 }
 
 .chat-messages::before {
@@ -384,6 +385,11 @@ body.is-dragging-chat #chat-windows-stack {
 }
 
 /* Chat Window overrides for shared msg classes (smaller sizes) */
+.chat-messages .chat-time-separator {
+    margin: 12px 0 6px;
+    font-size: 10px;
+}
+
 .chat-box .msg-bubble-wrapper {
     max-width: 85%;
 }
@@ -392,62 +398,6 @@ body.is-dragging-chat #chat-windows-stack {
     padding: 8px 14px;
     font-size: 14px;
 }
-
-/* Base Radius - Standard Messenger Style */
-.chat-box .msg-bubble-wrapper.received .msg-bubble,
-.chat-box .msg-bubble-wrapper.received .msg-content-container {
-    border-radius: 18px 18px 18px 4px;
-}
-
-.chat-box .msg-bubble-wrapper.sent .msg-bubble,
-.chat-box .msg-bubble-wrapper.sent .msg-content-container {
-    border-radius: 18px 18px 4px 18px;
-}
-
-/* Grouping Logic: Single */
-.chat-box .msg-group-single.received .msg-bubble,
-.chat-box .msg-group-single.received .msg-content-container {
-    border-radius: 18px;
-}
-.chat-box .msg-group-single.sent .msg-bubble,
-.chat-box .msg-group-single.sent .msg-content-container {
-    border-radius: 18px;
-}
-
-/* Grouping Logic: First */
-.chat-box .msg-group-first.received .msg-bubble,
-.chat-box .msg-group-first.received .msg-content-container {
-    border-radius: 18px 18px 18px 4px;
-}
-.chat-box .msg-group-first.sent .msg-bubble,
-.chat-box .msg-group-first.sent .msg-content-container {
-    border-radius: 18px 18px 4px 18px;
-}
-
-/* Grouping Logic: Middle */
-.chat-box .msg-group-middle.received .msg-bubble,
-.chat-box .msg-group-middle.received .msg-content-container {
-    border-radius: 4px 18px 18px 4px;
-}
-.chat-box .msg-group-middle.sent .msg-bubble,
-.chat-box .msg-group-middle.sent .msg-content-container {
-    border-radius: 18px 4px 4px 18px;
-}
-
-/* Grouping Logic: Last */
-.chat-box .msg-group-last.received .msg-bubble,
-.chat-box .msg-group-last.received .msg-content-container {
-    border-radius: 4px 18px 18px 18px;
-}
-.chat-box .msg-group-last.sent .msg-bubble,
-.chat-box .msg-group-last.sent .msg-content-container {
-    border-radius: 18px 4px 18px 18px;
-}
-
-.chat-box .msg-content-container {
-    overflow: hidden;
-}
-
 
 .chat-box .msg-avatar {
     width: 24px;
@@ -470,11 +420,6 @@ body.is-dragging-chat #chat-windows-stack {
 
 .chat-box .msg-row {
     gap: 6px;
-}
-
-.chat-box .chat-time-separator {
-    margin: 12px 0 6px;
-    font-size: 10px;
 }
 
 /* Media size overrides for compact chat window */
@@ -926,3 +871,6 @@ body.is-dragging-chat #chat-windows-stack {
     from { transform: translateY(100%); }
     to { transform: translateY(0); }
 }
+
+/* Seen indicators (Facebook Messenger style) - MOVED TO SHARED/CHAT-BUBBLE.CSS */
+

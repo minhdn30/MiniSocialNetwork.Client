@@ -1,0 +1,494 @@
+/* ================================================
+   Message Bubbles – Shared Chat Styling
+   Used by both chat-page.css and chat-window.css
+   ================================================ */
+
+/* --- Time Separator --- */
+.chat-time-separator {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin: 16px 0 8px; /* Reduced margin for better grouping look */
+  font-weight: 500;
+  width: 100%;
+}
+
+/* --- Message Bubbles Wrapper --- */
+.msg-bubble-wrapper {
+  display: flex;
+  flex-direction: column;
+  max-width: 65%; /* Default for chat page */
+}
+
+.msg-bubble-wrapper.sent {
+  align-self: flex-end;
+}
+
+.msg-bubble-wrapper.received {
+  align-self: flex-start;
+}
+
+/* --- Message Row: [Avatar] [Bubble] --- */
+.msg-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  position: relative; /* For absolutely positioned actions if needed */
+}
+
+.sent .msg-row {
+  flex-direction: row-reverse;
+}
+
+/* --- Avatar --- */
+.msg-avatar {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  align-self: flex-end;
+}
+
+.msg-avatar img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.msg-avatar-spacer {
+  width: 28px;
+  height: 0;
+  flex-shrink: 0;
+}
+
+/* --- Bubble Base --- */
+.msg-bubble {
+  padding: 8px 14px;
+  font-size: 15px;
+  line-height: 1.4;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.sent .msg-bubble {
+  background: var(--accent-primary, #3b82f6);
+  color: white;
+}
+
+.received .msg-bubble {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* --- Grouping Gap --- */
+.msg-bubble-wrapper.msg-group-single,
+.msg-bubble-wrapper.msg-group-first {
+  margin-top: 8px;
+}
+
+/* --- Messenger-Style Dynamic Border Radius --- */
+/* Received */
+.received .msg-bubble,
+.received .msg-content-container {
+  border-radius: 18px 18px 18px 4px;
+}
+
+/* Sent */
+.sent .msg-bubble,
+.sent .msg-content-container {
+  border-radius: 18px 18px 4px 18px;
+}
+
+/* Grouping: Single */
+.msg-group-single.received .msg-bubble,
+.msg-group-single.received .msg-content-container {
+  border-radius: 18px;
+}
+.msg-group-single.sent .msg-bubble,
+.msg-group-single.sent .msg-content-container {
+  border-radius: 18px;
+}
+
+/* Grouping: First */
+.msg-group-first.received .msg-bubble,
+.msg-group-first.received .msg-content-container {
+  border-radius: 18px 18px 18px 4px;
+}
+.msg-group-first.sent .msg-bubble,
+.msg-group-first.sent .msg-content-container {
+  border-radius: 18px 18px 4px 18px;
+}
+
+/* Grouping: Middle */
+.msg-group-middle.received .msg-bubble,
+.msg-group-middle.received .msg-content-container {
+  border-radius: 4px 18px 18px 4px;
+}
+.msg-group-middle.sent .msg-bubble,
+.msg-group-middle.sent .msg-content-container {
+  border-radius: 18px 4px 4px 18px;
+}
+
+/* Grouping: Last */
+.msg-group-last.received .msg-bubble,
+.msg-group-last.received .msg-content-container {
+  border-radius: 4px 18px 18px 18px;
+}
+.msg-group-last.sent .msg-bubble,
+.msg-group-last.sent .msg-content-container {
+  border-radius: 18px 4px 18px 18px;
+}
+
+.msg-content-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+}
+
+/* --- Author name for Group Chat --- */
+.msg-author {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  margin-bottom: 2px;
+  padding-left: 36px; /* avatar width + gap */
+}
+
+/* --- Message Actions (Messenger Style) --- */
+.msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+  pointer-events: none;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.msg-bubble-wrapper:hover .msg-actions {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.msg-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: transparent; /* No background by default */
+  color: var(--text-primary); /* Primary text color as requested */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: none; /* No shadow */
+  padding: 0;
+}
+
+.msg-action-btn:hover {
+  background: var(--bg-hover); /* Subtle background only on hover */
+  transform: scale(1.1);
+}
+
+.msg-action-btn svg,
+.msg-action-btn i {
+  width: 14px;
+  height: 14px;
+}
+
+/* Chat window specific sizing (smaller buttons) */
+.chat-box .msg-action-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+}
+
+.chat-box .msg-action-btn svg,
+.chat-box .msg-action-btn i {
+  width: 12px;
+  height: 12px;
+}
+
+/* --- More Menu Popup --- */
+.msg-more-menu {
+  position: fixed;
+  z-index: 20000; /* Increased to stay above chat windows (11000) */
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  box-shadow: var(--shadow-xl);
+  padding: 6px;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  animation: menuAppear 0.2s ease-out;
+}
+
+/* More menu tail/arrow */
+.msg-more-menu::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-primary);
+  border-top: 1px solid var(--border-primary);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+/* Position arrow based on direction */
+.msg-more-menu.pos-bottom::after {
+  top: -7px;
+  right: 14px;
+}
+
+.msg-more-menu.pos-top::after {
+  bottom: -7px;
+  right: 14px;
+  border-left: none;
+  border-top: none;
+  border-right: 1px solid var(--border-primary);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+@keyframes menuAppear {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.msg-more-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.15s;
+  font-weight: 500;
+}
+
+.msg-more-item:hover {
+  background: var(--bg-hover);
+}
+
+.msg-more-item i,
+.msg-more-item svg {
+  width: 18px;
+  height: 18px;
+  color: var(--text-secondary);
+}
+
+.msg-more-item.danger {
+  color: #ef4444;
+}
+
+.msg-more-item.danger i,
+.msg-more-item.danger svg {
+  color: #ef4444;
+}
+
+.msg-more-item.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* --- Confirmation Modal (Messenger Style) --- */
+.msg-confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20001; /* Stay above the more menu */
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(2px);
+}
+
+.msg-confirm-overlay.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.msg-confirm-popup {
+  background: var(--bg-primary);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 320px;
+  overflow: hidden;
+  box-shadow: var(--shadow-2xl);
+  transform: scale(0.9);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.msg-confirm-overlay.show .msg-confirm-popup {
+  transform: scale(1);
+}
+
+.msg-confirm-content {
+  padding: 24px 20px;
+  text-align: center;
+}
+
+.msg-confirm-content h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  color: var(--text-primary);
+}
+
+.msg-confirm-content p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.msg-confirm-actions {
+  display: flex;
+  border-top: 1px solid var(--border-primary);
+}
+
+.msg-confirm-btn {
+  flex: 1;
+  padding: 14px;
+  border: none;
+  background: none;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.msg-confirm-btn.cancel {
+  color: var(--text-primary);
+  border-right: 1px solid var(--border-primary);
+}
+
+.msg-confirm-btn.confirm {
+  color: #ef4444;
+}
+
+.msg-confirm-btn:hover {
+  background: var(--bg-hover);
+}
+
+/* --- Seen Row & Avatars --- */
+.msg-seen-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+  position: relative;
+  z-index: 2;
+}
+
+/* Fix spacing: Hide when empty so it doesn't push bubbles apart */
+.msg-seen-row:empty {
+  display: none !important;
+}
+
+.msg-seen-row:not(:empty) {
+  padding: 2px 4px 4px 0;
+  margin-top: 2px;
+  min-height: 14px;
+}
+
+.received .msg-seen-row {
+  justify-content: flex-start;
+  padding-left: 36px; /* avatar width 28px + gap 8px */
+}
+
+/* --- Seen Indicator Tooltip Style --- */
+.seen-avatar-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.seen-avatar {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid var(--bg-primary);
+  background: var(--bg-secondary);
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+}
+
+.seen-avatar-name {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-primary);
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  z-index: 100;
+}
+
+/* Tooltip Arrow */
+.seen-avatar-name::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background: var(--bg-primary);
+  border-right: 1px solid var(--border-primary);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+/* Adjust for sent messages (avoid spill over right edge) */
+.sent .seen-avatar-name {
+  left: auto;
+  right: -4px;
+  transform: translateX(0); /* Reset horizontal transform */
+  transform: translateY(10px);
+}
+
+.sent .seen-avatar-name::after {
+  left: auto;
+  right: 6px;
+  transform: rotate(45deg);
+}
+
+.seen-avatar-wrapper:hover .seen-avatar {
+  transform: scale(1.5);
+  z-index: 10;
+}
+
+.seen-avatar-wrapper:hover .seen-avatar-name {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.sent .seen-avatar-wrapper:hover .seen-avatar-name {
+  transform: translateX(0) translateY(0);
+}

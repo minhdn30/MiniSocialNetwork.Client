@@ -18,6 +18,47 @@ const ChatCommon = {
     },
 
     /**
+     * Normalize message object to have consistent property names and casing.
+     */
+    normalizeMessage(m, myId) {
+        if (!m) return null;
+        
+        // IDs
+        if (!m.messageId && m.MessageId) m.messageId = m.MessageId.toString().toLowerCase();
+        if (m.messageId) m.messageId = m.messageId.toString().toLowerCase();
+        
+        // Timestamps
+        if (!m.sentAt && m.SentAt) m.sentAt = m.SentAt;
+        
+        // Medias
+        if (!m.medias && m.Medias) m.medias = m.Medias;
+        
+        // Sender/Ownership
+        const senderId = (m.sender?.accountId || m.SenderId || m.senderId || '').toLowerCase();
+        if (myId && typeof m.isOwn !== 'boolean') {
+            m.isOwn = (senderId === myId.toLowerCase());
+        }
+        
+        // Ensure sender object exists with at least accountId
+        if (!m.sender) {
+            m.sender = { accountId: senderId };
+        } else if (!m.sender.accountId && senderId) {
+            m.sender.accountId = senderId;
+        }
+        return m;
+    },
+
+    /**
+     * Normalize text for comparison by stripping whitespace and standardizing newlines.
+     */
+    normalizeContent(text) {
+        if (!text) return "";
+        return text.trim()
+            .replace(/\r\n/g, "\n")    // Standardize newlines
+            .replace(/\s+/g, " ");      // Collapse all whitespace (including newlines) to a single space for maximum robustness
+    },
+
+    /**
      * Determine grouping position for a message within a consecutive group.
      * Returns: 'single' | 'first' | 'middle' | 'last'
      *
@@ -26,8 +67,12 @@ const ChatCommon = {
      * @param {Object|null} nextMsg - Next message (below in display order)
      */
     getGroupPosition(msg, prevMsg, nextMsg) {
-        const sameSenderAsPrev = prevMsg && prevMsg.sender?.accountId === msg.sender?.accountId;
-        const sameSenderAsNext = nextMsg && nextMsg.sender?.accountId === msg.sender?.accountId;
+        const msgId = msg.sender?.accountId;
+        const prevId = prevMsg?.sender?.accountId;
+        const nextId = nextMsg?.sender?.accountId;
+
+        const sameSenderAsPrev = prevMsg && prevId === msgId;
+        const sameSenderAsNext = nextMsg && nextId === msgId;
 
         // Also break grouping if time gap > configured threshold (default 2 mins)
         const gap = window.APP_CONFIG?.CHAT_GROUPING_GAP || 2 * 60 * 1000;
@@ -136,13 +181,36 @@ const ChatCommon = {
                </div>`
             : '';
 
+        // --- Build Actions (Messenger Style) ---
+        const isPage = !!options.isPage;
+        const msgActionsHtml = `
+            <div class="msg-actions">
+                ${isPage ? `
+                    <button class="msg-action-btn" title="React" onclick="window.ChatActions && ChatActions.openReactMenu(event, '${messageId}')">
+                        <i data-lucide="smile"></i>
+                    </button>
+                    <button class="msg-action-btn" title="Reply" onclick="window.ChatActions && ChatActions.replyTo('${messageId}')">
+                        <i data-lucide="reply"></i>
+                    </button>
+                ` : ''}
+                <button class="msg-action-btn more" title="More" onclick="window.ChatActions && ChatActions.openMoreMenu(event, '${messageId}', ${isOwn})">
+                    <i data-lucide="more-horizontal"></i>
+                </button>
+            </div>
+        `;
+
         // --- Build HTML ---
         const seenRowHtml = isOwn
             ? `<div class="msg-seen-row"${messageId ? ` id="seen-row-${messageId}"` : ''}></div>`
             : '';
 
         return `
-            <div class="msg-bubble-wrapper ${wrapperClass} msg-group-${groupPos}" data-sent-at="${msg.sentAt || ''}" data-sender-id="${msg.sender?.accountId || msg.senderId || ''}"${dataMessageIdAttr}>
+            <div class="msg-bubble-wrapper ${wrapperClass} msg-group-${groupPos}" 
+                 data-sent-at="${msg.sentAt || ''}" 
+                 data-sender-id="${msg.sender?.accountId || msg.senderId || ''}"
+                 data-avatar-url="${avatarSrc}"
+                 data-author-name="${(authorName || '').replace(/"/g, '&quot;')}"
+                 ${dataMessageIdAttr}>
                 ${authorHtml}
                 <div class="msg-row">
                     ${avatarHtml}
@@ -150,6 +218,7 @@ const ChatCommon = {
                         ${mediaHtml}
                         ${msg.content ? `<div class="msg-bubble">${linkify(escapeHtml(msg.content))}</div>` : ''}
                     </div>
+                    ${msgActionsHtml}
                 </div>
                 ${seenRowHtml}
             </div>
@@ -193,6 +262,59 @@ const ChatCommon = {
     getLastMsgPreview(conv) {
         if (conv.lastMessagePreview) return conv.lastMessagePreview;
         return conv.isGroup ? 'Group created' : 'Started a conversation';
+    },
+
+    /**
+     * Sync the boundary between two consecutive message bubbles in the DOM.
+     * Use this when prepending or appending messages to ensure correct grouping (border-radius, avatars).
+     * 
+     * @param {HTMLElement} msgAbove - The message element above
+     * @param {HTMLElement} msgBelow - The message element below
+     */
+    syncMessageBoundary(msgAbove, msgBelow) {
+        if (!msgAbove || !msgBelow || 
+            !msgAbove.classList.contains('msg-bubble-wrapper') || 
+            !msgBelow.classList.contains('msg-bubble-wrapper')) return;
+
+        const senderAbove = msgAbove.dataset.senderId;
+        const senderBelow = msgBelow.dataset.senderId;
+        const timeAbove = new Date(msgAbove.dataset.sentAt);
+        const timeBelow = new Date(msgBelow.dataset.sentAt);
+
+        const groupGap = window.APP_CONFIG?.CHAT_GROUPING_GAP || 2 * 60 * 1000;
+        const sameSender = (senderAbove && senderAbove === senderBelow);
+        const closeTime = (timeBelow - timeAbove < groupGap);
+
+        if (sameSender && closeTime) {
+            // --- Update Classes ---
+            // Above: single -> first, last -> middle
+            if (msgAbove.classList.contains('msg-group-single')) {
+                msgAbove.classList.replace('msg-group-single', 'msg-group-first');
+            } else if (msgAbove.classList.contains('msg-group-last')) {
+                msgAbove.classList.replace('msg-group-last', 'msg-group-middle');
+            }
+
+            // Below: single -> last, first -> middle
+            if (msgBelow.classList.contains('msg-group-single')) {
+                msgBelow.classList.replace('msg-group-single', 'msg-group-last');
+            } else if (msgBelow.classList.contains('msg-group-first')) {
+                msgBelow.classList.replace('msg-group-first', 'msg-group-middle');
+            }
+
+            // --- Update UI (Avatar/Author) ---
+            // If grouped, 'Above' message is NEVER 'last' or 'single', so it should NOT have avatar
+            const avatarAbove = msgAbove.querySelector('.msg-avatar');
+            if (avatarAbove && !avatarAbove.classList.contains('msg-avatar-spacer')) {
+                avatarAbove.classList.add('msg-avatar-spacer');
+                avatarAbove.innerHTML = '';
+            }
+
+            // If grouped, 'Below' message is NEVER 'first' or 'single', so it should NOT have author name (group chat)
+            const authorBelow = msgBelow.querySelector('.msg-author');
+            if (authorBelow) {
+                authorBelow.remove();
+            }
+        }
     }
 };
 

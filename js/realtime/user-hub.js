@@ -203,6 +203,14 @@
                 }
             });
 
+            // Listen for hidden messages (sync across devices)
+            connection.on("ReceiveMessageHidden", (data) => {
+                console.log("🙈 [UserHub] Message hidden (realtime):", data);
+                if (window.ChatActions && typeof window.ChatActions.hideFromRealtime === 'function') {
+                    window.ChatActions.hideFromRealtime(data);
+                }
+            });
+
             // Listen for global message notifications (Toasts/Badges)
             connection.on("ReceiveMessageNotification", (data) => {
                 const convId = (data.ConversationId || data.conversationId || '').toLowerCase();
@@ -243,9 +251,9 @@
             // 3. Start connection
             try {
                 await connection.start();
-                console.log("✅ [UserHub] Connected to UserHub");
+                console.log("✅ [UserHub] Connected successfully");
                 
-                // 4. Join my own account group via the queue mechanism
+                // 4. Join my own account group
                 const accountId = localStorage.getItem("accountId");
                 if (accountId) {
                    UserHub.joinGroup(accountId);

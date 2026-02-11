@@ -336,6 +336,8 @@
       // send message in group chat - conversation must exist
       sendGroup: (conversationId, formData, onProgress) =>
         uploadFormDataWithProgress(`/Messages/group/${conversationId}`, formData, onProgress),
+
+      hide: (messageId) => apiFetch(`/Messages/hide/${messageId}`, { method: "POST" }),
     },
   };
 

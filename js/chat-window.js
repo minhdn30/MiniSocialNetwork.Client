@@ -212,6 +212,7 @@ const ChatWindow = {
         const senderId = rawSenderId.toLowerCase();
         const myId = (localStorage.getItem('accountId') || '').toLowerCase();
         const content = (msg.Content || msg.content || '').trim();
+        const normIncoming = ChatCommon.normalizeContent(content);
 
         const convId = this.getOpenChatId(convIdRaw);
         const chat = convId ? this.openChats.get(convId) : null;
@@ -245,63 +246,70 @@ const ChatWindow = {
 
         if (!convId) return;
 
-        // De-duplication check
+        // De-duplication check: if real messageId already exists, discard this event
         if (messageId && document.querySelector(`#chat-messages-${convId} [data-message-id="${messageId}"]`)) {
             return;
         }
-        if (tempId && document.querySelector(`#chat-messages-${convId} [data-temp-id="${tempId}"]`)) {
-            return;
-        }
 
-        const incomingMedias = msg.Medias || msg.medias || [];
-        if (senderId === myId) {
+        // 2. Identify and handle optimistic UI confirmation (Merging)
+        let optimisticBubble = null;
+        if (tempId) {
+            optimisticBubble = document.querySelector(`#chat-messages-${convId} [data-temp-id="${tempId}"]`);
+        }
+        
+        // Fallback for our own messages if tempId matching fails (content + media count matching)
+        if (!optimisticBubble && senderId === myId) {
+            const incomingMedias = msg.Medias || msg.medias || [];
             const msgContainer = document.getElementById(`chat-messages-${convId}`);
-            const optimisticMsgs = msgContainer?.querySelectorAll('.msg-bubble-wrapper.sent[data-status="pending"], .msg-bubble-wrapper.sent[data-status="sent"]');
-            let matched = false;
+            const optimisticMsgs = msgContainer?.querySelectorAll('.msg-bubble-wrapper.sent[data-status="pending"]');
+            
             if (optimisticMsgs) {
                 for (let opt of optimisticMsgs) {
-                    const optContent = opt.querySelector('.msg-bubble')?.innerText?.trim() || '';
+                    const optContentRaw = opt.querySelector('.msg-bubble')?.innerText || '';
+                    const optContent = ChatCommon.normalizeContent(optContentRaw);
                     const optMediaCount = opt.querySelectorAll('.msg-media-item')?.length || 0;
-
-                    // Match by content text (when non-empty)
-                    const matchByContent = content && optContent === content;
-                    // Match by media count (for image-only messages with no text)
+                    
+                    const matchByContent = content && optContent === normIncoming;
                     const matchByMedia = !content && !optContent && incomingMedias.length > 0 && optMediaCount === incomingMedias.length;
-
                     if (matchByContent || matchByMedia) {
-                        if (messageId) opt.dataset.messageId = messageId;
-                        delete opt.dataset.status;
-                        opt.querySelector('.msg-status')?.remove();
-
-                        // Replace local blob URLs with real server URLs
-                        if (incomingMedias.length > 0) {
-                            const localItems = opt.querySelectorAll('.msg-media-item');
-                            incomingMedias.forEach((m, i) => {
-                                if (localItems[i]) {
-                                    const mediaUrl = m.MediaUrl || m.mediaUrl;
-                                    const img = localItems[i].querySelector('img');
-                                    const vid = localItems[i].querySelector('video');
-                                    if (img) img.src = mediaUrl;
-                                    if (vid) vid.src = mediaUrl;
-                                }
-                            });
-                        }
-
-                        const seenRow = opt.querySelector('.msg-seen-row');
-                        if (seenRow && messageId) seenRow.id = `seen-row-${messageId}`;
-
-                        if (messageId) {
-                            this.applyPendingSeenForMessage(convId, messageId);
-                        }
-                        if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
-                            window.ChatSidebar.incrementUnread(convId, msg);
-                        }
-                        matched = true;
+                        optimisticBubble = opt;
                         break;
                     }
                 }
             }
-            if (matched) return;
+        }
+
+        if (optimisticBubble) {
+            // Confirm optimistic message
+            if (messageId) optimisticBubble.dataset.messageId = messageId;
+            delete optimisticBubble.dataset.status;
+            optimisticBubble.querySelector('.msg-status')?.remove();
+
+            // Replace local blob URLs with real server URLs
+            const incomingMedias = msg.Medias || msg.medias || [];
+            if (incomingMedias.length > 0) {
+                const localItems = optimisticBubble.querySelectorAll('.msg-media-item');
+                incomingMedias.forEach((m, i) => {
+                    if (localItems[i]) {
+                        const mediaUrl = m.MediaUrl || m.mediaUrl;
+                        const img = localItems[i].querySelector('img');
+                        const vid = localItems[i].querySelector('video');
+                        if (img) img.src = mediaUrl;
+                        if (vid) vid.src = mediaUrl;
+                    }
+                });
+            }
+            
+            const seenRow = optimisticBubble.querySelector('.msg-seen-row');
+            if (seenRow && messageId) seenRow.id = `seen-row-${messageId}`;
+
+            if (messageId) {
+                this.applyPendingSeenForMessage(convId, messageId);
+            }
+            if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
+                window.ChatSidebar.incrementUnread(convIdRaw, msg);
+            }
+            return;
         } else {
             // Incoming message from others: clear "Sent" status
             const msgContainer = document.getElementById(`chat-messages-${convId}`);
@@ -472,7 +480,7 @@ const ChatWindow = {
         }
 
         // 1. Remove existing if any in this window
-        const existing = msgContainer.querySelector(`.seen-avatar[data-account-id="${accountId}"]`);
+        const existing = msgContainer.querySelector(`.seen-avatar-wrapper[data-account-id="${accountId}"]`);
         if (existing) {
             existing.remove();
         }
@@ -520,14 +528,22 @@ const ChatWindow = {
         const avatarUrl = memberInfo?.avatar || existing?.src || APP_CONFIG.DEFAULT_AVATAR;
         const displayName = memberInfo?.name || existing?.title || 'User';
 
+        const wrapper = document.createElement('div');
+        wrapper.className = 'seen-avatar-wrapper';
+        wrapper.dataset.accountId = accountId;
+
         const img = document.createElement('img');
         img.src = avatarUrl;
         img.className = 'seen-avatar';
-        img.dataset.accountId = accountId;
-        img.title = displayName;
         img.onerror = () => img.src = APP_CONFIG.DEFAULT_AVATAR;
 
-        targetRow.appendChild(img);
+        const nameLabel = document.createElement('div');
+        nameLabel.className = 'seen-avatar-name';
+        nameLabel.textContent = displayName;
+
+        wrapper.appendChild(img);
+        wrapper.appendChild(nameLabel);
+        targetRow.appendChild(wrapper);
     },
 
     /**
@@ -1402,6 +1418,7 @@ const ChatWindow = {
                     msgContainer.appendChild(bubble);
                 });
 
+                if (window.lucide) lucide.createIcons();
                 requestAnimationFrame(() => {
                     msgContainer.scrollTop = msgContainer.scrollHeight;
                 });
@@ -1500,8 +1517,20 @@ const ChatWindow = {
                     });
                 });
 
+                // Find old first message
+                const oldFirstMsg = msgContainer.querySelector('.msg-bubble-wrapper');
+
                 msgContainer.insertAdjacentHTML('afterbegin', html);
 
+                // If there was an existing first message, sync it with its new predecessor
+                if (oldFirstMsg) {
+                    const newPredecessor = oldFirstMsg.previousElementSibling;
+                    if (newPredecessor && newPredecessor.classList.contains('msg-bubble-wrapper')) {
+                        ChatCommon.syncMessageBoundary(newPredecessor, oldFirstMsg);
+                    }
+                }
+
+                if (window.lucide) lucide.createIcons();
                 // Maintain scroll position
                 requestAnimationFrame(() => {
                     msgContainer.scrollTop = msgContainer.scrollHeight - oldScrollHeight;
@@ -1552,19 +1581,6 @@ const ChatWindow = {
         const groupedWithPrev = sameSender && closeTime;
         const groupPos = groupedWithPrev ? 'last' : 'single';
 
-        // Update previous message
-        if (groupedWithPrev && lastMsgEl) {
-            if (lastMsgEl.classList.contains('msg-group-single')) {
-                lastMsgEl.classList.replace('msg-group-single', 'msg-group-first');
-            } else if (lastMsgEl.classList.contains('msg-group-last')) {
-                lastMsgEl.classList.replace('msg-group-last', 'msg-group-middle');
-            }
-            const prevAvatar = lastMsgEl.querySelector('.msg-avatar');
-            if (prevAvatar && !prevAvatar.classList.contains('msg-avatar-spacer')) {
-                prevAvatar.classList.add('msg-avatar-spacer');
-                prevAvatar.innerHTML = '';
-            }
-        }
 
         const senderAvatar = !msg.isOwn ? (msg.sender?.avatarUrl || '') : '';
         const authorName = isGroup && !msg.isOwn
@@ -1605,9 +1621,16 @@ const ChatWindow = {
         }
         
         msgContainer.appendChild(bubble);
+
+        // Sync grouping with the PREVIOUS message in DOM
+        if (lastMsgEl) {
+            ChatCommon.syncMessageBoundary(lastMsgEl, bubble);
+        }
+
         if (msg.messageId) {
             this.applyPendingSeenForMessage(id, msg.messageId);
         }
+        if (window.lucide) lucide.createIcons();
         msgContainer.scrollTop = msgContainer.scrollHeight;
     },
 
@@ -1673,6 +1696,7 @@ const ChatWindow = {
 
         const formData = new FormData();
         if (hasText) formData.append('Content', content);
+        if (tempId) formData.append('TempId', tempId);
         filesToSend.forEach(file => {
             formData.append('MediaFiles', file);
         });

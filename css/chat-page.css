@@ -1,12 +1,4 @@
-/* Time Separator */
-.chat-time-separator {
-  text-align: center;
-  font-size: 11px;
-  color: var(--text-tertiary);
-  margin: 24px 0 12px;
-  font-weight: 500;
-}
-.chat-page-container {
+﻿.chat-page-container {
   display: flex;
   height: 100vh;
   background: var(--bg-primary);
@@ -103,158 +95,12 @@
   flex-direction: column;
   gap: 2px;
   min-height: 0; /* Critical for flex scrolling */
+  overflow-x: hidden;
 }
 
 .chat-view-messages::before {
   content: "";
   flex: 1;
-}
-
-/* ================================================
-   Message Bubbles – Messenger-style with grouping
-   ================================================ */
-
-.msg-bubble-wrapper {
-  display: flex;
-  flex-direction: column;
-  max-width: 65%;
-}
-
-.msg-bubble-wrapper.sent {
-  align-self: flex-end;
-}
-
-.msg-bubble-wrapper.received {
-  align-self: flex-start;
-}
-
-/* --- Message Row: [Avatar] [Bubble] --- */
-.msg-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-}
-
-.sent .msg-row {
-  flex-direction: row-reverse;
-}
-
-/* --- Avatar --- */
-.msg-avatar {
-  width: 28px;
-  height: 28px;
-  flex-shrink: 0;
-  align-self: flex-end;
-}
-
-.msg-avatar img {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.msg-avatar-spacer {
-  /* Empty space, same width as avatar to keep alignment */
-  width: 28px;
-  height: 0;
-  flex-shrink: 0;
-}
-
-/* --- Bubble base --- */
-.msg-bubble {
-  padding: 8px 14px;
-  font-size: 15px;
-  line-height: 1.4;
-  word-break: break-word;
-}
-
-.sent .msg-bubble {
-  background: var(--accent-primary, #3b82f6);
-  color: white;
-}
-
-.received .msg-bubble {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-/* --- Grouping gap between wrappers --- */
-/* First or single message gets a bigger top gap */
-.msg-bubble-wrapper.msg-group-single,
-.msg-bubble-wrapper.msg-group-first {
-  margin-top: 8px;
-}
-
-/* --- Messenger-Style Dynamic Border Radius --- */
-
-/* Base Logic for Received (Tail on bottom-left) */
-.received .msg-bubble,
-.received .msg-content-container {
-  border-radius: 18px 18px 18px 4px;
-}
-
-/* Base Logic for Sent (Tail on bottom-right) */
-.sent .msg-bubble,
-.sent .msg-content-container {
-  border-radius: 18px 18px 4px 18px;
-}
-
-/* Grouping: Single (Rounded on all 4 corners for modern look) */
-.msg-group-single.received .msg-bubble,
-.msg-group-single.received .msg-content-container {
-  border-radius: 18px;
-}
-.msg-group-single.sent .msg-bubble,
-.msg-group-single.sent .msg-content-container {
-  border-radius: 18px;
-}
-
-/* Grouping: First (Flat bottom-left for received, flat bottom-right for sent) 
-   Actually, First should have flat bottom corner to mate with Middle/Last */
-.msg-group-first.received .msg-bubble,
-.msg-group-first.received .msg-content-container {
-  border-radius: 18px 18px 18px 4px;
-}
-.msg-group-first.sent .msg-bubble,
-.msg-group-first.sent .msg-content-container {
-  border-radius: 18px 18px 4px 18px;
-}
-
-/* Grouping: Middle (Flat both top and bottom on the side of origin) */
-.msg-group-middle.received .msg-bubble,
-.msg-group-middle.received .msg-content-container {
-  border-radius: 4px 18px 18px 4px;
-}
-.msg-group-middle.sent .msg-bubble,
-.msg-group-middle.sent .msg-content-container {
-  border-radius: 18px 4px 4px 18px;
-}
-
-/* Grouping: Last (Flat top on side of origin, rounded bottom) */
-.msg-group-last.received .msg-bubble,
-.msg-group-last.received .msg-content-container {
-  border-radius: 4px 18px 18px 18px;
-}
-.msg-group-last.sent .msg-bubble,
-.msg-group-last.sent .msg-content-container {
-  border-radius: 18px 4px 18px 18px;
-}
-
-.msg-content-container {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  overflow: hidden;
-}
-
-/* --- Author name for Group Chat --- */
-.msg-author {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-tertiary);
-  margin-bottom: 2px;
-  padding-left: 36px; /* avatar width + gap */
 }
 
 .msg-info {
@@ -275,16 +121,6 @@
 
 .received .msg-content-container {
   align-items: flex-start;
-}
-
-.msg-media-grid {
-  display: grid;
-  gap: 4px;
-  border-radius: 12px;
-  overflow: hidden;
-  margin-bottom: 2px;
-  width: fit-content;
-  max-width: 350px;
 }
 
 /* 1 media: Full width */
@@ -352,7 +188,7 @@
   height: 36px;
 }
 
-/* Nút (+) luôn giữ chỗ để tránh layout bị nhảy */
+/* NÃºt (+) luÃ´n giá»¯ chá»— Ä‘á»ƒ trÃ¡nh layout bá»‹ nháº£y */
 .chat-toggle-actions {
   width: 36px;
   height: 36px;
@@ -371,7 +207,7 @@
   display: flex;
 }
 
-/* Khối Icon hành động */
+/* Khá»‘i Icon hÃ nh Ä‘á»™ng */
 .chat-view-input-actions {
   display: flex;
   gap: 4px;
@@ -416,7 +252,7 @@
   box-shadow: none !important;
 }
 
-/* TRẠNG THÁI GOM (Khi đang nhập liệu): Ẩn ngay lập tức, không có transition để tránh flash / trượt */
+/* TRáº NG THÃI GOM (Khi Ä‘ang nháº­p liá»‡u): áº¨n ngay láº­p tá»©c, khÃ´ng cÃ³ transition Ä‘á»ƒ trÃ¡nh flash / trÆ°á»£t */
 .chat-view-input-container.has-content .chat-view-input-actions {
   position: absolute;
   bottom: 45px;
@@ -431,11 +267,11 @@
   transform: translateY(10px);
   z-index: 100;
   border: 1px solid var(--border-primary);
-  /* QUAN TRỌNG: Ngắt mọi hiệu ứng khi chuyển sang trạng thái này */
+  /* QUAN TRá»ŒNG: Ngáº¯t má»i hiá»‡u á»©ng khi chuyá»ƒn sang tráº¡ng thÃ¡i nÃ y */
   transition: none !important;
 }
 
-/* TRẠNG THÁI MỞ (Khi Click dấu +): Lúc này mới cho phép chạy transition mượt mà */
+/* TRáº NG THÃI Má»ž (Khi Click dáº¥u +): LÃºc nÃ y má»›i cho phÃ©p cháº¡y transition mÆ°á»£t mÃ  */
 .chat-input-expansion.is-show .chat-view-input-actions {
   opacity: 1;
   visibility: visible;
@@ -631,8 +467,13 @@
   transition: transform 0.2s;
 }
 
-.chat-send-btn:hover:not(:disabled) {
-  background: transparent;
+.chat-icon-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.chat-icon-btn.active {
+  background: var(--bg-active);
+  color: var(--accent-primary);
 }
 
 .chat-send-btn:disabled {
@@ -740,39 +581,250 @@
   }
 }
 
-/* Seen indicators (Facebook Messenger style) */
-.msg-seen-row {
-  display: flex;
-  justify-content: flex-end;
-  gap: 2px;
+/* Seen indicators (Facebook Messenger style) - MOVED TO SHARED/CHAT-BUBBLE.CSS */
+
+/* Cleaned up redundant msg-seen-row */
+
+/* ================================================
+   Chat Info Sidebar (Right) - Slim & Fixed
+   ================================================ */
+
+.chat-sidebar-info-panel {
+  width: 400px !important; /* Strict fixed width */
+  min-width: 400px !important;
+  max-width: 400px !important;
+  background: var(--bg-primary);
+  border-left: 1px solid var(--border-primary);
+  display: flex !important;
+  flex-direction: column;
+  overflow-y: auto;
+  transition: width 0.3s ease;
+  flex-shrink: 0 !important;
   position: relative;
-  z-index: 2;
 }
 
-/* Only take up space when there are actual seen avatars */
-.msg-seen-row:not(:empty) {
-  padding: 2px 4px 4px 0;
-  margin-top: 2px;
-  min-height: 14px;
+.chat-sidebar-info-panel.hidden {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  border-left: none;
+  overflow: hidden;
+  display: none !important; /* Force hide */
 }
 
-.received .msg-seen-row {
-  justify-content: flex-start;
-  padding-left: 48px; /* keep align with bubble start */
+.chat-info-content {
+  padding: 16px 8px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-.seen-avatar {
-  width: 13px;
-  height: 13px;
+/* --- Info Header --- */
+.chat-info-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+.chat-info-avatar {
+  width: 64px !important;
+  height: 64px !important;
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.chat-info-avatar img {
+  width: 100%;
+  height: 100%;
   border-radius: 50%;
   object-fit: cover;
-  border: 1.5px solid var(--bg-primary);
-  background: var(--bg-secondary);
-  transition: transform 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-.seen-avatar:hover {
-  transform: scale(1.5);
-  z-index: 10;
+/* Status Dot */
+.chat-info-avatar .status-dot {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 14px;
+  height: 14px;
+  background: #31a24c;
+  border: 2px solid var(--bg-primary);
+  border-radius: 50%;
+}
+
+.chat-info-name {
+  font-size: 16px !important;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+  word-break: break-word;
+  padding: 0 4px;
+}
+
+.chat-info-status {
+  font-size: 11px !important;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+/* Encrypted Badge - Smaller */
+.chat-info-encrypted {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--bg-secondary);
+  border-radius: 20px;
+  font-size: 11px !important;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.chat-info-encrypted i,
+.chat-info-encrypted svg {
+    width: 11px;
+    height: 11px;
+}
+
+/* --- Quick Actions --- */
+.chat-info-quick-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px !important;
+  margin: 12px 0;
+  width: 100%;
+}
+
+.chat-info-quick-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  width: 54px !important;
+  padding: 0;
+}
+
+.chat-info-quick-icon {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 50%;
+  background: var(--bg-active);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+}
+
+.chat-info-quick-btn span {
+  font-size: 10px !important;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+/* --- Section Containers --- */
+.chat-info-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-info-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px !important;
+  font-size: 13px !important;
+  font-weight: 700;
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.chat-info-section-title:hover {
+  background: var(--bg-hover);
+}
+
+.chat-info-section-title i.chevron,
+.chat-info-section-title svg.chevron {
+  width: 14px;
+  height: 14px;
+}
+
+.chat-info-section.collapsed .chat-info-section-title i.chevron,
+.chat-info-section.collapsed .chat-info-section-title svg.chevron {
+  transform: rotate(-90deg);
+}
+
+.chat-info-section-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-info-section.collapsed .chat-info-section-content {
+  display: none;
+}
+
+/* --- List Items --- */
+.chat-info-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px !important;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+  color: var(--text-primary);
+  font-size: 13px !important;
+  font-weight: 500;
+}
+
+.chat-info-item i,
+.chat-info-item svg {
+  width: 18px;
+  height: 18px;
+}
+
+.chat-info-member-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+
+.chat-info-member-role {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  background: var(--bg-secondary);
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+/* Scrollbar */
+.chat-sidebar-info-panel::-webkit-scrollbar {
+  width: 4px;
+}
+
+.chat-sidebar-info-panel::-webkit-scrollbar-thumb {
+  background: var(--border-primary);
+  border-radius: 10px;
+}
+
+@media (max-width: 992px) {
+  .chat-sidebar-info-panel {
+    position: absolute;
+    right: 0;
+    top: 72px;
+    height: calc(100% - 72px);
+    z-index: 100;
+    box-shadow: var(--shadow-2xl);
+    width: 240px !important;
+  }
 }
