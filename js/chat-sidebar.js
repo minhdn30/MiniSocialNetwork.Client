@@ -348,7 +348,11 @@ const ChatSidebar = {
                 conv.unreadCount = (conv.unreadCount || 0) + 1;
             }
             if (message) {
+                conv.lastMessage = message;
                 conv.lastMessageSentAt = message.sentAt || message.SentAt || new Date().toISOString();
+                // Reset seen-by since it's a new message
+                conv.lastMessageSeenBy = [];
+                conv.lastMessageSeenCount = 0;
             }
         }
 
@@ -462,6 +466,94 @@ const ChatSidebar = {
                 item.classList.toggle('active', !!isTarget);
             });
         }
+    },
+
+    /**
+     * Called by ChatWindow/ChatPage when a MemberSeen event is received.
+     * Updates the seen indicator in the sidebar for the given conversation.
+     */
+    updateSeenInSidebar(conversationId, accountId) {
+        const convIdNorm = (conversationId || '').toLowerCase();
+        const accIdNorm = (accountId || '').toLowerCase();
+        const myId = (localStorage.getItem('accountId') || '').toLowerCase();
+
+        if (accIdNorm === myId) {
+            return;
+        }
+
+        const conv = this.conversations.find(c => (c.conversationId || '').toLowerCase() === convIdNorm);
+        if (!conv) {
+            return;
+        }
+
+        // Only update if the last message was sent by us
+        const lastMsgSenderId = (conv.lastMessage?.sender?.accountId || conv.lastMessage?.sender?.AccountId || conv.lastMessage?.Sender?.AccountId || conv.lastMessage?.Sender?.accountId || '').toLowerCase();
+        if (lastMsgSenderId !== myId) {
+            return;
+        }
+
+        // Initialize array if needed
+        if (!conv.lastMessageSeenBy) conv.lastMessageSeenBy = [];
+
+        // Check if this member already seen
+        const alreadySeen = conv.lastMessageSeenBy.find(m =>
+            (m.accountId || '').toLowerCase() === accIdNorm
+        );
+        if (alreadySeen) {
+            return;
+        }
+
+        // Resolve member info
+        let memberInfo = null;
+        if (!conv.isGroup && conv.otherMember && (conv.otherMember.accountId || '').toLowerCase() === accIdNorm) {
+            memberInfo = {
+                accountId: conv.otherMember.accountId,
+                avatarUrl: conv.otherMember.avatarUrl,
+                displayName: conv.otherMember.username || conv.otherMember.fullName
+            };
+        }
+        // For group chats, try to find memberInfo from lastMessage sender context or members list
+        // For now, use a fallback
+        if (!memberInfo) {
+            memberInfo = {
+                accountId: accountId,
+                avatarUrl: APP_CONFIG.DEFAULT_AVATAR,
+                displayName: 'User'
+            };
+        }
+
+        conv.lastMessageSeenBy.push(memberInfo);
+        conv.lastMessageSeenCount = (conv.lastMessageSeenCount || 0) + 1;
+
+        // Update DOM
+        const item = document.querySelector(`.chat-item[data-conversation-id="${conv.conversationId}"]`);
+        if (!item) {
+            return;
+        }
+
+        const endArea = item.querySelector('.chat-item-end');
+        if (!endArea) {
+            return;
+        }
+
+        const unread = (conv.unreadCount > 0) || item.classList.contains('unread');
+        if (unread) {
+            return;
+        }
+
+        const seenCount = conv.lastMessageSeenCount || conv.lastMessageSeenBy.length;
+        const extraCount = Math.max(0, seenCount - conv.lastMessageSeenBy.length);
+
+        endArea.innerHTML = `
+            <div class="chat-seen-avatars">
+                ${conv.lastMessageSeenBy.map(m => `
+                    <img src="${m.avatarUrl || APP_CONFIG.DEFAULT_AVATAR}" 
+                         title="Seen by ${escapeHtml(m.displayName)}" 
+                         class="chat-mini-seen-avatar">
+                `).join('')}
+                ${extraCount > 0 ? `<span class="chat-seen-more">+${extraCount}</span>` : ''}
+            </div>
+        `;
     }
 };
 

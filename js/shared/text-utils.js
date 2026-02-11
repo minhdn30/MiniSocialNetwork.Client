@@ -104,3 +104,25 @@ function stripHtml(html) {
   tmp.innerHTML = html;
   return tmp.textContent || tmp.innerText || "";
 }
+
+/**
+ * Automatically convert URLs in text to clickable <a> tags
+ * @param {string} text - The text to process
+ * @returns {string} Text with clickable links
+ */
+function linkify(text) {
+  if (!text) return "";
+  
+  // URL regex: supports http, https, and www.
+  const urlPattern = /(\b(https?):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])|(\bwww\.[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
+  
+  return text.replace(urlPattern, (url) => {
+    let href = url;
+    // Add http:// if it starts with www.
+    if (url.toLowerCase().startsWith('www.')) {
+        href = 'http://' + url;
+    }
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${url}</a>`;
+  });
+}
+

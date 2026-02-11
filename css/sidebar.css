@@ -110,11 +110,11 @@
   stroke: var(--accent-primary);
 }
 
-.menu-item span {
+.menu-item span:not(.badge) {
   font-weight: 400;
 }
 
-.menu-item.active span {
+.menu-item.active span:not(.badge) {
   font-weight: 600;
   color: var(--accent-primary);
 }
@@ -132,7 +132,7 @@
   background: var(--bg-menu-hover);
 }
 
-.menu-item.active span {
+.menu-item.active span:not(.badge) {
   font-weight: 600;
 }
 
@@ -145,12 +145,12 @@
 }
 
 /* Text menu */
-.menu-item span {
+.menu-item span:not(.badge) {
   white-space: nowrap;
 }
 
 /* Ẩn text khi sidebar thu gọn */
-.sidebar:not(:hover):not(.expanded) .menu-item span {
+.sidebar:not(:hover):not(.expanded) .menu-item span:not(.badge) {
   display: none;
 }
 
@@ -184,12 +184,30 @@
 .badge {
   position: absolute;
   right: 14px;
+  background: var(--accent-primary);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
 
-  background: var(--badge-bg);
-  color: var(--text-primary);
-  font-size: 12px;
-  padding: 2px 6px;
-  border-radius: 999px;
+/* When sidebar is collapsed: shrink badge to a small dot at top-right of icon */
+.sidebar:not(:hover):not(.expanded) .badge {
+  top: 6px;
+  right: 10px;
+  min-width: 10px;
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  font-size: 0; /* Hide text */
+  border: 2px solid var(--bg-primary);
 }
 
 /* ================= FOOTER ================= */
@@ -594,7 +612,7 @@ body.light-mode .toggle-switch {
   }
 
   /* Hide labels on mobile bottom bar */
-  .menu-item span {
+  .menu-item span:not(.badge) {
     display: none !important;
   }
 

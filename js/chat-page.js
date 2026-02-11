@@ -276,7 +276,8 @@ const ChatPage = {
                 return;
             }
 
-            // 3. Merge check for our own messages
+            // 3. Merge check for our own messages (content + media count matching)
+            const incomingMedias = msg.Medias || msg.medias || [];
             if (senderId === myId) {
                 const msgContainer = document.getElementById('chat-view-messages');
                 const optimisticMsgs = msgContainer?.querySelectorAll('.msg-bubble-wrapper.sent[data-status="pending"]');
@@ -284,11 +285,32 @@ const ChatPage = {
                 
                 if (optimisticMsgs) {
                     for (let opt of optimisticMsgs) {
-                        const optContent = opt.querySelector('.msg-bubble')?.innerText.trim();
-                        if (optContent === content) {
+                        const optContent = opt.querySelector('.msg-bubble')?.innerText?.trim() || '';
+                        const optMediaCount = opt.querySelectorAll('.msg-media-item')?.length || 0;
+
+                        // Match by content text (when non-empty)
+                        const matchByContent = content && optContent === content;
+                        // Match by media count (for image-only messages with no text)
+                        const matchByMedia = !content && !optContent && incomingMedias.length > 0 && optMediaCount === incomingMedias.length;
+
+                        if (matchByContent || matchByMedia) {
                             if (messageId) opt.dataset.messageId = messageId;
                             delete opt.dataset.status;
                             opt.querySelector('.msg-status')?.remove();
+
+                            // Replace local blob URLs with real server URLs
+                            if (incomingMedias.length > 0) {
+                                const localItems = opt.querySelectorAll('.msg-media-item');
+                                incomingMedias.forEach((m, i) => {
+                                    if (localItems[i]) {
+                                        const mediaUrl = m.MediaUrl || m.mediaUrl;
+                                        const img = localItems[i].querySelector('img');
+                                        const vid = localItems[i].querySelector('video');
+                                        if (img) img.src = mediaUrl;
+                                        if (vid) vid.src = mediaUrl;
+                                    }
+                                });
+                            }
                             
                             const seenRow = opt.querySelector('.msg-seen-row');
                             if (seenRow && messageId) seenRow.id = `seen-row-${messageId}`;
@@ -344,6 +366,11 @@ const ChatPage = {
 
         if (currentNorm === eventNorm) {
             this.moveSeenAvatar(accId, msgId);
+        }
+
+        // Forward to sidebar to update seen indicator
+        if (window.ChatSidebar && typeof window.ChatSidebar.updateSeenInSidebar === 'function') {
+            window.ChatSidebar.updateSeenInSidebar(convId, accId);
         }
     },
 

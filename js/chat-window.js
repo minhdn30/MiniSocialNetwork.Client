@@ -12,13 +12,17 @@ const ChatWindow = {
         if (!document.getElementById('chat-container')) {
             const container = document.createElement('div');
             container.id = 'chat-container';
-            container.className = 'chat-window-container'; // Better class name
+            container.className = 'chat-window-container';
             document.body.appendChild(container);
+        }
+
+        // Setup global click-outside for ALL chat window emoji pickers
+        if (window.EmojiUtils) {
+            window.EmojiUtils.setupClickOutsideHandler('.chat-window-emoji-container', '.chat-action-btn');
         }
 
         // Click outside to lose focus
         document.addEventListener('mousedown', (e) => {
-            // If click is NOT inside a chat-box, remove focus from all
             if (!e.target.closest('.chat-box')) {
                 document.querySelectorAll('.chat-box.is-focused').forEach(b => b.classList.remove('is-focused'));
             }
@@ -104,28 +108,55 @@ const ChatWindow = {
         }
 
         const myId = (localStorage.getItem('accountId') || '').toLowerCase();
+        const incomingMedias = msg.Medias || msg.medias || [];
         if (senderId === myId) {
             const msgContainer = document.getElementById(`chat-messages-${convId}`);
-            const optimisticMsg = msgContainer?.querySelector(`.msg-bubble-wrapper.sent[data-status="pending"], .msg-bubble-wrapper.sent[data-status="sent"]`);
-            if (optimisticMsg) {
-                const optContent = optimisticMsg.querySelector('.msg-bubble')?.innerText.trim();
-                if (optContent === content) {
-                    if (messageId) optimisticMsg.dataset.messageId = messageId;
-                    delete optimisticMsg.dataset.status;
-                    optimisticMsg.querySelector('.msg-status')?.remove();
+            const optimisticMsgs = msgContainer?.querySelectorAll('.msg-bubble-wrapper.sent[data-status="pending"], .msg-bubble-wrapper.sent[data-status="sent"]');
+            let matched = false;
+            if (optimisticMsgs) {
+                for (let opt of optimisticMsgs) {
+                    const optContent = opt.querySelector('.msg-bubble')?.innerText?.trim() || '';
+                    const optMediaCount = opt.querySelectorAll('.msg-media-item')?.length || 0;
 
-                    const seenRow = optimisticMsg.querySelector('.msg-seen-row');
-                    if (seenRow && messageId) seenRow.id = `seen-row-${messageId}`;
+                    // Match by content text (when non-empty)
+                    const matchByContent = content && optContent === content;
+                    // Match by media count (for image-only messages with no text)
+                    const matchByMedia = !content && !optContent && incomingMedias.length > 0 && optMediaCount === incomingMedias.length;
 
-                    if (messageId) {
-                        this.applyPendingSeenForMessage(convId, messageId);
+                    if (matchByContent || matchByMedia) {
+                        if (messageId) opt.dataset.messageId = messageId;
+                        delete opt.dataset.status;
+                        opt.querySelector('.msg-status')?.remove();
+
+                        // Replace local blob URLs with real server URLs
+                        if (incomingMedias.length > 0) {
+                            const localItems = opt.querySelectorAll('.msg-media-item');
+                            incomingMedias.forEach((m, i) => {
+                                if (localItems[i]) {
+                                    const mediaUrl = m.MediaUrl || m.mediaUrl;
+                                    const img = localItems[i].querySelector('img');
+                                    const vid = localItems[i].querySelector('video');
+                                    if (img) img.src = mediaUrl;
+                                    if (vid) vid.src = mediaUrl;
+                                }
+                            });
+                        }
+
+                        const seenRow = opt.querySelector('.msg-seen-row');
+                        if (seenRow && messageId) seenRow.id = `seen-row-${messageId}`;
+
+                        if (messageId) {
+                            this.applyPendingSeenForMessage(convId, messageId);
+                        }
+                        if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
+                            window.ChatSidebar.incrementUnread(convId, msg);
+                        }
+                        matched = true;
+                        break;
                     }
-                    if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
-                        window.ChatSidebar.incrementUnread(convId, msg);
-                    }
-                    return;
                 }
             }
+            if (matched) return;
         } else {
             // Incoming message from others: clear "Sent" status
             const msgContainer = document.getElementById(`chat-messages-${convId}`);
@@ -156,12 +187,24 @@ const ChatWindow = {
     handleMemberSeen(data) {
         const convIdRaw = data.ConversationId || data.conversationId;
         const convId = this.getOpenChatId(convIdRaw);
-        if (!convId) return;
+        if (!convId) {
+            // Still forward to sidebar even if no chat window is open
+            const accId = data.AccountId || data.accountId;
+            if (window.ChatSidebar && typeof window.ChatSidebar.updateSeenInSidebar === 'function') {
+                window.ChatSidebar.updateSeenInSidebar(convIdRaw, accId);
+            }
+            return;
+        }
 
         const accId = data.AccountId || data.accountId;
         const msgIdRaw = data.LastSeenMessageId || data.lastSeenMessageId;
         const msgId = msgIdRaw ? msgIdRaw.toString().toLowerCase() : msgIdRaw;
         this.moveSeenAvatar(convId, accId, msgId);
+
+        // Forward to sidebar to update seen indicator
+        if (window.ChatSidebar && typeof window.ChatSidebar.updateSeenInSidebar === 'function') {
+            window.ChatSidebar.updateSeenInSidebar(convIdRaw, accId);
+        }
     },
 
     /**
@@ -237,6 +280,23 @@ const ChatWindow = {
                     memberInfo = {
                         avatar: member.avatarUrl || member.AvatarUrl,
                         name: member.displayName || member.DisplayName
+                    };
+                }
+            }
+            // Fallback: use conv data (otherMember / displayAvatar) for 1:1 chats
+            if (!memberInfo && chatObj?.data) {
+                const other = chatObj.data.otherMember;
+                if (other && (other.accountId || '').toLowerCase() === targetId) {
+                    memberInfo = {
+                        avatar: other.avatarUrl || other.AvatarUrl,
+                        name: other.displayName || other.DisplayName || other.username || other.Username
+                    };
+                }
+                // Final fallback: conversation display avatar (1:1 only)
+                if (!memberInfo && !chatObj.data.isGroup) {
+                    memberInfo = {
+                        avatar: chatObj.data.displayAvatar,
+                        name: chatObj.data.displayName
                     };
                 }
             }
@@ -412,17 +472,36 @@ const ChatWindow = {
                     Starting chat...
                 </div>
             </div>
-            <div class="chat-input-area">
+            <div class="chat-input-area" id="chat-input-area-${conv.conversationId}">
                 <div class="chat-window-attachment-preview" id="chat-window-preview-${conv.conversationId}"></div>
+                
+                <div class="chat-window-emoji-container" id="chat-emoji-container-${conv.conversationId}"></div>
+
                 <div class="chat-input-wrapper">
-                    <button class="chat-add-media-btn" onclick="event.stopPropagation(); ChatWindow.openFilePicker('${conv.conversationId}')">
-                        <i data-lucide="plus"></i>
-                    </button>
+                    <div class="chat-window-input-actions">
+                         <button class="chat-toggle-actions" onclick="event.stopPropagation(); ChatWindow.toggleExpansionMenu('${conv.conversationId}')">
+                            <i data-lucide="plus-circle"></i>
+                        </button>
+                        <div class="chat-actions-group" id="chat-actions-group-${conv.conversationId}">
+                               <button class="chat-action-btn" title="Emoji" onclick="ChatWindow.openEmojiPicker(this, '${conv.conversationId}')">
+                                    <i data-lucide="smile"></i>
+                                </button>
+                                <button class="chat-action-btn" title="Media" onclick="ChatWindow.openFilePicker('${conv.conversationId}')">
+                                    <i data-lucide="image"></i>
+                                </button>
+                                <button class="chat-action-btn" title="File" onclick="window.toastInfo && window.toastInfo('Feature coming soon')">
+                                    <i data-lucide="paperclip"></i>
+                                </button>
+                        </div>
+                    </div>
+
                     <div class="chat-input-field" contenteditable="true" placeholder="Type a message..." 
                          oninput="ChatWindow.handleInput(this, '${conv.conversationId}')"
-                         onkeydown="ChatWindow.handleKeyDown(event, '${conv.conversationId}')"></div>
+                         onkeydown="ChatWindow.handleKeyDown(event, '${conv.conversationId}')"
+                         onpaste="ChatWindow.handlePaste(event)"
+                         data-placeholder-visible="true"></div>
+                    
                     <div class="chat-input-actions-end">
-                        <button class="chat-emoji-btn"><i data-lucide="smile"></i></button>
                         <button class="chat-send-btn" id="send-btn-${conv.conversationId}" disabled onclick="ChatWindow.sendMessage('${conv.conversationId}')">
                             <i data-lucide="send"></i>
                         </button>
@@ -434,6 +513,9 @@ const ChatWindow = {
 
         container.appendChild(chatBox);
         setTimeout(() => chatBox.classList.add('show'), 10);
+        
+        // Render Lucide icons for the new box
+        if (window.lucide) window.lucide.createIcons();
 
         this.openChats.set(conv.conversationId, {
             element: chatBox,
@@ -530,13 +612,57 @@ const ChatWindow = {
 
     handleInput(field, id) {
         this.updateSendButtonState(id);
+        this.updatePlaceholderState(field);
         
-        // Toggle 'expanded' class based on field height
+        // Auto-resize
+        field.style.height = 'auto';
+        const newHeight = field.scrollHeight;
+        
         const wrapper = field.closest('.chat-input-wrapper');
+        const container = field.closest('.chat-input-area');
+        
         if (wrapper) {
-            // If field height > 32px (single line), it's expanded
-            wrapper.classList.toggle('expanded', field.scrollHeight > 32);
+            wrapper.classList.toggle('expanded', newHeight > 34);
         }
+
+        if (container) {
+            const hasText = field.innerText.trim().length > 0;
+            container.classList.toggle('has-content', hasText);
+            
+            // If has content, automatically hide action icons unless expanded
+            if (hasText) {
+                 const actionsGroup = container.querySelector('.chat-actions-group');
+                 if (actionsGroup) actionsGroup.classList.remove('is-show');
+            }
+        }
+    },
+
+    updatePlaceholderState(field) {
+        const text = field.innerText.trim();
+        // If it's effectively empty (handling <br> or whitespace), mark it
+        const isEmpty = text.length === 0;
+        field.dataset.placeholderVisible = isEmpty ? "true" : "false";
+        
+        // Ensure it's truly empty if effectively empty (removes <br>)
+        if (isEmpty && field.innerHTML !== '') {
+            field.innerHTML = '';
+        }
+    },
+
+    resetInput(id) {
+        const chat = this.openChats.get(id);
+        if (!chat) return;
+        const inputField = chat.element.querySelector('.chat-input-field');
+        if (!inputField) return;
+
+        inputField.innerHTML = ''; // Clear everything
+        inputField.style.height = 'auto';
+        inputField.dataset.placeholderVisible = "true";
+        
+        const wrapper = inputField.closest('.chat-input-wrapper');
+        if (wrapper) wrapper.classList.remove('expanded');
+        
+        this.updateSendButtonState(id);
     },
 
     handleKeyDown(event, id) {
@@ -546,9 +672,57 @@ const ChatWindow = {
         }
     },
 
+    handlePaste(e) {
+        e.preventDefault();
+        const text = e.clipboardData.getData('text/plain');
+        document.execCommand('insertText', false, text);
+    },
+
+    toggleExpansionMenu(id) {
+        const container = document.getElementById(`chat-input-area-${id}`);
+        const actionsGroup = document.getElementById(`chat-actions-group-${id}`);
+        if (!actionsGroup) return;
+        
+        actionsGroup.classList.toggle('is-show');
+        
+        // Close when clicking outside
+        if (actionsGroup.classList.contains('is-show')) {
+            const closeHandler = (e) => {
+                if (!actionsGroup.contains(e.target) && !e.target.closest('.chat-toggle-actions')) {
+                    actionsGroup.classList.remove('is-show');
+                    document.removeEventListener('click', closeHandler);
+                }
+            };
+            setTimeout(() => document.addEventListener('click', closeHandler), 10);
+        }
+    },
+
+    openEmojiPicker(btn, id) {
+        const container = document.getElementById(`chat-emoji-container-${id}`);
+        if (!container || !window.EmojiUtils) return;
+        
+        // Hide expansion menu first
+        const actionsGroup = document.getElementById(`chat-actions-group-${id}`);
+        if (actionsGroup) actionsGroup.classList.remove('is-show');
+
+        window.EmojiUtils.togglePicker(container, (emoji) => {
+            const inputField = document.querySelector(`#chat-box-${id} .chat-input-field`);
+            if (inputField) {
+                // Focus input first
+                inputField.focus();
+                document.execCommand('insertText', false, emoji.native);
+                this.handleInput(inputField, id);
+            }
+        });
+    },
+
     openFilePicker(id) {
         const input = document.getElementById(`chat-file-input-${id}`);
         if (input) input.click();
+        
+        // Hide expansion menu
+        const actionsGroup = document.getElementById(`chat-actions-group-${id}`);
+        if (actionsGroup) actionsGroup.classList.remove('is-show');
     },
 
     updateSendButtonState(id) {
@@ -612,6 +786,16 @@ const ChatWindow = {
             `;
             previewEl.appendChild(item);
         });
+
+        // Add the "+" button like Facebook Messenger if under limit
+        const maxFiles = window.APP_CONFIG?.MAX_CHAT_MEDIA_FILES || 5;
+        if (chat.pendingFiles.length > 0 && chat.pendingFiles.length < maxFiles) {
+            const addBtn = document.createElement('div');
+            addBtn.className = 'chat-window-preview-add-btn';
+            addBtn.innerHTML = '<i data-lucide="plus"></i>';
+            addBtn.onclick = () => document.getElementById(`chat-file-input-${id}`).click();
+            previewEl.appendChild(addBtn);
+        }
 
         if (window.lucide) lucide.createIcons();
     },
@@ -944,13 +1128,13 @@ const ChatWindow = {
             });
         }
         
-        inputField.innerText = '';
+        // Clear input and state
+        this.resetInput(id);
         inputField.focus();
         
         // Clear pending files and preview
         chat.pendingFiles = [];
         this.updateAttachmentPreview(id);
-        this.updateSendButtonState(id);
 
         const formData = new FormData();
         if (hasText) formData.append('Content', content);

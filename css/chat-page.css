@@ -22,6 +22,7 @@
   position: relative;
   background: var(--bg-primary);
   min-width: 0;
+  min-height: 0; /* Critical for flex scrolling */
 }
 
 /* Chat View */
@@ -29,6 +30,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0; /* Critical for flex scrolling */
 }
 
 .chat-view.hidden {
@@ -100,6 +102,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-height: 0; /* Critical for flex scrolling */
 }
 
 .chat-view-messages::before {
@@ -184,43 +187,17 @@
   margin-top: 8px;
 }
 
-/* --- Messenger-style border-radius per position --- */
-/* SENT messages: right side gets flattened */
-.sent.msg-group-single .msg-bubble {
-  border-radius: 18px;
-  border-bottom-right-radius: 4px;
-}
-.sent.msg-group-first .msg-bubble {
-  border-radius: 18px;
-  border-bottom-right-radius: 4px;
-}
-.sent.msg-group-middle .msg-bubble {
-  border-radius: 18px;
-  border-top-right-radius: 4px;
-  border-bottom-right-radius: 4px;
-}
-.sent.msg-group-last .msg-bubble {
-  border-radius: 18px;
-  border-top-right-radius: 4px;
+/* --- Border-radius: 4 corners rounded always --- */
+.msg-bubble {
+  border-radius: 18px !important;
 }
 
-/* RECEIVED messages: left side gets flattened */
-.received.msg-group-single .msg-bubble {
+.msg-content-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   border-radius: 18px;
-  border-bottom-left-radius: 4px;
-}
-.received.msg-group-first .msg-bubble {
-  border-radius: 18px;
-  border-bottom-left-radius: 4px;
-}
-.received.msg-group-middle .msg-bubble {
-  border-radius: 18px;
-  border-top-left-radius: 4px;
-  border-bottom-left-radius: 4px;
-}
-.received.msg-group-last .msg-bubble {
-  border-radius: 18px;
-  border-top-left-radius: 4px;
+  overflow: hidden;
 }
 
 /* --- Author name for Group Chat --- */
@@ -244,12 +221,6 @@
 }
 
 /* Media in Chat */
-.msg-content-container {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
 .sent .msg-content-container {
   align-items: flex-end;
 }
@@ -287,57 +258,18 @@
   aspect-ratio: 16/9;
 }
 
-/* 4 or more: 2x2 grid */
-.msg-media-grid.count-4 {
-  grid-template-columns: repeat(2, 1fr);
-}
-
-.msg-media-item {
-  position: relative;
-  background: var(--bg-hover);
-  cursor: pointer;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  aspect-ratio: 1/1; /* Default square for grids */
-}
-
+/* Page specific Chat Media Grid Overrides (if any) */
 .msg-media-grid.count-1 .msg-media-item {
   aspect-ratio: auto;
   max-height: 400px;
 }
 
-.msg-media-item img,
-.msg-media-item video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  transition: transform 0.3s;
+.msg-media-grid.count-2,
+.msg-media-grid.count-3,
+.msg-media-grid.count-4 {
+  width: 400px;
 }
 
-.msg-media-item:hover img {
-  transform: scale(1.05);
-}
-
-/* Overlay for more than 4 items */
-.msg-media-more-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 20px;
-  font-weight: 600;
-  z-index: 2;
-}
 
 /* Constraints for single items */
 .msg-media-grid.single .msg-media-item {
@@ -483,10 +415,13 @@
   display: flex;
   flex-wrap: nowrap;
   overflow-x: auto;
-  gap: 8px;
-  padding: 8px 4px;
+  overflow-y: hidden; /* Ensure no vertical scroll */
+  gap: 12px;
+  padding: 12px 4px;
   border-bottom: 1px solid var(--border-primary);
   margin-bottom: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-primary) transparent;
 }
 
 .chat-attachment-preview:empty {
@@ -498,13 +433,10 @@
 
 .chat-preview-item {
   position: relative;
-  width: 60px;
-  height: 60px;
+  width: 64px;
+  height: 64px;
   flex-shrink: 0;
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-primary);
+  z-index: 10;
 }
 
 .chat-preview-item img,
@@ -512,35 +444,50 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-hover);
+  box-shadow: var(--shadow-sm);
 }
 
 .chat-preview-remove {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 20px;
-  height: 20px;
-  background: rgba(0, 0, 0, 0.6);
-  color: white;
+  top: -8px;
+  right: -8px;
+  width: 18px;
+  height: 18px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 14px;
-  z-index: 2;
-  transition: background 0.2s;
+  box-shadow: var(--shadow-md);
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  z-index: 11;
 }
 
 .chat-preview-remove:hover {
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--bg-active);
+  color: #ef4444;
+  transform: scale(1.1);
+  border-color: var(--border-primary);
 }
 
+.chat-preview-remove i,
+.chat-preview-remove svg {
+  width: 12px;
+  height: 12px;
+}
+
+
 .chat-preview-add-btn {
-  width: 60px;
-  height: 60px;
+  width: 64px;
+  height: 64px;
   flex-shrink: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 2px dashed var(--border-primary);
   display: flex;
   align-items: center;
@@ -554,16 +501,39 @@
 .chat-preview-add-btn:hover {
   color: var(--accent-primary);
   border-color: var(--accent-primary);
+  background: var(--bg-hover);
+}
+
+
+/* Custom Horizontal Scrollbar Styling (Match ChatWindow) */
+.chat-attachment-preview::-webkit-scrollbar {
+  height: 5px;
+}
+
+.chat-attachment-preview::-webkit-scrollbar-track {
   background: transparent;
 }
 
-/* Custom scrollbar for preview */
-.chat-attachment-preview::-webkit-scrollbar {
-  height: 4px;
-}
 .chat-attachment-preview::-webkit-scrollbar-thumb {
   background: var(--border-primary);
   border-radius: 10px;
+}
+
+.chat-attachment-preview::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-primary, #3b82f6);
+}
+
+/* Hide ALL scrollbar buttons/arrows */
+.chat-attachment-preview::-webkit-scrollbar-button,
+.chat-attachment-preview::-webkit-scrollbar-button:start,
+.chat-attachment-preview::-webkit-scrollbar-button:end {
+  display: none !important;
+  width: 0;
+  height: 0;
+}
+
+.chat-attachment-preview::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .chat-view-input-wrapper textarea {
@@ -653,7 +623,7 @@
 
 .chat-sidebar-list::-webkit-scrollbar-thumb,
 .chat-view-messages::-webkit-scrollbar-thumb {
-  background: var(--text-tertiary);
+  background: #555; /* More visible than text-tertiary in dark mode */
   border-radius: 10px;
   cursor: pointer;
 }
@@ -726,12 +696,16 @@
 .msg-seen-row {
   display: flex;
   justify-content: flex-end;
-  padding: 2px 4px 4px 0;
-  margin-top: -6px; /* pull closer to bubble */
   gap: 2px;
-  min-height: 14px;
   position: relative;
   z-index: 2;
+}
+
+/* Only take up space when there are actual seen avatars */
+.msg-seen-row:not(:empty) {
+  padding: 2px 4px 4px 0;
+  margin-top: 2px;
+  min-height: 14px;
 }
 
 .received .msg-seen-row {

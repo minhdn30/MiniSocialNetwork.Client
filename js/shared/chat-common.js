@@ -78,21 +78,38 @@ const ChatCommon = {
             const remainingCount = allMedias.length - 4;
             const gridClass = `count-${Math.min(allMedias.length, 4)}`;
 
+            // Escaping JSON for HTML attribute safely
+            const mediaListJson = JSON.stringify(allMedias).replace(/"/g, '&quot;');
+
             mediaHtml = `
                 <div class="msg-media-grid ${gridClass}">
                     ${displayMedias.map((m, idx) => {
                         const isLast = idx === 3 && remainingCount > 0;
                         let inner = '';
+                        let onclickStr = '';
+                        let dblclickStr = `ondblclick="window.previewMedia && window.previewMedia('', ${idx}, ${mediaListJson})"`;
+
                         if (m.mediaType === 0) {
-                            inner = `<img src="${m.mediaUrl}" alt="image" loading="lazy" onclick="window.previewImage && window.previewImage('${m.mediaUrl}')">`;
+                            inner = `<img src="${m.mediaUrl}" alt="media" loading="lazy">`;
+                            // Image: single click opens preview
+                            onclickStr = `onclick="window.previewMedia && window.previewMedia('', ${idx}, ${mediaListJson})"`;
+                            dblclickStr = ''; 
                         } else if (m.mediaType === 1) {
-                            inner = `<video src="${m.mediaUrl}"></video>`; // Removed controls for clean grid
+                            inner = `
+                                <div class="msg-video-container">
+                                    <video src="${m.mediaUrl}" loop muted playsinline></video>
+                                    <div class="msg-video-overlay" onclick="ChatCommon.toggleChatVideo(event, this)">
+                                        <i data-lucide="play" class="play-icon"></i>
+                                    </div>
+                                </div>
+                            `;
+                            // Video: dblclick to zoom, single click handled by overlay
                         }
 
                         return `
-                            <div class="msg-media-item" onclick="window.previewImage && window.previewImage('${m.mediaUrl}')">
+                            <div class="msg-media-item" ${onclickStr} ${dblclickStr}>
                                 ${inner}
-                                ${isLast ? `<div class="msg-media-more-overlay">+${remainingCount}</div>` : ''}
+                                ${isLast ? `<div class="msg-media-more-overlay" onclick="event.stopPropagation(); window.previewMedia && window.previewMedia('', 3, ${mediaListJson})">+${remainingCount}</div>` : ''}
                             </div>
                         `;
                     }).join('')}
@@ -129,12 +146,34 @@ const ChatCommon = {
                     ${avatarHtml}
                     <div class="msg-content-container">
                         ${mediaHtml}
-                        ${msg.content ? `<div class="msg-bubble">${escapeHtml(msg.content)}</div>` : ''}
+                        ${msg.content ? `<div class="msg-bubble">${linkify(escapeHtml(msg.content))}</div>` : ''}
                     </div>
                 </div>
                 ${seenRowHtml}
             </div>
         `;
+    },
+
+    /**
+     * Toggle video play/pause in chat bubble
+     */
+    toggleChatVideo(e, overlay) {
+        if (e) e.stopPropagation();
+        const container = overlay.closest('.msg-video-container');
+        const video = container.querySelector('video');
+        const icon = overlay.querySelector('i');
+
+        if (video.paused) {
+            video.play();
+            container.classList.add('playing');
+            if (icon) icon.setAttribute('data-lucide', 'pause');
+        } else {
+            video.pause();
+            container.classList.remove('playing');
+            if (icon) icon.setAttribute('data-lucide', 'play');
+        }
+
+        if (window.lucide) lucide.createIcons();
     },
 
     /**

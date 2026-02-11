@@ -276,7 +276,7 @@ body.chat-sidebar-open #sidebar.expanded ~ .main-content {
 }
 
 .chat-unread-badge {
-    background: #3b82f6;
+    background: var(--accent-primary);
     color: white;
     font-size: 11px;
     font-weight: 700;

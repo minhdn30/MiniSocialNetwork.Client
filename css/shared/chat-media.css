@@ -1,0 +1,146 @@
+/* Shared Chat Media Grid & Video Styles */
+
+.msg-media-grid {
+  display: grid;
+  gap: 2px;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+/* Logic layouts for different counts */
+.msg-media-grid.count-1 { grid-template-columns: 1fr; }
+.msg-media-grid.count-2 { grid-template-columns: repeat(2, 1fr); }
+.msg-media-grid.count-3 { grid-template-columns: repeat(2, 1fr); }
+.msg-media-grid.count-4 { grid-template-columns: repeat(2, 1fr); }
+
+/* In a 3-item grid, make the first item span 2 rows if desired, 
+   but for simplicity and consistency with 4-item grid, we'll use 2x2 logic */
+.msg-media-grid.count-3 .msg-media-item:first-child {
+    grid-row: span 2;
+}
+
+.msg-media-item {
+  position: relative;
+  background: var(--bg-hover);
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1/1; 
+}
+
+/* For single items, don't force square */
+.msg-media-grid.count-1 .msg-media-item {
+    aspect-ratio: auto;
+}
+
+.msg-media-item img,
+.msg-media-item video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.3s;
+}
+
+/* Video Overlay Styles */
+.msg-video-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+
+.msg-video-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.2);
+  transition: background 0.3s;
+  z-index: 2;
+  cursor: pointer;
+}
+
+.msg-video-overlay:hover {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.msg-video-overlay .play-icon {
+  width: 44px;
+  height: 44px;
+  color: #fff;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5));
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s;
+  pointer-events: none;
+}
+
+.msg-video-container.playing .msg-video-overlay .play-icon {
+  opacity: 0;
+}
+
+.msg-video-container.playing .msg-video-overlay:hover .play-icon {
+  opacity: 0.8;
+  color: #fff;
+}
+
+.msg-video-container.playing .msg-video-overlay {
+  background: transparent;
+}
+
+/* More than 4 items overlay */
+.msg-media-more-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 600;
+  z-index: 10;
+  cursor: pointer;
+}
+
+/* Chat Link Styles */
+.msg-bubble a {
+    cursor: pointer;
+    word-break: break-all;
+    transition: opacity 0.2s;
+}
+
+/* Link in sent bubble (usually blue background) */
+.sent .msg-bubble a {
+    color: #fff;
+    text-decoration: underline;
+    font-weight: 500;
+}
+
+.sent .msg-bubble a:hover {
+    opacity: 0.8;
+}
+
+/* Link in received bubble (usually gray background) */
+.received .msg-bubble a {
+    color: var(--accent-primary);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.received .msg-bubble a:hover {
+    text-decoration: underline;
+}
+

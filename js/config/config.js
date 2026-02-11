@@ -21,7 +21,7 @@ window.APP_CONFIG = {
   MAX_PROFILE_ADDRESS_LENGTH: 100, // Số ký tự tối đa cho Address
   FOLLOW_LIST_PAGE_SIZE: 15, // Số lượng người trong danh sách followers/following load mỗi lần
   CONVERSATIONS_PAGE_SIZE: 20, // Số lượng cuộc trò chuyện load mỗi lần
-  CHATPAGE_MESSAGES_PAGE_SIZE: 10, // Số lượng tin nhắn load mỗi lần tại trang Chat Page
+  CHATPAGE_MESSAGES_PAGE_SIZE: 15, // Số lượng tin nhắn load mỗi lần tại trang Chat Page
   CHATWINDOW_MESSAGES_PAGE_SIZE: 10, // Số lượng tin nhắn load mỗi lần tại cửa sổ Chat nhỏ (Floating)
   MAX_CHAT_MESSAGE_LENGTH: 1000, // Số ký tự tối đa cho mỗi tin nhắn chat
   MAX_CHAT_FILE_SIZE_MB: 10, // Dung lượng tối đa mỗi file khi gửi chat (MB)
