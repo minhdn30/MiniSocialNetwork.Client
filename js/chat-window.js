@@ -12,6 +12,7 @@ const ChatWindow = {
     _realtimeRetryTimer: null,
     _messageUnsub: null,
     _seenUnsub: null,
+    _typingUnsub: null,
     _initialized: false,
     
     init() {
@@ -281,9 +282,16 @@ const ChatWindow = {
             this._seenUnsub();
             this._seenUnsub = null;
         }
+        if (typeof this._typingUnsub === 'function') {
+            this._typingUnsub();
+            this._typingUnsub = null;
+        }
 
         this._messageUnsub = window.ChatRealtime.onMessage((msg) => this.handleRealtimeMessage(msg));
         this._seenUnsub = window.ChatRealtime.onSeen((data) => this.handleMemberSeen(data));
+        if (typeof window.ChatRealtime.onTyping === 'function') {
+            this._typingUnsub = window.ChatRealtime.onTyping((data) => this.handleTypingEvent(data));
+        }
         this.rejoinAllRealtimeConversations();
     },
 
@@ -471,6 +479,7 @@ const ChatWindow = {
 
         const mappings = [
             { selector: '.chat-messages', id: `chat-messages-${realId}` },
+            { selector: '.typing-indicator', id: `typing-indicator-${realId}` },
             { selector: '.chat-send-btn', id: `send-btn-${realId}` },
             { selector: '.chat-window-file-input', id: `chat-file-input-${realId}` },
             { selector: '.chat-window-attachment-preview', id: `chat-window-preview-${realId}` },
@@ -683,6 +692,14 @@ const ChatWindow = {
             delete optimisticBubble.dataset.status;
             optimisticBubble.querySelector('.msg-status')?.remove();
 
+            // Clear "Sent" from all OTHER messages so only the latest shows it
+            msgContainer.querySelectorAll('.msg-bubble-wrapper.sent[data-status="sent"]').forEach(el => {
+                if (el !== optimisticBubble) {
+                    el.removeAttribute('data-status');
+                    el.querySelector('.msg-status')?.remove();
+                }
+            });
+
             const hadBlobMedia = !!optimisticBubble.querySelector('img[src^="blob:"], video[src^="blob:"]');
             const replaced = this.replaceOptimisticMediaUrls(optimisticBubble, msg, tempId);
 
@@ -886,6 +903,49 @@ const ChatWindow = {
         const allMsgs = msgContainer.querySelectorAll('[data-message-id]');
         if (allMsgs.length === 0) return null;
         return allMsgs[allMsgs.length - 1].dataset.messageId;
+    },
+
+    getLastMessageBubble(msgContainer) {
+        if (!msgContainer) return null;
+        const bubbles = msgContainer.querySelectorAll('.msg-bubble-wrapper');
+        if (!bubbles.length) return null;
+        return bubbles[bubbles.length - 1];
+    },
+
+    findPreviousMessageBubble(startElement) {
+        let cursor = startElement?.previousElementSibling || null;
+        while (cursor) {
+            if (cursor.classList?.contains('msg-bubble-wrapper')) {
+                return cursor;
+            }
+            cursor = cursor.previousElementSibling;
+        }
+        return null;
+    },
+
+    insertHtmlBeforeTypingIndicator(msgContainer, html) {
+        if (!msgContainer || !html) return;
+        const typingIndicator = msgContainer.querySelector('.typing-indicator');
+        if (!typingIndicator || typingIndicator.parentElement !== msgContainer) {
+            msgContainer.insertAdjacentHTML('beforeend', html);
+            return;
+        }
+
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        while (temp.firstChild) {
+            msgContainer.insertBefore(temp.firstChild, typingIndicator);
+        }
+    },
+
+    insertNodeBeforeTypingIndicator(msgContainer, node) {
+        if (!msgContainer || !node) return;
+        const typingIndicator = msgContainer.querySelector('.typing-indicator');
+        if (typingIndicator && typingIndicator.parentElement === msgContainer) {
+            msgContainer.insertBefore(node, typingIndicator);
+            return;
+        }
+        msgContainer.appendChild(node);
     },
 
     scrollToBottom(conversationId) {
@@ -1372,6 +1432,22 @@ const ChatWindow = {
                 <div style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--text-tertiary); font-size:12px;">
                     Starting chat...
                 </div>
+                <div class="typing-indicator" id="typing-indicator-${conv.conversationId}">
+                    <div class="typing-message-shell received msg-group-single">
+                        <div class="msg-row">
+                            <div class="msg-avatar">
+                                <img class="typing-avatar" src="${APP_CONFIG.DEFAULT_AVATAR}" alt="typing avatar">
+                            </div>
+                            <div class="msg-bubble typing-bubble" aria-label="Typing">
+                                <span class="typing-dots">
+                                    <span class="typing-dot"></span>
+                                    <span class="typing-dot"></span>
+                                    <span class="typing-dot"></span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="chat-input-area" id="chat-input-area-${conv.conversationId}">
                 <div class="chat-window-attachment-preview" id="chat-window-preview-${conv.conversationId}"></div>
@@ -1631,6 +1707,8 @@ const ChatWindow = {
             this.revokePreviewBlobUrls(id);
             chat.pendingFiles = [];
             chat.runtimeCtx = null;
+            // Cleanup typing timers
+            if (window.ChatTyping) ChatTyping.cleanup(id);
             if (chat.element) {
                 chat.element.querySelectorAll('[data-temp-id]').forEach(el => {
                     if (el.dataset.tempId) this.cleanupMessageBlobUrls(el.dataset.tempId);
@@ -1750,6 +1828,33 @@ const ChatWindow = {
         children.forEach(child => stack.appendChild(child));
     },
 
+    // ── Typing Indicator (delegates to shared ChatTyping) ──
+
+    handleTypingEvent(data) {
+        if (!window.ChatTyping) return;
+        const conversationId = (data?.conversationId || data?.ConversationId || '').toString().toLowerCase();
+        const accountId = (data?.accountId || data?.AccountId || '').toString().toLowerCase();
+        const isTyping = (typeof data?.isTyping === 'boolean')
+            ? data.isTyping
+            : ((typeof data?.IsTyping === 'boolean') ? data.IsTyping : false);
+        const myId = (localStorage.getItem('accountId') || '').toLowerCase();
+        if (accountId === myId) return;
+        if (!conversationId) return;
+
+        const chatId = this.getOpenChatId(conversationId) || conversationId;
+        const chat = this.openChats.get(chatId);
+        if (!chat) return;
+
+        if (isTyping) {
+            ChatTyping.showIndicator(`typing-indicator-${chatId}`, chatId, {
+                accountId,
+                metaData: chat.data
+            });
+        } else {
+            ChatTyping.hideIndicator(`typing-indicator-${chatId}`, chatId);
+        }
+    },
+
     handleInput(field, id) {
         this.updateSendButtonState(id);
         this.updatePlaceholderState(field);
@@ -1774,6 +1879,11 @@ const ChatWindow = {
                  const actionsGroup = container.querySelector('.chat-actions-group');
                  if (actionsGroup) actionsGroup.classList.remove('is-show');
             }
+        }
+
+        // Emit typing event (debounced)
+        if (window.ChatTyping && this.isGuidConversationId(id)) {
+            ChatTyping.emitTyping(id);
         }
     },
 
@@ -1980,16 +2090,11 @@ const ChatWindow = {
                         m.status = 'sent';
                     }
 
-                    // Set 'sent' status for the last message if it's ours
-                    if (idx === messages.length - 1 && m.isOwn) {
-                        m.status = 'sent';
-                    }
-
                     // Time separator (same logic as chat-page: 15 min gap)
                     const currentTime = new Date(m.sentAt);
                     const gap = window.APP_CONFIG?.CHAT_TIME_SEPARATOR_GAP || 15 * 60 * 1000;
                     if (!lastTime || (currentTime - lastTime > gap)) {
-                        msgContainer.insertAdjacentHTML('beforeend', ChatCommon.renderChatSeparator(m.sentAt));
+                        this.insertHtmlBeforeTypingIndicator(msgContainer, ChatCommon.renderChatSeparator(m.sentAt));
                     }
                     lastTime = currentTime;
 
@@ -2014,7 +2119,8 @@ const ChatWindow = {
                     const bubble = tempDiv.firstElementChild;
                     bubble.dataset.sentAt = m.sentAt;
                     bubble.dataset.senderId = m.sender?.accountId || myId;
-                    msgContainer.appendChild(bubble);
+                    if (m.status) bubble.dataset.status = m.status;
+                    this.insertNodeBeforeTypingIndicator(msgContainer, bubble);
                 });
 
                 if (window.lucide) lucide.createIcons();
@@ -2146,8 +2252,8 @@ const ChatWindow = {
 
                 // If there was an existing first message, sync it with its new predecessor
                 if (oldFirstMsg) {
-                    const newPredecessor = oldFirstMsg.previousElementSibling;
-                    if (newPredecessor && newPredecessor.classList.contains('msg-bubble-wrapper')) {
+                    const newPredecessor = this.findPreviousMessageBubble(oldFirstMsg);
+                    if (newPredecessor) {
                         ChatCommon.syncMessageBoundary(newPredecessor, oldFirstMsg);
                     }
                 }
@@ -2190,12 +2296,12 @@ const ChatWindow = {
         }
 
         // Time separator
-        const lastMsgEl = msgContainer.querySelector('.msg-bubble-wrapper:last-of-type');
+        const lastMsgEl = this.getLastMessageBubble(msgContainer);
         const prevTime = lastMsgEl ? new Date(lastMsgEl.dataset.sentAt) : null;
         const currentTime = new Date(msg.sentAt);
         const gap = window.APP_CONFIG?.CHAT_TIME_SEPARATOR_GAP || 15 * 60 * 1000;
         if (!prevTime || (currentTime - prevTime > gap)) {
-            msgContainer.insertAdjacentHTML('beforeend', ChatCommon.renderChatSeparator(msg.sentAt));
+            this.insertHtmlBeforeTypingIndicator(msgContainer, ChatCommon.renderChatSeparator(msg.sentAt));
         }
 
         // Determine grouping
@@ -2235,7 +2341,7 @@ const ChatWindow = {
             bubble.dataset.status = msg.status;
         }
         
-        msgContainer.appendChild(bubble);
+        this.insertNodeBeforeTypingIndicator(msgContainer, bubble);
 
         // Sync grouping with the PREVIOUS message in DOM
         if (lastMsgEl) {
@@ -2259,6 +2365,9 @@ const ChatWindow = {
         const hasFiles = chat.pendingFiles && chat.pendingFiles.length > 0;
         
         if (!hasText && !hasFiles) return;
+
+        // Cancel typing indicator immediately
+        if (window.ChatTyping) ChatTyping.cancelTyping(id);
 
         // generate temp message id for tracking
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;

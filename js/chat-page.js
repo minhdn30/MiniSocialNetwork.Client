@@ -193,6 +193,10 @@ const ChatPage = {
                 input.style.height = 'auto';
                 input.style.height = (input.scrollHeight) + 'px';
                 this.updateInputState();
+                // Emit typing (debounced via shared module)
+                if (window.ChatTyping && this.currentChatId) {
+                    ChatTyping.emitTyping(this.currentChatId);
+                }
             };
             input.addEventListener('input', onInput);
             this._listenerRefs.push({ target: input, type: 'input', handler: onInput });
@@ -390,6 +394,49 @@ const ChatPage = {
         return allMsgs[allMsgs.length - 1].dataset.messageId;
     },
 
+    getLastMessageBubble(msgContainer) {
+        if (!msgContainer) return null;
+        const bubbles = msgContainer.querySelectorAll('.msg-bubble-wrapper');
+        if (!bubbles.length) return null;
+        return bubbles[bubbles.length - 1];
+    },
+
+    findPreviousMessageBubble(startElement) {
+        let cursor = startElement?.previousElementSibling || null;
+        while (cursor) {
+            if (cursor.classList?.contains('msg-bubble-wrapper')) {
+                return cursor;
+            }
+            cursor = cursor.previousElementSibling;
+        }
+        return null;
+    },
+
+    insertHtmlBeforeTypingIndicator(msgContainer, html) {
+        if (!msgContainer || !html) return;
+        const typingIndicator = msgContainer.querySelector('.typing-indicator');
+        if (!typingIndicator || typingIndicator.parentElement !== msgContainer) {
+            msgContainer.insertAdjacentHTML('beforeend', html);
+            return;
+        }
+
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        while (temp.firstChild) {
+            msgContainer.insertBefore(temp.firstChild, typingIndicator);
+        }
+    },
+
+    insertNodeBeforeTypingIndicator(msgContainer, node) {
+        if (!msgContainer || !node) return;
+        const typingIndicator = msgContainer.querySelector('.typing-indicator');
+        if (typingIndicator && typingIndicator.parentElement === msgContainer) {
+            msgContainer.insertBefore(node, typingIndicator);
+            return;
+        }
+        msgContainer.appendChild(node);
+    },
+
     scrollToBottom(force = false) {
         const msgContainer = document.getElementById('chat-view-messages');
         if (!msgContainer) return;
@@ -416,6 +463,9 @@ const ChatPage = {
         }
         if (window.ChatRealtime && typeof window.ChatRealtime.onSeen === 'function') {
             window.ChatRealtime.onSeen((data) => this.handleMemberSeen(data));
+        }
+        if (window.ChatRealtime && typeof window.ChatRealtime.onTyping === 'function') {
+            window.ChatRealtime.onTyping((data) => this.handleTypingEvent(data));
         }
     },
 
@@ -453,6 +503,14 @@ const ChatPage = {
                 if (messageId) optimisticBubble.dataset.messageId = messageId;
                 delete optimisticBubble.dataset.status;
                 optimisticBubble.querySelector('.msg-status')?.remove();
+
+                // Clear "Sent" from all OTHER messages so only the latest shows it
+                msgContainer.querySelectorAll('.msg-bubble-wrapper.sent[data-status="sent"]').forEach(el => {
+                    if (el !== optimisticBubble) {
+                        el.removeAttribute('data-status');
+                        el.querySelector('.msg-status')?.remove();
+                    }
+                });
 
                 // Replace local blob URLs with real server URLs
                 const hadBlobMedia = !!optimisticBubble.querySelector('img[src^="blob:"], video[src^="blob:"]');
@@ -639,6 +697,31 @@ const ChatPage = {
         }
     },
 
+    // ── Typing Indicator (delegates to shared ChatTyping) ──
+
+    handleTypingEvent(data) {
+        if (!window.ChatTyping) return;
+        const conversationId = (data?.conversationId || data?.ConversationId || '').toString().toLowerCase();
+        const accountId = (data?.accountId || data?.AccountId || '').toString().toLowerCase();
+        const isTyping = (typeof data?.isTyping === 'boolean')
+            ? data.isTyping
+            : ((typeof data?.IsTyping === 'boolean') ? data.IsTyping : false);
+        const myId = (localStorage.getItem('accountId') || '').toLowerCase();
+        if (accountId === myId) return;
+        if (!conversationId) return;
+        if (this.currentChatId?.toLowerCase() !== conversationId) return;
+
+        const convId = this.currentChatId;
+        if (isTyping) {
+            ChatTyping.showIndicator('typing-indicator-page', convId, {
+                accountId,
+                metaData: this.currentMetaData
+            });
+        } else {
+            ChatTyping.hideIndicator('typing-indicator-page', convId);
+        }
+    },
+
     leaveCurrentConversation() {
         if (this.currentChatId) {
             // Automatically minimize to bubble when leaving page (requested feature)
@@ -651,6 +734,10 @@ const ChatPage = {
             this.pendingFiles = [];
             this.updateAttachmentPreview();
             this.updateInputState();
+            if (window.ChatTyping) {
+                ChatTyping.cancelTyping(oldId);
+                ChatTyping.hideIndicator('typing-indicator-page', oldId);
+            }
             
             // Only leave if not open in any floating ChatWindow
             const isOpenInWindow = window.ChatWindow && window.ChatWindow.openChats && window.ChatWindow.openChats.has(oldId);
@@ -984,8 +1071,8 @@ const ChatPage = {
                 
                 // If there was an existing first message, sync it with its new predecessor
                 if (oldFirstMsg) {
-                    const newPredecessor = oldFirstMsg.previousElementSibling;
-                    if (newPredecessor && newPredecessor.classList.contains('msg-bubble-wrapper')) {
+                    const newPredecessor = this.findPreviousMessageBubble(oldFirstMsg);
+                    if (newPredecessor) {
                         ChatCommon.syncMessageBoundary(newPredecessor, oldFirstMsg);
                     }
                 }
@@ -1095,12 +1182,12 @@ const ChatPage = {
         const senderId = (msg.sender?.accountId || '').toLowerCase();
 
         // Time separator
-        const lastMsgEl = msgContainer.querySelector('.msg-bubble-wrapper:last-of-type');
+        const lastMsgEl = this.getLastMessageBubble(msgContainer);
         const lastTime = lastMsgEl ? new Date(lastMsgEl.dataset.sentAt) : null;
         const currentTime = new Date(sentAt);
         const gap = window.APP_CONFIG?.CHAT_TIME_SEPARATOR_GAP || 15 * 60 * 1000;
         if (!lastTime || (currentTime - lastTime > gap)) {
-            msgContainer.insertAdjacentHTML('beforeend', ChatCommon.renderChatSeparator(sentAt));
+            this.insertHtmlBeforeTypingIndicator(msgContainer, ChatCommon.renderChatSeparator(sentAt));
         }
 
         // Determine grouping with the previous message in DOM
@@ -1148,7 +1235,7 @@ const ChatPage = {
             bubble.dataset.status = msg.status;
         }
         
-        msgContainer.appendChild(bubble);
+        this.insertNodeBeforeTypingIndicator(msgContainer, bubble);
 
         // Sync grouping with the PREVIOUS message in DOM
         if (lastMsgEl) {
@@ -1166,6 +1253,9 @@ const ChatPage = {
         const input = document.getElementById('chat-message-input');
         const content = input.value.trim();
         if ((!content && this.pendingFiles.length === 0) || !this.currentChatId) return;
+
+        // Cancel typing indicator immediately
+        if (window.ChatTyping) ChatTyping.cancelTyping(this.currentChatId);
 
         // generate temp message id
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;

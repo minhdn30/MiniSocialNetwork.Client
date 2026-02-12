@@ -7,6 +7,27 @@ const ChatActions = {
     currentConfirm: null,
 
     /**
+     * Find previous/next real message bubble (skip separators, typing indicator, etc.).
+     */
+    findPreviousMessageBubble(el) {
+        let cursor = el?.previousElementSibling || null;
+        while (cursor) {
+            if (cursor.classList?.contains('msg-bubble-wrapper')) return cursor;
+            cursor = cursor.previousElementSibling;
+        }
+        return null;
+    },
+
+    findNextMessageBubble(el) {
+        let cursor = el?.nextElementSibling || null;
+        while (cursor) {
+            if (cursor.classList?.contains('msg-bubble-wrapper')) return cursor;
+            cursor = cursor.nextElementSibling;
+        }
+        return null;
+    },
+
+    /**
      * Placeholder for Reaction Menu
      */
     openReactMenu(e, messageId) {
@@ -177,9 +198,13 @@ const ChatActions = {
         const bubbles = document.querySelectorAll(`[data-message-id="${normId}"]`);
 
         bubbles.forEach(bubble => {
-            const prev = bubble.previousElementSibling;
-            const next = bubble.nextElementSibling;
+            const prev = this.findPreviousMessageBubble(bubble);
+            const next = this.findNextMessageBubble(bubble);
             const container = bubble.closest('.chat-messages') || bubble.closest('.chat-view-messages');
+
+            // Capture "Sent" status info BEFORE removal
+            const hadSentStatus = bubble.dataset.status === 'sent';
+            const isLastBubbleInContainer = !!(container && !next);
 
             bubble.style.transition = 'all 0.3s ease';
             bubble.style.opacity = '0';
@@ -191,6 +216,11 @@ const ChatActions = {
                 // RE-GROUPING LOGIC after removal
                 if (next) this.refreshMessageState(next);
                 if (prev) this.refreshMessageState(prev);
+
+                // RE-ASSIGN "Sent" status if the hidden message was showing it
+                if ((hadSentStatus || isLastBubbleInContainer) && container) {
+                    this.reassignSentStatus(container);
+                }
 
                 // Check if we left an orphaned time separator
                 this.cleanTimeSeparators(container);
@@ -209,24 +239,63 @@ const ChatActions = {
     },
 
     /**
+     * After hiding a message, check if the new last own message
+     * should display "Sent" status (if it's ours and unseen).
+     */
+    reassignSentStatus(container) {
+        if (!container) return;
+
+        // Find all remaining message bubbles
+        const allBubbles = container.querySelectorAll('.msg-bubble-wrapper');
+        if (allBubbles.length === 0) return;
+
+        const lastBubble = allBubbles[allBubbles.length - 1];
+
+        // Only apply if the last message is ours (.sent class)
+        if (!lastBubble.classList.contains('sent')) return;
+
+        // Don't apply if it already has a status (pending, failed, or sent)
+        if (lastBubble.dataset.status) return;
+
+        // Don't apply if someone has already seen it (seen row has avatar children)
+        const seenRow = lastBubble.querySelector('.msg-seen-row');
+        if (seenRow && seenRow.children.length > 0) return;
+
+        // Apply "Sent" status
+        lastBubble.dataset.status = 'sent';
+        
+        // Add the status element if not present
+        let statusEl = lastBubble.querySelector('.msg-status');
+        if (!statusEl) {
+            statusEl = document.createElement('div');
+            statusEl.className = 'msg-status msg-status-sent';
+            statusEl.textContent = 'Sent';
+            lastBubble.appendChild(statusEl);
+        } else {
+            statusEl.className = 'msg-status msg-status-sent';
+            statusEl.textContent = 'Sent';
+        }
+    },
+
+    /**
      * Fix message classes and UI when its neighbors change
      */
     refreshMessageState(el) {
         if (!el || !el.classList.contains('msg-bubble-wrapper')) return;
         
-        const prev = el.previousElementSibling;
-        const next = el.nextElementSibling;
+        const prev = this.findPreviousMessageBubble(el);
+        const next = this.findNextMessageBubble(el);
         
         // Re-call grouping logic
         const m = {
             sender: { accountId: el.dataset.senderId },
             sentAt: el.dataset.sentAt
         };
-        const pM = prev && prev.classList.contains('msg-bubble-wrapper') ? {
+        const pM = prev ? {
             sender: { accountId: prev.dataset.senderId },
             sentAt: prev.dataset.sentAt
         } : null;
-        const nM = next && next.classList.contains('msg-bubble-wrapper') ? {
+        const nM = next ? {
             sender: { accountId: next.dataset.senderId },
             sentAt: next.dataset.sentAt
         } : null;
@@ -279,13 +348,32 @@ const ChatActions = {
      */
     cleanTimeSeparators(container) {
         if (!container) return;
-        const children = Array.from(container.children);
-        children.forEach((child, idx) => {
-            if (child.classList.contains('chat-time-separator')) {
-                const next = children[idx + 1];
-                if (!next || next.classList.contains('chat-time-separator')) {
-                    child.remove();
-                }
+        const gap = window.APP_CONFIG?.CHAT_TIME_SEPARATOR_GAP || 15 * 60 * 1000;
+        const separators = Array.from(container.children).filter((child) =>
+            child.classList?.contains('chat-time-separator')
+        );
+
+        separators.forEach((sep) => {
+            const prevMsg = this.findPreviousMessageBubble(sep);
+            const nextMsg = this.findNextMessageBubble(sep);
+
+            // Separator without any following message is always orphaned.
+            if (!nextMsg) {
+                sep.remove();
+                return;
+            }
+
+            // Keep leading separator before the first message in list.
+            if (!prevMsg) return;
+
+            const prevTime = new Date(prevMsg.dataset.sentAt || 0);
+            const nextTime = new Date(nextMsg.dataset.sentAt || 0);
+            const shouldKeep = Number.isFinite(prevTime.getTime())
+                && Number.isFinite(nextTime.getTime())
+                && ((nextTime - prevTime) > gap);
+
+            if (!shouldKeep) {
+                sep.remove();
             }
         });
     },

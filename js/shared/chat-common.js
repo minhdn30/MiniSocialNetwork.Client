@@ -219,7 +219,8 @@ const ChatCommon = {
                  data-sender-id="${msg.sender?.accountId || msg.senderId || ''}"
                  data-avatar-url="${avatarSrc}"
                  data-author-name="${(authorName || '').replace(/"/g, '&quot;')}"
-                 ${dataMessageIdAttr}>
+                 ${dataMessageIdAttr}
+                 ${msg.status ? `data-status="${msg.status}"` : ''}>
                 ${authorHtml}
                 <div class="msg-row">
                     ${avatarHtml}

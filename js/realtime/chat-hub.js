@@ -6,6 +6,7 @@
 (function (global) {
     const messageHandlers = new Set();
     const seenHandlers = new Set();
+    const typingHandlers = new Set();
     const groupRefCount = new Map(); // conversationId -> count
     let currentConnection = null;
     const pendingInvokes = new Map(); // key -> { method, args, resolve, timeoutId }
@@ -20,6 +21,7 @@
         try {
             conn.off('ReceiveNewMessage');
             conn.off('MemberSeen');
+            conn.off('Typing');
         } catch (err) {
             console.warn('[ChatRealtime] Failed to clear handlers:', err);
         }
@@ -41,6 +43,24 @@
                     handler(data);
                 } catch (err) {
                     console.error('[ChatRealtime] Seen handler error:', err);
+                }
+            });
+        });
+
+        conn.on('Typing', (data) => {
+            const rawIsTyping = data?.IsTyping ?? data?.isTyping;
+            const normalized = {
+                conversationId: (data?.ConversationId || data?.conversationId || data?.conversationID || data?.ConversationID || '').toString().toLowerCase(),
+                accountId: (data?.AccountId || data?.accountId || data?.accountID || data?.AccountID || '').toString().toLowerCase(),
+                isTyping: (typeof rawIsTyping === 'string')
+                    ? rawIsTyping.toLowerCase() === 'true'
+                    : !!rawIsTyping
+            };
+            typingHandlers.forEach((handler) => {
+                try {
+                    handler(normalized);
+                } catch (err) {
+                    console.error('[ChatRealtime] Typing handler error:', err);
                 }
             });
         });
@@ -144,6 +164,13 @@
             seenHandlers.add(handler);
             return () => {
                 seenHandlers.delete(handler);
+            };
+        },
+        onTyping(handler) {
+            if (typeof handler !== 'function') return () => { };
+            typingHandlers.add(handler);
+            return () => {
+                typingHandlers.delete(handler);
             };
         },
         joinConversation(conversationId) {
