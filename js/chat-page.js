@@ -325,9 +325,6 @@ const ChatPage = {
                 if (messageId) {
                     this.applyPendingSeenForMessage(convId, messageId);
                 }
-                if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
-                    window.ChatSidebar.incrementUnread(convId, msg);
-                }
                 return;
             } else {
                 // Incoming message from others: clear "Sent" status
@@ -344,14 +341,6 @@ const ChatPage = {
             }
             const lastId = messageId || this.getLastMessageId();
             if (lastId) this.markConversationSeen(convId, lastId);
-            
-            if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
-                window.ChatSidebar.incrementUnread(convId, msg);
-            }
-        } else {
-            if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
-                window.ChatSidebar.incrementUnread(convId, msg);
-            }
         }
     },
 

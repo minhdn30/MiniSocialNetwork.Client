@@ -229,30 +229,26 @@ const ChatWindow = {
         const convId = this.getOpenChatId(convIdRaw);
         const chat = convId ? this.openChats.get(convId) : null;
 
-        // 1. GLOBAL UI UPDATE (Sidebar & Global Badge)
-        // We do this REGARDLESS of whether a floating window is open.
+        // 1. FLOATING WINDOW UNREAD UI
+        // Note: Global incrementing (Sidebar/Badge) is handled by UserHub to avoid duplicates.
         if (senderId !== myId) {
-            const isActiveInPage = window.ChatPage && window.ChatPage.currentChatId?.toLowerCase() === convIdRaw.toLowerCase();
+            const isChatPage = document.body.classList.contains('is-chat-page');
+            const isActiveInPage = isChatPage && window.ChatPage && window.ChatPage.currentChatId?.toLowerCase() === convIdRaw.toLowerCase();
             const isActiveInWindow = chat && !chat.minimized && document.getElementById(`chat-box-${convId}`)?.classList.contains('is-focused');
             const isActuallyActive = isActiveInPage || isActiveInWindow;
 
-            if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
-                window.ChatSidebar.incrementUnread(convIdRaw, msg, isActuallyActive);
-            }
-
-            if (!isActuallyActive && typeof window.scheduleGlobalUnreadRefresh === 'function') {
-                window.scheduleGlobalUnreadRefresh();
-            }
-
-            // Floating chat specific unread UI (if open)
             if (!isActuallyActive && chat) {
-                chat.unreadCount = (chat.unreadCount || 0) + 1;
-                if (chat.minimized) {
-                    this.incrementBubbleUnread(convId, true); // true = skip incrementing (already done)
-                } else if (chat.element) {
-                    chat.element.classList.add('has-unread');
-                }
-                this.saveState(); // Save the new unread count
+                // Slight delay to ensure ChatSidebar has updated its data first
+                setTimeout(() => {
+                    chat.unreadCount = this.getSyncUnreadCount(convIdRaw) || 0;
+                    
+                    if (chat.minimized) {
+                        this.incrementBubbleUnread(convId, true); 
+                    } else if (chat.element) {
+                        chat.element.classList.add('has-unread');
+                    }
+                    this.saveState();
+                }, 100);
             }
         }
 
@@ -318,9 +314,6 @@ const ChatWindow = {
             if (messageId) {
                 this.applyPendingSeenForMessage(convId, messageId);
             }
-            if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
-                window.ChatSidebar.incrementUnread(convIdRaw, msg);
-            }
             return;
         } else {
             // Incoming message from others: clear "Sent" status
@@ -371,6 +364,19 @@ const ChatWindow = {
         chat.unreadCount = 0;
         const badge = chat.bubbleElement?.querySelector('.chat-bubble-unread');
         if (badge) badge.remove();
+    },
+
+    /**
+     * Get unread count from Sidebar to ensure consistency across UI
+     */
+    getSyncUnreadCount(convId) {
+        if (!convId) return 0;
+        const target = convId.toLowerCase();
+        if (window.ChatSidebar && window.ChatSidebar.conversations) {
+            const conv = window.ChatSidebar.conversations.find(c => (c.conversationId || '').toLowerCase() === target);
+            if (conv) return conv.unreadCount || 0;
+        }
+        return 0;
     },
 
     handleMemberSeen(data) {
@@ -611,14 +617,30 @@ const ChatWindow = {
 
         // Check Total Limit before opening a NEW one
         if (this.openChats.size >= this.maxTotalWindows) {
-            const oldestId = Array.from(this.openChats.keys())[0];
-            if (oldestId) this.closeChat(oldestId);
+            // Prefer closing the oldest bubble (minimized) first to preserve active windows
+            const oldestBubbleId = Array.from(this.openChats.entries())
+                .find(([, c]) => c.minimized)?.[0];
+            if (oldestBubbleId) {
+                console.log(`💬 [ChatWindow] Total limit reached, closing oldest bubble: ${oldestBubbleId}`);
+                this.closeChat(oldestBubbleId);
+            } else {
+                // No bubbles → close the oldest window (rightmost)
+                const oldestId = Array.from(this.openChats.keys())[0];
+                if (oldestId) {
+                    console.log(`💬 [ChatWindow] Total limit reached, closing oldest window: ${oldestId}`);
+                    this.closeChat(oldestId);
+                }
+            }
         }
 
+        // Check Open Windows Limit — minimize the rightmost (oldest / first in Map)
         const openWindowsCount = Array.from(this.openChats.values()).filter(c => !c.minimized).length;
         if (openWindowsCount >= this.maxOpenWindows) {
-            const oldestWindowId = Array.from(this.openChats.entries()).find(([id, c]) => !c.minimized)?.[0];
-            if (oldestWindowId) this.toggleMinimize(oldestWindowId);
+            const rightmostWindowId = Array.from(this.openChats.entries()).find(([, c]) => !c.minimized)?.[0];
+            if (rightmostWindowId) {
+                console.log(`💬 [ChatWindow] Window limit reached, minimizing rightmost: ${rightmostWindowId}`);
+                this.toggleMinimize(rightmostWindowId);
+            }
         }
 
         this.renderChatBox(conv, shouldFocus);
@@ -640,25 +662,26 @@ const ChatWindow = {
         this.saveState();
     },
 
-    async openById(convId, priorityLeft = false) {
+    async openById(convId, priorityLeft = false, shouldFocus = true) {
         if (!convId) return;
         
         let convData = null;
         if (window.ChatSidebar && window.ChatSidebar.conversations) {
-            convData = window.ChatSidebar.conversations.find(c => c.conversationId === convId);
+            const target = convId.toLowerCase();
+            convData = window.ChatSidebar.conversations.find(c => (c.conversationId || '').toLowerCase() === target);
         }
 
         if (convData) {
-            this.openChat(convData, true, priorityLeft);
+            this.openChat(convData, shouldFocus, priorityLeft);
         } else {
             try {
-                const res = await window.API.Conversations.getConversation(convId);
+                const res = await window.API.Conversations.getById(convId);
                 if (res.ok) {
                     const data = await res.json();
-                    this.openChat(data, true, priorityLeft);
+                    this.openChat(data, shouldFocus, priorityLeft);
                 }
             } catch (err) {
-                console.error("Failed to fetch conversation for drag-drop:", err);
+                console.error("Failed to fetch conversation for open:", err);
             }
         }
     },
@@ -668,12 +691,13 @@ const ChatWindow = {
 
         let convData = null;
         if (window.ChatSidebar && window.ChatSidebar.conversations) {
-            convData = window.ChatSidebar.conversations.find(c => c.conversationId === convId);
+            const target = convId.toLowerCase();
+            convData = window.ChatSidebar.conversations.find(c => (c.conversationId || '').toLowerCase() === target);
         }
 
         if (!convData) {
             try {
-                const res = await window.API.Conversations.getConversation(convId);
+                const res = await window.API.Conversations.getById(convId);
                 if (res.ok) convData = await res.json();
             } catch (err) {
                 console.error("Failed to fetch conversation for drag-drop:", err);
@@ -914,7 +938,7 @@ const ChatWindow = {
             bubbleElement: null,
             data: conv,
             minimized: false,
-            unreadCount: 0,
+            unreadCount: this.getSyncUnreadCount(conv.conversationId) || conv.unreadCount || 0,
             page: 1,
             hasMore: true,
             isLoading: false,
@@ -1734,15 +1758,6 @@ const ChatWindow = {
             isOwn: true,
             status: 'pending'  // pending, sent, failed
         });
-        
-        // Update Sidebar immediately
-        if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
-            window.ChatSidebar.incrementUnread(id, {
-                content,
-                sender: { accountId: (localStorage.getItem('accountId') || '') },
-                sentAt: new Date()
-            });
-        }
         
         // Clear input and state
         this.resetInput(id);
