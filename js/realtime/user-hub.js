@@ -185,39 +185,49 @@
             connection.on("ReceiveMessageNotification", (data) => {
                 const convId = (data.ConversationId || data.conversationId || '').toLowerCase();
                 const message = data.Message || data.message;
+                const isMuted = data.IsMuted ?? data.isMuted ?? false;
                 const myId = (localStorage.getItem("accountId") || '').toLowerCase();
                 const senderId = (message?.sender?.accountId || message?.Sender?.AccountId || '').toLowerCase();
                 
                 if (senderId === myId) return;
 
-                const isActiveInPage = window.ChatPage && window.ChatPage.currentChatId?.toLowerCase() === convId;
+                const isChatPage = document.body.classList.contains('is-chat-page');
+                const isActiveInPage = isChatPage && window.ChatPage && window.ChatPage.currentChatId?.toLowerCase() === convId;
                 
                 let isActiveInWindow = false; 
+                let isOpenInWindow = false;
                 if (window.ChatWindow && window.ChatWindow.openChats) { 
-                    const chatObj = window.ChatWindow.openChats.get(convId) || Array.from(window.ChatWindow.openChats.values()).find(c => (c.data?.conversationId || "").toLowerCase() === convId); 
-                    if (chatObj) { 
+                    const openId = window.ChatWindow.getOpenChatId(convId);
+                    if (openId) {
+                        isOpenInWindow = true;
+                        const chatObj = window.ChatWindow.openChats.get(openId);
                         const chatBox = document.getElementById("chat-box-" + chatObj.data.conversationId); 
                         if (chatBox && chatBox.classList.contains("is-focused") && !chatObj.minimized) { 
                             isActiveInWindow = true; 
-                        } 
-                    } 
+                        }
+                    }
                 }
 
-                if (!isActiveInPage && !isActiveInWindow) {
-                    const senderName = message?.sender?.fullName || message?.sender?.username || message?.Sender?.FullName || message?.Sender?.Username || "Someone";
-                    const content = message?.content || message?.Content || "Sent you a media message";
-                    
-                    if (window.toastInfo) {
-                        window.toastInfo(`💬 ${senderName}: ${content}`);
-                    }
 
+                if (!isActiveInPage && !isActiveInWindow) {
                     if (typeof scheduleGlobalUnreadRefresh === 'function') {
                         scheduleGlobalUnreadRefresh();
                     }
                 }
 
+                // Update sidebar FIRST (before auto-open so unread count syncs properly)
                 if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
                     window.ChatSidebar.incrementUnread(convId, message, (isActiveInPage || isActiveInWindow));
+                }
+
+                // Auto-open chat window if: not muted, not on chat-page, and not already open
+                // This runs AFTER sidebar update so getSyncUnreadCount() works correctly
+                if (!isMuted && !isChatPage && !isOpenInWindow) {
+                    if (window.ChatWindow && typeof window.ChatWindow.openById === 'function') {
+                        console.log(`💬 [UserHub] Auto-opening chat window for conversation: ${convId}`);
+                        // priorityLeft=true (leftmost position), shouldFocus=false (don't steal focus)
+                        window.ChatWindow.openById(convId, true, false);
+                    }
                 }
             });
 

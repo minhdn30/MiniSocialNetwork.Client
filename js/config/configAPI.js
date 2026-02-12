@@ -73,7 +73,10 @@
                 localStorage.removeItem("accessToken");
                 localStorage.removeItem("accountId");
                 localStorage.removeItem("fullname");
+                localStorage.removeItem("username");
                 localStorage.removeItem("avatarUrl");
+                localStorage.removeItem("defaultPostPrivacy");
+                localStorage.removeItem("SOCIAL_NETWORK_OPEN_CHATS");
                 
                 if (!window.location.pathname.includes("auth.html")) {
                     window.location.href = "auth.html?reason=restricted";
@@ -101,6 +104,12 @@
       console.error("❌ Auto-logout due to refresh failure:", err);
       // Refresh failed or expired
       localStorage.removeItem("accessToken");
+      localStorage.removeItem("accountId");
+      localStorage.removeItem("fullname");
+      localStorage.removeItem("username");
+      localStorage.removeItem("avatarUrl");
+      localStorage.removeItem("defaultPostPrivacy");
+      localStorage.removeItem("SOCIAL_NETWORK_OPEN_CHATS");
       if (!window.location.pathname.includes("auth.html")) {
         window.location.href = "auth.html";
       }
@@ -145,7 +154,10 @@
                      localStorage.removeItem("accessToken");
                      localStorage.removeItem("accountId");
                      localStorage.removeItem("fullname");
+                     localStorage.removeItem("username");
                      localStorage.removeItem("avatarUrl");
+                     localStorage.removeItem("defaultPostPrivacy");
+                     localStorage.removeItem("SOCIAL_NETWORK_OPEN_CHATS");
                      if (!window.location.pathname.includes("auth.html")) {
                         window.location.href = "auth.html?reason=restricted";
                      }

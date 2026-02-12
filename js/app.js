@@ -340,7 +340,11 @@ function clearSessionAndRedirect() {
   localStorage.removeItem("accessToken");
   localStorage.removeItem("avatarUrl");
   localStorage.removeItem("fullname");
+  localStorage.removeItem("username");
   localStorage.removeItem("accountId");
+  localStorage.removeItem("defaultPostPrivacy");
+  localStorage.removeItem("SOCIAL_NETWORK_OPEN_CHATS");
+  
   PageCache.clearAll();
   window.location.href = "auth.html";
 }
