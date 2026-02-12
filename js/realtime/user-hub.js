@@ -15,13 +15,23 @@
         init: async function() {
             if (connection) return;
 
-            const token = localStorage.getItem("accessToken");
+            const token = window.AuthStore?.getAccessToken?.() || (window.AuthStore?.ensureAccessToken ? await window.AuthStore.ensureAccessToken() : null);
             if (!token) return;
 
+            const getTokenForHub = async () => {
+                const current = window.AuthStore?.getAccessToken?.();
+                if (current) return current;
+                if (window.AuthStore?.ensureAccessToken) {
+                    return (await window.AuthStore.ensureAccessToken()) || "";
+                }
+                return "";
+            };
+
             // 1. Create connection
+            const hubBase = window.APP_CONFIG?.HUB_BASE || "http://localhost:5000";
             connection = new signalR.HubConnectionBuilder()
-                .withUrl(`http://localhost:5000/userHub`, {
-                    accessTokenFactory: () => localStorage.getItem("accessToken")
+                .withUrl(`${hubBase}/userHub`, {
+                    accessTokenFactory: () => getTokenForHub()
                 })
                 .withAutomaticReconnect()
                 .build();
@@ -355,7 +365,11 @@
     
     // Auto-init if user is logged in
     document.addEventListener("DOMContentLoaded", () => {
-        if (localStorage.getItem("accessToken")) {
+        UserHub.init();
+    });
+
+    window.addEventListener(window.AuthStore?.EVENT || "auth:token-changed", (evt) => {
+        if (evt?.detail?.hasToken) {
             UserHub.init();
         }
     });

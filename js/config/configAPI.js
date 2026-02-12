@@ -10,14 +10,136 @@
      ========================= */
 
   let refreshPromise = null;
+  let activeApiBase = null;
+
+  function normalizeApiBase(baseUrl) {
+    if (typeof baseUrl !== "string") return null;
+    const trimmed = baseUrl.trim();
+    if (!trimmed) return null;
+    return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
+  }
+
+  function getApiBaseCandidates() {
+    const configured = normalizeApiBase(window.APP_CONFIG?.API_BASE);
+    const configuredCandidates = Array.isArray(window.APP_CONFIG?.API_BASE_CANDIDATES)
+      ? window.APP_CONFIG.API_BASE_CANDIDATES.map(normalizeApiBase).filter(Boolean)
+      : [];
+
+    const host = (window.location?.hostname || "").toLowerCase();
+    const isLoopbackHost = host === "localhost" || host === "127.0.0.1";
+    const localDefaults = isLoopbackHost
+      ? [
+          "https://localhost:5000/api",
+          "http://localhost:5000/api",
+          "https://localhost:5270/api",
+          "http://localhost:5270/api",
+        ]
+      : [];
+
+    const allCandidates = [
+      normalizeApiBase(activeApiBase),
+      configured,
+      ...configuredCandidates,
+      ...localDefaults.map(normalizeApiBase),
+      "http://localhost:5000/api",
+    ].filter(Boolean);
+
+    // De-duplicate while keeping order.
+    return [...new Set(allCandidates)];
+  }
+
+  function setActiveApiBase(baseUrl) {
+    const normalized = normalizeApiBase(baseUrl);
+    if (!normalized) return;
+    if (activeApiBase !== normalized) {
+      console.info(`🌐 API base selected: ${normalized}`);
+    }
+    activeApiBase = normalized;
+    if (window.APP_CONFIG) {
+      window.APP_CONFIG.API_BASE = normalized;
+    }
+  }
+
+  function getCurrentApiBase() {
+    const candidates = getApiBaseCandidates();
+    return normalizeApiBase(activeApiBase) || candidates[0] || "http://localhost:5000/api";
+  }
+
+  async function fetchWithApiBase(url, fetchOptions) {
+    const candidates = getApiBaseCandidates();
+    let lastError = null;
+
+    for (const baseUrl of candidates) {
+      try {
+        const res = await fetch(`${baseUrl}${url}`, fetchOptions);
+        setActiveApiBase(baseUrl);
+        return { res, baseUrl };
+      } catch (err) {
+        lastError = err;
+      }
+    }
+
+    console.error("❌ Unable to reach API. Tried bases:", candidates, "url:", url, "error:", lastError);
+    throw lastError || new TypeError("Failed to fetch");
+  }
+
+  function getAccessToken() {
+    return window.AuthStore?.getAccessToken?.() || null;
+  }
+
+  function setAccessToken(token) {
+    if (window.AuthStore?.setAccessToken) {
+      window.AuthStore.setAccessToken(token, "api");
+    }
+  }
+
+  function syncAuthProfileFromResponse(data) {
+    if (!data || typeof data !== "object") return;
+
+    const accountId = data.accountId ?? data.AccountId;
+    const fullname = data.fullname ?? data.Fullname;
+    const username = data.username ?? data.Username;
+    const avatarUrl = data.avatarUrl ?? data.AvatarUrl;
+
+    if (accountId) {
+      localStorage.setItem("accountId", accountId);
+      if (window.APP_CONFIG) {
+        window.APP_CONFIG.CURRENT_USER_ID = accountId;
+      }
+    }
+    if (fullname !== undefined && fullname !== null) {
+      localStorage.setItem("fullname", fullname);
+    }
+    if (username !== undefined && username !== null) {
+      localStorage.setItem("username", username);
+    }
+    if (avatarUrl !== undefined && avatarUrl !== null) {
+      localStorage.setItem("avatarUrl", avatarUrl);
+    }
+  }
+
+  function clearClientSession() {
+    if (window.AuthStore?.clearAccessToken) {
+      window.AuthStore.clearAccessToken("logout");
+    }
+    // Backward compatibility cleanup for legacy storage keys
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("accountId");
+    localStorage.removeItem("fullname");
+    localStorage.removeItem("username");
+    localStorage.removeItem("avatarUrl");
+    localStorage.removeItem("defaultPostPrivacy");
+    localStorage.removeItem("SOCIAL_NETWORK_OPEN_CHATS");
+  }
 
   async function refreshAccessToken() {
     if (!refreshPromise) {
       console.warn("🔄 Token expired, attempting refresh...");
-      refreshPromise = fetch(`${window.APP_CONFIG.API_BASE}/Auths/refresh-token`, {
+      refreshPromise = fetchWithApiBase("/Auths/refresh-token", {
         method: "POST",
         credentials: "include",
       })
+        .then(({ res }) => res)
         .then(async (res) => {
           console.log("🔄 Refresh response status:", res.status);
           if (res.status === 401 || res.status === 403) {
@@ -34,7 +156,8 @@
           if (!data.accessToken) {
              throw new Error("REFRESH_NO_ACCESS_TOKEN_IN_RESPONSE");
           }
-          localStorage.setItem("accessToken", data.accessToken);
+          setAccessToken(data.accessToken);
+          syncAuthProfileFromResponse(data);
           return data.accessToken;
         })
         .catch((err) => {
@@ -49,15 +172,14 @@
   }
 
   async function apiFetch(url, options = {}) {
-    const accessToken = localStorage.getItem("accessToken");
-    const baseUrl = window.APP_CONFIG?.API_BASE || "http://localhost:5000/api";
+    const accessToken = getAccessToken();
 
     const headers = { ...options.headers };
     if (accessToken && !options.skipAuth) {
       headers.Authorization = `Bearer ${accessToken}`;
     }
 
-    const res = await fetch(`${baseUrl}${url}`, {
+    const { res } = await fetchWithApiBase(url, {
       ...options,
       credentials: "include",
       headers: headers,
@@ -70,13 +192,7 @@
             // If the message contains status info, it's likely our AccountStatusMiddleware
             if (data.message && (data.message.toLowerCase().includes("status") || data.message.toLowerCase().includes("reactivate"))) {
                 console.warn("🚫 Account restricted, logging out...");
-                localStorage.removeItem("accessToken");
-                localStorage.removeItem("accountId");
-                localStorage.removeItem("fullname");
-                localStorage.removeItem("username");
-                localStorage.removeItem("avatarUrl");
-                localStorage.removeItem("defaultPostPrivacy");
-                localStorage.removeItem("SOCIAL_NETWORK_OPEN_CHATS");
+                clearClientSession();
                 
                 if (!window.location.pathname.includes("auth.html")) {
                     window.location.href = "auth.html?reason=restricted";
@@ -92,7 +208,7 @@
     // Unauthorized - try refresh
     try {
       const newToken = await refreshAccessToken();
-      return fetch(`${baseUrl}${url}`, {
+      const { res: retryRes } = await fetchWithApiBase(url, {
         ...options,
         credentials: "include",
         headers: {
@@ -100,16 +216,11 @@
           Authorization: `Bearer ${newToken}`,
         },
       });
+      return retryRes;
     } catch (err) {
       console.error("❌ Auto-logout due to refresh failure:", err);
       // Refresh failed or expired
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("accountId");
-      localStorage.removeItem("fullname");
-      localStorage.removeItem("username");
-      localStorage.removeItem("avatarUrl");
-      localStorage.removeItem("defaultPostPrivacy");
-      localStorage.removeItem("SOCIAL_NETWORK_OPEN_CHATS");
+      clearClientSession();
       if (!window.location.pathname.includes("auth.html")) {
         window.location.href = "auth.html";
       }
@@ -120,18 +231,13 @@
   function uploadFormDataWithProgress(url, formData, onProgress, method = "POST") {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      const baseUrl = window.APP_CONFIG?.API_BASE || "http://localhost:5000/api";
+      const baseUrl = getCurrentApiBase();
       // don't show global loader for chat messages (we use optimistic UI)
       const isChatMessage = url.includes('/Messages/');
       if (!isChatMessage && window.showGlobalLoader) window.showGlobalLoader(0);
 
       xhr.open(method, baseUrl + url);
       xhr.withCredentials = true;
-
-      const accessToken = localStorage.getItem("accessToken");
-      if (accessToken) {
-        xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
-      }
 
       xhr.upload.onprogress = function (e) {
         if (e.lengthComputable && typeof onProgress === "function") {
@@ -151,13 +257,7 @@
              try {
                  const data = JSON.parse(text);
                  if (data.message && (data.message.toLowerCase().includes("status") || data.message.toLowerCase().includes("reactivate"))) {
-                     localStorage.removeItem("accessToken");
-                     localStorage.removeItem("accountId");
-                     localStorage.removeItem("fullname");
-                     localStorage.removeItem("username");
-                     localStorage.removeItem("avatarUrl");
-                     localStorage.removeItem("defaultPostPrivacy");
-                     localStorage.removeItem("SOCIAL_NETWORK_OPEN_CHATS");
+                     clearClientSession();
                      if (!window.location.pathname.includes("auth.html")) {
                         window.location.href = "auth.html?reason=restricted";
                      }
@@ -181,7 +281,25 @@
       };
 
       xhr.onerror = (e) => reject(e);
-      xhr.send(formData);
+
+      const sendRequest = async () => {
+        let accessToken = getAccessToken();
+        if (!accessToken) {
+          try {
+            accessToken = await refreshAccessToken();
+          } catch (_) {
+            accessToken = null;
+          }
+        }
+
+        if (accessToken) {
+          xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
+        }
+
+        xhr.send(formData);
+      };
+
+      sendRequest().catch(reject);
     });
   }
 
@@ -397,8 +515,8 @@
   // Export internal helpers for SignalR or other modules if they rely on window naming
   window.apiFetch = apiFetch;
   window.refreshAccessToken = refreshAccessToken;
+  window.clearClientSession = clearClientSession;
   // Export
-  window.API = API;
   window.uploadFormDataWithProgress = uploadFormDataWithProgress;
 })();
 

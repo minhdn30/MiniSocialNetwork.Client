@@ -337,13 +337,20 @@ document.addEventListener("click", (e) => {
    LOGOUT
    ========================= */
 function clearSessionAndRedirect() {
-  localStorage.removeItem("accessToken");
-  localStorage.removeItem("avatarUrl");
-  localStorage.removeItem("fullname");
-  localStorage.removeItem("username");
-  localStorage.removeItem("accountId");
-  localStorage.removeItem("defaultPostPrivacy");
-  localStorage.removeItem("SOCIAL_NETWORK_OPEN_CHATS");
+  if (typeof window.clearClientSession === "function") {
+    window.clearClientSession();
+  } else {
+    if (window.AuthStore?.clearAccessToken) {
+      window.AuthStore.clearAccessToken("logout");
+    }
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("avatarUrl");
+    localStorage.removeItem("fullname");
+    localStorage.removeItem("username");
+    localStorage.removeItem("accountId");
+    localStorage.removeItem("defaultPostPrivacy");
+    localStorage.removeItem("SOCIAL_NETWORK_OPEN_CHATS");
+  }
   
   PageCache.clearAll();
   window.location.href = "auth.html";

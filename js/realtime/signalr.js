@@ -8,11 +8,13 @@ let isStarting = false;
 ========================= */
 
 function getAccessToken() {
-  return localStorage.getItem("accessToken");
+  return window.AuthStore?.getAccessToken?.() || null;
 }
 
 function setAccessToken(token) {
-  localStorage.setItem("accessToken", token);
+  if (window.AuthStore?.setAccessToken) {
+    window.AuthStore.setAccessToken(token, "signalr");
+  }
 }
 
 /**
@@ -37,9 +39,14 @@ async function startChatHub() {
 
   isStarting = true;
 
+  // Try to hydrate access token from refresh cookie before connecting.
+  if (!getAccessToken() && window.AuthStore?.ensureAccessToken) {
+    await window.AuthStore.ensureAccessToken();
+  }
+
   chatConnection = new signalR.HubConnectionBuilder()
     .withUrl(`${HUB_BASE}/chatHub`, {
-      accessTokenFactory: () => getAccessToken(),
+      accessTokenFactory: () => getAccessToken() || "",
     })
     .withAutomaticReconnect([0, 2000, 5000, 10000])
     .build();

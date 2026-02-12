@@ -111,7 +111,6 @@ const ChatWindow = {
             const state = Array.from(this.openChats.entries()).map(([id, chat]) => ({
                 id,
                 minimized: chat.minimized || false,
-                data: chat.data,
                 unreadCount: chat.unreadCount || 0
             }));
             localStorage.setItem('SOCIAL_NETWORK_OPEN_CHATS', JSON.stringify(state));
@@ -131,27 +130,57 @@ const ChatWindow = {
             if (!Array.isArray(state)) return;
 
             state.forEach(item => {
-                if (!item.id || !item.data) return;
+                if (!item.id) return;
 
                 // Defensive: Ensure we don't restore temporary/broken ID states
                 const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id);
                 if (!isGuid) return;
 
-                // Sync with Sidebar if possible to fix "poisoned" localStorage data
-                let freshData = item.data;
+                // Always prefer fresh metadata from Sidebar.
+                let freshData = null;
                 if (window.ChatSidebar && window.ChatSidebar.conversations) {
                     const realConv = window.ChatSidebar.conversations.find(c => c.conversationId === item.id);
                     if (realConv) {
-                        // Merge saved state (unread) with fresh metadata (names, avatars)
-                        freshData = { ...realConv, unreadCount: item.unreadCount || realConv.unreadCount || 0 };
+                        freshData = realConv;
                     }
                 }
 
-                if (item.minimized) {
-                    this.renderBubble(item.id, freshData);
-                } else {
-                    this.openChat(freshData, false); // Do not focus on restore
+                // Backward compatibility with old stored schema that still had "data".
+                if (!freshData && item.data && typeof item.data === 'object') {
+                    freshData = item.data;
                 }
+
+                const unreadCount = item.unreadCount || freshData?.unreadCount || 0;
+
+                if (freshData) {
+                    const payload = { ...freshData, unreadCount };
+                    if (item.minimized) {
+                        this.renderBubble(item.id, payload);
+                    } else {
+                        this.openChat(payload, false); // Do not focus on restore
+                    }
+                    return;
+                }
+
+                // Final fallback: fetch fresh metadata by conversation ID.
+                this.openById(item.id, false, false)
+                    .then(() => {
+                        const openId = this.getOpenChatId(item.id);
+                        if (!openId) return;
+                        const chat = this.openChats.get(openId);
+                        if (!chat) return;
+
+                        chat.unreadCount = unreadCount;
+
+                        if (item.minimized && !chat.minimized) {
+                            this.toggleMinimize(openId);
+                        }
+
+                        if (!item.minimized && chat.element && unreadCount > 0) {
+                            chat.element.classList.add('has-unread');
+                        }
+                    })
+                    .catch(err => console.error('Failed to restore chat state:', err));
             });
         } catch (e) {
             console.error("Failed to restore ChatWindow state:", e);
@@ -175,6 +204,7 @@ const ChatWindow = {
         if (!conversationId || !messageId || !accountId) return;
         const convId = conversationId.toString().toLowerCase();
         const msgId = messageId.toString().toLowerCase();
+        const accId = accountId.toString().toLowerCase();
         let convMap = this.pendingSeenByConv.get(convId);
         if (!convMap) {
             convMap = new Map();
@@ -185,7 +215,7 @@ const ChatWindow = {
             arr = [];
             convMap.set(msgId, arr);
         }
-        arr.push({ accountId, memberInfo });
+        arr.push({ accountId: accId, memberInfo });
     },
 
     applyPendingSeenForMessage(conversationId, messageId) {
@@ -384,20 +414,24 @@ const ChatWindow = {
         const convId = this.getOpenChatId(convIdRaw);
         if (!convId) {
             // Still forward to sidebar even if no chat window is open
-            const accId = data.AccountId || data.accountId;
-            if (window.ChatSidebar && typeof window.ChatSidebar.updateSeenInSidebar === 'function') {
+            const accIdRaw = data.AccountId || data.accountId;
+            const accId = accIdRaw ? accIdRaw.toString().toLowerCase() : null;
+            if (accId && window.ChatSidebar && typeof window.ChatSidebar.updateSeenInSidebar === 'function') {
                 window.ChatSidebar.updateSeenInSidebar(convIdRaw, accId);
             }
             return;
         }
 
-        const accId = data.AccountId || data.accountId;
+        const accIdRaw = data.AccountId || data.accountId;
+        const accId = accIdRaw ? accIdRaw.toString().toLowerCase() : null;
         const msgIdRaw = data.LastSeenMessageId || data.lastSeenMessageId;
         const msgId = msgIdRaw ? msgIdRaw.toString().toLowerCase() : msgIdRaw;
-        this.moveSeenAvatar(convId, accId, msgId);
+        if (accId && msgId) {
+            this.moveSeenAvatar(convId, accId, msgId);
+        }
 
         // Forward to sidebar to update seen indicator
-        if (window.ChatSidebar && typeof window.ChatSidebar.updateSeenInSidebar === 'function') {
+        if (accId && window.ChatSidebar && typeof window.ChatSidebar.updateSeenInSidebar === 'function') {
             window.ChatSidebar.updateSeenInSidebar(convIdRaw, accId);
         }
     },
@@ -459,13 +493,15 @@ const ChatWindow = {
     moveSeenAvatar(conversationId, accountId, messageId, memberInfo = null) {
         const msgContainer = document.getElementById(`chat-messages-${conversationId}`);
         if (!msgContainer) return;
+        const normAccountId = accountId ? accountId.toString().toLowerCase() : '';
+        if (!normAccountId) return;
         const myId = (localStorage.getItem('accountId') || '').toLowerCase();
-        if ((accountId || '').toLowerCase() === myId) return;
+        if (normAccountId === myId) return;
 
         // Resolve info from metadata if missing (realtime event)
         if (!memberInfo) {
             const chatObj = this.openChats.get(conversationId);
-            const targetId = accountId.toLowerCase();
+            const targetId = normAccountId;
             if (chatObj?.metaData?.memberSeenStatuses) {
                 const member = chatObj.metaData.memberSeenStatuses.find(m => {
                     const mId = (m.accountId || m.AccountId || '').toLowerCase();
@@ -498,7 +534,7 @@ const ChatWindow = {
         }
 
         // 1. Remove existing if any in this window
-        const existing = msgContainer.querySelector(`.seen-avatar-wrapper[data-account-id="${accountId}"]`);
+        const existing = msgContainer.querySelector(`.seen-avatar-wrapper[data-account-id="${normAccountId}"]`);
         if (existing) {
             existing.remove();
         }
@@ -510,7 +546,7 @@ const ChatWindow = {
 
         // If target message isn't loaded yet (pagination), defer until that message appears in DOM.
         if (normMessageId && !bubbleWrapper) {
-            this.queuePendingSeen(conversationId, normMessageId, accountId, memberInfo);
+            this.queuePendingSeen(conversationId, normMessageId, normAccountId, memberInfo);
             return;
         }
 
@@ -530,7 +566,7 @@ const ChatWindow = {
         }
 
         if (!targetRow) {
-            this.queuePendingSeen(conversationId, normMessageId || messageId, accountId, memberInfo);
+            this.queuePendingSeen(conversationId, normMessageId || messageId, normAccountId, memberInfo);
             return;
         }
 
@@ -545,12 +581,14 @@ const ChatWindow = {
         }
 
         // 3. Create or reconstruct avatar
-        const avatarUrl = memberInfo?.avatar || existing?.src || APP_CONFIG.DEFAULT_AVATAR;
-        const displayName = memberInfo?.name || existing?.title || 'User';
+        const existingImg = existing?.querySelector('.seen-avatar');
+        const existingName = existing?.querySelector('.seen-avatar-name');
+        const avatarUrl = memberInfo?.avatar || existingImg?.src || APP_CONFIG.DEFAULT_AVATAR;
+        const displayName = memberInfo?.name || existingName?.textContent || 'User';
 
         const wrapper = document.createElement('div');
         wrapper.className = 'seen-avatar-wrapper';
-        wrapper.dataset.accountId = accountId;
+        wrapper.dataset.accountId = normAccountId;
 
         const img = document.createElement('img');
         img.src = avatarUrl;
@@ -571,16 +609,19 @@ const ChatWindow = {
      */
     updateMemberSeenStatuses(conversationId, meta) {
         if (!meta || !meta.memberSeenStatuses) return;
-        const myId = localStorage.getItem('accountId');
+        const myId = (localStorage.getItem('accountId') || '').toLowerCase();
 
         meta.memberSeenStatuses.forEach(member => {
-            if (member.accountId === myId) return;
-            if (!member.lastSeenMessageId) return;
+            const memberId = (member.accountId || member.AccountId || '').toLowerCase();
+            if (!memberId || memberId === myId) return;
+
+            const rawLastSeenId = member.lastSeenMessageId || member.LastSeenMessageId;
+            if (!rawLastSeenId) return;
             
-            const lastSeenId = member.lastSeenMessageId ? member.lastSeenMessageId.toString().toLowerCase() : member.lastSeenMessageId;
-            this.moveSeenAvatar(conversationId, member.accountId, lastSeenId, {
-                avatar: member.avatarUrl,
-                name: member.displayName
+            const lastSeenId = rawLastSeenId.toString().toLowerCase();
+            this.moveSeenAvatar(conversationId, memberId, lastSeenId, {
+                avatar: member.avatarUrl || member.AvatarUrl,
+                name: member.displayName || member.DisplayName
             });
         });
     },
@@ -610,7 +651,7 @@ const ChatWindow = {
             }
 
             if (chat.minimized) {
-                this.toggleMinimize(convId);
+                this.toggleMinimize(convId, shouldFocus);
             } else if (shouldFocus) {
                 this.focusChat(convId);
             }
@@ -1040,7 +1081,7 @@ const ChatWindow = {
         }
     },
 
-    toggleMinimize(id) {
+    toggleMinimize(id, shouldFocus = true) {
         const chat = this.openChats.get(id);
         if (!chat) return;
 
@@ -1072,10 +1113,10 @@ const ChatWindow = {
                 chat.element.style.display = 'flex';
                 setTimeout(() => {
                     chat.element.classList.add('show');
-                    this.focusChat(id);
+                    if (shouldFocus) this.focusChat(id);
                 }, 10);
             } else {
-                this.renderChatBox(chat.data);
+                this.renderChatBox(chat.data, shouldFocus);
                 // focusChat is already inside renderChatBox's loadInitialMessages / timeout
             }
             chat.minimized = false;

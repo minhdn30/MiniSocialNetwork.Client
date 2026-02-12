@@ -1,6 +1,37 @@
-window.APP_CONFIG = {
-  API_BASE: "http://localhost:5000/api", // API
-  HUB_BASE: "http://localhost:5000", // SignalR
+(function (global) {
+  const currentHost = (global.location?.hostname || "").toLowerCase();
+  const isLoopbackHost = currentHost === "127.0.0.1" || currentHost === "localhost";
+  const isHttpsPage = global.location?.protocol === "https:";
+  const resolvedHost = isLoopbackHost ? "localhost" : (currentHost || "localhost");
+
+  const localApiBaseCandidates = [
+    "https://localhost:5000/api",
+    "http://localhost:5000/api",
+    "https://localhost:5270/api",
+    "http://localhost:5270/api",
+  ];
+
+  const localHubBaseCandidates = [
+    "https://localhost:5000",
+    "http://localhost:5000",
+    "https://localhost:5270",
+    "http://localhost:5270",
+  ];
+
+  const apiProtocol = isHttpsPage ? "https" : "http";
+  const remoteApiBase = `${apiProtocol}://${resolvedHost}:5000/api`;
+  const remoteHubBase = `${apiProtocol}://${resolvedHost}:5000`;
+
+  const apiBaseCandidates = isLoopbackHost ? localApiBaseCandidates : [remoteApiBase];
+  const hubBaseCandidates = isLoopbackHost ? localHubBaseCandidates : [remoteHubBase];
+  const apiBase = apiBaseCandidates[0];
+  const hubBase = hubBaseCandidates[0];
+
+  global.APP_CONFIG = {
+  API_BASE: apiBase, // API
+  API_BASE_CANDIDATES: apiBaseCandidates, // API fallback candidates (local dev)
+  HUB_BASE: hubBase, // SignalR
+  HUB_BASE_CANDIDATES: hubBaseCandidates, // SignalR fallback candidates (local dev)
   DEFAULT_AVATAR: "assets/images/default-avatar.jpg", // Default avatar image
   NEWSFEED_LIMIT: 5, // Max newsfeed limit/1 rq
   CAPTION_TRUNCATE_LENGTH: 150, // Chiều dài nội dung post tối đa trước khi bị cắt và hiện nút "more"
@@ -30,4 +61,5 @@ window.APP_CONFIG = {
   CHAT_GROUPING_GAP: 2 * 60 * 1000, // Gap (ms) to break message grouping (2 mins)
   MAX_OPEN_CHAT_WINDOWS: 3, // Số lượng cửa sổ chat được mở tối đa cùng lúc
   MAX_TOTAL_CHAT_WINDOWS: 8, // Tổng số lượng chat (cả cửa sổ và bong bóng) tối đa được phép duy trì
-};
+  };
+})(window);

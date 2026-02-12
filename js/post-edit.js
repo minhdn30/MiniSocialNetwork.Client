@@ -44,13 +44,17 @@
 
         // 3. Populate user info in Edit Panel
         const avatarUrl = localStorage.getItem("avatarUrl") || APP_CONFIG.DEFAULT_AVATAR;
-        const fullname = localStorage.getItem("fullname") || "User";
+        const fullname = localStorage.getItem("fullname");
+        const username = localStorage.getItem("username");
+        const display = username || fullname || "User";
         
         const editAvatar = document.getElementById("edit-user-avatar");
         const editName = document.getElementById("edit-user-name");
         
         if (editAvatar) editAvatar.src = avatarUrl;
-        if (editName) editName.textContent = fullname;
+        if (editName) {
+            editName.textContent = window.PostUtils ? PostUtils.truncateName(display) : display;
+        }
 
         // 4. Get current data for fields
         const captionTextEl = document.getElementById("detailCaptionText");

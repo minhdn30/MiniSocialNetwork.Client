@@ -22,9 +22,13 @@ async function initPostHub() {
   if (postHubConnection) return; // Already initialized
 
   try {
+    if (window.AuthStore?.ensureAccessToken) {
+      await window.AuthStore.ensureAccessToken();
+    }
+
     postHubConnection = new signalR.HubConnectionBuilder()
       .withUrl(`${window.APP_CONFIG.HUB_BASE}/postHub`, {
-        accessTokenFactory: () => localStorage.getItem("accessToken"),
+        accessTokenFactory: () => window.AuthStore?.getAccessToken?.() || "",
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000])
       .build();

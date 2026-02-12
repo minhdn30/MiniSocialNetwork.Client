@@ -59,9 +59,13 @@ loginForm.addEventListener("submit", async (e) => {
       return;
     }
 
-    localStorage.removeItem("accessToken");
+    if (window.AuthStore && typeof window.AuthStore.clearAccessToken === "function") {
+      window.AuthStore.clearAccessToken("login-reset");
+    }
     // Lưu token + thông tin
-    localStorage.setItem("accessToken", data.accessToken);
+    if (window.AuthStore && typeof window.AuthStore.setAccessToken === "function") {
+      window.AuthStore.setAccessToken(data.accessToken, "login");
+    }
     localStorage.setItem("fullname", data.fullname || "");
     localStorage.setItem("username", data.username || "");
     localStorage.setItem("avatarUrl", data.avatarUrl || "");
