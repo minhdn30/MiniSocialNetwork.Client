@@ -201,7 +201,7 @@
 }
 
 /* NÃºt (+) luÃ´n giá»¯ chá»— Ä‘á»ƒ trÃ¡nh layout bá»‹ nháº£y */
-.chat-toggle-actions {
+.chat-page-container .chat-toggle-actions {
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -215,7 +215,7 @@
   transition: all 0.2s ease;
 }
 
-.chat-view-input-container.has-content .chat-toggle-actions {
+.chat-page-container .chat-view-input-container.has-content .chat-toggle-actions {
   display: flex;
 }
 
@@ -463,13 +463,13 @@
   background: var(--accent-primary);
 }
 
-.chat-send-btn,
-.chat-send-btn i,
-.chat-send-btn svg {
+.chat-page-container .chat-send-btn,
+.chat-page-container .chat-send-btn i,
+.chat-page-container .chat-send-btn svg {
   cursor: pointer;
 }
 
-.chat-send-btn {
+.chat-page-container .chat-send-btn {
   background: none;
   border: none;
   color: var(--accent-primary, #3b82f6);
@@ -486,7 +486,7 @@
   color: var(--accent-primary);
 }
 
-.chat-send-btn:disabled {
+.chat-page-container .chat-send-btn:disabled {
   color: var(--text-tertiary);
   cursor: default;
 }

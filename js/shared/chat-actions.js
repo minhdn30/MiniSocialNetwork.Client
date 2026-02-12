@@ -30,6 +30,7 @@ const ChatActions = {
 
         const btn = e.currentTarget;
         const wrapper = btn.closest('.msg-bubble-wrapper');
+        const resolvedMessageId = (messageId || wrapper?.dataset?.messageId || '').toString().toLowerCase();
         
         // Mark as active so CSS can keep buttons visible
         if (wrapper) wrapper.classList.add('menu-active');
@@ -41,7 +42,7 @@ const ChatActions = {
         menu.className = 'msg-more-menu';
         
         let itemsHtml = `
-            <div class="msg-more-item" onclick="window.ChatActions.hideForYou('${messageId}')">
+            <div class="msg-more-item" onclick="window.ChatActions.hideForYou('${resolvedMessageId}')">
                 <i data-lucide="eye-off"></i>
                 <span>Hide for you</span>
             </div>
@@ -57,7 +58,7 @@ const ChatActions = {
 
         if (isOwn) {
             itemsHtml = `
-                <div class="msg-more-item danger" onclick="window.ChatActions.recallMessage('${messageId}')">
+                <div class="msg-more-item danger" onclick="window.ChatActions.recallMessage('${resolvedMessageId}')">
                     <i data-lucide="undo"></i>
                     <span>Recall</span>
                 </div>
@@ -139,16 +140,21 @@ const ChatActions = {
      * Hide message for current user with confirmation
      */
     hideForYou(messageId) {
+        const normId = (messageId || '').toString().toLowerCase();
+        if (!normId) {
+            window.toastError && window.toastError('Failed to hide message');
+            return;
+        }
         this.closeAllMenus();
         this.showConfirm(
             'Hide Message?',
             'This message will be removed for you. Others in the chat will still be able to see it.',
             async () => {
                 try {
-                    const res = await window.API.Messages.hide(messageId);
+                    const res = await window.API.Messages.hide(normId);
                     if (res.ok) {
                         // Success - Remove from UI
-                        this.removeMessageFromUI(messageId);
+                        this.removeMessageFromUI(normId);
                     } else {
                         window.toastError && window.toastError('Failed to hide message');
                     }

@@ -673,7 +673,7 @@ body.is-dragging-chat #chat-windows-stack {
     min-width: 32px;
 }
 
-.chat-actions-group {
+.chat-box .chat-actions-group {
     display: flex;
     gap: 2px;
     align-items: center;
@@ -681,7 +681,7 @@ body.is-dragging-chat #chat-windows-stack {
 }
 
 /* Toggle (+) Button - Hidden by default, shows when input has content */
-.chat-toggle-actions {
+.chat-box .chat-toggle-actions {
     width: 32px;
     height: 32px;
     border-radius: 50%;
@@ -695,26 +695,26 @@ body.is-dragging-chat #chat-windows-stack {
     transition: all 0.2s ease;
 }
 
-.chat-toggle-actions i {
+.chat-box .chat-toggle-actions i {
     width: 20px;
     height: 20px;
 }
 
-.chat-toggle-actions:hover {
+.chat-box .chat-toggle-actions:hover {
     background: var(--bg-hover);
 }
 
 /* State: When input has text, hide group and show toggle */
-.chat-input-area.has-content .chat-actions-group:not(.is-show) {
+.chat-box .chat-input-area.has-content .chat-actions-group:not(.is-show) {
     display: none;
 }
 
-.chat-input-area.has-content .chat-toggle-actions {
+.chat-box .chat-input-area.has-content .chat-toggle-actions {
     display: flex;
 }
 
 /* Expansion state (when + is clicked) */
-.chat-actions-group.is-show {
+.chat-box .chat-actions-group.is-show {
     position: absolute;
     bottom: 40px;
     left: 0;
@@ -727,7 +727,7 @@ body.is-dragging-chat #chat-windows-stack {
     z-index: 100;
 }
 
-.chat-action-btn {
+.chat-box .chat-action-btn {
     background: none;
     border: none;
     padding: 6px;
@@ -740,18 +740,18 @@ body.is-dragging-chat #chat-windows-stack {
     transition: all 0.2s;
 }
 
-.chat-action-btn:hover {
+.chat-box .chat-action-btn:hover {
     background: var(--bg-hover);
     transform: scale(1.1);
 }
 
-.chat-action-btn i {
+.chat-box .chat-action-btn i {
     width: 20px;
     height: 20px;
 }
 
 /* Expansion items special styling */
-.chat-actions-group.is-show .chat-action-btn {
+.chat-box .chat-actions-group.is-show .chat-action-btn {
     width: 36px;
     height: 36px;
 }
@@ -819,13 +819,13 @@ body.is-dragging-chat #chat-windows-stack {
     background: var(--accent-primary, #3b82f6);
 }
 
-.chat-send-btn,
-.chat-send-btn i,
-.chat-send-btn svg {
+.chat-box .chat-send-btn,
+.chat-box .chat-send-btn i,
+.chat-box .chat-send-btn svg {
     cursor: pointer;
 }
 
-.chat-send-btn {
+.chat-box .chat-send-btn {
     color: var(--accent-primary, #3b82f6);
     background: none;
     border: none;
@@ -836,11 +836,11 @@ body.is-dragging-chat #chat-windows-stack {
     transition: transform 0.2s;
 }
 
-.chat-send-btn:hover:not(:disabled) {
+.chat-box .chat-send-btn:hover:not(:disabled) {
     background: transparent;
 }
 
-.chat-send-btn:disabled {
+.chat-box .chat-send-btn:disabled {
     color: var(--text-tertiary);
     cursor: default;
 }

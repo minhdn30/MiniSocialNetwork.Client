@@ -8,6 +8,8 @@ const ChatWindow = {
     maxTotalWindows: window.APP_CONFIG?.MAX_TOTAL_CHAT_WINDOWS || 8,
     retryFiles: new Map(), // tempId -> File[]
     pendingSeenByConv: new Map(),
+    _blobUrls: new Map(), // key -> Set<blobUrl>
+    _realtimeRetryTimer: null,
     
     init() {
         if (!document.getElementById('chat-window-wrapper')) {
@@ -69,7 +71,14 @@ const ChatWindow = {
         // Click outside to lose focus
         document.addEventListener('mousedown', (e) => {
             if (!e.target.closest('.chat-box') && !e.target.closest('.chat-bubble')) {
-                document.querySelectorAll('.chat-box.is-focused').forEach(b => b.classList.remove('is-focused'));
+                this.clearFocusedChatWindows();
+            }
+        });
+        // Losing browser/tab focus should also clear focused chat windows
+        window.addEventListener('blur', () => this.clearFocusedChatWindows());
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState !== 'visible') {
+                this.clearFocusedChatWindows();
             }
         });
 
@@ -111,7 +120,8 @@ const ChatWindow = {
             const state = Array.from(this.openChats.entries()).map(([id, chat]) => ({
                 id,
                 minimized: chat.minimized || false,
-                unreadCount: chat.unreadCount || 0
+                unreadCount: chat.unreadCount || 0,
+                data: chat.data || null
             }));
             localStorage.setItem('SOCIAL_NETWORK_OPEN_CHATS', JSON.stringify(state));
         } catch (e) {
@@ -134,7 +144,7 @@ const ChatWindow = {
 
                 // Defensive: Ensure we don't restore temporary/broken ID states
                 const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id);
-                if (!isGuid) return;
+                if (!isGuid && !(item.data && typeof item.data === 'object')) return;
 
                 // Always prefer fresh metadata from Sidebar.
                 let freshData = null;
@@ -154,8 +164,12 @@ const ChatWindow = {
 
                 if (freshData) {
                     const payload = { ...freshData, unreadCount };
+                    const payloadConvId = payload.conversationId || payload.ConversationId || item.id;
+                    if (!payload.conversationId && payloadConvId) {
+                        payload.conversationId = payloadConvId;
+                    }
                     if (item.minimized) {
-                        this.renderBubble(item.id, payload);
+                        this.renderBubble(payloadConvId, payload);
                     } else {
                         this.openChat(payload, false); // Do not focus on restore
                     }
@@ -163,6 +177,43 @@ const ChatWindow = {
                 }
 
                 // Final fallback: fetch fresh metadata by conversation ID.
+                if (!isGuid) {
+                    if (typeof item.id === 'string' && item.id.startsWith('new-')) {
+                        const accountId = item.id.slice(4);
+                        if (accountId) {
+                            this.openByAccountId(accountId, false)
+                                .then(() => {
+                                    let openId = this.getOpenChatId(item.id);
+                                    if (!openId) {
+                                        for (const [id, chatObj] of this.openChats.entries()) {
+                                            const otherId = (chatObj?.data?.otherMember?.accountId || chatObj?.data?.otherMemberId || '').toLowerCase();
+                                            if (otherId && otherId === accountId.toLowerCase()) {
+                                                openId = id;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if (!openId) return;
+                                    const chat = this.openChats.get(openId);
+                                    if (!chat) return;
+
+                                    chat.unreadCount = unreadCount;
+                                    if (item.minimized && !chat.minimized) {
+                                        this.toggleMinimize(openId, false);
+                                    }
+                                    if (!item.minimized && chat.element && unreadCount > 0) {
+                                        chat.element.classList.add('has-unread');
+                                    }
+                                    if (chat.minimized && unreadCount > 0) {
+                                        this.incrementBubbleUnread(openId, true);
+                                    }
+                                    this.saveState();
+                                })
+                                .catch(err => console.error('Failed to restore transient chat state:', err));
+                        }
+                    }
+                    return;
+                }
                 this.openById(item.id, false, false)
                     .then(() => {
                         const openId = this.getOpenChatId(item.id);
@@ -173,7 +224,7 @@ const ChatWindow = {
                         chat.unreadCount = unreadCount;
 
                         if (item.minimized && !chat.minimized) {
-                            this.toggleMinimize(openId);
+                            this.toggleMinimize(openId, false);
                         }
 
                         if (!item.minimized && chat.element && unreadCount > 0) {
@@ -188,16 +239,248 @@ const ChatWindow = {
         }
     },
 
+    isGuidConversationId(id) {
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id || '');
+    },
+
     registerRealtimeHandlers() {
         if (this._realtimeBound) return;
-        this._realtimeBound = true;
 
-        if (window.ChatRealtime && typeof window.ChatRealtime.onMessage === 'function') {
-            window.ChatRealtime.onMessage((msg) => this.handleRealtimeMessage(msg));
+        const hasRealtimeApi =
+            window.ChatRealtime &&
+            typeof window.ChatRealtime.onMessage === 'function' &&
+            typeof window.ChatRealtime.onSeen === 'function';
+
+        if (!hasRealtimeApi) {
+            if (!this._realtimeRetryTimer) {
+                this._realtimeRetryTimer = setTimeout(() => {
+                    this._realtimeRetryTimer = null;
+                    this.registerRealtimeHandlers();
+                }, 500);
+            }
+            return;
         }
-        if (window.ChatRealtime && typeof window.ChatRealtime.onSeen === 'function') {
-            window.ChatRealtime.onSeen((data) => this.handleMemberSeen(data));
+
+        this._realtimeBound = true;
+        if (this._realtimeRetryTimer) {
+            clearTimeout(this._realtimeRetryTimer);
+            this._realtimeRetryTimer = null;
         }
+
+        window.ChatRealtime.onMessage((msg) => this.handleRealtimeMessage(msg));
+        window.ChatRealtime.onSeen((data) => this.handleMemberSeen(data));
+        this.rejoinAllRealtimeConversations();
+    },
+
+    tryJoinRealtimeConversation(conversationId, chatObj = null) {
+        if (!this.isGuidConversationId(conversationId)) return false;
+        if (!window.ChatRealtime || typeof window.ChatRealtime.joinConversation !== 'function') return false;
+
+        const openId = this.getOpenChatId(conversationId) || conversationId;
+        const chat = chatObj || this.openChats.get(openId);
+        if (!chat || chat._realtimeJoined || chat._realtimeJoining) return !!(chat && (chat._realtimeJoined || chat._realtimeJoining));
+
+        chat._realtimeJoining = true;
+
+        window.ChatRealtime.joinConversation(openId)
+            .then((ok) => {
+                if (ok === false) {
+                    setTimeout(() => this.rejoinAllRealtimeConversations(), 1000);
+                    return;
+                }
+                const activeId = this.getOpenChatId(openId) || openId;
+                const activeChat = this.openChats.get(activeId);
+                if (activeChat) {
+                    activeChat._realtimeJoined = true;
+                }
+            })
+            .catch(err => console.error("Error joining conversation group:", err))
+            .finally(() => {
+                const activeId = this.getOpenChatId(openId) || openId;
+                const activeChat = this.openChats.get(activeId);
+                if (activeChat) {
+                    activeChat._realtimeJoining = false;
+                }
+            });
+
+        return true;
+    },
+
+    rejoinAllRealtimeConversations() {
+        for (const [id, chat] of this.openChats.entries()) {
+            this.tryJoinRealtimeConversation(id, chat);
+        }
+    },
+
+    clearFocusedChatWindows() {
+        document.querySelectorAll('.chat-box.is-focused').forEach(b => b.classList.remove('is-focused'));
+    },
+
+    trackBlobUrl(url, key = 'global') {
+        if (!url) return null;
+        if (!this._blobUrls.has(key)) {
+            this._blobUrls.set(key, new Set());
+        }
+        this._blobUrls.get(key).add(url);
+        return url;
+    },
+
+    revokeBlobUrl(url) {
+        if (!url) return;
+        try {
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            console.warn('Failed to revoke blob URL:', e);
+        }
+        this._blobUrls.forEach(set => set.delete(url));
+    },
+
+    revokePreviewBlobUrls(conversationId) {
+        const key = `preview:${conversationId}`;
+        const previewUrls = this._blobUrls.get(key);
+        if (!previewUrls || previewUrls.size === 0) return;
+        Array.from(previewUrls).forEach(url => this.revokeBlobUrl(url));
+        this._blobUrls.delete(key);
+    },
+
+    cleanupMessageBlobUrls(tempId) {
+        if (!tempId) return;
+        this.retryFiles.delete(tempId);
+        const urls = this._blobUrls.get(tempId);
+        if (urls && urls.size > 0) {
+            Array.from(urls).forEach(url => this.revokeBlobUrl(url));
+        }
+        this._blobUrls.delete(tempId);
+    },
+
+    replaceOptimisticMediaUrls(bubble, messagePayload, tempId = null) {
+        if (!bubble || !messagePayload) return false;
+        const medias = messagePayload.Medias || messagePayload.medias || [];
+        if (!Array.isArray(medias) || medias.length === 0) return false;
+
+        const localItems = bubble.querySelectorAll('.msg-media-item');
+        if (!localItems || localItems.length === 0) return false;
+
+        let replaced = false;
+        medias.forEach((m, i) => {
+            if (!localItems[i]) return;
+            const mediaUrl = m.MediaUrl || m.mediaUrl;
+            if (!mediaUrl) return;
+
+            const img = localItems[i].querySelector('img');
+            const vid = localItems[i].querySelector('video');
+            if (img) {
+                if (img.src?.startsWith('blob:')) this.revokeBlobUrl(img.src);
+                img.src = mediaUrl;
+                replaced = true;
+            }
+            if (vid) {
+                if (vid.src?.startsWith('blob:')) this.revokeBlobUrl(vid.src);
+                vid.src = mediaUrl;
+                replaced = true;
+            }
+        });
+
+        if (replaced && tempId) {
+            this.cleanupMessageBlobUrls(tempId);
+        }
+
+        return replaced;
+    },
+
+    remapConversationDomIds(oldId, realId, chatObj) {
+        if (!oldId || !realId || !chatObj?.element) return;
+        const root = chatObj.element;
+
+        root.id = `chat-box-${realId}`;
+        root.dataset.id = realId;
+
+        const mappings = [
+            { selector: '.chat-messages', id: `chat-messages-${realId}` },
+            { selector: '.chat-send-btn', id: `send-btn-${realId}` },
+            { selector: '.chat-window-file-input', id: `chat-file-input-${realId}` },
+            { selector: '.chat-window-attachment-preview', id: `chat-window-preview-${realId}` },
+            { selector: '.chat-input-area', id: `chat-input-area-${realId}` },
+            { selector: '.chat-actions-group', id: `chat-actions-group-${realId}` },
+            { selector: '.chat-window-emoji-container', id: `chat-emoji-container-${realId}` }
+        ];
+
+        mappings.forEach(item => {
+            const el = root.querySelector(item.selector);
+            if (el) el.id = item.id;
+        });
+
+        root.querySelectorAll('[onclick],[oninput],[onkeydown]').forEach(el => {
+            ['onclick', 'oninput', 'onkeydown'].forEach(attr => {
+                const raw = el.getAttribute(attr);
+                if (raw && raw.includes(oldId)) {
+                    el.setAttribute(attr, raw.split(oldId).join(realId));
+                }
+            });
+        });
+
+        const fileInput = root.querySelector('.chat-window-file-input');
+        if (fileInput) {
+            fileInput.onchange = () => {
+                const files = fileInput.files;
+                if (files && files.length > 0) {
+                    this.handleMediaUpload(realId, files);
+                    fileInput.value = '';
+                }
+            };
+        }
+
+        const sendBtn = root.querySelector('.chat-send-btn');
+        if (sendBtn) {
+            sendBtn.onclick = () => this.sendMessage(realId);
+        }
+
+        this.initScrollListener(realId);
+
+        if (chatObj.bubbleElement) {
+            chatObj.bubbleElement.id = `chat-bubble-${realId}`;
+            chatObj.bubbleElement.dataset.id = realId;
+            chatObj.bubbleElement.onclick = () => this.toggleMinimize(realId);
+            const bubbleCloseBtn = chatObj.bubbleElement.querySelector('.chat-bubble-close');
+            if (bubbleCloseBtn) {
+                bubbleCloseBtn.setAttribute('onclick', `event.stopPropagation(); ChatWindow.closeChat('${realId}')`);
+            }
+        }
+    },
+
+    promoteConversationId(oldId, realId, chatObj) {
+        if (!oldId || !realId || oldId === realId || !chatObj) return oldId;
+
+        this.openChats.delete(oldId);
+        chatObj.data.conversationId = realId;
+        this.openChats.set(realId, chatObj);
+
+        const oldPreviewKey = `preview:${oldId}`;
+        const newPreviewKey = `preview:${realId}`;
+        const oldPreviewUrls = this._blobUrls.get(oldPreviewKey);
+        if (oldPreviewUrls && oldPreviewUrls.size > 0) {
+            if (!this._blobUrls.has(newPreviewKey)) {
+                this._blobUrls.set(newPreviewKey, new Set());
+            }
+            const targetSet = this._blobUrls.get(newPreviewKey);
+            oldPreviewUrls.forEach(url => targetSet.add(url));
+            this._blobUrls.delete(oldPreviewKey);
+        }
+
+        const oldSeenKey = oldId.toLowerCase();
+        const pendingSeen = this.pendingSeenByConv.get(oldSeenKey);
+        if (pendingSeen) {
+            this.pendingSeenByConv.delete(oldSeenKey);
+            this.pendingSeenByConv.set(realId.toLowerCase(), pendingSeen);
+        }
+
+        this.remapConversationDomIds(oldId, realId, chatObj);
+
+        chatObj._realtimeJoined = false;
+        this.tryJoinRealtimeConversation(realId, chatObj);
+
+        this.saveState();
+        return realId;
     },
 
     queuePendingSeen(conversationId, messageId, accountId, memberInfo = null) {
@@ -247,6 +530,7 @@ const ChatWindow = {
 
     handleRealtimeMessage(msg) {
         const convIdRaw = msg.ConversationId || msg.conversationId;
+        const convIdRawNorm = (convIdRaw || '').toLowerCase();
         const messageIdRaw = msg.MessageId || msg.messageId;
         const messageId = messageIdRaw ? messageIdRaw.toString().toLowerCase() : null;
         const tempId = msg.TempId || msg.tempId;
@@ -259,46 +543,35 @@ const ChatWindow = {
         const convId = this.getOpenChatId(convIdRaw);
         const chat = convId ? this.openChats.get(convId) : null;
 
-        // 1. FLOATING WINDOW UNREAD UI
-        // Note: Global incrementing (Sidebar/Badge) is handled by UserHub to avoid duplicates.
-        if (senderId !== myId) {
-            const isChatPage = document.body.classList.contains('is-chat-page');
-            const isActiveInPage = isChatPage && window.ChatPage && window.ChatPage.currentChatId?.toLowerCase() === convIdRaw.toLowerCase();
-            const isActiveInWindow = chat && !chat.minimized && document.getElementById(`chat-box-${convId}`)?.classList.contains('is-focused');
-            const isActuallyActive = isActiveInPage || isActiveInWindow;
-
-            if (!isActuallyActive && chat) {
-                // Slight delay to ensure ChatSidebar has updated its data first
-                setTimeout(() => {
-                    chat.unreadCount = this.getSyncUnreadCount(convIdRaw) || 0;
-                    
-                    if (chat.minimized) {
-                        this.incrementBubbleUnread(convId, true); 
-                    } else if (chat.element) {
-                        chat.element.classList.add('has-unread');
-                    }
-                    this.saveState();
-                }, 100);
+        if (!convId || !chat) return;
+        const msgContainer = document.getElementById(`chat-messages-${convId}`);
+        if (!msgContainer) {
+            if (senderId !== myId) {
+                const isChatPage = document.body.classList.contains('is-chat-page');
+                const isActiveInPage = isChatPage && window.ChatPage && window.ChatPage.currentChatId?.toLowerCase() === convIdRawNorm;
+                const isActiveInWindow = !chat.minimized && chat.element?.classList.contains('is-focused');
+                const isActuallyActive = isActiveInPage || isActiveInWindow;
+                if (!isActuallyActive) {
+                    this.markInactiveUnread(convId, chat);
+                }
             }
+            return;
         }
 
-        if (!convId) return;
-
         // De-duplication check: if real messageId already exists, discard this event
-        if (messageId && document.querySelector(`#chat-messages-${convId} [data-message-id="${messageId}"]`)) {
+        if (messageId && msgContainer.querySelector(`[data-message-id="${messageId}"]`)) {
             return;
         }
 
         // 2. Identify and handle optimistic UI confirmation (Merging)
         let optimisticBubble = null;
         if (tempId) {
-            optimisticBubble = document.querySelector(`#chat-messages-${convId} [data-temp-id="${tempId}"]`);
+            optimisticBubble = msgContainer.querySelector(`[data-temp-id="${tempId}"]`);
         }
         
         // Fallback for our own messages if tempId matching fails (content + media count matching)
         if (!optimisticBubble && senderId === myId) {
             const incomingMedias = msg.Medias || msg.medias || [];
-            const msgContainer = document.getElementById(`chat-messages-${convId}`);
             const optimisticMsgs = msgContainer?.querySelectorAll('.msg-bubble-wrapper.sent[data-status="pending"]');
             
             if (optimisticMsgs) {
@@ -324,19 +597,8 @@ const ChatWindow = {
             optimisticBubble.querySelector('.msg-status')?.remove();
 
             // Replace local blob URLs with real server URLs
-            const incomingMedias = msg.Medias || msg.medias || [];
-            if (incomingMedias.length > 0) {
-                const localItems = optimisticBubble.querySelectorAll('.msg-media-item');
-                incomingMedias.forEach((m, i) => {
-                    if (localItems[i]) {
-                        const mediaUrl = m.MediaUrl || m.mediaUrl;
-                        const img = localItems[i].querySelector('img');
-                        const vid = localItems[i].querySelector('video');
-                        if (img) img.src = mediaUrl;
-                        if (vid) vid.src = mediaUrl;
-                    }
-                });
-            }
+            const hadBlobMedia = !!optimisticBubble.querySelector('img[src^="blob:"], video[src^="blob:"]');
+            const replaced = this.replaceOptimisticMediaUrls(optimisticBubble, msg, tempId);
             
             const seenRow = optimisticBubble.querySelector('.msg-seen-row');
             if (seenRow && messageId) seenRow.id = `seen-row-${messageId}`;
@@ -344,10 +606,15 @@ const ChatWindow = {
             if (messageId) {
                 this.applyPendingSeenForMessage(convId, messageId);
             }
+            if (tempId) {
+                this.retryFiles.delete(tempId);
+                if (!hadBlobMedia || replaced) {
+                    this.cleanupMessageBlobUrls(tempId);
+                }
+            }
             return;
         } else {
             // Incoming message from others: clear "Sent" status
-            const msgContainer = document.getElementById(`chat-messages-${convId}`);
             msgContainer?.querySelectorAll('.msg-bubble-wrapper.sent[data-status="sent"]').forEach(el => {
                 el.removeAttribute('data-status');
                 el.querySelector('.msg-status')?.remove();
@@ -363,6 +630,18 @@ const ChatWindow = {
         if (messageId) {
             this.applyPendingSeenForMessage(convId, messageId);
         }
+
+        if (senderId !== myId && chat) {
+            const isChatPage = document.body.classList.contains('is-chat-page');
+            const isActiveInPage = isChatPage && window.ChatPage && window.ChatPage.currentChatId?.toLowerCase() === convIdRawNorm;
+            const isActiveInWindow = !chat.minimized && document.getElementById(`chat-box-${convId}`)?.classList.contains('is-focused');
+            const isActuallyActive = isActiveInPage || isActiveInWindow;
+
+            if (!isActuallyActive) {
+                this.markInactiveUnread(convId, chat);
+            }
+        }
+
         if (!chat.minimized) this.scrollToBottom(convId);
 
         // Manage unread state (moved up to be global)
@@ -391,6 +670,60 @@ const ChatWindow = {
             chat.bubbleElement.appendChild(badge);
         }
         badge.textContent = chat.unreadCount > 9 ? '9+' : chat.unreadCount;
+    },
+
+    markInactiveUnread(conversationId, chatObj = null) {
+        const openId = this.getOpenChatId(conversationId) || conversationId;
+        const chat = chatObj || this.openChats.get(openId);
+        if (!chat) return;
+
+        const syncedUnread = this.getSyncUnreadCount(openId);
+        if (chat.minimized) {
+            if (syncedUnread > 0) {
+                chat.unreadCount = syncedUnread;
+                this.incrementBubbleUnread(openId, true);
+            } else {
+                this.incrementBubbleUnread(openId);
+            }
+        } else {
+            chat.unreadCount = syncedUnread > 0 ? syncedUnread : (chat.unreadCount || 0) + 1;
+            if (chat.element) {
+                chat.element.classList.add('has-unread');
+            }
+        }
+
+        this.saveState();
+    },
+
+    syncUnreadFromSidebar(conversationId) {
+        const openId = this.getOpenChatId(conversationId);
+        if (!openId) return;
+
+        const chat = this.openChats.get(openId);
+        if (!chat) return;
+
+        const syncedUnread = this.getSyncUnreadCount(openId) || 0;
+        const localUnread = chat.unreadCount || 0;
+
+        // Incoming notification can arrive before sidebar state is fully refreshed after reload.
+        // For minimized windows, never apply a lower unread snapshot from sidebar in this path.
+        if (chat.minimized && syncedUnread < localUnread) {
+            return;
+        }
+
+        chat.unreadCount = syncedUnread;
+
+        if (chat.minimized) {
+            if (syncedUnread > 0) {
+                this.incrementBubbleUnread(openId, true);
+            } else {
+                this.clearBubbleUnread(openId);
+            }
+        } else if (chat.element) {
+            chat.element.classList.toggle('has-unread', syncedUnread > 0);
+        }
+
+        this.saveState();
     },
 
     clearBubbleUnread(id) {
@@ -660,6 +993,7 @@ const ChatWindow = {
             } else if (shouldFocus) {
                 this.focusChat(convId);
             }
+            this.tryJoinRealtimeConversation(convId, chat);
             return;
         }
 
@@ -692,11 +1026,7 @@ const ChatWindow = {
         }
 
         this.renderChatBox(conv, shouldFocus);
-
-        const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(convId);
-        if (isGuid && window.ChatRealtime && typeof window.ChatRealtime.joinConversation === 'function') {
-            window.ChatRealtime.joinConversation(convId);
-        }
+        this.tryJoinRealtimeConversation(convId);
 
         // Adjust internal Map order if opening at start
         if (priorityLeft) {
@@ -778,7 +1108,7 @@ const ChatWindow = {
         }
     },
 
-    async openByAccountId(accountId) {
+    async openByAccountId(accountId, shouldFocus = true) {
         if (!accountId) return;
         const targetAccountId = accountId.toString().toLowerCase();
         
@@ -786,7 +1116,7 @@ const ChatWindow = {
         for (const [id, chat] of this.openChats) {
             const existingId = chat.data.otherMember?.accountId?.toString().toLowerCase();
             if (existingId === targetAccountId) {
-                this.openChat(chat.data);
+                this.openChat(chat.data, shouldFocus);
                 return;
             }
         }
@@ -802,7 +1132,7 @@ const ChatWindow = {
                     chatData.conversationId = `new-${accountId}`;
                 }
                 
-                this.openChat(chatData);
+                this.openChat(chatData, shouldFocus);
             }
         } catch (error) {
             console.error("Failed to open chat by account ID:", error);
@@ -838,16 +1168,18 @@ const ChatWindow = {
         chatBox.addEventListener('mousedown', (e) => {
             const isHeader = e.target.closest('.chat-box-header');
             const isButton = e.target.closest('.chat-btn');
+            const isHeaderInfo = e.target.closest('.chat-header-info');
+            const isSpecialHeaderAction = !!(isButton || isHeaderInfo);
             
-            // Only allow dragging if clicking on the header but NOT on buttons
-            if (isHeader && !isButton) {
+            // Only allow dragging if clicking on header area that is not button/info action.
+            if (isHeader && !isSpecialHeaderAction) {
                 chatBox.draggable = true;
             } else {
                 chatBox.draggable = false;
             }
 
-            // Focus logic: Don't focus when clicking the header (avoid inadvertent "seen" while dragging/sorting)
-            if (!isButton && !isHeader) {
+            // Focus for normal window clicks, but exclude header special controls.
+            if (!isSpecialHeaderAction) {
                 this.focusChat(conv.conversationId);
             }
         }, true);
@@ -990,7 +1322,9 @@ const ChatWindow = {
             page: 1,
             hasMore: true,
             isLoading: false,
-            pendingFiles: []
+            pendingFiles: [],
+            _realtimeJoined: false,
+            _realtimeJoining: false
         };
         this.openChats.set(conv.conversationId, chatObj);
 
@@ -1012,9 +1346,6 @@ const ChatWindow = {
             setTimeout(() => this.focusChat(conv.conversationId), 100);
         }
 
-        const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(conv.conversationId);
-        // REMOVED: joinConversation from here. It's now handled by the caller (openChat/restoreState) 
-        // to ensure it only happens ONCE when added to openChats map.
     },
 
     renderBubble(id, data) {
@@ -1055,10 +1386,11 @@ const ChatWindow = {
         
         // Add unread badge if exists
         const chatObj = this.openChats.get(id);
-        if (chatObj && chatObj.unreadCount > 0) {
+        const unreadCount = (chatObj?.unreadCount ?? data?.unreadCount ?? 0);
+        if (unreadCount > 0) {
             const badge = document.createElement('div');
             badge.className = 'chat-bubble-unread';
-            badge.textContent = chatObj.unreadCount > 9 ? '9+' : chatObj.unreadCount;
+            badge.textContent = unreadCount > 9 ? '9+' : unreadCount;
             bubble.appendChild(badge);
         }
         
@@ -1075,14 +1407,14 @@ const ChatWindow = {
 
             chat = {
                 element: null, bubbleElement: bubble, data: data, minimized: true,
-                unreadCount: 0, page: 1, hasMore: true, isLoading: false, pendingFiles: []
+                unreadCount: data?.unreadCount || 0, page: 1, hasMore: true, isLoading: false, pendingFiles: [], _realtimeJoined: false, _realtimeJoining: false
             };
             this.openChats.set(id, chat);
-            const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-            if (isGuid && window.ChatRealtime) window.ChatRealtime.joinConversation(id);
+            this.tryJoinRealtimeConversation(id, chat);
         } else {
             chat.bubbleElement = bubble;
             chat.minimized = true;
+            this.tryJoinRealtimeConversation(id, chat);
         }
     },
 
@@ -1129,6 +1461,28 @@ const ChatWindow = {
         this.saveState();
     },
 
+    focusInputField(id) {
+        const chat = this.openChats.get(id);
+        if (!chat || chat.minimized || !chat.element) return;
+
+        const inputField = chat.element.querySelector('.chat-input-field');
+        if (!inputField) return;
+
+        inputField.focus();
+
+        // Keep caret visible at the end so typing can continue immediately.
+        if (inputField.isContentEditable) {
+            const selection = window.getSelection && window.getSelection();
+            if (selection) {
+                const range = document.createRange();
+                range.selectNodeContents(inputField);
+                range.collapse(false);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+        }
+    },
+
     focusChat(id) {
         const chat = this.openChats.get(id);
         if (!chat || chat.minimized) return;
@@ -1154,21 +1508,27 @@ const ChatWindow = {
             if (lastId) this.markConversationSeen(id, lastId);
         }
 
-        // Auto-focus input if not minimized
-        const inputField = chatBox.querySelector('.chat-input-field');
-        if (inputField && !chatBox.classList.contains('minimized')) {
-            inputField.focus();
-        }
+        // Auto-focus input with visible caret.
+        this.focusInputField(id);
     },
 
     closeChat(id) {
         const chat = this.openChats.get(id);
         if (chat) {
             this.pendingSeenByConv.delete(id.toLowerCase());
-            // Leave the SignalR group
-            if (window.ChatRealtime && typeof window.ChatRealtime.leaveConversation === 'function') {
-                window.ChatRealtime.leaveConversation(id);
+            this.revokePreviewBlobUrls(id);
+            chat.pendingFiles = [];
+            if (chat.element) {
+                chat.element.querySelectorAll('[data-temp-id]').forEach(el => {
+                    if (el.dataset.tempId) this.cleanupMessageBlobUrls(el.dataset.tempId);
+                });
             }
+            // Leave the SignalR group
+            if (chat._realtimeJoined && this.isGuidConversationId(id) && window.ChatRealtime && typeof window.ChatRealtime.leaveConversation === 'function') {
+                window.ChatRealtime.leaveConversation(id);
+                chat._realtimeJoined = false;
+            }
+            chat._realtimeJoining = false;
 
             if (chat.element) {
                 chat.element.classList.remove('show');
@@ -1437,11 +1797,12 @@ const ChatWindow = {
 
         const previewEl = document.getElementById(`chat-window-preview-${id}`);
         if (!previewEl) return;
+        this.revokePreviewBlobUrls(id);
         previewEl.innerHTML = '';
 
         chat.pendingFiles.forEach((file, index) => {
             const isVideo = file.type.startsWith('video/');
-            const url = URL.createObjectURL(file);
+            const url = this.trackBlobUrl(URL.createObjectURL(file), `preview:${id}`);
 
             const item = document.createElement('div');
             item.className = 'chat-window-preview-item';
@@ -1709,8 +2070,9 @@ const ChatWindow = {
         if (msg.isOwn === undefined) {
             msg.isOwn = (msg.sender?.accountId || msg.senderId || '').toLowerCase() === myId;
         }
-        if (!msg.messageId && msg.MessageId) {
-            msg.messageId = msg.MessageId.toString().toLowerCase();
+        const normalizedMessageId = (msg.messageId || msg.MessageId || '').toString().toLowerCase();
+        if (normalizedMessageId) {
+            msg.messageId = normalizedMessageId;
         }
 
         // Time separator
@@ -1790,7 +2152,7 @@ const ChatWindow = {
         // optimistic ui - include local media previews if any
         const filesToSend = [...(chat.pendingFiles || [])];
         const medias = filesToSend.map(file => ({
-            mediaUrl: URL.createObjectURL(file),
+            mediaUrl: this.trackBlobUrl(URL.createObjectURL(file), tempId),
             mediaType: file.type.startsWith('video/') ? 1 : 0
         }));
 
@@ -1856,86 +2218,14 @@ const ChatWindow = {
             
             if (res.ok) {
                 const msg = await res.json();
-                
-                // update message to sent status
-                this.updateMessageStatus(id, tempId, 'sent', content, msg.messageId);
-                this.retryFiles.delete(tempId);
-                
-                // if it was a 'new-' chat, update to real conversationId
+                const realMessageId = msg?.messageId || msg?.MessageId;
+                this.updateMessageStatus(id, tempId, 'sent', content, realMessageId, msg);
+
                 if (id.startsWith('new-')) {
-                    const realId = msg.conversationId;
-                    
-                    // update mapping
-                    this.openChats.delete(id);
-                    chat.data.conversationId = realId;
-                    this.openChats.set(realId, chat);
-                    
-                    // update DOM
-                    chat.element.id = `chat-box-${realId}`;
-                    const msgContainer = chat.element.querySelector('.chat-messages');
-                    if (msgContainer) msgContainer.id = `chat-messages-${realId}`;
-
-                    const sendBtn = chat.element.querySelector('.chat-send-btn');
-                    if (sendBtn) sendBtn.id = `send-btn-${realId}`;
-
-                    const fileInput = chat.element.querySelector('.chat-window-file-input');
-                    if (fileInput) {
-                        fileInput.id = `chat-file-input-${realId}`;
-                        fileInput.onchange = () => {
-                            const files = fileInput.files;
-                            if (files && files.length > 0) {
-                                this.handleMediaUpload(realId, files);
-                                fileInput.value = '';
-                            }
-                        };
+                    const realId = msg?.conversationId || msg?.ConversationId;
+                    if (realId) {
+                        this.promoteConversationId(id, realId, chat);
                     }
-
-                    const preview = chat.element.querySelector('.chat-window-attachment-preview');
-                    if (preview) preview.id = `chat-window-preview-${realId}`;
-
-                    // update handlers
-                    const header = chat.element.querySelector('.chat-box-header');
-                    if (header) header.onclick = () => this.toggleMinimize(realId);
-
-                    const minimizeBtn = chat.element.querySelector('.chat-header-actions .chat-btn:not(.close)');
-                    if (minimizeBtn) minimizeBtn.onclick = (event) => {
-                        event.stopPropagation();
-                        this.toggleMinimize(realId);
-                    };
-
-                    const closeBtn = chat.element.querySelector('.chat-header-actions .chat-btn.close');
-                    if (closeBtn) closeBtn.onclick = (event) => {
-                        event.stopPropagation();
-                        this.closeChat(realId);
-                    };
-
-                    const addMediaBtn = chat.element.querySelector('.chat-add-media-btn');
-                    if (addMediaBtn) addMediaBtn.onclick = (event) => {
-                        event.stopPropagation();
-                        this.openFilePicker(realId);
-                    };
-
-                    const inputField = chat.element.querySelector('.chat-input-field');
-                    if (inputField) {
-                        inputField.onkeydown = (e) => this.handleKeyDown(e, realId);
-                        inputField.oninput = (e) => this.handleInput(e, realId);
-                    }
-
-                    if (sendBtn) sendBtn.onclick = () => this.sendMessage(realId);
-
-                    // Update onclick for bubble if it somehow exists (unlikely here but for safety)
-                    if (chat.bubbleElement) {
-                        chat.bubbleElement.id = `chat-bubble-${realId}`;
-                        chat.bubbleElement.onclick = () => this.toggleMinimize(realId);
-                    }
-
-                    // Join the SignalR group for the newly created conversation
-                    if (window.ChatRealtime && typeof window.ChatRealtime.joinConversation === 'function') {
-                        window.ChatRealtime.joinConversation(realId)
-                            .then(() => console.log(`✅ Joined Conv-${realId} group`))
-                            .catch(err => console.error("Error joining conversation group:", err));
-                    }
-                    this.saveState();
                 }
             } else {
                 // failed to send
@@ -1946,18 +2236,17 @@ const ChatWindow = {
             this.updateMessageStatus(id, tempId, 'failed', content);
         }
     },
-
-    updateMessageStatus(chatId, tempId, status, content, realMessageId = null) {
+    updateMessageStatus(chatId, tempId, status, content, realMessageId = null, messagePayload = null) {
         const msgContainer = document.getElementById(`chat-messages-${chatId}`);
         if (!msgContainer) return;
         
         const msgEl = msgContainer.querySelector(`[data-temp-id="${tempId}"]`);
-        if (!msgEl) return;
+        if (!msgEl) {
+            if (status === 'sent') this.cleanupMessageBlobUrls(tempId);
+            return;
+        }
 
         msgEl.dataset.status = status;
-        if (status === 'sent') {
-            this.retryFiles.delete(tempId);
-        }
         
         if (realMessageId) {
             const normRealId = realMessageId ? realMessageId.toString().toLowerCase() : null;
@@ -1966,6 +2255,15 @@ const ChatWindow = {
             if (seenRow && normRealId) seenRow.id = `seen-row-${normRealId}`;
             if (normRealId) {
                 this.applyPendingSeenForMessage(chatId, normRealId);
+            }
+        }
+
+        if (status === 'sent') {
+            const hadBlobMedia = !!msgEl.querySelector('img[src^="blob:"], video[src^="blob:"]');
+            const replaced = this.replaceOptimisticMediaUrls(msgEl, messagePayload, tempId);
+            this.retryFiles.delete(tempId);
+            if (!hadBlobMedia || replaced) {
+                this.cleanupMessageBlobUrls(tempId);
             }
         }
         
@@ -2019,8 +2317,12 @@ const ChatWindow = {
         const formData = new FormData();
         const files = this.retryFiles.get(tempId) || [];
         const hasText = content && content.trim().length > 0;
-        if (!hasText && files.length === 0) return;
+        if (!hasText && files.length === 0) {
+            this.updateMessageStatus(chatId, tempId, 'failed', content);
+            return;
+        }
         if (hasText) formData.append('Content', content);
+        formData.append('TempId', tempId);
         files.forEach(file => formData.append('MediaFiles', file));
         
         try {
@@ -2043,8 +2345,15 @@ const ChatWindow = {
             
             if (res.ok) {
                 const msg = await res.json();
-                this.updateMessageStatus(chatId, tempId, 'sent', content, msg.messageId);
-                this.retryFiles.delete(tempId);
+                const realMessageId = msg?.messageId || msg?.MessageId;
+                this.updateMessageStatus(chatId, tempId, 'sent', content, realMessageId, msg);
+
+                if (chatId.startsWith('new-')) {
+                    const realId = msg?.conversationId || msg?.ConversationId;
+                    if (realId) {
+                        this.promoteConversationId(chatId, realId, chat);
+                    }
+                }
             } else {
                 this.updateMessageStatus(chatId, tempId, 'failed', content);
             }

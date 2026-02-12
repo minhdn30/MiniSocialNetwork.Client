@@ -229,6 +229,10 @@
                 if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
                     window.ChatSidebar.incrementUnread(convId, message, (isActiveInPage || isActiveInWindow));
                 }
+                // Keep floating chat-window unread in sync with sidebar after reload/minimize.
+                if (isOpenInWindow && window.ChatWindow && typeof window.ChatWindow.syncUnreadFromSidebar === 'function') {
+                    window.ChatWindow.syncUnreadFromSidebar(convId);
+                }
 
                 // Auto-open chat window if: not muted, not on chat-page, and not already open
                 // This runs AFTER sidebar update so getSyncUnreadCount() works correctly

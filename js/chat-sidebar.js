@@ -211,7 +211,7 @@ const ChatSidebar = {
     },
 
     async loadConversations(isLoadMore = false) {
-        if (this.isLoading || (!isLoadMore && !this.page === 1)) return;
+        if (this.isLoading) return;
         if (isLoadMore && !this.hasMore) return;
 
         const listContainer = document.getElementById('chat-conversation-list');
@@ -383,9 +383,6 @@ const ChatSidebar = {
      * Updates preview text, time, moves item to top. Like Facebook/Instagram.
      */
     incrementUnread(conversationId, message, skipBadgeIncrement = false) {
-        const listContainer = document.getElementById('chat-conversation-list');
-        if (!listContainer) return;
-
         const myId = (localStorage.getItem('accountId') || '').toLowerCase();
         const senderId = (message?.sender?.accountId || message?.Sender?.AccountId || '').toLowerCase();
         const isMe = senderId === myId;
@@ -404,6 +401,9 @@ const ChatSidebar = {
                 conv.lastMessageSeenCount = 0;
             }
         }
+
+        const listContainer = document.getElementById('chat-conversation-list');
+        if (!listContainer) return;
 
         // Find existing DOM item
         let item = document.querySelector(`.chat-item[data-conversation-id="${conversationId}"]`);

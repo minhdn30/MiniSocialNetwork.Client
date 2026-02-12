@@ -11,9 +11,15 @@ const ChatPage = {
     pageSize: window.APP_CONFIG?.CHATPAGE_MESSAGES_PAGE_SIZE || 20,
     currentMetaData: null,
     pendingFiles: [], // Store files before sending
+    retryFiles: new Map(), // tempId -> File[]
     pendingSeenByConv: new Map(),
+    _listenerRefs: [],
+    _blobUrls: new Map(), // key -> Set<blobUrl>
+    _emojiOutsideBound: false,
 
     async init() {
+        this.cleanupEventListeners();
+        this.revokeAllBlobUrls();
 
         // Cleanup old group if exists (prevent leaks across re-initializations)
         if (this.currentChatId) {
@@ -26,6 +32,7 @@ const ChatPage = {
         this.hasMore = true;
         this.isLoading = false;
         this.pendingFiles = []; 
+        this.retryFiles.clear();
         
         this.cacheElements();
         this.attachEventListeners();
@@ -41,6 +48,96 @@ const ChatPage = {
         this.infoContent = document.getElementById('chat-info-content');
     },
 
+    trackBlobUrl(url, key = 'global') {
+        if (!url) return null;
+        if (!this._blobUrls.has(key)) {
+            this._blobUrls.set(key, new Set());
+        }
+        this._blobUrls.get(key).add(url);
+        return url;
+    },
+
+    revokeBlobUrl(url) {
+        if (!url) return;
+        try {
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            console.warn('Failed to revoke blob URL:', e);
+        }
+        this._blobUrls.forEach(set => set.delete(url));
+    },
+
+    revokeAllPreviewBlobUrls() {
+        const previewUrls = this._blobUrls.get('preview');
+        if (!previewUrls || previewUrls.size === 0) return;
+        Array.from(previewUrls).forEach(url => this.revokeBlobUrl(url));
+        this._blobUrls.delete('preview');
+    },
+
+    revokeAllBlobUrls() {
+        if (!this._blobUrls || this._blobUrls.size === 0) return;
+        const allUrls = [];
+        this._blobUrls.forEach(set => {
+            set.forEach(url => allUrls.push(url));
+        });
+        allUrls.forEach(url => this.revokeBlobUrl(url));
+        this._blobUrls.clear();
+    },
+
+    cleanupEventListeners() {
+        if (!Array.isArray(this._listenerRefs) || this._listenerRefs.length === 0) return;
+        this._listenerRefs.forEach(ref => {
+            if (!ref?.target || !ref?.type || !ref?.handler) return;
+            ref.target.removeEventListener(ref.type, ref.handler, ref.options);
+        });
+        this._listenerRefs = [];
+    },
+
+    cleanupRetryPayload(tempId) {
+        if (!tempId) return;
+        this.retryFiles.delete(tempId);
+        const messageBlobUrls = this._blobUrls.get(tempId);
+        if (messageBlobUrls && messageBlobUrls.size > 0) {
+            Array.from(messageBlobUrls).forEach(url => this.revokeBlobUrl(url));
+        }
+        this._blobUrls.delete(tempId);
+    },
+
+    replaceOptimisticMediaUrls(bubble, messagePayload, tempId = null) {
+        if (!bubble || !messagePayload) return false;
+        const medias = messagePayload.Medias || messagePayload.medias || [];
+        if (!Array.isArray(medias) || medias.length === 0) return false;
+
+        const localItems = bubble.querySelectorAll('.msg-media-item');
+        if (!localItems || localItems.length === 0) return false;
+
+        let replaced = false;
+        medias.forEach((m, i) => {
+            if (!localItems[i]) return;
+            const mediaUrl = m.MediaUrl || m.mediaUrl;
+            if (!mediaUrl) return;
+
+            const img = localItems[i].querySelector('img');
+            const vid = localItems[i].querySelector('video');
+            if (img) {
+                if (img.src?.startsWith('blob:')) this.revokeBlobUrl(img.src);
+                img.src = mediaUrl;
+                replaced = true;
+            }
+            if (vid) {
+                if (vid.src?.startsWith('blob:')) this.revokeBlobUrl(vid.src);
+                vid.src = mediaUrl;
+                replaced = true;
+            }
+        });
+
+        if (replaced && tempId) {
+            this.cleanupRetryPayload(tempId);
+        }
+
+        return replaced;
+    },
+
     attachEventListeners() {
         const input = document.getElementById('chat-message-input');
         if (input) {
@@ -48,13 +145,15 @@ const ChatPage = {
             const maxLen = window.APP_CONFIG?.MAX_CHAT_MESSAGE_LENGTH || 1000;
             input.setAttribute('maxlength', maxLen);
 
-            input.addEventListener('input', () => {
+            const onInput = () => {
                 input.style.height = 'auto';
                 input.style.height = (input.scrollHeight) + 'px';
                 this.updateInputState();
-            });
+            };
+            input.addEventListener('input', onInput);
+            this._listenerRefs.push({ target: input, type: 'input', handler: onInput });
             
-            input.addEventListener('keydown', (e) => {
+            const onKeyDown = (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     if (this.currentChatId && this.currentMetaData) {
@@ -64,7 +163,9 @@ const ChatPage = {
                         this.sendMessage();
                     }
                 }
-            });
+            };
+            input.addEventListener('keydown', onKeyDown);
+            this._listenerRefs.push({ target: input, type: 'keydown', handler: onKeyDown });
         }
 
         const sendBtn = document.getElementById('chat-page-send-btn');
@@ -82,11 +183,13 @@ const ChatPage = {
             };
 
             // Close menu when clicking outside
-            document.addEventListener('click', (e) => {
+            const onDocumentClick = (e) => {
                 if (!expansion.contains(e.target)) {
                     expansion.classList.remove('is-show');
                 }
-            });
+            };
+            document.addEventListener('click', onDocumentClick);
+            this._listenerRefs.push({ target: document, type: 'click', handler: onDocumentClick });
         }
 
         // --- NEW ACTION BUTTONS ---
@@ -103,7 +206,10 @@ const ChatPage = {
                 });
             };
             // Setup click outside to close
-            window.EmojiUtils?.setupClickOutsideHandler('#chat-emoji-picker-container', '#chat-emoji-btn');
+            if (!this._emojiOutsideBound) {
+                window.EmojiUtils?.setupClickOutsideHandler('#chat-emoji-picker-container', '#chat-emoji-btn');
+                this._emojiOutsideBound = true;
+            }
         }
 
         // Upload media button
@@ -268,21 +374,24 @@ const ChatPage = {
         const myId = (localStorage.getItem('accountId') || '').toLowerCase();
 
         if (this.currentChatId?.toLowerCase() === convId) {
+            const msgContainer = document.getElementById('chat-view-messages');
+            if (!msgContainer) return;
+
             // 1. Check if message already exists in DOM (by real ID)
-            if (messageId && document.querySelector(`[data-message-id="${messageId}"]`)) {
+            if (messageId && msgContainer.querySelector(`[data-message-id="${messageId}"]`)) {
                 return;
             }
 
             // 2. Identify and handle optimistic UI confirmation (Merging)
             let optimisticBubble = null;
             if (tempId) {
-                optimisticBubble = document.querySelector(`[data-temp-id="${tempId}"]`);
+                optimisticBubble = msgContainer.querySelector(`[data-temp-id="${tempId}"]`);
             }
             
             // Fallback for our own messages if tempId matching fails (content + media count matching)
             if (!optimisticBubble && senderId === myId) {
                 const incomingMedias = msg.Medias || msg.medias || [];
-                const optimisticMsgs = document.querySelectorAll('.msg-bubble-wrapper.sent[data-status="pending"]');
+                const optimisticMsgs = msgContainer.querySelectorAll('.msg-bubble-wrapper.sent[data-status="pending"]');
                 for (let opt of optimisticMsgs) {
                     const optContentRaw = opt.querySelector('.msg-bubble')?.innerText || '';
                     const optContent = ChatCommon.normalizeContent(optContentRaw);
@@ -304,19 +413,8 @@ const ChatPage = {
                 optimisticBubble.querySelector('.msg-status')?.remove();
 
                 // Replace local blob URLs with real server URLs
-                const incomingMedias = msg.Medias || msg.medias || [];
-                if (incomingMedias.length > 0) {
-                    const localItems = optimisticBubble.querySelectorAll('.msg-media-item');
-                    incomingMedias.forEach((m, i) => {
-                        if (localItems[i]) {
-                            const mediaUrl = m.MediaUrl || m.mediaUrl;
-                            const img = localItems[i].querySelector('img');
-                            const vid = localItems[i].querySelector('video');
-                            if (img) img.src = mediaUrl;
-                            if (vid) vid.src = mediaUrl;
-                        }
-                    });
-                }
+                const hadBlobMedia = !!optimisticBubble.querySelector('img[src^="blob:"], video[src^="blob:"]');
+                const replaced = this.replaceOptimisticMediaUrls(optimisticBubble, msg, tempId);
                 
                 const seenRow = optimisticBubble.querySelector('.msg-seen-row');
                 if (seenRow && messageId) seenRow.id = `seen-row-${messageId}`;
@@ -325,10 +423,15 @@ const ChatPage = {
                 if (messageId) {
                     this.applyPendingSeenForMessage(convId, messageId);
                 }
+                if (tempId) {
+                    this.retryFiles.delete(tempId);
+                    if (!hadBlobMedia || replaced) {
+                        this.cleanupRetryPayload(tempId);
+                    }
+                }
                 return;
             } else {
                 // Incoming message from others: clear "Sent" status
-                const msgContainer = document.getElementById('chat-view-messages');
                 msgContainer?.querySelectorAll('.msg-bubble-wrapper.sent[data-status="sent"]').forEach(el => {
                     el.removeAttribute('data-status');
                     el.querySelector('.msg-status')?.remove();
@@ -394,6 +497,8 @@ const ChatPage = {
      */
     moveSeenAvatar(accountId, messageId, memberInfo = null) {
         if (!accountId || !messageId) return;
+        const msgContainer = document.getElementById('chat-view-messages');
+        if (!msgContainer) return;
 
         const myId = (localStorage.getItem('accountId') || '').toLowerCase();
         const targetAccountId = accountId.toLowerCase();
@@ -416,14 +521,14 @@ const ChatPage = {
         }
 
         // 2. Remove existing avatar for THIS member in THIS conversation
-        const existing = document.querySelector(`.seen-avatar-wrapper[data-account-id="${accountId}"]`);
+        const existing = msgContainer.querySelector(`.seen-avatar-wrapper[data-account-id="${accountId}"]`);
         if (existing) {
             existing.remove();
         }
 
         // 3. Find target bubble (by messageId), then pick correct seen-row
         const normMessageId = messageId ? messageId.toString().toLowerCase() : messageId;
-        let bubbleWrapper = normMessageId ? document.querySelector(`.msg-bubble-wrapper[data-message-id="${normMessageId}"]`) : null;
+        let bubbleWrapper = normMessageId ? msgContainer.querySelector(`.msg-bubble-wrapper[data-message-id="${normMessageId}"]`) : null;
         let targetRow = bubbleWrapper?.querySelector('.msg-seen-row') || null;
 
         // If target message isn't loaded yet (pagination), defer until that message appears in DOM.
@@ -499,6 +604,11 @@ const ChatPage = {
 
             const oldId = this.currentChatId;
             this.pendingSeenByConv.delete(oldId.toLowerCase());
+            this.revokeAllBlobUrls();
+            this.retryFiles.clear();
+            this.pendingFiles = [];
+            this.updateAttachmentPreview();
+            this.updateInputState();
             
             // Only leave if not open in any floating ChatWindow
             const isOpenInWindow = window.ChatWindow && window.ChatWindow.openChats && window.ChatWindow.openChats.has(oldId);
@@ -1018,7 +1128,7 @@ const ChatPage = {
         
         // Prepare local preview URLs for optimistic UI if there are files
         const medias = this.pendingFiles.map(file => ({
-            mediaUrl: URL.createObjectURL(file), // Local preview link
+            mediaUrl: this.trackBlobUrl(URL.createObjectURL(file), tempId), // Local preview link
             mediaType: file.type.startsWith('video/') ? 1 : 0
         }));
 
@@ -1052,6 +1162,9 @@ const ChatPage = {
         
         // Prepare data for real upload
         const filesToSend = [...this.pendingFiles];
+        if (filesToSend.length > 0) {
+            this.retryFiles.set(tempId, filesToSend);
+        }
 
         // Clear input and pending state immediately
         input.value = '';
@@ -1093,7 +1206,7 @@ const ChatPage = {
             
             if (res.ok) {
                 const msg = await res.json();
-                this.updateMessageStatus(tempId, 'sent', content, msg?.messageId || msg?.MessageId);
+                this.updateMessageStatus(tempId, 'sent', content, msg?.messageId || msg?.MessageId, msg);
             } else {
                 this.updateMessageStatus(tempId, 'failed', content);
             }
@@ -1153,11 +1266,12 @@ const ChatPage = {
         const previewEl = document.getElementById('chat-attachment-preview');
         if (!previewEl) return;
 
+        this.revokeAllPreviewBlobUrls();
         previewEl.innerHTML = '';
         
         this.pendingFiles.forEach((file, index) => {
             const isVideo = file.type.startsWith('video/');
-            const url = URL.createObjectURL(file);
+            const url = this.trackBlobUrl(URL.createObjectURL(file), 'preview');
 
             const item = document.createElement('div');
             item.className = 'chat-preview-item';
@@ -1199,9 +1313,15 @@ const ChatPage = {
         this.updateInputState();
     },
 
-    updateMessageStatus(tempId, status, content, realId = null) {
-        const bubble = document.querySelector(`[data-temp-id="${tempId}"]`);
-        if (!bubble) return;
+    updateMessageStatus(tempId, status, content, realId = null, messagePayload = null) {
+        const msgContainer = document.getElementById('chat-view-messages');
+        if (!msgContainer) return;
+
+        const bubble = msgContainer.querySelector(`[data-temp-id="${tempId}"]`);
+        if (!bubble) {
+            if (status === 'sent') this.cleanupRetryPayload(tempId);
+            return;
+        }
 
         bubble.dataset.status = status;
         if (realId) {
@@ -1214,6 +1334,15 @@ const ChatPage = {
                 this.applyPendingSeenForMessage(this.currentChatId, normRealId);
             }
         }
+
+        if (status === 'sent') {
+            const hadBlobMedia = !!bubble.querySelector('img[src^="blob:"], video[src^="blob:"]');
+            const replaced = this.replaceOptimisticMediaUrls(bubble, messagePayload, tempId);
+            this.retryFiles.delete(tempId);
+            if (!hadBlobMedia || replaced) {
+                this.cleanupRetryPayload(tempId);
+            }
+        }
         
         // Remove existing status indicators from THIS bubble
         const existingStatus = bubble.querySelector('.msg-status');
@@ -1221,7 +1350,7 @@ const ChatPage = {
         
         // If this message is being marked as SENT, remove "Sent" status from all PREVIOUS messages
         if (status === 'sent') {
-            document.querySelectorAll('.msg-bubble-wrapper.sent[data-status="sent"]').forEach(el => {
+            msgContainer.querySelectorAll('.msg-bubble-wrapper.sent[data-status="sent"]').forEach(el => {
                 if (el !== bubble) {
                     el.removeAttribute('data-status');
                     el.querySelector('.msg-status')?.remove();
@@ -1259,7 +1388,15 @@ const ChatPage = {
         this.updateMessageStatus(tempId, 'pending', content);
         
         const formData = new FormData();
-        formData.append('Content', content);
+        const files = this.retryFiles.get(tempId) || [];
+        const hasText = content && content.trim().length > 0;
+        if (!hasText && files.length === 0) {
+            this.updateMessageStatus(tempId, 'failed', content);
+            return;
+        }
+        if (hasText) formData.append('Content', content);
+        formData.append('TempId', tempId);
+        files.forEach(file => formData.append('MediaFiles', file));
         
         try {
             let res;
@@ -1276,7 +1413,7 @@ const ChatPage = {
             
             if (res.ok) {
                 const msg = await res.json();
-                this.updateMessageStatus(tempId, 'sent', content, msg?.messageId || msg?.MessageId);
+                this.updateMessageStatus(tempId, 'sent', content, msg?.messageId || msg?.MessageId, msg);
             } else {
                 this.updateMessageStatus(tempId, 'failed', content);
             }
