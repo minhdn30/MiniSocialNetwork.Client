@@ -10,8 +10,14 @@ const ChatWindow = {
     pendingSeenByConv: new Map(),
     _blobUrls: new Map(), // key -> Set<blobUrl>
     _realtimeRetryTimer: null,
+    _messageUnsub: null,
+    _seenUnsub: null,
+    _initialized: false,
     
     init() {
+        if (this._initialized) return;
+        this._initialized = true;
+
         if (!document.getElementById('chat-window-wrapper')) {
             const wrapper = document.createElement('div');
             wrapper.id = 'chat-window-wrapper';
@@ -267,8 +273,17 @@ const ChatWindow = {
             this._realtimeRetryTimer = null;
         }
 
-        window.ChatRealtime.onMessage((msg) => this.handleRealtimeMessage(msg));
-        window.ChatRealtime.onSeen((data) => this.handleMemberSeen(data));
+        if (typeof this._messageUnsub === 'function') {
+            this._messageUnsub();
+            this._messageUnsub = null;
+        }
+        if (typeof this._seenUnsub === 'function') {
+            this._seenUnsub();
+            this._seenUnsub = null;
+        }
+
+        this._messageUnsub = window.ChatRealtime.onMessage((msg) => this.handleRealtimeMessage(msg));
+        this._seenUnsub = window.ChatRealtime.onSeen((data) => this.handleMemberSeen(data));
         this.rejoinAllRealtimeConversations();
     },
 
@@ -312,11 +327,56 @@ const ChatWindow = {
         }
     },
 
+    getRuntimeCtx(conversationId, chatObj = null) {
+        if (!window.ChatMessageRuntime || typeof window.ChatMessageRuntime.createContext !== 'function') {
+            return null;
+        }
+        if (!conversationId) return null;
+
+        const openId = this.getOpenChatId(conversationId) || conversationId;
+        const chat = chatObj || this.openChats.get(openId);
+        if (!chat) return null;
+
+        const myId = (localStorage.getItem('accountId') || sessionStorage.getItem('accountId') || window.APP_CONFIG?.CURRENT_USER_ID || '').toLowerCase();
+
+        if (!chat.runtimeCtx) {
+            chat.runtimeCtx = window.ChatMessageRuntime.createContext({
+                scope: 'window',
+                conversationId: openId,
+                myAccountId: myId,
+                retryFiles: this.retryFiles,
+                pendingSeenByConv: this.pendingSeenByConv,
+                blobUrls: this._blobUrls,
+                now: () => new Date()
+            });
+        }
+
+        chat.runtimeCtx.scope = 'window';
+        chat.runtimeCtx.conversationId = openId;
+        chat.runtimeCtx.myAccountId = myId;
+        chat.runtimeCtx.retryFiles = this.retryFiles;
+        chat.runtimeCtx.pendingSeenByConv = this.pendingSeenByConv;
+        chat.runtimeCtx.blobUrls = this._blobUrls;
+        return chat.runtimeCtx;
+    },
+
+    getAnyRuntimeCtx() {
+        for (const [id, chat] of this.openChats.entries()) {
+            const ctx = this.getRuntimeCtx(id, chat);
+            if (ctx) return ctx;
+        }
+        return null;
+    },
+
     clearFocusedChatWindows() {
         document.querySelectorAll('.chat-box.is-focused').forEach(b => b.classList.remove('is-focused'));
     },
 
     trackBlobUrl(url, key = 'global') {
+        const ctx = this.getAnyRuntimeCtx();
+        if (ctx && window.ChatMessageRuntime) {
+            return window.ChatMessageRuntime.trackBlobUrl(ctx, key, url);
+        }
         if (!url) return null;
         if (!this._blobUrls.has(key)) {
             this._blobUrls.set(key, new Set());
@@ -326,6 +386,11 @@ const ChatWindow = {
     },
 
     revokeBlobUrl(url) {
+        const ctx = this.getAnyRuntimeCtx();
+        if (ctx && window.ChatMessageRuntime) {
+            window.ChatMessageRuntime.revokeBlobUrlIfNeeded(ctx, url);
+            return;
+        }
         if (!url) return;
         try {
             URL.revokeObjectURL(url);
@@ -344,6 +409,11 @@ const ChatWindow = {
     },
 
     cleanupMessageBlobUrls(tempId) {
+        const ctx = this.getAnyRuntimeCtx();
+        if (ctx && window.ChatMessageRuntime) {
+            window.ChatMessageRuntime.revokeMediaUrlsForTemp(ctx, tempId);
+            return;
+        }
         if (!tempId) return;
         this.retryFiles.delete(tempId);
         const urls = this._blobUrls.get(tempId);
@@ -354,6 +424,10 @@ const ChatWindow = {
     },
 
     replaceOptimisticMediaUrls(bubble, messagePayload, tempId = null) {
+        const ctx = this.getAnyRuntimeCtx();
+        if (ctx && window.ChatMessageRuntime) {
+            return window.ChatMessageRuntime.replaceOptimisticMediaUrls(ctx, bubble, messagePayload, tempId);
+        }
         if (!bubble || !messagePayload) return false;
         const medias = messagePayload.Medias || messagePayload.medias || [];
         if (!Array.isArray(medias) || medias.length === 0) return false;
@@ -453,6 +527,12 @@ const ChatWindow = {
 
         this.openChats.delete(oldId);
         chatObj.data.conversationId = realId;
+        if (chatObj.runtimeCtx) {
+            chatObj.runtimeCtx.conversationId = realId;
+            chatObj.runtimeCtx.retryFiles = this.retryFiles;
+            chatObj.runtimeCtx.pendingSeenByConv = this.pendingSeenByConv;
+            chatObj.runtimeCtx.blobUrls = this._blobUrls;
+        }
         this.openChats.set(realId, chatObj);
 
         const oldPreviewKey = `preview:${oldId}`;
@@ -475,6 +555,7 @@ const ChatWindow = {
         }
 
         this.remapConversationDomIds(oldId, realId, chatObj);
+        this.getRuntimeCtx(realId, chatObj);
 
         chatObj._realtimeJoined = false;
         this.tryJoinRealtimeConversation(realId, chatObj);
@@ -484,6 +565,11 @@ const ChatWindow = {
     },
 
     queuePendingSeen(conversationId, messageId, accountId, memberInfo = null) {
+        const ctx = this.getRuntimeCtx(conversationId);
+        if (ctx && window.ChatMessageRuntime) {
+            window.ChatMessageRuntime.queuePendingSeen(ctx, conversationId, messageId, accountId, memberInfo);
+            return;
+        }
         if (!conversationId || !messageId || !accountId) return;
         const convId = conversationId.toString().toLowerCase();
         const msgId = messageId.toString().toLowerCase();
@@ -502,6 +588,16 @@ const ChatWindow = {
     },
 
     applyPendingSeenForMessage(conversationId, messageId) {
+        const ctx = this.getRuntimeCtx(conversationId);
+        if (ctx && window.ChatMessageRuntime) {
+            window.ChatMessageRuntime.applyPendingSeenForMessage(
+                ctx,
+                conversationId,
+                messageId,
+                (accountId, msgId, memberInfo) => this.moveSeenAvatar(conversationId, accountId, msgId, memberInfo)
+            );
+            return;
+        }
         if (!conversationId || !messageId) return;
         const convId = conversationId.toString().toLowerCase();
         const msgId = messageId.toString().toLowerCase();
@@ -529,77 +625,67 @@ const ChatWindow = {
     },
 
     handleRealtimeMessage(msg) {
-        const convIdRaw = msg.ConversationId || msg.conversationId;
-        const convIdRawNorm = (convIdRaw || '').toLowerCase();
-        const messageIdRaw = msg.MessageId || msg.messageId;
-        const messageId = messageIdRaw ? messageIdRaw.toString().toLowerCase() : null;
-        const tempId = msg.TempId || msg.tempId;
-        const rawSenderId = msg.Sender?.AccountId || msg.sender?.accountId || msg.SenderId || msg.senderId || '';
-        const senderId = rawSenderId.toLowerCase();
         const myId = (localStorage.getItem('accountId') || '').toLowerCase();
-        const content = (msg.Content || msg.content || '').trim();
-        const normIncoming = ChatCommon.normalizeContent(content);
+        const normalized = window.ChatMessageRuntime
+            ? window.ChatMessageRuntime.normalizeIncomingMessage(msg, myId)
+            : null;
+
+        const convIdRaw = normalized?.conversationId || msg.ConversationId || msg.conversationId;
+        const messageIdRaw = normalized?.messageId || msg.MessageId || msg.messageId;
+        const messageId = messageIdRaw ? messageIdRaw.toString().toLowerCase() : null;
+        const tempId = normalized?.tempId || msg.TempId || msg.tempId;
+        const senderIdRaw = normalized?.senderId || msg.Sender?.AccountId || msg.sender?.accountId || msg.SenderId || msg.senderId || '';
+        const senderId = senderIdRaw.toString().toLowerCase();
+        const content = normalized?.content || (msg.Content || msg.content || '').trim();
+        const normIncoming = normalized?.normalizedContent || ChatCommon.normalizeContent(content);
 
         const convId = this.getOpenChatId(convIdRaw);
         const chat = convId ? this.openChats.get(convId) : null;
-
         if (!convId || !chat) return;
+
+        const runtimeCtx = this.getRuntimeCtx(convId, chat);
         const msgContainer = document.getElementById(`chat-messages-${convId}`);
         if (!msgContainer) {
-            if (senderId !== myId) {
-                const isChatPage = document.body.classList.contains('is-chat-page');
-                const isActiveInPage = isChatPage && window.ChatPage && window.ChatPage.currentChatId?.toLowerCase() === convIdRawNorm;
-                const isActiveInWindow = !chat.minimized && chat.element?.classList.contains('is-focused');
-                const isActuallyActive = isActiveInPage || isActiveInWindow;
-                if (!isActuallyActive) {
-                    this.markInactiveUnread(convId, chat);
-                }
-            }
             return;
         }
 
-        // De-duplication check: if real messageId already exists, discard this event
         if (messageId && msgContainer.querySelector(`[data-message-id="${messageId}"]`)) {
             return;
         }
 
-        // 2. Identify and handle optimistic UI confirmation (Merging)
         let optimisticBubble = null;
-        if (tempId) {
+        if (runtimeCtx && normalized && window.ChatMessageRuntime) {
+            optimisticBubble = window.ChatMessageRuntime.findOptimisticBubble(msgContainer, normalized, myId);
+        }
+        if (!optimisticBubble && tempId) {
             optimisticBubble = msgContainer.querySelector(`[data-temp-id="${tempId}"]`);
         }
-        
-        // Fallback for our own messages if tempId matching fails (content + media count matching)
+
         if (!optimisticBubble && senderId === myId) {
             const incomingMedias = msg.Medias || msg.medias || [];
-            const optimisticMsgs = msgContainer?.querySelectorAll('.msg-bubble-wrapper.sent[data-status="pending"]');
-            
-            if (optimisticMsgs) {
-                for (let opt of optimisticMsgs) {
-                    const optContentRaw = opt.querySelector('.msg-bubble')?.innerText || '';
-                    const optContent = ChatCommon.normalizeContent(optContentRaw);
-                    const optMediaCount = opt.querySelectorAll('.msg-media-item')?.length || 0;
-                    
-                    const matchByContent = content && optContent === normIncoming;
-                    const matchByMedia = !content && !optContent && incomingMedias.length > 0 && optMediaCount === incomingMedias.length;
-                    if (matchByContent || matchByMedia) {
-                        optimisticBubble = opt;
-                        break;
-                    }
+            const optimisticMsgs = msgContainer.querySelectorAll('.msg-bubble-wrapper.sent[data-status="pending"]');
+            for (const opt of optimisticMsgs) {
+                const optContentRaw = opt.querySelector('.msg-bubble')?.innerText || '';
+                const optContent = ChatCommon.normalizeContent(optContentRaw);
+                const optMediaCount = opt.querySelectorAll('.msg-media-item')?.length || 0;
+
+                const matchByContent = content && optContent === normIncoming;
+                const matchByMedia = !content && !optContent && incomingMedias.length > 0 && optMediaCount === incomingMedias.length;
+                if (matchByContent || matchByMedia) {
+                    optimisticBubble = opt;
+                    break;
                 }
             }
         }
 
         if (optimisticBubble) {
-            // Confirm optimistic message
             if (messageId) optimisticBubble.dataset.messageId = messageId;
             delete optimisticBubble.dataset.status;
             optimisticBubble.querySelector('.msg-status')?.remove();
 
-            // Replace local blob URLs with real server URLs
             const hadBlobMedia = !!optimisticBubble.querySelector('img[src^="blob:"], video[src^="blob:"]');
             const replaced = this.replaceOptimisticMediaUrls(optimisticBubble, msg, tempId);
-            
+
             const seenRow = optimisticBubble.querySelector('.msg-seen-row');
             if (seenRow && messageId) seenRow.id = `seen-row-${messageId}`;
 
@@ -613,46 +699,31 @@ const ChatWindow = {
                 }
             }
             return;
-        } else {
-            // Incoming message from others: clear "Sent" status
-            msgContainer?.querySelectorAll('.msg-bubble-wrapper.sent[data-status="sent"]').forEach(el => {
-                el.removeAttribute('data-status');
-                el.querySelector('.msg-status')?.remove();
-            });
         }
 
-        // If it's an own message from another device, mark it as 'sent'
-        if (senderId === myId && !msg.status) {
-            msg.status = 'sent';
+        msgContainer.querySelectorAll('.msg-bubble-wrapper.sent[data-status="sent"]').forEach(el => {
+            el.removeAttribute('data-status');
+            el.querySelector('.msg-status')?.remove();
+        });
+
+        const incoming = normalized?.raw || msg;
+        if (senderId === myId && !incoming.status) {
+            incoming.status = 'sent';
         }
 
-        this.appendMessage(convId, msg);
+        this.appendMessage(convId, incoming);
         if (messageId) {
             this.applyPendingSeenForMessage(convId, messageId);
         }
 
-        if (senderId !== myId && chat) {
-            const isChatPage = document.body.classList.contains('is-chat-page');
-            const isActiveInPage = isChatPage && window.ChatPage && window.ChatPage.currentChatId?.toLowerCase() === convIdRawNorm;
-            const isActiveInWindow = !chat.minimized && document.getElementById(`chat-box-${convId}`)?.classList.contains('is-focused');
-            const isActuallyActive = isActiveInPage || isActiveInWindow;
-
-            if (!isActuallyActive) {
-                this.markInactiveUnread(convId, chat);
-            }
+        if (!chat.minimized) {
+            this.scrollToBottom(convId);
         }
 
-        if (!chat.minimized) this.scrollToBottom(convId);
-
-        // Manage unread state (moved up to be global)
-
-        // DO NOT mark as seen immediately. Only when focused/clicked.
         const chatBox = document.getElementById(`chat-box-${convId}`);
-        if (chatBox) {
-            if (chatBox.classList.contains('is-focused')) {
-                const lastId = messageId || this.getLastMessageId(convId);
-                if (lastId) this.markConversationSeen(convId, lastId);
-            }
+        if (chatBox && chatBox.classList.contains('is-focused')) {
+            const lastId = messageId || this.getLastMessageId(convId);
+            if (lastId) this.markConversationSeen(convId, lastId);
         }
     },
 
@@ -695,7 +766,7 @@ const ChatWindow = {
         this.saveState();
     },
 
-    syncUnreadFromSidebar(conversationId) {
+    syncUnreadFromSidebar(conversationId, options = {}) {
         const openId = this.getOpenChatId(conversationId);
         if (!openId) return;
 
@@ -704,23 +775,28 @@ const ChatWindow = {
 
         const syncedUnread = this.getSyncUnreadCount(openId) || 0;
         const localUnread = chat.unreadCount || 0;
+        const expectIncomingUnreadIncrement = !!options.expectIncomingUnreadIncrement;
+        let resolvedUnread = syncedUnread;
 
-        // Incoming notification can arrive before sidebar state is fully refreshed after reload.
-        // For minimized windows, never apply a lower unread snapshot from sidebar in this path.
-        if (chat.minimized && syncedUnread < localUnread) {
-            return;
+        // After reload, sidebar unread can lag behind the incoming realtime event.
+        // For incoming notifications that should increment unread, enforce monotonic growth.
+        if (expectIncomingUnreadIncrement && syncedUnread <= localUnread) {
+            resolvedUnread = localUnread + 1;
+        } else if (chat.minimized && syncedUnread < localUnread) {
+            // In non-increment paths (active view), keep local value if sidebar snapshot is older.
+            resolvedUnread = localUnread;
         }
 
-        chat.unreadCount = syncedUnread;
+        chat.unreadCount = resolvedUnread;
 
         if (chat.minimized) {
-            if (syncedUnread > 0) {
+            if (resolvedUnread > 0) {
                 this.incrementBubbleUnread(openId, true);
             } else {
                 this.clearBubbleUnread(openId);
             }
         } else if (chat.element) {
-            chat.element.classList.toggle('has-unread', syncedUnread > 0);
+            chat.element.classList.toggle('has-unread', resolvedUnread > 0);
         }
 
         this.saveState();
@@ -972,6 +1048,7 @@ const ChatWindow = {
      */
     openChat(conv, shouldFocus = true, priorityLeft = false) {
         if (!conv) return;
+        this.init();
         const convId = conv.conversationId;
 
         if (this.openChats.has(convId)) {
@@ -979,6 +1056,7 @@ const ChatWindow = {
             
             // Always refresh data to ensure consistency (fix for "header showing own info" if stale)
             if (conv) chat.data = conv;
+            this.getRuntimeCtx(convId, chat);
 
             // Move to last position (leftmost) if requested even if already open
             if (priorityLeft) {
@@ -1042,26 +1120,53 @@ const ChatWindow = {
 
     async openById(convId, priorityLeft = false, shouldFocus = true) {
         if (!convId) return;
+        this.init();
+        const target = convId.toLowerCase();
         
         let convData = null;
         if (window.ChatSidebar && window.ChatSidebar.conversations) {
-            const target = convId.toLowerCase();
             convData = window.ChatSidebar.conversations.find(c => (c.conversationId || '').toLowerCase() === target);
         }
 
+        // Fallback 1: Query latest "All conversations" snapshot, independent from current sidebar filter/search state.
+        if (!convData && window.API?.Conversations?.getConversations) {
+            try {
+                const pageSize = window.APP_CONFIG?.CONVERSATIONS_PAGE_SIZE || 20;
+                const res = await window.API.Conversations.getConversations(null, null, 1, pageSize);
+                if (res.ok) {
+                    const data = await res.json();
+                    const items = data?.items || [];
+                    convData = items.find(c => ((c.conversationId || c.ConversationId || '').toLowerCase() === target)) || null;
+                }
+            } catch (err) {
+                console.error("Failed to query conversations list for openById:", err);
+            }
+        }
+
+        // Fallback 2 (legacy): keep compatibility if backend adds/has this endpoint in future.
         if (convData) {
+            if (!convData.conversationId) {
+                convData.conversationId = convData.ConversationId || convId;
+            }
             this.openChat(convData, shouldFocus, priorityLeft);
+            return true;
         } else {
             try {
                 const res = await window.API.Conversations.getById(convId);
                 if (res.ok) {
-                    const data = await res.json();
+                    const raw = await res.json();
+                    const data = raw?.metaData || raw;
+                    if (data && !data.conversationId) {
+                        data.conversationId = data.ConversationId || convId;
+                    }
                     this.openChat(data, shouldFocus, priorityLeft);
+                    return true;
                 }
             } catch (err) {
                 console.error("Failed to fetch conversation for open:", err);
             }
         }
+        return false;
     },
 
     async openByIdAtPosition(convId, referenceId) {
@@ -1324,9 +1429,11 @@ const ChatWindow = {
             isLoading: false,
             pendingFiles: [],
             _realtimeJoined: false,
-            _realtimeJoining: false
+            _realtimeJoining: false,
+            runtimeCtx: null
         };
         this.openChats.set(conv.conversationId, chatObj);
+        this.getRuntimeCtx(conv.conversationId, chatObj);
 
         const fileInput = chatBox.querySelector(`#chat-file-input-${conv.conversationId}`);
         if (fileInput) {
@@ -1407,13 +1514,18 @@ const ChatWindow = {
 
             chat = {
                 element: null, bubbleElement: bubble, data: data, minimized: true,
-                unreadCount: data?.unreadCount || 0, page: 1, hasMore: true, isLoading: false, pendingFiles: [], _realtimeJoined: false, _realtimeJoining: false
+                unreadCount: data?.unreadCount || 0, page: 1, hasMore: true, isLoading: false, pendingFiles: [], _realtimeJoined: false, _realtimeJoining: false, runtimeCtx: null
             };
             this.openChats.set(id, chat);
+            this.getRuntimeCtx(id, chat);
             this.tryJoinRealtimeConversation(id, chat);
         } else {
             chat.bubbleElement = bubble;
+            if (data) {
+                chat.data = data;
+            }
             chat.minimized = true;
+            this.getRuntimeCtx(id, chat);
             this.tryJoinRealtimeConversation(id, chat);
         }
     },
@@ -1518,6 +1630,7 @@ const ChatWindow = {
             this.pendingSeenByConv.delete(id.toLowerCase());
             this.revokePreviewBlobUrls(id);
             chat.pendingFiles = [];
+            chat.runtimeCtx = null;
             if (chat.element) {
                 chat.element.querySelectorAll('[data-temp-id]').forEach(el => {
                     if (el.dataset.tempId) this.cleanupMessageBlobUrls(el.dataset.tempId);
@@ -1928,6 +2041,7 @@ const ChatWindow = {
                     const chat = this.openChats.get(id);
                     if (chat) {
                         chat.data = data.metaData;
+                        this.getRuntimeCtx(id, chat);
                         // If window is open (not bubble), refresh its header UI
                         if (chat.element) {
                             const nameEl = chat.element.querySelector('.chat-header-name');
@@ -2186,12 +2300,21 @@ const ChatWindow = {
         this.updateAttachmentPreview(id);
         this.saveState();
 
-        const formData = new FormData();
-        if (hasText) formData.append('Content', content);
-        if (tempId) formData.append('TempId', tempId);
-        filesToSend.forEach(file => {
-            formData.append('MediaFiles', file);
-        });
+        const runtimePayload = window.ChatMessageRuntime
+            ? window.ChatMessageRuntime.buildRetryFormData({
+                content,
+                tempId,
+                files: filesToSend
+            })
+            : null;
+        const formData = runtimePayload?.formData || new FormData();
+        if (!runtimePayload) {
+            if (hasText) formData.append('Content', content);
+            if (tempId) formData.append('TempId', tempId);
+            filesToSend.forEach(file => {
+                formData.append('MediaFiles', file);
+            });
+        }
 
         try {
             let res;
@@ -2243,6 +2366,30 @@ const ChatWindow = {
         const msgEl = msgContainer.querySelector(`[data-temp-id="${tempId}"]`);
         if (!msgEl) {
             if (status === 'sent') this.cleanupMessageBlobUrls(tempId);
+            return;
+        }
+
+        const runtimeCtx = this.getRuntimeCtx(chatId);
+        if (runtimeCtx && window.ChatMessageRuntime) {
+            window.ChatMessageRuntime.applyMessageStatus(runtimeCtx, {
+                container: msgContainer,
+                bubble: msgEl,
+                status,
+                content,
+                tempId,
+                realMessageId,
+                messagePayload,
+                retryHandler: (_retryTempId, retryContent) => this.retryMessage(chatId, tempId, retryContent),
+                onPendingSeen: (normRealId) => this.applyPendingSeenForMessage(chatId, normRealId),
+                removePreviousSent: (currentBubble) => {
+                    msgContainer.querySelectorAll('.msg-bubble-wrapper.sent[data-status="sent"]').forEach(el => {
+                        if (el !== currentBubble) {
+                            el.removeAttribute('data-status');
+                            el.querySelector('.msg-status')?.remove();
+                        }
+                    });
+                }
+            });
             return;
         }
 
@@ -2314,16 +2461,25 @@ const ChatWindow = {
         const chat = this.openChats.get(chatId);
         if (!chat) return;
         
-        const formData = new FormData();
         const files = this.retryFiles.get(tempId) || [];
-        const hasText = content && content.trim().length > 0;
+        const runtimePayload = window.ChatMessageRuntime
+            ? window.ChatMessageRuntime.buildRetryFormData({
+                content,
+                tempId,
+                files
+            })
+            : null;
+        const hasText = runtimePayload ? runtimePayload.hasText : (content && content.trim().length > 0);
+        const formData = runtimePayload?.formData || new FormData();
         if (!hasText && files.length === 0) {
             this.updateMessageStatus(chatId, tempId, 'failed', content);
             return;
         }
-        if (hasText) formData.append('Content', content);
-        formData.append('TempId', tempId);
-        files.forEach(file => formData.append('MediaFiles', file));
+        if (!runtimePayload) {
+            if (hasText) formData.append('Content', content);
+            formData.append('TempId', tempId);
+            files.forEach(file => formData.append('MediaFiles', file));
+        }
         
         try {
             let res;

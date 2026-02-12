@@ -25,9 +25,10 @@
         }
 
         conn.on('ReceiveNewMessage', (msg) => {
+            const normalizedPayload = normalizeMessagePayload(msg);
             messageHandlers.forEach((handler) => {
                 try {
-                    handler(msg);
+                    handler(normalizedPayload);
                 } catch (err) {
                     console.error('[ChatRealtime] Message handler error:', err);
                 }
@@ -43,6 +44,31 @@
                 }
             });
         });
+    }
+
+    function normalizeMessagePayload(msg) {
+        if (!msg || typeof msg !== 'object') return msg;
+        if (!global.ChatMessageRuntime || typeof global.ChatMessageRuntime.normalizeIncomingMessage !== 'function') {
+            return msg;
+        }
+
+        const myId = (localStorage.getItem('accountId') || '').toLowerCase();
+        const normalized = global.ChatMessageRuntime.normalizeIncomingMessage(msg, myId);
+        if (!normalized) return msg;
+
+        return {
+            ...msg,
+            conversationId: normalized.conversationId || msg.conversationId || msg.ConversationId,
+            messageId: normalized.messageId || msg.messageId || msg.MessageId,
+            tempId: normalized.tempId || msg.tempId || msg.TempId,
+            senderId: normalized.senderId || msg.senderId || msg.SenderId,
+            content: normalized.content ?? msg.content ?? msg.Content,
+            sentAt: normalized.sentAt || msg.sentAt || msg.SentAt,
+            medias: normalized.medias || msg.medias || msg.Medias,
+            isOwn: normalized.isOwn,
+            __normalized: true,
+            raw: msg
+        };
     }
 
     function isReady() {
@@ -107,10 +133,18 @@
 
     const ChatRealtime = {
         onMessage(handler) {
-            if (typeof handler === 'function') messageHandlers.add(handler);
+            if (typeof handler !== 'function') return () => { };
+            messageHandlers.add(handler);
+            return () => {
+                messageHandlers.delete(handler);
+            };
         },
         onSeen(handler) {
-            if (typeof handler === 'function') seenHandlers.add(handler);
+            if (typeof handler !== 'function') return () => { };
+            seenHandlers.add(handler);
+            return () => {
+                seenHandlers.delete(handler);
+            };
         },
         joinConversation(conversationId) {
             if (!isGuid(conversationId)) return Promise.reject(new Error('Invalid conversationId'));

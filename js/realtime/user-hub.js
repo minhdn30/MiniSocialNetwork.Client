@@ -4,6 +4,108 @@
  */
 (function(global) {
     let connection = null;
+    const pendingAutoOpenConversations = new Set();
+
+    function isConversationOpenInWindow(conversationId) {
+        if (!conversationId || !window.ChatWindow || typeof window.ChatWindow.getOpenChatId !== 'function') {
+            return false;
+        }
+        return !!window.ChatWindow.getOpenChatId(conversationId);
+    }
+
+    async function tryAutoOpenConversationWindow(conversationId) {
+        if (!conversationId || pendingAutoOpenConversations.has(conversationId)) {
+            return;
+        }
+        if (!window.ChatWindow || typeof window.ChatWindow.openById !== 'function') {
+            return;
+        }
+
+        pendingAutoOpenConversations.add(conversationId);
+        try {
+            if (isConversationOpenInWindow(conversationId)) return;
+
+            // Attempt 1: immediate open.
+            await window.ChatWindow.openById(conversationId, true, false);
+            if (isConversationOpenInWindow(conversationId)) return;
+
+            // Attempt 2: refresh sidebar source, then open again.
+            if (window.ChatSidebar && typeof window.ChatSidebar.loadConversations === 'function') {
+                try {
+                    await window.ChatSidebar.loadConversations(false);
+                } catch (e) {
+                    console.warn("[UserHub] Sidebar refresh before auto-open failed:", e);
+                }
+            }
+            await window.ChatWindow.openById(conversationId, true, false);
+            if (isConversationOpenInWindow(conversationId)) return;
+
+            // Attempt 3: short delayed retry for post-reload race windows.
+            await new Promise(resolve => setTimeout(resolve, 300));
+            if (window.ChatSidebar && typeof window.ChatSidebar.loadConversations === 'function') {
+                try {
+                    await window.ChatSidebar.loadConversations(false);
+                } catch (e) {
+                    console.warn("[UserHub] Delayed sidebar refresh before auto-open failed:", e);
+                }
+            }
+            await window.ChatWindow.openById(conversationId, true, false);
+        } catch (e) {
+            console.error("[UserHub] Auto-open chat window failed:", e);
+        } finally {
+            pendingAutoOpenConversations.delete(conversationId);
+        }
+    }
+
+    function handleIncomingMessageNotification(data) {
+        const convId = (data.ConversationId || data.conversationId || '').toLowerCase();
+        const message = data.Message || data.message;
+        const isMuted = data.IsMuted ?? data.isMuted ?? false;
+        const myId = (localStorage.getItem("accountId") || '').toLowerCase();
+        const senderId = (message?.sender?.accountId || message?.Sender?.AccountId || '').toLowerCase();
+
+        if (!convId || senderId === myId) return;
+
+        const isChatPage = document.body.classList.contains('is-chat-page');
+        const isActiveInPage = isChatPage && window.ChatPage && window.ChatPage.currentChatId?.toLowerCase() === convId;
+
+        let isActiveInWindow = false;
+        let isOpenInWindow = false;
+        if (window.ChatWindow && window.ChatWindow.openChats && typeof window.ChatWindow.getOpenChatId === 'function') {
+            const openId = window.ChatWindow.getOpenChatId(convId);
+            if (openId) {
+                isOpenInWindow = true;
+                const chatObj = window.ChatWindow.openChats.get(openId);
+                const chatBox = document.getElementById(`chat-box-${openId}`);
+                if (chatObj && chatBox && chatBox.classList.contains("is-focused") && !chatObj.minimized) {
+                    isActiveInWindow = true;
+                }
+            }
+        }
+
+        const shouldIncrementUnread = !isActiveInPage && !isActiveInWindow;
+
+        if (shouldIncrementUnread && typeof scheduleGlobalUnreadRefresh === 'function') {
+            scheduleGlobalUnreadRefresh();
+        }
+
+        if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
+            window.ChatSidebar.incrementUnread(convId, message, !shouldIncrementUnread);
+        }
+
+        if (isOpenInWindow && window.ChatWindow && typeof window.ChatWindow.syncUnreadFromSidebar === 'function') {
+            window.ChatWindow.syncUnreadFromSidebar(convId, {
+                expectIncomingUnreadIncrement: shouldIncrementUnread
+            });
+        }
+
+        const shouldAutoOpenWindow = !isMuted && !isChatPage && !isOpenInWindow;
+        if (shouldAutoOpenWindow) {
+            console.log(`💬 [UserHub] Auto-opening chat window for conversation: ${convId}`);
+            // priorityLeft=true (leftmost position), shouldFocus=false (don't steal focus)
+            tryAutoOpenConversationWindow(convId);
+        }
+    }
 
     const UserHub = {
         pendingJoins: new Set(), // Store groups to join once connected
@@ -193,56 +295,7 @@
             });
 
             connection.on("ReceiveMessageNotification", (data) => {
-                const convId = (data.ConversationId || data.conversationId || '').toLowerCase();
-                const message = data.Message || data.message;
-                const isMuted = data.IsMuted ?? data.isMuted ?? false;
-                const myId = (localStorage.getItem("accountId") || '').toLowerCase();
-                const senderId = (message?.sender?.accountId || message?.Sender?.AccountId || '').toLowerCase();
-                
-                if (senderId === myId) return;
-
-                const isChatPage = document.body.classList.contains('is-chat-page');
-                const isActiveInPage = isChatPage && window.ChatPage && window.ChatPage.currentChatId?.toLowerCase() === convId;
-                
-                let isActiveInWindow = false; 
-                let isOpenInWindow = false;
-                if (window.ChatWindow && window.ChatWindow.openChats) { 
-                    const openId = window.ChatWindow.getOpenChatId(convId);
-                    if (openId) {
-                        isOpenInWindow = true;
-                        const chatObj = window.ChatWindow.openChats.get(openId);
-                        const chatBox = document.getElementById("chat-box-" + chatObj.data.conversationId); 
-                        if (chatBox && chatBox.classList.contains("is-focused") && !chatObj.minimized) { 
-                            isActiveInWindow = true; 
-                        }
-                    }
-                }
-
-
-                if (!isActiveInPage && !isActiveInWindow) {
-                    if (typeof scheduleGlobalUnreadRefresh === 'function') {
-                        scheduleGlobalUnreadRefresh();
-                    }
-                }
-
-                // Update sidebar FIRST (before auto-open so unread count syncs properly)
-                if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
-                    window.ChatSidebar.incrementUnread(convId, message, (isActiveInPage || isActiveInWindow));
-                }
-                // Keep floating chat-window unread in sync with sidebar after reload/minimize.
-                if (isOpenInWindow && window.ChatWindow && typeof window.ChatWindow.syncUnreadFromSidebar === 'function') {
-                    window.ChatWindow.syncUnreadFromSidebar(convId);
-                }
-
-                // Auto-open chat window if: not muted, not on chat-page, and not already open
-                // This runs AFTER sidebar update so getSyncUnreadCount() works correctly
-                if (!isMuted && !isChatPage && !isOpenInWindow) {
-                    if (window.ChatWindow && typeof window.ChatWindow.openById === 'function') {
-                        console.log(`💬 [UserHub] Auto-opening chat window for conversation: ${convId}`);
-                        // priorityLeft=true (leftmost position), shouldFocus=false (don't steal focus)
-                        window.ChatWindow.openById(convId, true, false);
-                    }
-                }
+                handleIncomingMessageNotification(data);
             });
 
             // 3. Start connection

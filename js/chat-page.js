@@ -16,6 +16,7 @@ const ChatPage = {
     _listenerRefs: [],
     _blobUrls: new Map(), // key -> Set<blobUrl>
     _emojiOutsideBound: false,
+    runtimeCtx: null,
 
     async init() {
         this.cleanupEventListeners();
@@ -33,8 +34,10 @@ const ChatPage = {
         this.isLoading = false;
         this.pendingFiles = []; 
         this.retryFiles.clear();
+        this.runtimeCtx = null;
         
         this.cacheElements();
+        this.getRuntimeCtx();
         this.attachEventListeners();
         this.initScrollListener();
         this.handleUrlNavigation();
@@ -48,7 +51,34 @@ const ChatPage = {
         this.infoContent = document.getElementById('chat-info-content');
     },
 
+    getRuntimeCtx() {
+        if (!window.ChatMessageRuntime) return null;
+        const myId = (localStorage.getItem('accountId') || '').toLowerCase();
+        if (!this.runtimeCtx) {
+            this.runtimeCtx = window.ChatMessageRuntime.createContext({
+                scope: 'page',
+                conversationId: this.currentChatId || null,
+                myAccountId: myId,
+                retryFiles: this.retryFiles,
+                pendingSeenByConv: this.pendingSeenByConv,
+                blobUrls: this._blobUrls,
+                now: () => new Date()
+            });
+        }
+        this.runtimeCtx.scope = 'page';
+        this.runtimeCtx.conversationId = this.currentChatId || null;
+        this.runtimeCtx.myAccountId = myId;
+        this.runtimeCtx.retryFiles = this.retryFiles;
+        this.runtimeCtx.pendingSeenByConv = this.pendingSeenByConv;
+        this.runtimeCtx.blobUrls = this._blobUrls;
+        return this.runtimeCtx;
+    },
+
     trackBlobUrl(url, key = 'global') {
+        const ctx = this.getRuntimeCtx();
+        if (ctx) {
+            return window.ChatMessageRuntime.trackBlobUrl(ctx, key, url);
+        }
         if (!url) return null;
         if (!this._blobUrls.has(key)) {
             this._blobUrls.set(key, new Set());
@@ -58,6 +88,11 @@ const ChatPage = {
     },
 
     revokeBlobUrl(url) {
+        const ctx = this.getRuntimeCtx();
+        if (ctx) {
+            window.ChatMessageRuntime.revokeBlobUrlIfNeeded(ctx, url);
+            return;
+        }
         if (!url) return;
         try {
             URL.revokeObjectURL(url);
@@ -94,6 +129,11 @@ const ChatPage = {
     },
 
     cleanupRetryPayload(tempId) {
+        const ctx = this.getRuntimeCtx();
+        if (ctx) {
+            window.ChatMessageRuntime.revokeMediaUrlsForTemp(ctx, tempId);
+            return;
+        }
         if (!tempId) return;
         this.retryFiles.delete(tempId);
         const messageBlobUrls = this._blobUrls.get(tempId);
@@ -104,6 +144,10 @@ const ChatPage = {
     },
 
     replaceOptimisticMediaUrls(bubble, messagePayload, tempId = null) {
+        const ctx = this.getRuntimeCtx();
+        if (ctx) {
+            return window.ChatMessageRuntime.replaceOptimisticMediaUrls(ctx, bubble, messagePayload, tempId);
+        }
         if (!bubble || !messagePayload) return false;
         const medias = messagePayload.Medias || messagePayload.medias || [];
         if (!Array.isArray(medias) || medias.length === 0) return false;
@@ -243,6 +287,11 @@ const ChatPage = {
     },
 
     queuePendingSeen(conversationId, messageId, accountId, memberInfo = null) {
+        const ctx = this.getRuntimeCtx();
+        if (ctx) {
+            window.ChatMessageRuntime.queuePendingSeen(ctx, conversationId, messageId, accountId, memberInfo);
+            return;
+        }
         if (!conversationId || !messageId || !accountId) return;
         const convId = conversationId.toString().toLowerCase();
         const msgId = messageId.toString().toLowerCase();
@@ -260,6 +309,16 @@ const ChatPage = {
     },
 
     applyPendingSeenForMessage(conversationId, messageId) {
+        const ctx = this.getRuntimeCtx();
+        if (ctx) {
+            window.ChatMessageRuntime.applyPendingSeenForMessage(
+                ctx,
+                conversationId,
+                messageId,
+                (accountId, msgId, memberInfo) => this.moveSeenAvatar(accountId, msgId, memberInfo)
+            );
+            return;
+        }
         if (!conversationId || !messageId) return;
         const convId = conversationId.toString().toLowerCase();
         const msgId = messageId.toString().toLowerCase();
@@ -361,17 +420,15 @@ const ChatPage = {
     },
 
     handleRealtimeMessage(msg) {
-        // --- ROBUST PROPERTY RESOLUTION ---
-        const convId = (msg.ConversationId || msg.conversationId || '').toLowerCase();
-        const messageIdRaw = msg.MessageId || msg.messageId;
-        const messageId = messageIdRaw ? messageIdRaw.toString().toLowerCase() : null;
-        const tempId = msg.TempId || msg.tempId;
-        const rawSenderId = msg.Sender?.AccountId || msg.sender?.accountId || msg.SenderId || msg.senderId || '';
-        const senderId = rawSenderId.toLowerCase();
-        const content = (msg.Content || msg.content || '').trim();
-        const normIncoming = ChatCommon.normalizeContent(content);
-
         const myId = (localStorage.getItem('accountId') || '').toLowerCase();
+        const normalized = window.ChatMessageRuntime
+            ? window.ChatMessageRuntime.normalizeIncomingMessage(msg, myId)
+            : null;
+
+        const convId = (normalized?.conversationId || msg.ConversationId || msg.conversationId || '').toLowerCase();
+        const messageId = normalized?.messageId || (msg.MessageId || msg.messageId || '').toString().toLowerCase() || null;
+        const tempId = normalized?.tempId || msg.TempId || msg.tempId;
+        const senderId = normalized?.senderId || (msg.Sender?.AccountId || msg.sender?.accountId || msg.SenderId || msg.senderId || '').toLowerCase();
 
         if (this.currentChatId?.toLowerCase() === convId) {
             const msgContainer = document.getElementById('chat-view-messages');
@@ -384,26 +441,11 @@ const ChatPage = {
 
             // 2. Identify and handle optimistic UI confirmation (Merging)
             let optimisticBubble = null;
-            if (tempId) {
-                optimisticBubble = msgContainer.querySelector(`[data-temp-id="${tempId}"]`);
+            if (window.ChatMessageRuntime && normalized) {
+                optimisticBubble = window.ChatMessageRuntime.findOptimisticBubble(msgContainer, normalized, myId);
             }
-            
-            // Fallback for our own messages if tempId matching fails (content + media count matching)
-            if (!optimisticBubble && senderId === myId) {
-                const incomingMedias = msg.Medias || msg.medias || [];
-                const optimisticMsgs = msgContainer.querySelectorAll('.msg-bubble-wrapper.sent[data-status="pending"]');
-                for (let opt of optimisticMsgs) {
-                    const optContentRaw = opt.querySelector('.msg-bubble')?.innerText || '';
-                    const optContent = ChatCommon.normalizeContent(optContentRaw);
-                    const optMediaCount = opt.querySelectorAll('.msg-media-item')?.length || 0;
-                    
-                    const matchByContent = content && optContent === normIncoming;
-                    const matchByMedia = !content && !optContent && incomingMedias.length > 0 && optMediaCount === incomingMedias.length;
-                    if (matchByContent || matchByMedia) {
-                        optimisticBubble = opt;
-                        break;
-                    }
-                }
+            if (!optimisticBubble && tempId) {
+                optimisticBubble = msgContainer.querySelector(`[data-temp-id="${tempId}"]`);
             }
 
             if (optimisticBubble) {
@@ -415,12 +457,12 @@ const ChatPage = {
                 // Replace local blob URLs with real server URLs
                 const hadBlobMedia = !!optimisticBubble.querySelector('img[src^="blob:"], video[src^="blob:"]');
                 const replaced = this.replaceOptimisticMediaUrls(optimisticBubble, msg, tempId);
-                
+
                 const seenRow = optimisticBubble.querySelector('.msg-seen-row');
                 if (seenRow && messageId) seenRow.id = `seen-row-${messageId}`;
 
-                this.markConversationSeen(convId, messageId);
                 if (messageId) {
+                    this.markConversationSeen(convId, messageId);
                     this.applyPendingSeenForMessage(convId, messageId);
                 }
                 if (tempId) {
@@ -432,7 +474,7 @@ const ChatPage = {
                 return;
             } else {
                 // Incoming message from others: clear "Sent" status
-                msgContainer?.querySelectorAll('.msg-bubble-wrapper.sent[data-status="sent"]').forEach(el => {
+                msgContainer.querySelectorAll('.msg-bubble-wrapper.sent[data-status="sent"]').forEach(el => {
                     el.removeAttribute('data-status');
                     el.querySelector('.msg-status')?.remove();
                 });
@@ -617,6 +659,7 @@ const ChatPage = {
                 window.ChatRealtime.leaveConversation(oldId);
             }
             this.currentChatId = null;
+            this.getRuntimeCtx();
         }
     },
 
@@ -654,6 +697,7 @@ const ChatPage = {
         this.page = 1;
         this.hasMore = true;
         this.isLoading = false;
+        this.getRuntimeCtx();
         
         // 4. Optimization: Join target FIRST to maintain session during handoff from Bubble
         if (window.ChatRealtime && typeof window.ChatRealtime.joinConversation === 'function') {
@@ -1173,12 +1217,21 @@ const ChatPage = {
         this.updateAttachmentPreview();
         this.updateInputState();
 
-        const formData = new FormData();
-        if (content) formData.append('Content', content);
-        if (tempId) formData.append('TempId', tempId);
-        filesToSend.forEach(file => {
-            formData.append('MediaFiles', file);
-        });
+        const runtimePayload = window.ChatMessageRuntime
+            ? window.ChatMessageRuntime.buildRetryFormData({
+                content,
+                tempId,
+                files: filesToSend
+            })
+            : null;
+        const formData = runtimePayload?.formData || new FormData();
+        if (!runtimePayload) {
+            if (content) formData.append('Content', content);
+            if (tempId) formData.append('TempId', tempId);
+            filesToSend.forEach(file => {
+                formData.append('MediaFiles', file);
+            });
+        }
 
         try {
             let res;
@@ -1323,6 +1376,34 @@ const ChatPage = {
             return;
         }
 
+        const runtimeCtx = this.getRuntimeCtx();
+        if (runtimeCtx && window.ChatMessageRuntime) {
+            window.ChatMessageRuntime.applyMessageStatus(runtimeCtx, {
+                container: msgContainer,
+                bubble,
+                status,
+                content,
+                tempId,
+                realMessageId: realId,
+                messagePayload,
+                retryHandler: (retryTempId, retryContent) => this.retryMessage(retryTempId, retryContent),
+                onPendingSeen: (normRealId) => {
+                    if (this.currentChatId) {
+                        this.applyPendingSeenForMessage(this.currentChatId, normRealId);
+                    }
+                },
+                removePreviousSent: (currentBubble) => {
+                    msgContainer.querySelectorAll('.msg-bubble-wrapper.sent[data-status="sent"]').forEach(el => {
+                        if (el !== currentBubble) {
+                            el.removeAttribute('data-status');
+                            el.querySelector('.msg-status')?.remove();
+                        }
+                    });
+                }
+            });
+            return;
+        }
+
         bubble.dataset.status = status;
         if (realId) {
             const normRealId = realId ? realId.toString().toLowerCase() : null;
@@ -1387,16 +1468,25 @@ const ChatPage = {
         // update to pending
         this.updateMessageStatus(tempId, 'pending', content);
         
-        const formData = new FormData();
         const files = this.retryFiles.get(tempId) || [];
-        const hasText = content && content.trim().length > 0;
+        const runtimePayload = window.ChatMessageRuntime
+            ? window.ChatMessageRuntime.buildRetryFormData({
+                content,
+                tempId,
+                files
+            })
+            : null;
+        const hasText = runtimePayload ? runtimePayload.hasText : (content && content.trim().length > 0);
+        const formData = runtimePayload?.formData || new FormData();
         if (!hasText && files.length === 0) {
             this.updateMessageStatus(tempId, 'failed', content);
             return;
         }
-        if (hasText) formData.append('Content', content);
-        formData.append('TempId', tempId);
-        files.forEach(file => formData.append('MediaFiles', file));
+        if (!runtimePayload) {
+            if (hasText) formData.append('Content', content);
+            formData.append('TempId', tempId);
+            files.forEach(file => formData.append('MediaFiles', file));
+        }
         
         try {
             let res;
