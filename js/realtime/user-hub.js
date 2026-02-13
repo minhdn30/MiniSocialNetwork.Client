@@ -298,6 +298,57 @@
                 handleIncomingMessageNotification(data);
             });
 
+            connection.on("ReceiveConversationMuteUpdated", (data) => {
+                const conversationId = (data?.ConversationId || data?.conversationId || '').toString().toLowerCase();
+                const isMuted = !!(data?.IsMuted ?? data?.isMuted);
+                if (!conversationId) return;
+
+                if (window.ChatSidebar && typeof window.ChatSidebar.setMuteStatus === 'function') {
+                    window.ChatSidebar.setMuteStatus(conversationId, isMuted, { forceRender: true });
+                }
+                if (window.ChatWindow && typeof window.ChatWindow.setMuteStatus === 'function') {
+                    window.ChatWindow.setMuteStatus(conversationId, isMuted);
+                }
+                if (window.ChatPage && typeof window.ChatPage.applyMuteStatus === 'function') {
+                    window.ChatPage.applyMuteStatus(conversationId, isMuted);
+                }
+            });
+
+            connection.on("ReceiveConversationRemoved", (data) => {
+                const conversationId = (data?.ConversationId || data?.conversationId || '').toString().toLowerCase();
+                const reason = (data?.Reason || data?.reason || '').toString().toLowerCase();
+                if (!conversationId) return;
+
+                if (window.ChatSidebar && typeof window.ChatSidebar.removeConversation === 'function') {
+                    window.ChatSidebar.removeConversation(conversationId);
+                }
+                if (window.ChatWindow && typeof window.ChatWindow.removeConversation === 'function') {
+                    window.ChatWindow.removeConversation(conversationId);
+                }
+                if (window.ChatPage && typeof window.ChatPage.applyConversationRemoved === 'function') {
+                    window.ChatPage.applyConversationRemoved(conversationId, reason);
+                }
+            });
+
+            connection.on("ReceiveConversationNicknameUpdated", (data) => {
+                const conversationId = (data?.ConversationId || data?.conversationId || '').toString().toLowerCase();
+                const accountId = (data?.AccountId || data?.accountId || '').toString().toLowerCase();
+                const nicknameRaw = data?.Nickname ?? data?.nickname;
+                const nickname = (typeof nicknameRaw === 'string' && nicknameRaw.trim().length > 0) ? nicknameRaw.trim() : null;
+
+                if (!conversationId || !accountId) return;
+
+                if (window.ChatSidebar && typeof window.ChatSidebar.applyNicknameUpdate === 'function') {
+                    window.ChatSidebar.applyNicknameUpdate(conversationId, accountId, nickname);
+                }
+                if (window.ChatWindow && typeof window.ChatWindow.applyNicknameUpdate === 'function') {
+                    window.ChatWindow.applyNicknameUpdate(conversationId, accountId, nickname);
+                }
+                if (window.ChatPage && typeof window.ChatPage.applyNicknameUpdate === 'function') {
+                    window.ChatPage.applyNicknameUpdate(conversationId, accountId, nickname);
+                }
+            });
+
             // 3. Start connection
             try {
                 await connection.start();

@@ -1737,6 +1737,56 @@ const ChatWindow = {
         }
     },
 
+    removeConversation(conversationId) {
+        const openId = this.getOpenChatId(conversationId) || conversationId;
+        if (!openId || !this.openChats.has(openId)) return false;
+        this.closeChat(openId);
+        return true;
+    },
+
+    setMuteStatus(conversationId, isMuted) {
+        const openId = this.getOpenChatId(conversationId) || conversationId;
+        const chat = this.openChats.get(openId);
+        if (!chat) return false;
+
+        chat.data = chat.data || {};
+        chat.data.isMuted = !!isMuted;
+        this.saveState();
+        return true;
+    },
+
+    applyNicknameUpdate(conversationId, accountId, nickname) {
+        const openId = this.getOpenChatId(conversationId) || conversationId;
+        const chat = this.openChats.get(openId);
+        if (!chat || !chat.data) return false;
+
+        const accTarget = (accountId || '').toLowerCase();
+        if (!accTarget) return false;
+
+        let changed = false;
+        if (chat.data.otherMember && (chat.data.otherMember.accountId || '').toLowerCase() === accTarget) {
+            chat.data.otherMember.nickname = nickname || null;
+            changed = true;
+        }
+
+        if (!changed) return false;
+
+        const nextName = escapeHtml(ChatCommon.getDisplayName(chat.data));
+        if (chat.element) {
+            const headerName = chat.element.querySelector('.chat-header-name');
+            if (headerName) {
+                headerName.textContent = nextName;
+                headerName.setAttribute('title', nextName);
+            }
+        }
+        if (chat.bubbleElement) {
+            const bubbleName = chat.bubbleElement.querySelector('.chat-bubble-name');
+            if (bubbleName) bubbleName.textContent = nextName;
+        }
+        this.saveState();
+        return true;
+    },
+
     minimizeAll() {
         for (const [id, chat] of this.openChats.entries()) {
             if (!chat.minimized) {

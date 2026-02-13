@@ -376,6 +376,168 @@ const ChatCommon = {
                 authorBelow.remove();
             }
         }
+    },
+
+    /**
+     * Show a generic chat confirmation modal (Specific classes to avoid overlap)
+     * @param {Object} options - { title, message, confirmText, cancelText, onConfirm, onCancel, isDanger }
+     */
+    showConfirm(options = {}) {
+        const {
+            title = 'Are you sure?',
+            message = '',
+            confirmText = 'Confirm',
+            cancelText = 'Cancel',
+            onConfirm = null,
+            onCancel = null,
+            isDanger = false
+        } = options;
+
+        const overlay = document.createElement("div");
+        overlay.className = "chat-common-confirm-overlay";
+
+        const popup = document.createElement("div");
+        popup.className = "chat-common-confirm-popup";
+
+        popup.innerHTML = `
+            <div class="chat-common-confirm-content">
+                <h3>${title}</h3>
+                <p>${message}</p>
+            </div>
+            <div class="chat-common-confirm-actions">
+                <button class="chat-common-confirm-btn chat-common-confirm-confirm ${isDanger ? 'danger' : ''}" id="genericConfirmBtn">${confirmText}</button>
+                <button class="chat-common-confirm-btn chat-common-confirm-cancel" id="genericCancelBtn">${cancelText}</button>
+            </div>
+        `;
+
+        overlay.appendChild(popup);
+        document.body.appendChild(overlay);
+
+        if (window.lockScroll) lockScroll();
+
+        requestAnimationFrame(() => overlay.classList.add("show"));
+
+        const close = () => {
+            overlay.classList.remove("show");
+            if (window.unlockScroll) unlockScroll();
+            setTimeout(() => overlay.remove(), 200);
+        };
+
+        const confirmBtn = document.getElementById("genericConfirmBtn");
+        const cancelBtn = document.getElementById("genericCancelBtn");
+
+        if (confirmBtn) {
+            confirmBtn.onclick = () => {
+                if (onConfirm) onConfirm();
+                close();
+            };
+        }
+
+        if (cancelBtn) {
+            cancelBtn.onclick = () => {
+                if (onCancel) onCancel();
+                close();
+            };
+        }
+
+        overlay.onclick = (e) => {
+            if (e.target === overlay) {
+                if (onCancel) onCancel();
+                close();
+            }
+        };
+    },
+
+    /**
+     * Show a generic chat prompt modal (Specific classes to avoid overlap)
+     * @param {Object} options - { title, message, placeholder, value, confirmText, cancelText, onConfirm, onCancel }
+     */
+    showPrompt(options = {}) {
+        const {
+            title = 'Input required',
+            message = '',
+            placeholder = '',
+            value = '',
+            confirmText = 'Save',
+            cancelText = 'Cancel',
+            onConfirm = null,
+            onCancel = null
+        } = options;
+
+        const overlay = document.createElement("div");
+        overlay.className = "chat-common-confirm-overlay";
+
+        const popup = document.createElement("div");
+        popup.className = "chat-common-confirm-popup";
+
+        popup.innerHTML = `
+            <div class="chat-common-confirm-content">
+                <h3>${title}</h3>
+                ${message ? `<p>${message}</p>` : ''}
+                <div class="chat-common-confirm-input-wrapper">
+                    <input type="text" id="genericPromptInput" class="chat-common-confirm-input" placeholder="${placeholder}" value="${(value || '').replace(/"/g, '&quot;')}" autocomplete="off">
+                </div>
+            </div>
+            <div class="chat-common-confirm-actions">
+                <button class="chat-common-confirm-btn chat-common-confirm-confirm" id="genericConfirmBtn">${confirmText}</button>
+                <button class="chat-common-confirm-btn chat-common-confirm-cancel" id="genericCancelBtn">${cancelText}</button>
+            </div>
+        `;
+
+        overlay.appendChild(popup);
+        document.body.appendChild(overlay);
+
+        if (window.lockScroll) lockScroll();
+
+        const input = document.getElementById("genericPromptInput");
+        requestAnimationFrame(() => {
+            overlay.classList.add("show");
+            if (input) {
+                input.focus();
+                input.select();
+            }
+        });
+
+        const close = () => {
+            overlay.classList.remove("show");
+            if (window.unlockScroll) unlockScroll();
+            setTimeout(() => overlay.remove(), 200);
+        };
+
+        const handleConfirm = () => {
+            if (onConfirm) onConfirm(input.value);
+            close();
+        };
+
+        const confirmBtn = document.getElementById("genericConfirmBtn");
+        const cancelBtn = document.getElementById("genericCancelBtn");
+
+        if (confirmBtn) confirmBtn.onclick = handleConfirm;
+        
+        if (input) {
+            input.onkeydown = (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleConfirm();
+                } else if (e.key === 'Escape') {
+                    close();
+                }
+            };
+        }
+
+        if (cancelBtn) {
+            cancelBtn.onclick = () => {
+                if (onCancel) onCancel();
+                close();
+            };
+        }
+
+        overlay.onclick = (e) => {
+            if (e.target === overlay) {
+                if (onCancel) onCancel();
+                close();
+            }
+        };
     }
 };
 

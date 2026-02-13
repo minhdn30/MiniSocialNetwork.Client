@@ -454,6 +454,18 @@
         apiFetch(`/Conversations/${conversationId}/messages?page=${page}&pageSize=${pageSize}`),
       getPrivateWithMessages: (otherId, page = 1, pageSize = window.APP_CONFIG?.CHATPAGE_MESSAGES_PAGE_SIZE || 20) =>
         apiFetch(`/Conversations/private/${otherId}?page=${page}&pageSize=${pageSize}`),
+      updateNickname: (conversationId, data) =>
+        apiFetch(`/Conversations/${conversationId}/members/nickname`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }),
+      updateMute: (conversationId, isMuted) =>
+        apiFetch(`/Conversations/${conversationId}/mute`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isMuted: !!isMuted }),
+        }),
       deleteHistory: (conversationId) => apiFetch(`/Conversations/${conversationId}/history`, { method: "DELETE" }),
       getUnreadCount: () => apiFetch('/Conversations/unread-count'),
     },

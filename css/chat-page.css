@@ -600,26 +600,32 @@
    ================================================ */
 
 .chat-sidebar-info-panel {
-  width: 400px !important; /* Strict fixed width */
-  min-width: 400px !important;
-  max-width: 400px !important;
+  width: 350px !important;
+  min-width: 350px !important;
+  max-width: 350px !important;
   background: var(--bg-primary);
   border-left: 1px solid var(--border-primary);
   display: flex !important;
   flex-direction: column;
   overflow-y: auto;
-  transition: width 0.3s ease;
+  overflow-x: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0 !important;
   position: relative;
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .chat-sidebar-info-panel.hidden {
   width: 0 !important;
   min-width: 0 !important;
   max-width: 0 !important;
-  border-left: none;
-  overflow: hidden;
-  display: none !important; /* Force hide */
+  border-left-width: 0 !important;
+  border-left-color: transparent !important;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transform: translateX(30px);
 }
 
 .chat-info-content {
@@ -801,7 +807,11 @@
   width: 18px;
   height: 18px;
 }
-
+.chat-info-item.danger,
+.chat-info-item.danger i,
+.chat-info-item.danger svg {
+  color: red;
+}
 .chat-info-member-avatar {
   width: 32px;
   height: 32px;

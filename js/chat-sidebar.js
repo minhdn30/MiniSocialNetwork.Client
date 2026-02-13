@@ -380,6 +380,66 @@ const ChatSidebar = {
         }
     },
 
+    setMuteStatus(conversationId, isMuted, options = {}) {
+        const target = (conversationId || '').toLowerCase();
+        if (!target) return false;
+
+        let changed = false;
+        this.conversations.forEach(conv => {
+            if ((conv.conversationId || '').toLowerCase() !== target) return;
+            const nextMuted = !!isMuted;
+            if ((conv.isMuted ?? false) !== nextMuted) {
+                conv.isMuted = nextMuted;
+                changed = true;
+            }
+        });
+
+        if (changed || options.forceRender) {
+            this.renderConversations(this.conversations, false);
+        }
+        return changed;
+    },
+
+    removeConversation(conversationId) {
+        const target = (conversationId || '').toLowerCase();
+        if (!target) return false;
+
+        const originalLength = this.conversations.length;
+        this.conversations = this.conversations.filter(c => (c.conversationId || '').toLowerCase() !== target);
+        const changed = this.conversations.length !== originalLength;
+
+        if (!changed) return false;
+        this.renderConversations(this.conversations, false);
+        return true;
+    },
+
+    applyNicknameUpdate(conversationId, accountId, nickname) {
+        const convTarget = (conversationId || '').toLowerCase();
+        const accTarget = (accountId || '').toLowerCase();
+        if (!convTarget || !accTarget) return false;
+
+        let changed = false;
+        this.conversations.forEach(conv => {
+            if ((conv.conversationId || '').toLowerCase() !== convTarget) return;
+
+            if (conv.otherMember && (conv.otherMember.accountId || '').toLowerCase() === accTarget) {
+                conv.otherMember.nickname = nickname || null;
+                changed = true;
+            }
+
+            const sender = conv.lastMessage?.sender;
+            if (sender && (sender.accountId || '').toLowerCase() === accTarget) {
+                sender.nickname = nickname || null;
+                changed = true;
+            }
+        });
+
+        if (changed) {
+            this.renderConversations(this.conversations, false);
+        }
+        return changed;
+    },
+
     /**
      * Increment unread badge for a specific conversation.
      * Updates preview text, time, moves item to top. Like Facebook/Instagram.
