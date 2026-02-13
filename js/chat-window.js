@@ -1413,8 +1413,8 @@ const ChatWindow = {
         chatBox.innerHTML = `
             <div class="chat-box-header">
                 <div class="chat-header-info" 
-                     ${canNav ? `onclick="window.location.hash = '#/profile/${otherAccountId}';"` : ''} 
-                     style="${canNav ? 'cursor: pointer;' : 'cursor: grab;'}">
+                     onclick="event.stopPropagation(); ChatWindow.toggleHeaderMenu(this, '${conv.conversationId}')" 
+                     style="cursor: pointer;">
                     <div class="chat-header-avatar">
                         <img src="${avatar}" alt="${name}" onerror="this.src='${APP_CONFIG.DEFAULT_AVATAR}'">
                         ${!conv.isGroup && conv.otherMember?.isActive ? '<div class="chat-header-status"></div>' : ''}
@@ -2094,6 +2094,188 @@ const ChatWindow = {
             };
             setTimeout(() => document.addEventListener('click', closeHandler), 10);
         }
+    },
+
+    closeHeaderMenu() {
+        document.querySelectorAll('.chat-window-header-menu').forEach(m => m.remove());
+    },
+
+    toggleHeaderMenu(triggerEl, id) {
+        const chat = this.openChats.get(id);
+        if (!chat) return;
+
+        // Close ANY message more-menus if open
+        if (window.ChatActions && typeof window.ChatActions.closeAllMenus === 'function') {
+            window.ChatActions.closeAllMenus();
+        }
+
+        const globalClick = (e) => {
+            if (!e.target.closest('.chat-window-header-menu') && !e.target.closest('.chat-header-info')) {
+                this.closeHeaderMenu();
+                document.removeEventListener('click', globalClick);
+            }
+        };
+
+        // If already open, close it
+        const existing = document.getElementById(`chat-header-menu-${id}`);
+        if (existing) {
+            this.closeHeaderMenu();
+            return;
+        }
+
+        // Close others first
+        this.closeHeaderMenu();
+
+        const otherMember = chat.data.otherMember;
+        const otherAccountId = otherMember?.accountId || '';
+
+        const isGroup = !!chat.data.isGroup;
+        const isMuted = !!chat.data.isMuted;
+        const muteIcon = isMuted ? 'bell' : 'bell-off';
+        const muteText = isMuted ? 'Unmute' : 'Mute';
+
+        const menu = document.createElement('div');
+        menu.id = `chat-header-menu-${id}`;
+        menu.className = 'chat-window-header-menu';
+        
+        menu.innerHTML = `
+            <div class="chat-menu-group">
+                <button class="chat-menu-item" onclick="ChatWindow.closeHeaderMenu(); window.location.hash = '#/profile/${otherAccountId}';">
+                    <i data-lucide="user"></i>
+                    <span>View profile</span>
+                </button>
+                <button class="chat-menu-item" onclick="ChatWindow.closeHeaderMenu(); window.toastInfo('Pinned messages coming soon')">
+                    <i data-lucide="pin"></i>
+                    <span>View pinned messages</span>
+                </button>
+            </div>
+            <div class="chat-menu-group">
+                <button class="chat-menu-item" onclick="ChatWindow.closeHeaderMenu(); window.toastInfo('Theme coming soon')">
+                    <i data-lucide="palette"></i>
+                    <span>Change theme</span>
+                </button>
+                <button class="chat-menu-item" onclick="ChatWindow.closeHeaderMenu(); ChatWindow.promptEditNicknames('${id}')">
+                    <i data-lucide="at-sign"></i>
+                    <span>Edit nicknames</span>
+                </button>
+            </div>
+            <div class="chat-menu-group">
+                <button class="chat-menu-item" onclick="ChatWindow.closeHeaderMenu(); ChatWindow.toggleMute('${id}')">
+                    <i data-lucide="${muteIcon}"></i>
+                    <span>${muteText} notifications</span>
+                </button>
+                ${!isGroup ? `
+                <button class="chat-menu-item danger" onclick="ChatWindow.closeHeaderMenu(); window.toastInfo('Block feature coming soon')">
+                    <i data-lucide="ban"></i>
+                    <span>Block</span>
+                </button>
+                ` : ''}
+            </div>
+        `;
+
+        // Position it relative to the triggerEl
+        chat.element.appendChild(menu);
+        
+        if (window.lucide) lucide.createIcons({ container: menu, props: { size: 16 } });
+
+        setTimeout(() => {
+            menu.classList.add('show');
+            document.addEventListener('click', globalClick);
+        }, 10);
+    },
+
+    toggleMute(id) {
+        const chat = this.openChats.get(id);
+        if (!chat) return;
+        const isMuted = !chat.data.isMuted;
+        
+        // Call API if needed, for now just update local state
+        this.setMuteStatus(id, isMuted);
+        const menu = document.getElementById(`chat-header-menu-${id}`);
+        if (menu) menu.remove();
+
+        if (window.ChatSidebar) {
+            window.ChatSidebar.setMuteStatus(id, isMuted);
+        }
+        
+        window.toastSuccess && window.toastSuccess(isMuted ? 'Notifications muted' : 'Notifications unmuted');
+    },
+
+    promptEditNicknames(id) {
+        const chat = this.openChats.get(id);
+        if (!chat) return;
+
+        // Close menu
+        const menu = document.getElementById(`chat-header-menu-${id}`);
+        if (menu) menu.remove();
+
+        // This assumes we have a way to call the same logic as chat-page
+        // We can reuse the ChatCommon logic we just implemented
+        const myId = (localStorage.getItem('accountId') || '').toLowerCase();
+        const myName = localStorage.getItem('fullname') || 'You';
+        const myUsername = localStorage.getItem('username') || '';
+        const myAvatar = localStorage.getItem('avatarUrl') || window.APP_CONFIG?.DEFAULT_AVATAR;
+
+        let members = [];
+        if (Array.isArray(chat.data.members)) {
+            members = chat.data.members.map(m => ChatCommon.normalizeConversationMember(m, { fallbackUsernameToDisplayName: true }));
+        }
+
+        if (!members.length && chat.data.otherMember) {
+            members.push(ChatCommon.normalizeConversationMember(chat.data.otherMember, { fallbackUsernameToDisplayName: true }));
+        }
+
+        if (!members.find(m => m.accountId === myId)) {
+            members.unshift(ChatCommon.normalizeConversationMember({
+                accountId: myId,
+                displayName: myName,
+                username: myUsername,
+                avatarUrl: myAvatar,
+                nickname: chat.data.myNickname || null
+            }));
+        }
+
+        ChatCommon.showNicknamesModal({
+            title: 'Nicknames',
+            members: members,
+            conversationId: id,
+            onNicknameUpdated: (accId, next) => {
+                this.applyNicknameUpdate(id, accId, next);
+                if (window.ChatPage && window.ChatPage.currentChatId === id) {
+                    window.ChatPage.applyNicknameUpdate(id, accId, next);
+                }
+                if (window.ChatSidebar) {
+                    window.ChatSidebar.applyNicknameUpdate(id, accId, next);
+                }
+            }
+        });
+    },
+
+    confirmDeleteChat(id) {
+        const menu = document.getElementById(`chat-header-menu-${id}`);
+        if (menu) menu.remove();
+
+        ChatCommon.showConfirm({
+            title: 'Delete chat?',
+            message: 'You will lose all messages in this conversation. This action cannot be undone.',
+            confirmText: 'Delete',
+            isDanger: true,
+            onConfirm: async () => {
+                try {
+                    const res = await window.API.Conversations.delete(id);
+                    if (res.ok) {
+                        this.closeChat(id);
+                        if (window.ChatSidebar) window.ChatSidebar.removeConversation(id);
+                        if (window.ChatPage && window.ChatPage.currentChatId === id) {
+                            window.ChatPage.closeChat();
+                        }
+                        window.toastSuccess && window.toastSuccess('Chat deleted');
+                    }
+                } catch (err) {
+                    console.error("Delete error:", err);
+                }
+            }
+        });
     },
 
     openEmojiPicker(btn, id) {

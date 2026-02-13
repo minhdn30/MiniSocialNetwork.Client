@@ -856,3 +856,79 @@
 .chat-nickname-save-btn:hover {
     background: rgba(59, 130, 246, 0.1);
 }
+/* --- Chat Window Header Menu --- */
+.chat-box {
+    position: relative;
+}
+
+.chat-window-header-menu {
+    position: absolute;
+    top: 48px;
+    left: 8px;
+    width: 220px;
+    background: var(--bg-primary, #242526);
+    border: 1px solid var(--border-secondary, rgba(255, 255, 255, 0.1));
+    border-radius: 8px;
+    box-shadow: 0 12px 28px 0 rgba(0, 0, 0, 0.2), 0 2px 4px 0 rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    opacity: 0;
+    transform: translateY(-10px);
+    pointer-events: none;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.chat-window-header-menu.show {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: all;
+}
+
+.chat-menu-group {
+    padding: 6px;
+    border-bottom: 1px solid var(--border-secondary, rgba(255, 255, 255, 0.1));
+}
+
+.chat-menu-group:last-child {
+    border-bottom: none;
+}
+
+.chat-menu-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary, #ffffff);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.1s;
+    text-align: left;
+}
+
+.chat-menu-item:hover {
+    background: var(--bg-hover, rgba(255, 255, 255, 0.05));
+}
+
+.chat-menu-item i, 
+.chat-menu-item svg {
+    width: 18px;
+    height: 18px;
+    color: var(--text-secondary, #b0b3b8);
+    flex-shrink: 0;
+}
+
+.chat-menu-item.danger {
+    color: #f02849; /* Facebook danger color */
+}
+
+.chat-menu-item.danger i,
+.chat-menu-item.danger svg {
+    color: #f02849;
+}

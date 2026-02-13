@@ -132,6 +132,15 @@
     localStorage.removeItem("SOCIAL_NETWORK_OPEN_CHATS");
   }
 
+  function isHardRefreshAuthFailure(err) {
+    const message = (err?.message || "").toString().toUpperCase();
+    return (
+      message.includes("REFRESH_EXPIRED_OR_FORBIDDEN") ||
+      message.includes("REFRESH_FAILED_STATUS_401") ||
+      message.includes("REFRESH_FAILED_STATUS_403")
+    );
+  }
+
   async function refreshAccessToken() {
     if (!refreshPromise) {
       console.warn("🔄 Token expired, attempting refresh...");
@@ -218,11 +227,14 @@
       });
       return retryRes;
     } catch (err) {
-      console.error("❌ Auto-logout due to refresh failure:", err);
-      // Refresh failed or expired
-      clearClientSession();
-      if (!window.location.pathname.includes("auth.html")) {
-        window.location.href = "auth.html";
+      if (isHardRefreshAuthFailure(err)) {
+        console.error("❌ Auto-logout due to refresh auth failure:", err);
+        clearClientSession();
+        if (!window.location.pathname.includes("auth.html")) {
+          window.location.href = "auth.html";
+        }
+      } else {
+        console.warn("⚠️ Refresh failed due to temporary error. Keeping session.", err);
       }
       throw err;
     }

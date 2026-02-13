@@ -144,6 +144,11 @@ const ChatActions = {
             this.currentMenu = null;
         }
         
+        // Close ChatWindow header menu if open
+        if (window.ChatWindow && typeof window.ChatWindow.closeHeaderMenu === 'function') {
+            window.ChatWindow.closeHeaderMenu();
+        }
+
         // Remove active state from any buttons or wrappers
         document.querySelectorAll('.msg-bubble-wrapper.menu-active').forEach(w => w.classList.remove('menu-active'));
         document.querySelectorAll('.msg-action-btn.active').forEach(b => b.classList.remove('active'));
