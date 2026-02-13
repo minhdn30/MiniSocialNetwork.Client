@@ -469,6 +469,11 @@
   outline: none;
 }
 
+.chat-view-input-wrapper textarea::placeholder {
+  color: var(--chat-theme-system-text, var(--chat-theme-action-color, var(--text-tertiary)));
+}
+
+
 /* Custom Scrollbar - Match post-detail aesthetics */
 .chat-view-input-wrapper textarea::-webkit-scrollbar {
   width: 4px;

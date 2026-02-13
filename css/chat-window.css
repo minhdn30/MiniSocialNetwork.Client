@@ -814,7 +814,7 @@ body.is-dragging-chat #chat-windows-stack {
 .chat-input-field:empty::before,
 .chat-input-field[data-placeholder-visible="true"]::before {
     content: attr(placeholder);
-    color: var(--text-tertiary);
+    color: var(--chat-theme-system-text, var(--chat-theme-action-color, var(--text-tertiary)));
     pointer-events: none;
     display: block;
 }

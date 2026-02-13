@@ -860,12 +860,13 @@ const ChatWindow = {
       incoming.status = "sent";
     }
 
-    this.appendMessage(convId, incoming);
+    const wasNearBottom = this.isNearBottom(convId);
+    this.appendMessage(convId, incoming, wasNearBottom);
     if (messageId) {
       this.applyPendingSeenForMessage(convId, messageId);
     }
 
-    if (!chat.minimized) {
+    if (!chat.minimized && wasNearBottom) {
       this.scrollToBottom(convId);
     }
 
@@ -1123,6 +1124,14 @@ const ChatWindow = {
       return;
     }
     msgContainer.appendChild(node);
+  },
+
+  isNearBottom(conversationId, threshold = 150) {
+    const msgContainer = document.getElementById(
+      `chat-messages-${conversationId}`,
+    );
+    if (!msgContainer) return true;
+    return msgContainer.scrollHeight - msgContainer.scrollTop - msgContainer.clientHeight <= threshold;
   },
 
   scrollToBottom(conversationId) {
@@ -3271,7 +3280,7 @@ const ChatWindow = {
     }
   },
 
-  appendMessage(id, msg) {
+  appendMessage(id, msg, autoScroll = true) {
     const chat = this.openChats.get(id);
     const msgContainer = document.getElementById(`chat-messages-${id}`);
     if (!msgContainer || !chat) return;
@@ -3372,7 +3381,7 @@ const ChatWindow = {
       this.applyPendingSeenForMessage(id, msg.messageId);
     }
     if (window.lucide) lucide.createIcons();
-    msgContainer.scrollTop = msgContainer.scrollHeight;
+    if (autoScroll) msgContainer.scrollTop = msgContainer.scrollHeight;
   },
 
   async sendMessage(id) {

@@ -457,6 +457,12 @@ const ChatPage = {
         msgContainer.appendChild(node);
     },
 
+    isNearBottom(threshold = 150) {
+        const msgContainer = document.getElementById('chat-view-messages');
+        if (!msgContainer) return true;
+        return msgContainer.scrollHeight - msgContainer.scrollTop - msgContainer.clientHeight <= threshold;
+    },
+
     scrollToBottom(force = false) {
         const msgContainer = document.getElementById('chat-view-messages');
         if (!msgContainer) return;
@@ -566,7 +572,8 @@ const ChatPage = {
                 msg.status = 'sent';
             }
 
-            this.appendMessage(msg);
+            const wasNearBottom = this.isNearBottom();
+            this.appendMessage(msg, wasNearBottom);
             if (messageId) {
                 this.applyPendingSeenForMessage(convId, messageId);
             }
@@ -1817,7 +1824,7 @@ const ChatPage = {
         return html;
     },
 
-    appendMessage(msg) {
+    appendMessage(msg, autoScroll = true) {
         const msgContainer = document.getElementById('chat-view-messages');
         if (!msgContainer) return;
 
@@ -1909,7 +1916,7 @@ const ChatPage = {
         if (messageId) {
             this.applyPendingSeenForMessage(this.currentChatId, messageId);
         }
-        msgContainer.scrollTop = msgContainer.scrollHeight;
+        if (autoScroll) msgContainer.scrollTop = msgContainer.scrollHeight;
         if (window.lucide) lucide.createIcons();
     },
 

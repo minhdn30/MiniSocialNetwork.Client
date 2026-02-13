@@ -62,6 +62,19 @@ const ChatActions = {
 
         const menu = document.createElement('div');
         menu.className = 'msg-more-menu';
+
+        // Inherit theme
+        const themeTarget = btn.closest('.chat-box') || btn.closest('.chat-view') || btn.closest('.chat-panel-container');
+        if (themeTarget) {
+            const vars = ['--chat-theme-surface', '--chat-theme-border', '--chat-theme-action-color', '--chat-theme-action-hover-bg'];
+            vars.forEach(v => {
+                const val = getComputedStyle(themeTarget).getPropertyValue(v);
+                if (val) menu.style.setProperty(v, val);
+            });
+            const themeClass = [...themeTarget.classList].find(c => c.startsWith('chat-theme-'));
+            if (themeClass) menu.classList.add(themeClass);
+        }
+
         
         let itemsHtml = `
             <div class="msg-more-item" onclick="window.ChatActions.hideForYou('${resolvedMessageId}')">
@@ -511,6 +524,13 @@ const ChatActions = {
         const confirmText = options.confirmText || 'Hide';
         const overlay = document.createElement('div');
         overlay.className = 'msg-confirm-overlay';
+
+        // Inherit theme
+        const activeMenu = this.currentMenu;
+        if (activeMenu) {
+            const themeClass = [...activeMenu.classList].find(c => c.startsWith('chat-theme-'));
+            if (themeClass) overlay.classList.add(themeClass);
+        }
         
         overlay.innerHTML = `
             <div class="msg-confirm-popup">

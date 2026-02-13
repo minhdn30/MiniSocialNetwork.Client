@@ -385,11 +385,18 @@ const ChatCommon = {
         if (palette.actionColor) targetElement.style.setProperty('--chat-theme-action-color', palette.actionColor);
         if (palette.actionHover) targetElement.style.setProperty('--chat-theme-action-hover', palette.actionHover);
         // Keep hover clean: no background flash on icon/buttons.
-        targetElement.style.setProperty('--chat-theme-action-hover-bg', 'transparent');
+        targetElement.style.setProperty('--chat-theme-action-hover-bg', palette.actionHoverBg || 'transparent');
         if (palette.scrollbarThumb) targetElement.style.setProperty('--chat-theme-scrollbar-thumb', palette.scrollbarThumb);
         if (palette.scrollbarHover) targetElement.style.setProperty('--chat-theme-scrollbar-hover', palette.scrollbarHover);
         if (palette.inputWrapperBg) targetElement.style.setProperty('--chat-theme-input-wrapper-bg', palette.inputWrapperBg);
         if (palette.inputBorder) targetElement.style.setProperty('--chat-theme-input-border', palette.inputBorder);
+    
+        // Add theme class for CSS targeting
+        [...targetElement.classList].forEach(c => {
+            if (c.startsWith('chat-theme-')) targetElement.classList.remove(c);
+        });
+        targetElement.classList.add(`chat-theme-${option.key}`);
+        targetElement.dataset.theme = option.key;
 
         return option.key;
     },
