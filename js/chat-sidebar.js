@@ -286,6 +286,7 @@ const ChatSidebar = {
             const time = conv.lastMessageSentAt ? PostUtils.timeAgo(conv.lastMessageSentAt, true) : '';
             const unread = conv.unreadCount > 0;
             const isOnline = !conv.isGroup && conv.otherMember && conv.otherMember.isActive;
+            const isMuted = conv.isMuted ?? conv.IsMuted ?? false;
             
             // Only highlight if on the Messages Page
             const isChatPage = window.location.hash.startsWith('#/messages');
@@ -322,6 +323,7 @@ const ChatSidebar = {
                     <div class="chat-info">
                         <div class="chat-name-row">
                             <span class="chat-name">${name}</span>
+                            ${isMuted ? '<i data-lucide="bell-off" class="chat-muted-icon"></i>' : ''}
                         </div>
                         <div class="chat-msg-row">
                             <span class="chat-last-msg">${lastMsgEscaped}</span>
