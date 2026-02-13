@@ -724,7 +724,7 @@ const ChatWindow = {
         });
 
         const incoming = normalized?.raw || msg;
-        if (senderId === myId && !incoming.status) {
+        if (senderId === myId && !incoming.status && !ChatCommon.isSystemMessage(incoming)) {
             incoming.status = 'sent';
         }
 
@@ -1024,14 +1024,19 @@ const ChatWindow = {
             return;
         }
 
-        // If target exists but isn't our message, move to nearest previous message sent by us.
-        if (bubbleWrapper && (bubbleWrapper.dataset.senderId || '').toLowerCase() !== myId) {
+        // If target isn't our message OR target has no seen row (e.g. system message),
+        // move to nearest previous message sent by us that has a seen row.
+        if (bubbleWrapper && (
+            (bubbleWrapper.dataset.senderId || '').toLowerCase() !== myId ||
+            !targetRow
+        )) {
             let cursor = bubbleWrapper.previousElementSibling;
             while (cursor) {
                 if (cursor.classList?.contains('msg-bubble-wrapper')) {
                     const senderId = (cursor.dataset.senderId || '').toLowerCase();
-                    if (senderId === myId) {
-                        targetRow = cursor.querySelector('.msg-seen-row');
+                    const candidateSeenRow = cursor.querySelector('.msg-seen-row');
+                    if (senderId === myId && candidateSeenRow) {
+                        targetRow = candidateSeenRow;
                         break;
                     }
                 }
@@ -1763,15 +1768,109 @@ const ChatWindow = {
         const accTarget = (accountId || '').toLowerCase();
         if (!accTarget) return false;
 
+        const normalizeNickname = (value) => {
+            if (window.ChatCommon && typeof window.ChatCommon.normalizeNickname === 'function') {
+                return window.ChatCommon.normalizeNickname(value);
+            }
+            if (typeof value !== 'string') return value ?? null;
+            const trimmed = value.trim();
+            return trimmed.length ? trimmed : null;
+        };
+        const normalizedNickname = normalizeNickname(nickname);
+        const myId = (localStorage.getItem('accountId') || '').toLowerCase();
+        const resolveBaseDisplayName = () => {
+            if (accTarget === myId) {
+                return localStorage.getItem('username') || localStorage.getItem('fullname') || 'You';
+            }
+
+            if (chat.data.otherMember &&
+                (chat.data.otherMember.accountId || '').toLowerCase() === accTarget) {
+                return chat.data.otherMember.username ||
+                    chat.data.otherMember.Username ||
+                    chat.data.otherMember.fullName ||
+                    chat.data.otherMember.FullName ||
+                    chat.data.otherMember.displayName ||
+                    chat.data.otherMember.DisplayName ||
+                    'User';
+            }
+
+            if (Array.isArray(chat.data.members)) {
+                const member = chat.data.members.find(m =>
+                    (m.accountId || m.AccountId || '').toString().toLowerCase() === accTarget
+                );
+                if (member) {
+                    return member.username ||
+                        member.userName ||
+                        member.Username ||
+                        member.UserName ||
+                        member.fullName ||
+                        member.FullName ||
+                        member.displayName ||
+                        member.DisplayName ||
+                        'User';
+                }
+            }
+
+            return 'User';
+        };
+        const fallbackDisplayName = resolveBaseDisplayName();
+
         let changed = false;
+        
+        // Handle direct otherMember (Private chat)
         if (chat.data.otherMember && (chat.data.otherMember.accountId || '').toLowerCase() === accTarget) {
-            chat.data.otherMember.nickname = nickname || null;
+            chat.data.otherMember.nickname = normalizedNickname;
+            if (chat.data.otherMember.displayName !== undefined) {
+                chat.data.otherMember.displayName = normalizedNickname || fallbackDisplayName;
+            }
             changed = true;
+        }
+
+        // Handle my own nickname
+        if (accTarget === myId) {
+            chat.data.myNickname = normalizedNickname;
+            changed = true;
+        }
+
+        // Handle group members
+        if (Array.isArray(chat.data.members)) {
+            chat.data.members.forEach(m => {
+                if ((m.accountId || m.AccountId || '').toString().toLowerCase() === accTarget) {
+                    const memberBaseName =
+                        m.username ||
+                        m.userName ||
+                        m.Username ||
+                        m.UserName ||
+                        m.fullName ||
+                        m.FullName ||
+                        fallbackDisplayName;
+                    m.nickname = normalizedNickname;
+                    m.displayName = normalizedNickname || memberBaseName || 'User';
+                    changed = true;
+                }
+            });
+        }
+
+        if (Array.isArray(chat.data.memberSeenStatuses)) {
+            chat.data.memberSeenStatuses.forEach(m => {
+                if ((m.accountId || m.AccountId || '').toString().toLowerCase() !== accTarget) return;
+                m.displayName = normalizedNickname || fallbackDisplayName;
+                changed = true;
+            });
         }
 
         if (!changed) return false;
 
-        const nextName = escapeHtml(ChatCommon.getDisplayName(chat.data));
+        const msgContainer = document.getElementById(`chat-messages-${openId}`);
+        if (msgContainer) {
+            msgContainer
+                .querySelectorAll(`.seen-avatar-wrapper[data-account-id="${accTarget}"] .seen-avatar-name`)
+                .forEach(el => {
+                    el.textContent = normalizedNickname || fallbackDisplayName;
+                });
+        }
+
+        const nextName = ChatCommon.getDisplayName(chat.data);
         if (chat.element) {
             const headerName = chat.element.querySelector('.chat-header-name');
             if (headerName) {
@@ -2135,8 +2234,8 @@ const ChatWindow = {
                 messages.forEach((m, idx) => {
                     ChatCommon.normalizeMessage(m, myId);
 
-                    // Set 'sent' status for the last message if it's ours
-                    if (idx === messages.length - 1 && m.isOwn) {
+                    // Set 'sent' status for the last own non-system message
+                    if (idx === messages.length - 1 && m.isOwn && !ChatCommon.isSystemMessage(m)) {
                         m.status = 'sent';
                     }
 
@@ -2152,9 +2251,9 @@ const ChatWindow = {
                     const nextMsg = idx < messages.length - 1 ? messages[idx + 1] : null;
                     const groupPos = ChatCommon.getGroupPosition(m, prevMsg, nextMsg);
 
-                    const senderAvatar = !m.isOwn ? (m.sender?.avatarUrl || '') : '';
+                    const senderAvatar = !m.isOwn ? (m.sender?.avatarUrl || m.sender?.AvatarUrl || '') : '';
                     const authorName = isGroup && !m.isOwn
-                        ? (m.sender?.nickname || m.sender?.username || m.sender?.fullName || '')
+                        ? (m.sender?.nickname || m.sender?.Nickname || m.sender?.username || m.sender?.Username || m.sender?.fullName || m.sender?.FullName || '')
                         : '';
 
                     const html = ChatCommon.renderMessageBubble(m, {
@@ -2168,11 +2267,12 @@ const ChatWindow = {
                     tempDiv.innerHTML = html;
                     const bubble = tempDiv.firstElementChild;
                     bubble.dataset.sentAt = m.sentAt;
-                    bubble.dataset.senderId = m.sender?.accountId || myId;
+                    bubble.dataset.senderId = (m.sender?.accountId || m.senderId || '').toLowerCase() || (m.isOwn ? myId : '');
                     if (m.status) bubble.dataset.status = m.status;
                     this.insertNodeBeforeTypingIndicator(msgContainer, bubble);
                 });
 
+                ChatCommon.cleanTimeSeparators(msgContainer);
                 if (window.lucide) lucide.createIcons();
                 requestAnimationFrame(() => {
                     msgContainer.scrollTop = msgContainer.scrollHeight;
@@ -2259,9 +2359,7 @@ const ChatWindow = {
                 let lastTime = null;
 
                 messages.forEach((m, idx) => {
-                    if (!m.messageId && m.MessageId) m.messageId = m.MessageId.toString().toLowerCase();
-                    if (!m.sentAt && m.SentAt) m.sentAt = m.SentAt;
-                    m.isOwn = m.sender?.accountId === myId;
+                    ChatCommon.normalizeMessage(m, myId);
 
                     const currentTime = new Date(m.sentAt);
                     const gap = window.APP_CONFIG?.CHAT_TIME_SEPARATOR_GAP || 15 * 60 * 1000;
@@ -2274,9 +2372,9 @@ const ChatWindow = {
                     const nextMsg = idx < messages.length - 1 ? messages[idx + 1] : null;
                     const groupPos = ChatCommon.getGroupPosition(m, prevMsg, nextMsg);
 
-                    const senderAvatar = !m.isOwn ? (m.sender?.avatarUrl || '') : '';
+                    const senderAvatar = !m.isOwn ? (m.sender?.avatarUrl || m.sender?.AvatarUrl || '') : '';
                     const authorName = isGroup && !m.isOwn
-                        ? (m.sender?.nickname || m.sender?.username || m.sender?.fullName || '')
+                        ? (m.sender?.nickname || m.sender?.Nickname || m.sender?.username || m.sender?.Username || m.sender?.fullName || m.sender?.FullName || '')
                         : '';
 
                     html += ChatCommon.renderMessageBubble(m, {
@@ -2308,6 +2406,7 @@ const ChatWindow = {
                     }
                 }
 
+                ChatCommon.cleanTimeSeparators(msgContainer);
                 if (window.lucide) lucide.createIcons();
                 // Maintain scroll position
                 requestAnimationFrame(() => {
@@ -2336,6 +2435,8 @@ const ChatWindow = {
 
         const isGroup = chat.data.isGroup;
         const myId = (localStorage.getItem('accountId') || '').toLowerCase();
+        ChatCommon.normalizeMessage(msg, myId);
+        const isSystemMessage = ChatCommon.isSystemMessage(msg);
         
         if (msg.isOwn === undefined) {
             msg.isOwn = (msg.sender?.accountId || msg.senderId || '').toLowerCase() === myId;
@@ -2356,6 +2457,7 @@ const ChatWindow = {
 
         // Determine grouping
         const prevSenderId = lastMsgEl ? lastMsgEl.dataset.senderId : null;
+        const prevIsSystemMessage = !!lastMsgEl && ChatCommon.isSystemMessageElement(lastMsgEl);
         const groupGap = window.APP_CONFIG?.CHAT_GROUPING_GAP || 2 * 60 * 1000;
         
         let senderId = (msg.sender?.accountId || msg.SenderId || msg.senderId || '').toLowerCase();
@@ -2363,7 +2465,7 @@ const ChatWindow = {
         
         const sameSender = prevSenderId && prevSenderId === senderId;
         const closeTime = prevTime && (currentTime - prevTime < groupGap);
-        const groupedWithPrev = sameSender && closeTime;
+        const groupedWithPrev = !isSystemMessage && !prevIsSystemMessage && sameSender && closeTime;
         const groupPos = groupedWithPrev ? 'last' : 'single';
 
 
@@ -2387,7 +2489,7 @@ const ChatWindow = {
         if (msg.tempId) bubble.dataset.tempId = msg.tempId;
         if (msg.messageId) bubble.dataset.messageId = msg.messageId;
 
-        if (msg.status) {
+        if (msg.status && !isSystemMessage) {
             bubble.dataset.status = msg.status;
         }
         
@@ -2397,6 +2499,7 @@ const ChatWindow = {
         if (lastMsgEl) {
             ChatCommon.syncMessageBoundary(lastMsgEl, bubble);
         }
+        ChatCommon.cleanTimeSeparators(msgContainer);
 
         if (msg.messageId) {
             this.applyPendingSeenForMessage(id, msg.messageId);

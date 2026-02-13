@@ -538,8 +538,8 @@ const ChatPage = {
                 });
             }
 
-            // If it's an own message from another device, mark it as 'sent'
-            if (senderId === myId && !msg.status) {
+            // If it's an own message from another device, mark it as 'sent' (exclude system messages)
+            if (senderId === myId && !msg.status && !ChatCommon.isSystemMessage(msg)) {
                 msg.status = 'sent';
             }
 
@@ -637,14 +637,19 @@ const ChatPage = {
             return;
         }
 
-        // If target exists but isn't our message, move to nearest previous message sent by us.
-        if (bubbleWrapper && (bubbleWrapper.dataset.senderId || '').toLowerCase() !== myId) {
+        // If target isn't our message OR target has no seen row (e.g. system message),
+        // move to nearest previous message sent by us that has a seen row.
+        if (bubbleWrapper && (
+            (bubbleWrapper.dataset.senderId || '').toLowerCase() !== myId ||
+            !targetRow
+        )) {
             let cursor = bubbleWrapper.previousElementSibling;
             while (cursor) {
                 if (cursor.classList?.contains('msg-bubble-wrapper')) {
                     const senderId = (cursor.dataset.senderId || '').toLowerCase();
-                    if (senderId === myId) {
-                        targetRow = cursor.querySelector('.msg-seen-row');
+                    const candidateSeenRow = cursor.querySelector('.msg-seen-row');
+                    if (senderId === myId && candidateSeenRow) {
+                        targetRow = candidateSeenRow;
                         break;
                     }
                 }
@@ -939,25 +944,94 @@ const ChatPage = {
         if (!convTarget || !accTarget || !this.currentMetaData) return false;
         if ((this.currentChatId || '').toLowerCase() !== convTarget) return false;
 
+        const normalizeNickname = (value) => {
+            if (window.ChatCommon && typeof window.ChatCommon.normalizeNickname === 'function') {
+                return window.ChatCommon.normalizeNickname(value);
+            }
+            if (typeof value !== 'string') return value ?? null;
+            const trimmed = value.trim();
+            return trimmed.length ? trimmed : null;
+        };
+        const normalizedNickname = normalizeNickname(nickname);
+        const myId = (localStorage.getItem('accountId') || '').toLowerCase();
+        const resolveBaseDisplayName = () => {
+            if (accTarget === myId) {
+                return localStorage.getItem('username') || localStorage.getItem('fullname') || 'You';
+            }
+
+            if (this.currentMetaData.otherMember &&
+                (this.currentMetaData.otherMember.accountId || '').toLowerCase() === accTarget) {
+                return this.currentMetaData.otherMember.username ||
+                    this.currentMetaData.otherMember.Username ||
+                    this.currentMetaData.otherMember.fullName ||
+                    this.currentMetaData.otherMember.FullName ||
+                    'User';
+            }
+
+            if (Array.isArray(this.currentMetaData.members)) {
+                const member = this.currentMetaData.members.find(m =>
+                    (m.accountId || m.AccountId || '').toString().toLowerCase() === accTarget
+                );
+                if (member) {
+                    return member.username ||
+                        member.userName ||
+                        member.Username ||
+                        member.UserName ||
+                        member.fullName ||
+                        member.FullName ||
+                        member.displayName ||
+                        member.DisplayName ||
+                        'User';
+                }
+            }
+
+            return 'User';
+        };
+        const fallbackDisplayName = resolveBaseDisplayName();
+
         let changed = false;
-        if (this.currentMetaData.otherMember && (this.currentMetaData.otherMember.accountId || '').toLowerCase() === accTarget) {
-            this.currentMetaData.otherMember.nickname = nickname || null;
+        if (accTarget === myId) {
+            if (this.currentMetaData) this.currentMetaData.myNickname = normalizedNickname;
             changed = true;
         }
+
+        if (this.currentMetaData.otherMember && (this.currentMetaData.otherMember.accountId || '').toLowerCase() === accTarget) {
+            this.currentMetaData.otherMember.nickname = normalizedNickname;
+            changed = true;
+        }
+
         if (Array.isArray(this.currentMetaData.members)) {
             this.currentMetaData.members.forEach(m => {
-                if ((m.accountId || '').toLowerCase() !== accTarget) return;
-                m.nickname = nickname || null;
-                m.displayName = nickname || m.displayName;
+                if ((m.accountId || m.AccountId || '').toString().toLowerCase() !== accTarget) return;
+                const memberBaseName =
+                    m.username ||
+                    m.userName ||
+                    m.Username ||
+                    m.UserName ||
+                    m.fullName ||
+                    m.FullName ||
+                    fallbackDisplayName;
+
+                m.nickname = normalizedNickname;
+                m.displayName = normalizedNickname || memberBaseName || 'User';
                 changed = true;
             });
         }
         if (Array.isArray(this.currentMetaData.memberSeenStatuses)) {
             this.currentMetaData.memberSeenStatuses.forEach(m => {
-                if ((m.accountId || '').toLowerCase() !== accTarget) return;
-                if (nickname) m.displayName = nickname;
+                if ((m.accountId || m.AccountId || '').toString().toLowerCase() !== accTarget) return;
+                m.displayName = normalizedNickname || fallbackDisplayName;
                 changed = true;
             });
+        }
+
+        const msgContainer = document.getElementById('chat-view-messages');
+        if (msgContainer) {
+            msgContainer
+                .querySelectorAll(`.seen-avatar-wrapper[data-account-id="${accTarget}"] .seen-avatar-name`)
+                .forEach(el => {
+                    el.textContent = normalizedNickname || fallbackDisplayName;
+                });
         }
 
         if (changed) {
@@ -1049,19 +1123,41 @@ const ChatPage = {
 
     async promptEditNickname(accountId, displayName = 'User', currentNickname = null) {
         if (!this.currentChatId || !accountId) return;
-        const currentLabel = (currentNickname || '').trim();
+        const normalizeNickname = (value) => {
+            if (window.ChatCommon && typeof window.ChatCommon.normalizeNickname === 'function') {
+                return window.ChatCommon.normalizeNickname(value);
+            }
+            if (typeof value !== 'string') return value ?? null;
+            const trimmed = value.trim();
+            return trimmed.length ? trimmed : null;
+        };
+        const truncateDisplayText = (value, maxLength) => {
+            if (window.ChatCommon && typeof window.ChatCommon.truncateDisplayText === 'function') {
+                return window.ChatCommon.truncateDisplayText(value, maxLength);
+            }
+            const raw = value === null || value === undefined ? '' : String(value);
+            const limit = Number(maxLength);
+            if (!Number.isFinite(limit) || limit <= 0 || raw.length <= limit) {
+                return raw;
+            }
+            return raw.substring(0, Math.floor(limit)) + '...';
+        };
+        const nicknameMaxLength = window.APP_CONFIG?.MAX_CHAT_NICKNAME_LENGTH || 50;
+        const currentLabel = normalizeNickname(currentNickname) || '';
+        const promptDisplayName = truncateDisplayText(displayName || 'User', 40);
 
         ChatCommon.showPrompt({
-            title: `Edit nickname for ${displayName}`,
+            title: `Edit nickname for ${promptDisplayName}`,
             placeholder: 'Enter nickname...',
             value: currentLabel,
+            maxLength: nicknameMaxLength,
             confirmText: 'Save',
             cancelText: 'Cancel',
             onConfirm: async (input) => {
-                const nextNickname = (input || '').trim();
+                const nextNickname = normalizeNickname(input);
                 const payload = {
                     accountId,
-                    nickname: nextNickname.length ? nextNickname : null
+                    nickname: nextNickname
                 };
 
                 try {
@@ -1081,6 +1177,92 @@ const ChatPage = {
                 } catch (error) {
                     console.error('Failed to update nickname:', error);
                     if (window.toastError) window.toastError('Failed to update nickname');
+                }
+            }
+        });
+    },
+
+    async promptEditNicknames() {
+        if (!this.currentChatId || !this.currentMetaData) return;
+
+        const myId = (localStorage.getItem('accountId') || '').toLowerCase();
+        const myName = localStorage.getItem('fullname') || 'You';
+        const myUsername = localStorage.getItem('username') || '';
+        const myAvatar = localStorage.getItem('avatarUrl') || window.APP_CONFIG?.DEFAULT_AVATAR;
+        const normalizeMember = (member, options = {}) => {
+            if (window.ChatCommon && typeof window.ChatCommon.normalizeConversationMember === 'function') {
+                return window.ChatCommon.normalizeConversationMember(member, options);
+            }
+
+            const normalized = member || {};
+            const accountId = (normalized.accountId || normalized.AccountId || '').toString().toLowerCase();
+            const displayName =
+                normalized.displayName ||
+                normalized.DisplayName ||
+                normalized.fullName ||
+                normalized.FullName ||
+                '';
+            const nickname = normalized.nickname ?? normalized.Nickname ?? null;
+            const usernameRaw =
+                normalized.username ||
+                normalized.userName ||
+                normalized.Username ||
+                normalized.UserName ||
+                '';
+            const username =
+                usernameRaw ||
+                ((options.fallbackUsernameToDisplayName && displayName && !nickname) ? displayName : '');
+
+            return {
+                accountId,
+                displayName,
+                username,
+                avatarUrl: normalized.avatarUrl || normalized.AvatarUrl || window.APP_CONFIG?.DEFAULT_AVATAR,
+                nickname
+            };
+        };
+        
+        let members = [];
+        // Priority 1: Use the members list from metaData (contains all info if available)
+        if (this.currentMetaData.members && this.currentMetaData.members.length > 0) {
+            members = this.currentMetaData.members.map(m =>
+                normalizeMember(m, { fallbackUsernameToDisplayName: true })
+            );
+        } 
+        
+        // Priority 2: Ensure I and the other member are in the list if it's a private chat or if members list is incomplete
+        if (!members.length) {
+            if (this.currentMetaData.otherMember) {
+                const normalizedOther = normalizeMember(this.currentMetaData.otherMember, {
+                    fallbackUsernameToDisplayName: true
+                });
+                if (!normalizedOther.displayName) normalizedOther.displayName = 'User';
+                members.push(normalizedOther);
+            }
+        }
+
+        // Always ensure I am in the list
+        if (!members.find(m => (m.accountId || '').toLowerCase() === myId)) {
+            members.unshift(normalizeMember({
+                accountId: myId,
+                displayName: myName,
+                username: myUsername,
+                avatarUrl: myAvatar,
+                nickname: this.currentMetaData.myNickname || members.find(m => (m.accountId || '').toLowerCase() === myId)?.nickname || null
+            }));
+        }
+
+        ChatCommon.showNicknamesModal({
+            title: 'Nicknames',
+            conversationId: this.currentChatId,
+            members: members,
+            onNicknameUpdated: (accountId, nickname) => {
+                this.applyNicknameUpdate(this.currentChatId, accountId, nickname);
+                if (window.ChatSidebar && typeof window.ChatSidebar.applyNicknameUpdate === 'function') {
+                    window.ChatSidebar.applyNicknameUpdate(this.currentChatId, accountId, nickname);
+                }
+                if (window.ChatWindow && typeof window.ChatWindow.applyNicknameUpdate === 'function') {
+                    window.ChatWindow.applyNicknameUpdate(this.currentChatId, accountId, nickname);
                 }
             }
         });
@@ -1106,6 +1288,28 @@ const ChatPage = {
         } else if (isGroup) {
             statusHtml = `${meta.members?.length || 0} Members`;
         }
+        const getMemberEditableName = (member) =>
+            member?.nickname ||
+            member?.Nickname ||
+            member?.username ||
+            member?.userName ||
+            member?.Username ||
+            member?.UserName ||
+            member?.displayName ||
+            member?.DisplayName ||
+            'Unknown';
+        const truncateDisplayText = (value, maxLength) => {
+            if (window.ChatCommon && typeof window.ChatCommon.truncateDisplayText === 'function') {
+                return window.ChatCommon.truncateDisplayText(value, maxLength);
+            }
+            const raw = value === null || value === undefined ? '' : String(value);
+            const limit = Number(maxLength);
+            if (!Number.isFinite(limit) || limit <= 0 || raw.length <= limit) {
+                return raw;
+            }
+            return raw.substring(0, Math.floor(limit)) + '...';
+        };
+        const memberNameMaxLength = window.APP_CONFIG?.MAX_NAME_DISPLAY_LENGTH || 25;
 
         const html = `
             <div class="chat-info-header">
@@ -1156,12 +1360,10 @@ const ChatPage = {
                             <i data-lucide="palette"></i>
                             <span>Change theme</span>
                         </div>
-                        ${!isGroup && privateTargetId ? `
-                        <div class="chat-info-item" id="chat-info-edit-private-nickname">
+                        <div class="chat-info-item" id="chat-info-edit-nicknames-btn">
                             <i data-lucide="at-sign"></i>
                             <span>Edit nicknames</span>
                         </div>
-                        ` : ''}
                     </div>
                 </div>
 
@@ -1172,17 +1374,22 @@ const ChatPage = {
                         <i data-lucide="chevron-down" class="chevron"></i>
                     </div>
                     <div class="chat-info-section-content">
-                        ${(meta.members || []).map(m => `
+                        ${(meta.members || []).map(m => {
+                            const rawMemberName = getMemberEditableName(m);
+                            const displayMemberName = truncateDisplayText(rawMemberName, memberNameMaxLength);
+                            const escapedRawMemberName = escapeHtml(rawMemberName);
+                            return `
                             <div class="chat-info-item chat-info-member chat-info-member-edit"
-                                data-account-id="${m.accountId || ''}"
-                                data-display-name="${escapeHtml(m.displayName || m.nickname || 'Unknown')}"
-                                data-nickname="${escapeHtml(m.nickname || '')}">
+                                data-account-id="${(m.accountId || m.AccountId || '').toString().toLowerCase()}"
+                                data-display-name="${escapedRawMemberName}"
+                                data-nickname="${escapeHtml((m.nickname || m.Nickname || ''))}">
                                 <img src="${m.avatarUrl || window.APP_CONFIG?.DEFAULT_AVATAR}" class="chat-info-member-avatar">
-                                <span class="chat-info-member-name">${m.displayName || m.nickname || 'Unknown'}</span>
-                                ${m.role === 1 ? '<span class="chat-info-member-role">Admin</span>' : ''}
+                                <span class="chat-info-member-name" title="${escapedRawMemberName}">${escapeHtml(displayMemberName)}</span>
+                                ${(m.role === 1 || m.Role === 1) ? '<span class="chat-info-member-role">Admin</span>' : ''}
                                 <i data-lucide="pencil" style="margin-left:auto;"></i>
                             </div>
-                        `).join('')}
+                        `;
+                        }).join('')}
                     </div>
                 </div>
                 ` : ''}
@@ -1245,9 +1452,9 @@ const ChatPage = {
             deleteBtn.onclick = () => this.softDeleteCurrentConversation();
         }
 
-        const privateNicknameBtn = document.getElementById('chat-info-edit-private-nickname');
-        if (privateNicknameBtn && privateTargetId) {
-            privateNicknameBtn.onclick = () => this.promptEditNickname(privateTargetId, privateTargetName, privateTargetNickname);
+        const editNicknamesBtn = document.getElementById('chat-info-edit-nicknames-btn');
+        if (editNicknamesBtn) {
+            editNicknamesBtn.onclick = () => this.promptEditNicknames();
         }
 
         this.infoContent.querySelectorAll('.chat-info-member-edit').forEach(el => {
@@ -1345,12 +1552,15 @@ const ChatPage = {
                     }
                 }
 
+                ChatCommon.cleanTimeSeparators(msgContainer);
+
                 requestAnimationFrame(() => {
                     msgContainer.scrollTop = msgContainer.scrollHeight - oldScrollHeight;
                 });
                 if (window.lucide) lucide.createIcons(); // Added lucide.createIcons() for prepend
             } else {
                     msgContainer.innerHTML = html;
+                    ChatCommon.cleanTimeSeparators(msgContainer);
                     this.scrollToBottom();
                     if (window.lucide) lucide.createIcons();
                     
@@ -1387,8 +1597,8 @@ const ChatPage = {
         messages.forEach((m, idx) => {
             ChatCommon.normalizeMessage(m, myId);
 
-            // Set 'sent' status for the last message if it's ours and not prepending
-            if (!isPrepend && idx === messages.length - 1 && m.isOwn) {
+            // Set 'sent' status for the last own non-system message if not prepending
+            if (!isPrepend && idx === messages.length - 1 && m.isOwn && !ChatCommon.isSystemMessage(m)) {
                 m.status = 'sent';
             }
 
@@ -1439,6 +1649,7 @@ const ChatPage = {
         
         ChatCommon.normalizeMessage(msg, myId);
         const isOwn = !!msg.isOwn;
+        const isSystemMessage = ChatCommon.isSystemMessage(msg);
         
         // Ensure optimistic messages have the correct senderId for seen-avatar fallback
         if (msg.isOwn && !msg.sender?.accountId) {
@@ -1460,10 +1671,11 @@ const ChatPage = {
 
         // Determine grouping with the previous message in DOM
         const prevSenderId = lastMsgEl ? lastMsgEl.dataset.senderId : null;
+        const prevIsSystemMessage = !!lastMsgEl && ChatCommon.isSystemMessageElement(lastMsgEl);
         const groupGap = window.APP_CONFIG?.CHAT_GROUPING_GAP || 2 * 60 * 1000;
         const sameSender = prevSenderId && prevSenderId === senderId;
         const closeTime = lastTime && (currentTime - lastTime < groupGap);
-        const groupedWithPrev = sameSender && closeTime;
+        const groupedWithPrev = !isSystemMessage && !prevIsSystemMessage && sameSender && closeTime;
 
         // New message is always 'last' or 'single' when appended
         const groupPos = groupedWithPrev ? 'last' : 'single';
@@ -1499,7 +1711,7 @@ const ChatPage = {
         if (msg.tempId) {
             bubble.dataset.tempId = msg.tempId;
         }
-        if (msg.status) {
+        if (msg.status && !isSystemMessage) {
             bubble.dataset.status = msg.status;
         }
         
@@ -1509,6 +1721,7 @@ const ChatPage = {
         if (lastMsgEl) {
             ChatCommon.syncMessageBoundary(lastMsgEl, bubble);
         }
+        ChatCommon.cleanTimeSeparators(msgContainer);
 
         if (messageId) {
             this.applyPendingSeenForMessage(this.currentChatId, messageId);

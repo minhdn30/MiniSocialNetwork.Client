@@ -280,25 +280,52 @@ const ChatActions = {
     /**
      * Fix message classes and UI when its neighbors change
      */
+    buildMessageShapeFromElement(el) {
+        if (!el || !el.classList?.contains('msg-bubble-wrapper')) return null;
+
+        const typeRaw = (el.dataset?.messageType || '').toString().trim().toLowerCase();
+        let messageType = null;
+        if (el.classList.contains('msg-system') || typeRaw === 'system' || typeRaw === '3') {
+            messageType = 3;
+        } else if (typeRaw.length) {
+            const numericType = Number(typeRaw);
+            if (Number.isFinite(numericType)) {
+                messageType = numericType;
+            } else if (typeRaw === 'text') {
+                messageType = 1;
+            } else if (typeRaw === 'media') {
+                messageType = 2;
+            }
+        }
+
+        return {
+            sender: { accountId: (el.dataset?.senderId || '').toString().toLowerCase() },
+            sentAt: el.dataset?.sentAt,
+            messageType
+        };
+    },
+
+    /**
+     * Fix message classes and UI when its neighbors change
+     */
     refreshMessageState(el) {
         if (!el || !el.classList.contains('msg-bubble-wrapper')) return;
         
         const prev = this.findPreviousMessageBubble(el);
         const next = this.findNextMessageBubble(el);
+        const m = this.buildMessageShapeFromElement(el);
+        if (!m) return;
+
+        if (m.messageType === 3 || window.ChatCommon?.isSystemMessageElement?.(el)) {
+            const classes = ['msg-group-first', 'msg-group-middle', 'msg-group-last', 'msg-group-single'];
+            classes.forEach(c => el.classList.remove(c));
+            el.classList.add('msg-group-single');
+            return;
+        }
         
         // Re-call grouping logic
-        const m = {
-            sender: { accountId: el.dataset.senderId },
-            sentAt: el.dataset.sentAt
-        };
-        const pM = prev ? {
-            sender: { accountId: prev.dataset.senderId },
-            sentAt: prev.dataset.sentAt
-        } : null;
-        const nM = next ? {
-            sender: { accountId: next.dataset.senderId },
-            sentAt: next.dataset.sentAt
-        } : null;
+        const pM = this.buildMessageShapeFromElement(prev);
+        const nM = this.buildMessageShapeFromElement(next);
         
         const newGroupPos = window.ChatCommon.getGroupPosition(m, pM, nM);
         
@@ -348,11 +375,17 @@ const ChatActions = {
      */
     cleanTimeSeparators(container) {
         if (!container) return;
+        if (window.ChatCommon?.cleanTimeSeparators) {
+            window.ChatCommon.cleanTimeSeparators(container);
+            return;
+        }
+
         const gap = window.APP_CONFIG?.CHAT_TIME_SEPARATOR_GAP || 15 * 60 * 1000;
         const separators = Array.from(container.children).filter((child) =>
             child.classList?.contains('chat-time-separator')
         );
 
+        let keptLeadingSeparator = false;
         separators.forEach((sep) => {
             const prevMsg = this.findPreviousMessageBubble(sep);
             const nextMsg = this.findNextMessageBubble(sep);
@@ -364,7 +397,14 @@ const ChatActions = {
             }
 
             // Keep leading separator before the first message in list.
-            if (!prevMsg) return;
+            if (!prevMsg) {
+                if (keptLeadingSeparator) {
+                    sep.remove();
+                } else {
+                    keptLeadingSeparator = true;
+                }
+                return;
+            }
 
             const prevTime = new Date(prevMsg.dataset.sentAt || 0);
             const nextTime = new Date(nextMsg.dataset.sentAt || 0);

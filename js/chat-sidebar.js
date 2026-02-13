@@ -418,19 +418,44 @@ const ChatSidebar = {
         const accTarget = (accountId || '').toLowerCase();
         if (!convTarget || !accTarget) return false;
 
+        const normalizeNickname = (value) => {
+            if (window.ChatCommon && typeof window.ChatCommon.normalizeNickname === 'function') {
+                return window.ChatCommon.normalizeNickname(value);
+            }
+            if (typeof value !== 'string') return value ?? null;
+            const trimmed = value.trim();
+            return trimmed.length ? trimmed : null;
+        };
+        const normalizedNickname = normalizeNickname(nickname);
+
         let changed = false;
         this.conversations.forEach(conv => {
             if ((conv.conversationId || '').toLowerCase() !== convTarget) return;
 
+            const fallbackDisplayName = () => {
+                if (conv.otherMember && (conv.otherMember.accountId || '').toLowerCase() === accTarget) {
+                    return conv.otherMember.username || conv.otherMember.Username || conv.otherMember.fullName || conv.otherMember.FullName || 'User';
+                }
+                return 'User';
+            };
+
             if (conv.otherMember && (conv.otherMember.accountId || '').toLowerCase() === accTarget) {
-                conv.otherMember.nickname = nickname || null;
+                conv.otherMember.nickname = normalizedNickname;
                 changed = true;
             }
 
             const sender = conv.lastMessage?.sender;
             if (sender && (sender.accountId || '').toLowerCase() === accTarget) {
-                sender.nickname = nickname || null;
+                sender.nickname = normalizedNickname;
                 changed = true;
+            }
+
+            if (Array.isArray(conv.lastMessageSeenBy)) {
+                conv.lastMessageSeenBy.forEach(seen => {
+                    if ((seen.accountId || '').toLowerCase() !== accTarget) return;
+                    seen.displayName = normalizedNickname || fallbackDisplayName();
+                    changed = true;
+                });
             }
         });
 

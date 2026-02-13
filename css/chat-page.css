@@ -812,10 +812,22 @@
 .chat-info-item.danger svg {
   color: red;
 }
+.chat-info-member {
+  min-width: 0;
+}
 .chat-info-member-avatar {
   width: 32px;
   height: 32px;
   border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.chat-info-member-name {
+  min-width: 0;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .chat-info-member-role {
@@ -825,6 +837,7 @@
   background: var(--bg-secondary);
   padding: 1px 6px;
   border-radius: 10px;
+  flex-shrink: 0;
 }
 
 /* Scrollbar */

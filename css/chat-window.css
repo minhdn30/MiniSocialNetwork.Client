@@ -267,6 +267,9 @@ body.is-dragging-chat #chat-windows-stack {
     font-size: 13px;
     font-weight: 600;
     white-space: nowrap;
+    max-width: min(240px, calc(100vw - 110px));
+    overflow: hidden;
+    text-overflow: ellipsis;
     opacity: 0;
     visibility: hidden;
     pointer-events: none;

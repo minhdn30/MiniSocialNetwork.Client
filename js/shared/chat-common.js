@@ -24,6 +24,184 @@ const ChatCommon = {
         return conv.displayName || 'Chat';
     },
 
+    getMessageType(msg) {
+        if (!msg) return null;
+
+        const rawType =
+            msg.messageType ??
+            msg.MessageType ??
+            msg.message_type ??
+            msg.Type ??
+            null;
+
+        if (rawType === null || rawType === undefined || rawType === '') {
+            return null;
+        }
+
+        if (typeof rawType === 'number' && Number.isFinite(rawType)) {
+            return rawType;
+        }
+
+        if (typeof rawType === 'string') {
+            const normalized = rawType.trim().toLowerCase();
+            if (!normalized.length) return null;
+
+            const numericType = Number(normalized);
+            if (Number.isFinite(numericType)) {
+                return numericType;
+            }
+
+            if (normalized === 'text') return 1;
+            if (normalized === 'media') return 2;
+            if (normalized === 'system') return 3;
+        }
+
+        return rawType;
+    },
+
+    isSystemMessage(msg) {
+        return this.getMessageType(msg) === 3;
+    },
+
+    isSystemMessageElement(el) {
+        if (!el || !el.classList || !el.classList.contains('msg-bubble-wrapper')) {
+            return false;
+        }
+
+        if (el.classList.contains('msg-system')) {
+            return true;
+        }
+
+        const typeRaw = (el.dataset?.messageType || '').toString().toLowerCase();
+        return typeRaw === 'system' || typeRaw === '3';
+    },
+
+    toMentionUsername(value) {
+        const normalized = (value === null || value === undefined) ? '' : String(value).trim();
+        if (!normalized.length) return '';
+        return normalized.startsWith('@') ? normalized : `@${normalized}`;
+    },
+
+    getSystemMessageText(msg) {
+        const systemDataRaw = msg?.systemMessageDataJson ?? msg?.SystemMessageDataJson ?? '';
+        if (typeof systemDataRaw === 'string' && systemDataRaw.trim().length) {
+            try {
+                const parsed = JSON.parse(systemDataRaw);
+                const actor = this.toMentionUsername(parsed?.actorUsername || parsed?.actorDisplayName || '');
+                const target = this.toMentionUsername(parsed?.targetUsername || parsed?.targetDisplayName || '');
+                const hasNicknameField = Object.prototype.hasOwnProperty.call(parsed || {}, 'nickname');
+                const nickname = this.normalizeNickname(parsed?.nickname);
+
+                if (actor && target && hasNicknameField) {
+                    return nickname
+                        ? `${actor} set nickname for ${target} to "${nickname}".`
+                        : `${actor} removed nickname for ${target}.`;
+                }
+            } catch (_err) {
+                // Keep silent fallback for malformed JSON payloads.
+            }
+        }
+
+        const contentRaw = msg?.content ?? msg?.Content ?? '';
+        if (typeof contentRaw === 'string' && contentRaw.trim().length) {
+            const content = contentRaw.trim();
+
+            const setNicknameMatch = content.match(/^@?([^\s@]+)\s+set nickname for\s+@?([^\s@]+)\s+to\s+"([\s\S]*)"\.$/i);
+            if (setNicknameMatch) {
+                const actor = this.toMentionUsername(setNicknameMatch[1]);
+                const target = this.toMentionUsername(setNicknameMatch[2]);
+                const nickname = setNicknameMatch[3];
+                return `${actor} set nickname for ${target} to "${nickname}".`;
+            }
+
+            const removeNicknameMatch = content.match(/^@?([^\s@]+)\s+removed nickname for\s+@?([^\s@]+)\.$/i);
+            if (removeNicknameMatch) {
+                const actor = this.toMentionUsername(removeNicknameMatch[1]);
+                const target = this.toMentionUsername(removeNicknameMatch[2]);
+                return `${actor} removed nickname for ${target}.`;
+            }
+
+            return content;
+        }
+
+        return 'System message';
+    },
+
+    /**
+     * Normalize a conversation member object to one consistent shape.
+     * @param {Object} member
+     * @param {Object} options
+     * @param {boolean} options.fallbackUsernameToDisplayName - Use displayName as username only when nickname is empty.
+     */
+    normalizeConversationMember(member = {}, options = {}) {
+        const { fallbackUsernameToDisplayName = false } = options;
+        const normalized = member || {};
+        const accountId = (normalized.accountId || normalized.AccountId || '').toString().toLowerCase();
+        const displayName =
+            normalized.displayName ||
+            normalized.DisplayName ||
+                normalized.fullName ||
+                normalized.FullName ||
+                '';
+        const nickname = this.normalizeNickname(normalized.nickname ?? normalized.Nickname ?? null);
+        const usernameRaw =
+            normalized.username ||
+            normalized.userName ||
+            normalized.Username ||
+            normalized.UserName ||
+            '';
+        const username =
+            usernameRaw ||
+            ((fallbackUsernameToDisplayName && displayName && !nickname) ? displayName : '');
+        const avatarUrl = normalized.avatarUrl || normalized.AvatarUrl || window.APP_CONFIG?.DEFAULT_AVATAR;
+
+        return {
+            accountId,
+            displayName,
+            username,
+            avatarUrl,
+            nickname
+        };
+    },
+
+    getNicknameMaxLength() {
+        const configured = Number(window.APP_CONFIG?.MAX_CHAT_NICKNAME_LENGTH);
+        if (!Number.isFinite(configured) || configured <= 0) {
+            return 50;
+        }
+        return Math.floor(configured);
+    },
+
+    truncateDisplayText(text, maxLength = 50) {
+        if (text === null || text === undefined) return '';
+        const rawText = String(text);
+        const configured = Number(maxLength);
+        if (!Number.isFinite(configured) || configured <= 0 || rawText.length <= configured) {
+            return rawText;
+        }
+
+        if (typeof truncateSmart === 'function') {
+            return truncateSmart(rawText, Math.floor(configured));
+        }
+        if (typeof truncateText === 'function') {
+            return truncateText(rawText, Math.floor(configured));
+        }
+        return rawText.substring(0, Math.floor(configured)) + '...';
+    },
+
+    normalizeNickname(value) {
+        if (typeof value !== 'string') {
+            return value ?? null;
+        }
+        const trimmed = value.trim();
+        if (!trimmed.length) return null;
+
+        const maxLength = this.getNicknameMaxLength();
+        return trimmed.length > maxLength
+            ? trimmed.substring(0, maxLength)
+            : trimmed;
+    },
+
     /**
      * Normalize message object to have consistent property names and casing.
      */
@@ -36,22 +214,63 @@ const ChatCommon = {
         
         // Timestamps
         if (!m.sentAt && m.SentAt) m.sentAt = m.SentAt;
+
+        // Content
+        if ((m.content === undefined || m.content === null) && m.Content !== undefined) {
+            m.content = m.Content;
+        }
         
         // Medias
         if (!m.medias && m.Medias) m.medias = m.Medias;
+
+        // Message type / system payload
+        const messageType = this.getMessageType(m);
+        if (messageType !== null && messageType !== undefined && messageType !== '') {
+            m.messageType = messageType;
+        }
+        if (!m.systemMessageDataJson && m.SystemMessageDataJson) {
+            m.systemMessageDataJson = m.SystemMessageDataJson;
+        }
         
         // Sender/Ownership
-        const senderId = (m.sender?.accountId || m.SenderId || m.senderId || '').toLowerCase();
+        const senderId = (
+            m.sender?.accountId ||
+            m.sender?.AccountId ||
+            m.Sender?.accountId ||
+            m.Sender?.AccountId ||
+            m.SenderId ||
+            m.senderId ||
+            ''
+        ).toString().toLowerCase();
         if (myId && typeof m.isOwn !== 'boolean') {
             m.isOwn = (senderId === myId.toLowerCase());
         }
         
         // Ensure sender object exists with at least accountId
-        if (!m.sender) {
+        if (!m.sender && m.Sender) {
+            m.sender = {
+                accountId: senderId,
+                username: m.Sender.username || m.Sender.Username || '',
+                fullName: m.Sender.fullName || m.Sender.FullName || '',
+                nickname: this.normalizeNickname(m.Sender.nickname ?? m.Sender.Nickname ?? null),
+                avatarUrl: m.Sender.avatarUrl || m.Sender.AvatarUrl || ''
+            };
+        } else if (!m.sender) {
             m.sender = { accountId: senderId };
-        } else if (!m.sender.accountId && senderId) {
-            m.sender.accountId = senderId;
+        } else {
+            if (!m.sender.accountId && m.sender.AccountId) {
+                m.sender.accountId = m.sender.AccountId.toString().toLowerCase();
+            } else if (m.sender.accountId) {
+                m.sender.accountId = m.sender.accountId.toString().toLowerCase();
+            } else if (senderId) {
+                m.sender.accountId = senderId;
+            }
         }
+
+        if (!m.senderId && senderId) {
+            m.senderId = senderId;
+        }
+
         return m;
     },
 
@@ -74,17 +293,25 @@ const ChatCommon = {
      * @param {Object|null} nextMsg - Next message (below in display order)
      */
     getGroupPosition(msg, prevMsg, nextMsg) {
+        if (this.isSystemMessage(msg)) {
+            return 'single';
+        }
+
         const msgId = msg.sender?.accountId;
         const prevId = prevMsg?.sender?.accountId;
         const nextId = nextMsg?.sender?.accountId;
+        const prevIsSystem = this.isSystemMessage(prevMsg);
+        const nextIsSystem = this.isSystemMessage(nextMsg);
 
-        const sameSenderAsPrev = prevMsg && prevId === msgId;
-        const sameSenderAsNext = nextMsg && nextId === msgId;
+        const sameSenderAsPrev = prevMsg && !prevIsSystem && prevId === msgId;
+        const sameSenderAsNext = nextMsg && !nextIsSystem && nextId === msgId;
 
         // Also break grouping if time gap > configured threshold (default 2 mins)
         const gap = window.APP_CONFIG?.CHAT_GROUPING_GAP || 2 * 60 * 1000;
-        const closeTimePrev = prevMsg && (new Date(msg.sentAt) - new Date(prevMsg.sentAt) < gap);
-        const closeTimeNext = nextMsg && (new Date(nextMsg.sentAt) - new Date(msg.sentAt) < gap);
+        const diffPrev = prevMsg ? (new Date(msg.sentAt) - new Date(prevMsg.sentAt)) : Number.POSITIVE_INFINITY;
+        const diffNext = nextMsg ? (new Date(nextMsg.sentAt) - new Date(msg.sentAt)) : Number.POSITIVE_INFINITY;
+        const closeTimePrev = prevMsg && !prevIsSystem && Number.isFinite(diffPrev) && diffPrev >= 0 && diffPrev < gap;
+        const closeTimeNext = nextMsg && !nextIsSystem && Number.isFinite(diffNext) && diffNext >= 0 && diffNext < gap;
 
         const groupedWithPrev = sameSenderAsPrev && closeTimePrev;
         const groupedWithNext = sameSenderAsNext && closeTimeNext;
@@ -118,8 +345,27 @@ const ChatCommon = {
         const wrapperClass = isOwn ? 'sent' : 'received';
         const rawMessageId = msg.messageId || msg.MessageId || '';
         const messageId = rawMessageId ? rawMessageId.toString().toLowerCase() : '';
+        const messageType = this.getMessageType(msg);
+        const isSystemMessage = this.isSystemMessage(msg);
 
         const dataMessageIdAttr = messageId ? ` data-message-id="${messageId}"` : '';
+        const dataMessageTypeAttr = (messageType !== null && messageType !== undefined && messageType !== '')
+            ? ` data-message-type="${String(messageType).replace(/"/g, '&quot;')}"`
+            : '';
+
+        if (isSystemMessage) {
+            const senderId = msg.sender?.accountId || msg.senderId || '';
+            const systemText = this.getSystemMessageText(msg);
+            return `
+                <div class="msg-bubble-wrapper msg-system msg-group-single"
+                     data-sent-at="${msg.sentAt || ''}"
+                     data-sender-id="${senderId}"
+                     data-message-type="system"
+                     ${dataMessageIdAttr}>
+                    <div class="msg-system-text">${linkify(escapeHtml(systemText))}</div>
+                </div>
+            `;
+        }
 
         // --- Media ---
         const allMedias = msg.medias || msg.Medias || [];
@@ -220,6 +466,7 @@ const ChatCommon = {
                  data-avatar-url="${avatarSrc}"
                  data-author-name="${(authorName || '').replace(/"/g, '&quot;')}"
                  ${dataMessageIdAttr}
+                 ${dataMessageTypeAttr}
                  ${msg.status ? `data-status="${msg.status}"` : ''}>
                 ${authorHtml}
                 <div class="msg-row">
@@ -307,6 +554,103 @@ const ChatCommon = {
         return `<div class="chat-time-separator">${timeStr}</div>`;
     },
 
+    findPreviousMessageBubble(el) {
+        let cursor = el?.previousElementSibling || null;
+        while (cursor) {
+            if (cursor.classList?.contains('msg-bubble-wrapper')) return cursor;
+            cursor = cursor.previousElementSibling;
+        }
+        return null;
+    },
+
+    findNextMessageBubble(el) {
+        let cursor = el?.nextElementSibling || null;
+        while (cursor) {
+            if (cursor.classList?.contains('msg-bubble-wrapper')) return cursor;
+            cursor = cursor.nextElementSibling;
+        }
+        return null;
+    },
+
+    cleanTimeSeparators(container) {
+        if (!container) return;
+
+        const gap = window.APP_CONFIG?.CHAT_TIME_SEPARATOR_GAP || 15 * 60 * 1000;
+        const separators = Array.from(container.children).filter((child) =>
+            child.classList?.contains('chat-time-separator')
+        );
+        if (!separators.length) return;
+
+        const messageBubbles = Array.from(container.children).filter((child) =>
+            child.classList?.contains('msg-bubble-wrapper')
+        );
+        if (!messageBubbles.length) {
+            separators.forEach((sep) => sep.remove());
+            return;
+        }
+
+        let keptLeadingSeparator = false;
+        const keptBoundaryKeys = new Set();
+        separators.forEach((sep) => {
+            const prevMsg = this.findPreviousMessageBubble(sep);
+            const nextMsg = this.findNextMessageBubble(sep);
+
+            // Separator without any following message is always orphaned.
+            if (!nextMsg) {
+                sep.remove();
+                return;
+            }
+
+            // Keep only one leading separator before first message.
+            if (!prevMsg) {
+                if (keptLeadingSeparator) {
+                    sep.remove();
+                } else {
+                    keptLeadingSeparator = true;
+                }
+                return;
+            }
+
+            const prevTime = new Date(prevMsg.dataset.sentAt || 0);
+            const nextTime = new Date(nextMsg.dataset.sentAt || 0);
+            const prevValid = Number.isFinite(prevTime.getTime());
+            const nextValid = Number.isFinite(nextTime.getTime());
+            const shouldKeep = prevValid && nextValid && ((nextTime - prevTime) > gap);
+
+            if (!shouldKeep) {
+                sep.remove();
+                return;
+            }
+
+            // Keep at most one separator per message boundary.
+            const prevKey = prevMsg.dataset.messageId || prevMsg.dataset.sentAt || `prev-${prevTime.getTime()}`;
+            const nextKey = nextMsg.dataset.messageId || nextMsg.dataset.sentAt || `next-${nextTime.getTime()}`;
+            const boundaryKey = `${prevKey}|${nextKey}`;
+            if (keptBoundaryKeys.has(boundaryKey)) {
+                sep.remove();
+                return;
+            }
+            keptBoundaryKeys.add(boundaryKey);
+        });
+
+        // Safety pass: never allow 2 adjacent separators after cleanup.
+        let lastKeptSeparator = null;
+        Array.from(container.children).forEach((child) => {
+            if (!child.classList?.contains('chat-time-separator')) {
+                if (child.classList?.contains('msg-bubble-wrapper')) {
+                    lastKeptSeparator = null;
+                }
+                return;
+            }
+
+            if (lastKeptSeparator) {
+                child.remove();
+                return;
+            }
+            lastKeptSeparator = child;
+        });
+    },
+
     goToProfile(accountId) {
         if (!accountId) return;
         // If we are leaving chat-page, ensure we minimize the current chat session
@@ -336,6 +680,7 @@ const ChatCommon = {
         if (!msgAbove || !msgBelow || 
             !msgAbove.classList.contains('msg-bubble-wrapper') || 
             !msgBelow.classList.contains('msg-bubble-wrapper')) return;
+        if (this.isSystemMessageElement(msgAbove) || this.isSystemMessageElement(msgBelow)) return;
 
         const senderAbove = msgAbove.dataset.senderId;
         const senderBelow = msgBelow.dataset.senderId;
@@ -461,8 +806,18 @@ const ChatCommon = {
             confirmText = 'Save',
             cancelText = 'Cancel',
             onConfirm = null,
-            onCancel = null
+            onCancel = null,
+            maxLength = null
         } = options;
+
+        const resolvedMaxLength = Number(maxLength);
+        const normalizedMaxLength = Number.isFinite(resolvedMaxLength) && resolvedMaxLength > 0
+            ? Math.floor(resolvedMaxLength)
+            : null;
+        const normalizedValue = normalizedMaxLength
+            ? String(value || '').substring(0, normalizedMaxLength)
+            : String(value || '');
+        const maxLengthAttr = normalizedMaxLength ? ` maxlength="${normalizedMaxLength}"` : '';
 
         const overlay = document.createElement("div");
         overlay.className = "chat-common-confirm-overlay";
@@ -475,7 +830,7 @@ const ChatCommon = {
                 <h3>${title}</h3>
                 ${message ? `<p>${message}</p>` : ''}
                 <div class="chat-common-confirm-input-wrapper">
-                    <input type="text" id="genericPromptInput" class="chat-common-confirm-input" placeholder="${placeholder}" value="${(value || '').replace(/"/g, '&quot;')}" autocomplete="off">
+                    <input type="text" id="genericPromptInput" class="chat-common-confirm-input" placeholder="${placeholder}" value="${normalizedValue.replace(/"/g, '&quot;')}" autocomplete="off"${maxLengthAttr}>
                 </div>
             </div>
             <div class="chat-common-confirm-actions">
@@ -538,6 +893,220 @@ const ChatCommon = {
                 close();
             }
         };
+    },
+
+    /**
+     * Show a modal to manage nicknames of all members in a conversation.
+     * @param {Object} options - { title, members, conversationId, onNicknameUpdated }
+     */
+    showNicknamesModal(options = {}) {
+        const {
+            title = 'Nicknames',
+            members = [],
+            conversationId = '',
+            onNicknameUpdated = null
+        } = options;
+
+        const normalizedMembers = (members || []).map(m =>
+            this.normalizeConversationMember(m, { fallbackUsernameToDisplayName: true })
+        );
+        const nicknameMaxLength = this.getNicknameMaxLength();
+
+        if (!conversationId || !normalizedMembers.length) return;
+
+        const overlay = document.createElement("div");
+        overlay.className = "chat-common-confirm-overlay chat-nicknames-overlay";
+
+        const popup = document.createElement("div");
+        popup.className = "chat-common-confirm-popup chat-nicknames-popup";
+
+        // Layout
+        popup.innerHTML = `
+            <div class="chat-nicknames-header">
+                <h3>${title}</h3>
+                <div class="chat-nicknames-close" id="nicknamesCloseBtn">
+                    <i data-lucide="x"></i>
+                </div>
+            </div>
+            <div class="chat-nicknames-list" id="nicknamesList">
+                <!-- List items will be rendered here -->
+            </div>
+        `;
+
+        overlay.appendChild(popup);
+        document.body.appendChild(overlay);
+
+        if (window.lockScroll) lockScroll();
+        if (window.lucide) lucide.createIcons({ props: { size: 18 }, container: popup });
+
+        requestAnimationFrame(() => overlay.classList.add("show"));
+
+        const close = () => {
+            overlay.classList.remove("show");
+            if (window.unlockScroll) unlockScroll();
+            setTimeout(() => overlay.remove(), 200);
+        };
+
+        const findMemberById = (accountId) => {
+            const normalizedAccountId = (accountId || '').toString().toLowerCase();
+            return normalizedMembers.find(m => m.accountId === normalizedAccountId) || null;
+        };
+
+        const renderNicknameItem = (member) => {
+            const usernameRawLabel = member.username || 'unknown';
+            const usernameLabel = ChatCommon.truncateDisplayText(
+                usernameRawLabel,
+                window.APP_CONFIG?.MAX_NAME_DISPLAY_LENGTH || 25
+            );
+            const nicknameRawLabel = member.nickname || 'Set nickname';
+            const nicknameLabel = member.nickname
+                ? ChatCommon.truncateDisplayText(member.nickname, nicknameMaxLength)
+                : nicknameRawLabel;
+            const nicknameEmptyClass = member.nickname ? '' : 'empty';
+            const avatarUrl = member.avatarUrl || window.APP_CONFIG?.DEFAULT_AVATAR;
+
+            return `
+                <div class="chat-nickname-item" data-account-id="${member.accountId}">
+                    <img src="${avatarUrl}" class="chat-nickname-avatar" onerror="this.src='${window.APP_CONFIG?.DEFAULT_AVATAR}'">
+                    <div class="chat-nickname-info">
+                        <div class="chat-nickname-name" title="@${escapeHtml(usernameRawLabel)}">@${escapeHtml(usernameLabel)}</div>
+                        <div class="chat-nickname-label ${nicknameEmptyClass}" title="${escapeHtml(nicknameRawLabel)}">${escapeHtml(nicknameLabel)}</div>
+                    </div>
+                    <div class="chat-nickname-edit-btn" onclick="ChatCommon._toggleNicknameEdit('${member.accountId}')">
+                        <i data-lucide="pencil"></i>
+                    </div>
+                </div>
+            `;
+        };
+
+        const updateNicknameInfoArea = (infoArea, member) => {
+            if (!infoArea) return;
+            const nameEl = infoArea.querySelector('.chat-nickname-name');
+            const labelEl = infoArea.querySelector('.chat-nickname-label');
+            const usernameRawLabel = member.username || 'unknown';
+            const usernameLabel = ChatCommon.truncateDisplayText(
+                usernameRawLabel,
+                window.APP_CONFIG?.MAX_NAME_DISPLAY_LENGTH || 25
+            );
+            if (nameEl) {
+                nameEl.textContent = `@${usernameLabel}`;
+                nameEl.title = `@${usernameRawLabel}`;
+            }
+            if (labelEl) {
+                const nicknameRawLabel = member.nickname || 'Set nickname';
+                const nicknameLabel = member.nickname
+                    ? ChatCommon.truncateDisplayText(member.nickname, nicknameMaxLength)
+                    : nicknameRawLabel;
+                labelEl.textContent = nicknameLabel;
+                labelEl.title = nicknameRawLabel;
+                labelEl.classList.toggle('empty', !member.nickname);
+            }
+        };
+
+        const renderList = () => {
+            const list = document.getElementById('nicknamesList');
+            if (!list) return;
+
+            list.innerHTML = normalizedMembers.map(renderNicknameItem).join('');
+
+            if (window.lucide) lucide.createIcons({ props: { size: 18 }, container: list });
+        };
+
+        // Internal helper to handle the toggle
+        ChatCommon._toggleNicknameEdit = (accountId) => {
+            const normalizedAccountId = (accountId || '').toString().toLowerCase();
+            const item = document.querySelector(`.chat-nickname-item[data-account-id="${normalizedAccountId}"]`);
+            if (!item || item.classList.contains('is-editing')) return;
+
+            const member = findMemberById(normalizedAccountId);
+            if (!member) return;
+
+            const infoArea = item.querySelector('.chat-nickname-info');
+            const editBtn = item.querySelector('.chat-nickname-edit-btn');
+            const currentNickname = ChatCommon.normalizeNickname(member.nickname);
+            const currentNicknameValue = currentNickname || '';
+
+            item.classList.add('is-editing');
+
+            // Replace info area with input
+            infoArea.style.display = 'none';
+            const inputWrapper = document.createElement('div');
+            inputWrapper.className = 'chat-nickname-input-wrapper';
+            inputWrapper.innerHTML = `<input type="text" class="chat-nickname-input" value="${escapeHtml(currentNicknameValue)}" placeholder="Set nickname..." maxlength="${nicknameMaxLength}">`;
+            item.insertBefore(inputWrapper, editBtn);
+
+            const input = inputWrapper.querySelector('input');
+            input.focus();
+            input.select();
+
+            // Replace pencil with checkmark
+            editBtn.innerHTML = '<i data-lucide="check"></i>';
+            editBtn.classList.add('chat-nickname-save-btn');
+            if (window.lucide) lucide.createIcons({ props: { size: 18 }, container: editBtn });
+
+            const handleSave = async () => {
+                const nicknameToSave = ChatCommon.normalizeNickname(input.value);
+
+                if (nicknameToSave === currentNickname) {
+                    cancelEdit();
+                    return;
+                }
+
+                // Call API
+                try {
+                    const payload = { accountId: normalizedAccountId, nickname: nicknameToSave };
+                    const res = await window.API.Conversations.updateNickname(conversationId, payload);
+                    
+                    if (res.ok) {
+                        member.nickname = nicknameToSave;
+                        if (onNicknameUpdated) onNicknameUpdated(normalizedAccountId, nicknameToSave);
+                        cancelEdit({ applyUpdatedData: true });
+                    } else {
+                        if (window.toastError) window.toastError('Failed to update nickname');
+                        cancelEdit();
+                    }
+                } catch (err) {
+                    console.error('Nickname update error:', err);
+                    if (window.toastError) window.toastError('Failed to update nickname');
+                    cancelEdit();
+                }
+            };
+
+            const cancelEdit = ({ applyUpdatedData = false } = {}) => {
+                inputWrapper.remove();
+                infoArea.style.display = '';
+                if (applyUpdatedData) {
+                    updateNicknameInfoArea(infoArea, member);
+                }
+                editBtn.innerHTML = '<i data-lucide="pencil"></i>';
+                editBtn.classList.remove('chat-nickname-save-btn');
+                item.classList.remove('is-editing');
+                editBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    ChatCommon._toggleNicknameEdit(normalizedAccountId);
+                };
+                if (window.lucide) lucide.createIcons({ props: { size: 18 }, container: editBtn });
+            };
+
+            editBtn.onclick = (e) => {
+                e.stopPropagation();
+                handleSave();
+            };
+
+            input.onkeydown = (e) => {
+                if (e.key === 'Enter') handleSave();
+                if (e.key === 'Escape') cancelEdit();
+            };
+        };
+
+        const closeBtn = document.getElementById('nicknamesCloseBtn');
+        if (closeBtn) closeBtn.onclick = close;
+
+        overlay.onclick = (e) => {
+            if (e.target === overlay) close();
+        };
+
+        renderList();
     }
 };
 
