@@ -465,6 +465,56 @@ const ChatSidebar = {
         return changed;
     },
 
+    applyMessageRecalled(conversationId, messageId) {
+        const convTarget = (conversationId || '').toLowerCase();
+        const msgTarget = (messageId || '').toString().toLowerCase();
+        if (!convTarget || !msgTarget) return false;
+
+        const conv = this.conversations.find(c => (c.conversationId || '').toLowerCase() === convTarget);
+        if (!conv || !conv.lastMessage) return false;
+
+        const lastMessageId = (
+            conv.lastMessage.messageId ||
+            conv.lastMessage.MessageId ||
+            ''
+        ).toString().toLowerCase();
+
+        if (!lastMessageId || lastMessageId !== msgTarget) return false;
+
+        conv.lastMessage.isRecalled = true;
+        conv.lastMessage.IsRecalled = true;
+        conv.lastMessage.content = null;
+        conv.lastMessage.Content = null;
+        conv.lastMessagePreview = 'Message recalled';
+
+        const item = document.querySelector(`.chat-item[data-conversation-id="${conv.conversationId}"]`);
+        if (!item) return true;
+
+        let previewText = ChatCommon.getLastMsgPreview(conv);
+        const myId = (localStorage.getItem('accountId') || '').toLowerCase();
+        const lastMsgSenderId = (
+            conv.lastMessage?.sender?.accountId ||
+            conv.lastMessage?.sender?.AccountId ||
+            conv.lastMessage?.Sender?.accountId ||
+            conv.lastMessage?.Sender?.AccountId ||
+            ''
+        ).toLowerCase();
+
+        if (lastMsgSenderId) {
+            if (lastMsgSenderId === myId) {
+                previewText = `You: ${previewText}`;
+            } else if (conv.isGroup) {
+                const sender = conv.lastMessage.sender || conv.lastMessage.Sender || {};
+                const senderName = sender.nickname || sender.Nickname || sender.username || sender.Username || sender.fullName || sender.FullName || 'User';
+                previewText = `${senderName}: ${previewText}`;
+            }
+        }
+
+        const preview = item.querySelector('.chat-last-msg');
+        if (preview) preview.textContent = previewText;
+        return true;
+    },
+
     /**
      * Increment unread badge for a specific conversation.
      * Updates preview text, time, moves item to top. Like Facebook/Instagram.
@@ -523,8 +573,11 @@ const ChatSidebar = {
         if (message) {
             let content = message.content || message.Content || '';
             const isMedia = (message.medias?.length > 0) || (message.Medias?.length > 0);
+            const isRecalled = !!(message.isRecalled ?? message.IsRecalled);
             
-            if (!content && isMedia) {
+            if (isRecalled) {
+                content = 'Message recalled';
+            } else if (!content && isMedia) {
                 const firstMedia = (message.medias || message.Medias)[0];
                 const type = firstMedia.mediaType === 0 ? '[Image]' : '[Video]';
                 content = type;

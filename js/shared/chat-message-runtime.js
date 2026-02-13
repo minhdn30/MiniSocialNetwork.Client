@@ -44,6 +44,10 @@
         const contentRaw = raw.Content ?? raw.content ?? '';
         const content = typeof contentRaw === 'string' ? contentRaw.trim() : '';
         const medias = raw.Medias || raw.medias || [];
+        const isRecalledRaw = raw.IsRecalled ?? raw.isRecalled;
+        const isRecalled = (typeof isRecalledRaw === 'boolean')
+            ? isRecalledRaw
+            : (typeof isRecalledRaw === 'string' ? isRecalledRaw.toLowerCase() === 'true' : !!isRecalledRaw);
         const normalizeContentFn = global.ChatCommon && typeof global.ChatCommon.normalizeContent === 'function'
             ? global.ChatCommon.normalizeContent
             : (txt) => (txt || '').trim().replace(/\r\n/g, '\n').replace(/\s+/g, ' ');
@@ -59,7 +63,8 @@
             content,
             normalizedContent: normalizeContentFn(content),
             sentAt,
-            medias
+            medias,
+            isRecalled
         };
     }
 

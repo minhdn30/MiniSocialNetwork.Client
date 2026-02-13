@@ -362,23 +362,33 @@ const ChatPage = {
         const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(conversationId);
         if (!isGuid) return;
 
+        const normConversationId = conversationId.toString().toLowerCase();
         const normMessageId = messageId ? messageId.toString().toLowerCase() : null;
         if (!normMessageId) return;
 
+        let wasUnread = false;
+        if (window.ChatSidebar && typeof window.ChatSidebar.clearUnread === 'function') {
+            const sidebarConv = window.ChatSidebar.conversations?.find(
+                c => (c.conversationId || '').toLowerCase() === normConversationId
+            );
+            wasUnread = !!sidebarConv && (sidebarConv.unreadCount || 0) > 0;
+            window.ChatSidebar.clearUnread(conversationId);
+        }
+
+        if ((this.currentChatId || '').toLowerCase() === normConversationId && this.currentMetaData) {
+            this.currentMetaData.unreadCount = 0;
+        }
+
+        if (window.ChatWindow && typeof window.ChatWindow.syncUnreadFromSidebar === 'function') {
+            window.ChatWindow.syncUnreadFromSidebar(conversationId);
+        }
+
+        if (wasUnread && typeof scheduleGlobalUnreadRefresh === 'function') {
+            scheduleGlobalUnreadRefresh();
+        }
+
         if (window.ChatRealtime && typeof window.ChatRealtime.seenConversation === 'function') {
             window.ChatRealtime.seenConversation(conversationId, normMessageId)
-                .then(() => {
-                    if (window.ChatSidebar) {
-                        // Check if conversation was actually unread before clearing
-                        const conv = window.ChatSidebar.conversations.find(c => c.conversationId === conversationId);
-                        const wasUnread = conv && conv.unreadCount > 0;
-                        window.ChatSidebar.clearUnread(conversationId);
-                        // Refresh global badge only if it was unread
-                        if (wasUnread && typeof scheduleGlobalUnreadRefresh === 'function') {
-                            scheduleGlobalUnreadRefresh();
-                        }
-                    }
-                })
                 .catch(err => console.error('SeenConversation error:', err));
         }
     },
@@ -539,7 +549,7 @@ const ChatPage = {
             }
 
             // If it's an own message from another device, mark it as 'sent' (exclude system messages)
-            if (senderId === myId && !msg.status && !ChatCommon.isSystemMessage(msg)) {
+            if (senderId === myId && !msg.status && !ChatCommon.isSystemMessage(msg) && !msg.isRecalled) {
                 msg.status = 'sent';
             }
 
@@ -866,7 +876,22 @@ const ChatPage = {
 
     minimizeToBubble() {
         if (window.ChatWindow && this.currentChatId && this.currentMetaData) {
-            ChatWindow.renderBubble(this.currentChatId, this.currentMetaData);
+            const conversationId = this.currentChatId;
+            const normConversationId = conversationId.toLowerCase();
+            const sidebarConv = window.ChatSidebar?.conversations?.find(
+                c => (c.conversationId || '').toLowerCase() === normConversationId
+            );
+            const syncedUnread = sidebarConv ? (sidebarConv.unreadCount || 0) : 0;
+            const bubbleMeta = {
+                ...this.currentMetaData,
+                unreadCount: syncedUnread
+            };
+
+            this.currentMetaData.unreadCount = syncedUnread;
+            ChatWindow.renderBubble(conversationId, bubbleMeta);
+            if (typeof ChatWindow.syncUnreadFromSidebar === 'function') {
+                ChatWindow.syncUnreadFromSidebar(conversationId);
+            }
             ChatWindow.saveState();
         }
     },
@@ -1598,7 +1623,7 @@ const ChatPage = {
             ChatCommon.normalizeMessage(m, myId);
 
             // Set 'sent' status for the last own non-system message if not prepending
-            if (!isPrepend && idx === messages.length - 1 && m.isOwn && !ChatCommon.isSystemMessage(m)) {
+            if (!isPrepend && idx === messages.length - 1 && m.isOwn && !ChatCommon.isSystemMessage(m) && !m.isRecalled) {
                 m.status = 'sent';
             }
 

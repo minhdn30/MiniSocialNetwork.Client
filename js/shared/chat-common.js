@@ -228,6 +228,14 @@ const ChatCommon = {
         if (messageType !== null && messageType !== undefined && messageType !== '') {
             m.messageType = messageType;
         }
+        const recalledRaw = (m.isRecalled !== undefined) ? m.isRecalled : m.IsRecalled;
+        if (typeof recalledRaw === 'boolean') {
+            m.isRecalled = recalledRaw;
+        } else if (typeof recalledRaw === 'string') {
+            m.isRecalled = recalledRaw.toLowerCase() === 'true';
+        } else {
+            m.isRecalled = !!recalledRaw;
+        }
         if (!m.systemMessageDataJson && m.SystemMessageDataJson) {
             m.systemMessageDataJson = m.SystemMessageDataJson;
         }
@@ -347,6 +355,8 @@ const ChatCommon = {
         const messageId = rawMessageId ? rawMessageId.toString().toLowerCase() : '';
         const messageType = this.getMessageType(msg);
         const isSystemMessage = this.isSystemMessage(msg);
+        const isRecalled = !!(msg.isRecalled ?? msg.IsRecalled);
+        const recalledText = window.APP_CONFIG?.CHAT_RECALLED_MESSAGE_TEXT || 'Message was recalled';
 
         const dataMessageIdAttr = messageId ? ` data-message-id="${messageId}"` : '';
         const dataMessageTypeAttr = (messageType !== null && messageType !== undefined && messageType !== '')
@@ -369,7 +379,7 @@ const ChatCommon = {
 
         // --- Media ---
         const allMedias = msg.medias || msg.Medias || [];
-        const hasMedia = allMedias.length > 0;
+        const hasMedia = !isRecalled && allMedias.length > 0;
         let mediaHtml = '';
         if (hasMedia) {
             // Only show up to 4 items in the grid
@@ -465,6 +475,7 @@ const ChatCommon = {
                  data-sender-id="${msg.sender?.accountId || msg.senderId || ''}"
                  data-avatar-url="${avatarSrc}"
                  data-author-name="${(authorName || '').replace(/"/g, '&quot;')}"
+                 data-is-recalled="${isRecalled ? 'true' : 'false'}"
                  ${dataMessageIdAttr}
                  ${dataMessageTypeAttr}
                  ${msg.status ? `data-status="${msg.status}"` : ''}>
@@ -473,7 +484,9 @@ const ChatCommon = {
                     ${avatarHtml}
                     <div class="msg-content-container">
                         ${mediaHtml}
-                        ${msg.content ? `<div class="msg-bubble">${linkify(escapeHtml(msg.content))}</div>` : ''}
+                        ${(isRecalled || msg.content)
+                            ? `<div class="msg-bubble${isRecalled ? ' msg-bubble-recalled' : ''}">${isRecalled ? escapeHtml(recalledText) : linkify(escapeHtml(msg.content))}</div>`
+                            : ''}
                     </div>
                     <span class="msg-time-tooltip">${this.formatTime(msg.sentAt)}</span>
                     ${msgActionsHtml}
@@ -664,6 +677,9 @@ const ChatCommon = {
      * Format last message preview
      */
     getLastMsgPreview(conv) {
+        if (conv?.lastMessage?.isRecalled || conv?.lastMessage?.IsRecalled) {
+            return 'Message recalled';
+        }
         if (conv.lastMessagePreview) return conv.lastMessagePreview;
         return conv.isGroup ? 'Group created' : 'Started a conversation';
     },

@@ -724,7 +724,7 @@ const ChatWindow = {
         });
 
         const incoming = normalized?.raw || msg;
-        if (senderId === myId && !incoming.status && !ChatCommon.isSystemMessage(incoming)) {
+        if (senderId === myId && !incoming.status && !ChatCommon.isSystemMessage(incoming) && !incoming.isRecalled) {
             incoming.status = 'sent';
         }
 
@@ -875,21 +875,42 @@ const ChatWindow = {
         const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(conversationId);
         if (!isGuid) return;
 
+        const normConversationId = conversationId.toString().toLowerCase();
         const normMessageId = messageId ? messageId.toString().toLowerCase() : null;
         if (!normMessageId) return;
 
+        let wasUnread = false;
+        if (window.ChatSidebar && typeof window.ChatSidebar.clearUnread === 'function') {
+            const sidebarConv = window.ChatSidebar.conversations?.find(
+                c => (c.conversationId || '').toLowerCase() === normConversationId
+            );
+            wasUnread = !!sidebarConv && (sidebarConv.unreadCount || 0) > 0;
+            window.ChatSidebar.clearUnread(conversationId);
+        }
+
+        const openId = this.getOpenChatId(conversationId);
+        if (openId && this.openChats.has(openId)) {
+            const chat = this.openChats.get(openId);
+            if (chat) {
+                chat.unreadCount = 0;
+                if (chat.minimized) {
+                    this.clearBubbleUnread(openId);
+                } else if (chat.element) {
+                    chat.element.classList.remove('has-unread');
+                }
+            }
+        }
+
+        if (typeof this.syncUnreadFromSidebar === 'function') {
+            this.syncUnreadFromSidebar(conversationId);
+        }
+
+        if (wasUnread && typeof scheduleGlobalUnreadRefresh === 'function') {
+            scheduleGlobalUnreadRefresh();
+        }
+
         if (window.ChatRealtime && typeof window.ChatRealtime.seenConversation === 'function') {
             window.ChatRealtime.seenConversation(conversationId, normMessageId)
-                .then(() => {
-                    if (window.ChatSidebar) {
-                        const conv = window.ChatSidebar.conversations.find(c => c.conversationId === conversationId);
-                        const wasUnread = conv && conv.unreadCount > 0;
-                        window.ChatSidebar.clearUnread(conversationId);
-                        if (wasUnread && typeof scheduleGlobalUnreadRefresh === 'function') {
-                            scheduleGlobalUnreadRefresh();
-                        }
-                    }
-                })
                 .catch(err => console.error('SeenConversation error:', err));
         }
     },
@@ -2417,7 +2438,7 @@ const ChatWindow = {
                     ChatCommon.normalizeMessage(m, myId);
 
                     // Set 'sent' status for the last own non-system message
-                    if (idx === messages.length - 1 && m.isOwn && !ChatCommon.isSystemMessage(m)) {
+                    if (idx === messages.length - 1 && m.isOwn && !ChatCommon.isSystemMessage(m) && !m.isRecalled) {
                         m.status = 'sent';
                     }
 

@@ -52,6 +52,7 @@ const ChatActions = {
         const btn = e.currentTarget;
         const wrapper = btn.closest('.msg-bubble-wrapper');
         const resolvedMessageId = (messageId || wrapper?.dataset?.messageId || '').toString().toLowerCase();
+        const isRecalled = (wrapper?.dataset?.isRecalled || '').toString().toLowerCase() === 'true';
         
         // Mark as active so CSS can keep buttons visible
         if (wrapper) wrapper.classList.add('menu-active');
@@ -77,7 +78,7 @@ const ChatActions = {
             </div>
         `;
 
-        if (isOwn) {
+        if (isOwn && !isRecalled) {
             itemsHtml = `
                 <div class="msg-more-item danger" onclick="window.ChatActions.recallMessage('${resolvedMessageId}')">
                     <i data-lucide="undo"></i>
@@ -255,6 +256,8 @@ const ChatActions = {
         if (allBubbles.length === 0) return;
 
         const lastBubble = allBubbles[allBubbles.length - 1];
+        const isLastRecalled = (lastBubble.dataset?.isRecalled || '').toString().toLowerCase() === 'true';
+        if (isLastRecalled || window.ChatCommon?.isSystemMessageElement?.(lastBubble)) return;
 
         // Only apply if the last message is ours (.sent class)
         if (!lastBubble.classList.contains('sent')) return;
@@ -423,12 +426,89 @@ const ChatActions = {
         });
     },
 
-    recallMessage(messageId) {
-        this.closeAllMenus();
-        window.toastInfo && window.toastInfo('Recall feature coming soon (API required)');
+    applyRecalledState(messageId, options = {}) {
+        if (!messageId) return false;
+        const recalledText = options.recalledText || window.APP_CONFIG?.CHAT_RECALLED_MESSAGE_TEXT || 'Message was recalled';
+        const normalizedMessageId = messageId.toString().toLowerCase();
+        const bubbles = document.querySelectorAll(`.msg-bubble-wrapper[data-message-id="${normalizedMessageId}"]`);
+        if (!bubbles.length) return false;
+
+        bubbles.forEach((bubble) => {
+            if (!bubble.classList?.contains('msg-bubble-wrapper')) return;
+            if (window.ChatCommon?.isSystemMessageElement?.(bubble)) return;
+
+            bubble.dataset.isRecalled = 'true';
+            bubble.removeAttribute('data-status');
+
+            const statusEl = bubble.querySelector('.msg-status');
+            if (statusEl) statusEl.remove();
+
+            const contentContainer = bubble.querySelector('.msg-content-container');
+            if (!contentContainer) return;
+
+            contentContainer.querySelectorAll('.msg-media-grid').forEach((grid) => grid.remove());
+
+            let textBubble = contentContainer.querySelector('.msg-bubble');
+            if (!textBubble) {
+                textBubble = document.createElement('div');
+                textBubble.className = 'msg-bubble';
+                contentContainer.appendChild(textBubble);
+            }
+
+            textBubble.classList.add('msg-bubble-recalled');
+            textBubble.textContent = recalledText;
+        });
+
+        return true;
     },
 
-    showConfirm(title, message, onConfirm) {
+    recallFromRealtime(data) {
+        const messageId = data?.messageId || data?.MessageId;
+        const conversationId = (data?.conversationId || data?.ConversationId || '').toString().toLowerCase();
+        if (!messageId) return;
+        this.applyRecalledState(messageId);
+        if (conversationId && window.ChatSidebar && typeof window.ChatSidebar.applyMessageRecalled === 'function') {
+            window.ChatSidebar.applyMessageRecalled(conversationId, messageId);
+        }
+    },
+
+    recallMessage(messageId) {
+        this.closeAllMenus();
+        const normId = (messageId || '').toString().toLowerCase();
+        if (!normId) {
+            window.toastError && window.toastError('Failed to recall message');
+            return;
+        }
+
+        this.showConfirm(
+            'Recall Message?',
+            'This message will be replaced with "Message was recalled" for everyone in this conversation.',
+            async () => {
+                try {
+                    const res = await window.API.Messages.recall(normId);
+                    if (!res.ok) {
+                        window.toastError && window.toastError('Failed to recall message');
+                        return;
+                    }
+
+                    const data = await res.json().catch(() => null);
+                    this.applyRecalledState(normId);
+
+                    const conversationId = (data?.conversationId || data?.ConversationId || '').toString().toLowerCase();
+                    if (conversationId && window.ChatSidebar && typeof window.ChatSidebar.applyMessageRecalled === 'function') {
+                        window.ChatSidebar.applyMessageRecalled(conversationId, normId);
+                    }
+                } catch (error) {
+                    console.error('Error recalling message:', error);
+                    window.toastError && window.toastError('An error occurred');
+                }
+            },
+            { confirmText: 'Recall' }
+        );
+    },
+
+    showConfirm(title, message, onConfirm, options = {}) {
+        const confirmText = options.confirmText || 'Hide';
         const overlay = document.createElement('div');
         overlay.className = 'msg-confirm-overlay';
         
@@ -440,7 +520,7 @@ const ChatActions = {
                 </div>
                 <div class="msg-confirm-actions">
                     <button class="msg-confirm-btn cancel">Cancel</button>
-                    <button class="msg-confirm-btn confirm">Hide</button>
+                    <button class="msg-confirm-btn confirm">${confirmText}</button>
                 </div>
             </div>
         `;

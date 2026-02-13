@@ -22,6 +22,7 @@
             conn.off('ReceiveNewMessage');
             conn.off('MemberSeen');
             conn.off('Typing');
+            conn.off('ReceiveMessageRecalled');
         } catch (err) {
             console.warn('[ChatRealtime] Failed to clear handlers:', err);
         }
@@ -63,6 +64,16 @@
                     console.error('[ChatRealtime] Typing handler error:', err);
                 }
             });
+        });
+
+        conn.on('ReceiveMessageRecalled', (data) => {
+            try {
+                if (global.ChatActions && typeof global.ChatActions.recallFromRealtime === 'function') {
+                    global.ChatActions.recallFromRealtime(data);
+                }
+            } catch (err) {
+                console.error('[ChatRealtime] Recall handler error:', err);
+            }
         });
     }
 

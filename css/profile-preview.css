@@ -460,7 +460,7 @@
   bottom: 0;
   background: var(--overlay-bg);
   backdrop-filter: blur(4px);
-  z-index: 31000; /* Highest priority */
+  z-index: 100001; /* Highest priority */
   display: flex;
   align-items: center;
   justify-content: center;

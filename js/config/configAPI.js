@@ -27,20 +27,34 @@
 
     const host = (window.location?.hostname || "").toLowerCase();
     const isLoopbackHost = host === "localhost" || host === "127.0.0.1";
-    const localDefaults = isLoopbackHost
-      ? [
-          "https://localhost:5000/api",
-          "http://localhost:5000/api",
-          "https://localhost:5270/api",
-          "http://localhost:5270/api",
-        ]
-      : [];
+    const isHttpsPage = window.location?.protocol === "https:";
+    const preferredLoopbackHost = host === "127.0.0.1" ? "127.0.0.1" : "localhost";
+    const fallbackLoopbackHost = preferredLoopbackHost === "localhost" ? "127.0.0.1" : "localhost";
+    const loopbackHosts = isLoopbackHost ? [preferredLoopbackHost, fallbackLoopbackHost] : [];
+    const localDefaults = loopbackHosts.flatMap((loopbackHost) => {
+      if (isHttpsPage) {
+        return [
+          `https://${loopbackHost}:5000/api`,
+          `https://${loopbackHost}:5270/api`,
+          `http://${loopbackHost}:5000/api`,
+          `http://${loopbackHost}:5270/api`,
+        ];
+      }
+
+      return [
+        `http://${loopbackHost}:5000/api`,
+        `http://${loopbackHost}:5270/api`,
+        `https://${loopbackHost}:5000/api`,
+        `https://${loopbackHost}:5270/api`,
+      ];
+    });
 
     const allCandidates = [
       normalizeApiBase(activeApiBase),
       configured,
       ...configuredCandidates,
       ...localDefaults.map(normalizeApiBase),
+      `http://${preferredLoopbackHost}:5000/api`,
       "http://localhost:5000/api",
     ].filter(Boolean);
 
@@ -492,6 +506,7 @@
         uploadFormDataWithProgress(`/Messages/group/${conversationId}`, formData, onProgress),
 
       hide: (messageId) => apiFetch(`/Messages/hide/${messageId}`, { method: "POST" }),
+      recall: (messageId) => apiFetch(`/Messages/recall/${messageId}`, { method: "POST" }),
     },
   };
 

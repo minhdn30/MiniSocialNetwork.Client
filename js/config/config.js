@@ -2,21 +2,50 @@
   const currentHost = (global.location?.hostname || "").toLowerCase();
   const isLoopbackHost = currentHost === "127.0.0.1" || currentHost === "localhost";
   const isHttpsPage = global.location?.protocol === "https:";
-  const resolvedHost = isLoopbackHost ? "localhost" : (currentHost || "localhost");
+  const resolvedHost = currentHost || "localhost";
 
-  const localApiBaseCandidates = [
-    "https://localhost:5000/api",
-    "http://localhost:5000/api",
-    "https://localhost:5270/api",
-    "http://localhost:5270/api",
-  ];
+  const preferredLoopbackHost = currentHost === "127.0.0.1" ? "127.0.0.1" : "localhost";
+  const fallbackLoopbackHost = preferredLoopbackHost === "localhost" ? "127.0.0.1" : "localhost";
+  const loopbackHosts = isLoopbackHost
+    ? [preferredLoopbackHost, fallbackLoopbackHost]
+    : [];
 
-  const localHubBaseCandidates = [
-    "https://localhost:5000",
-    "http://localhost:5000",
-    "https://localhost:5270",
-    "http://localhost:5270",
-  ];
+  const buildApiCandidatesForHost = (host) => {
+    if (isHttpsPage) {
+      return [
+        `https://${host}:5000/api`,
+        `https://${host}:5270/api`,
+        `http://${host}:5000/api`,
+        `http://${host}:5270/api`,
+      ];
+    }
+    return [
+      `http://${host}:5000/api`,
+      `http://${host}:5270/api`,
+      `https://${host}:5000/api`,
+      `https://${host}:5270/api`,
+    ];
+  };
+
+  const buildHubCandidatesForHost = (host) => {
+    if (isHttpsPage) {
+      return [
+        `https://${host}:5000`,
+        `https://${host}:5270`,
+        `http://${host}:5000`,
+        `http://${host}:5270`,
+      ];
+    }
+    return [
+      `http://${host}:5000`,
+      `http://${host}:5270`,
+      `https://${host}:5000`,
+      `https://${host}:5270`,
+    ];
+  };
+
+  const localApiBaseCandidates = [...new Set(loopbackHosts.flatMap(buildApiCandidatesForHost))];
+  const localHubBaseCandidates = [...new Set(loopbackHosts.flatMap(buildHubCandidatesForHost))];
 
   const apiProtocol = isHttpsPage ? "https" : "http";
   const remoteApiBase = `${apiProtocol}://${resolvedHost}:5000/api`;
@@ -58,6 +87,7 @@
   MAX_CHAT_NICKNAME_LENGTH: 50, // Số ký tự tối đa cho nickname trong chat
   MAX_CHAT_FILE_SIZE_MB: 10, // Dung lượng tối đa mỗi file khi gửi chat (MB)
   MAX_CHAT_MEDIA_FILES: 5, // Số lượng ảnh/video tối đa có thể gửi trong 1 tin nhắn chat
+  CHAT_RECALLED_MESSAGE_TEXT: "Message was recalled", // Text shown when a message is recalled
   CHAT_TIME_SEPARATOR_GAP: 15 * 60 * 1000, // Gap (ms) to show time separator (15 mins)
   CHAT_GROUPING_GAP: 2 * 60 * 1000, // Gap (ms) to break message grouping (2 mins)
   MAX_OPEN_CHAT_WINDOWS: 3, // Số lượng cửa sổ chat được mở tối đa cùng lúc
