@@ -694,7 +694,9 @@ const ChatPage = {
         if (hash.includes('?id=')) {
             const id = hash.split('?id=')[1].split('&')[0];
             if (id) this.loadConversation(id);
+            return;
         }
+        this.renderNoConversationState();
     },
 
     // ── Typing Indicator (delegates to shared ChatTyping) ──
@@ -804,6 +806,7 @@ const ChatPage = {
                 if (sidebarConv) {
                     this.currentMetaData = sidebarConv;
                     this.renderHeader(sidebarConv);
+                    this.renderInfoSidebar(sidebarConv);
                     this.updateInputState();
                 }
             }
@@ -863,12 +866,239 @@ const ChatPage = {
         }
     },
 
+    renderNoConversationState() {
+        this.currentChatId = null;
+        this.currentMetaData = null;
+        this.getRuntimeCtx();
+
+        const img = document.getElementById('chat-view-img');
+        const nameEl = document.getElementById('chat-view-name');
+        const statusText = document.getElementById('chat-view-status-text');
+        const statusDot = document.getElementById('chat-view-status-dot');
+        const msgContainer = document.getElementById('chat-view-messages');
+
+        if (img) img.src = window.APP_CONFIG?.DEFAULT_AVATAR;
+        if (nameEl) nameEl.textContent = 'Select a conversation';
+        if (statusText) statusText.textContent = '';
+        if (statusDot) statusDot.classList.add('hidden');
+        if (msgContainer) {
+            msgContainer.innerHTML = '<div style="padding:24px; text-align:center; color:var(--text-tertiary);">Select a conversation from the sidebar</div>';
+        }
+        if (this.infoContent) {
+            this.infoContent.innerHTML = '';
+        }
+        this.updateInputState();
+    },
+
+    applyConversationRemoved(conversationId, _reason = '') {
+        const target = (conversationId || '').toLowerCase();
+        if (!target) return;
+
+        if ((this.currentChatId || '').toLowerCase() !== target) {
+            return;
+        }
+
+        if (window.ChatTyping) {
+            ChatTyping.cancelTyping(this.currentChatId);
+            ChatTyping.hideIndicator('typing-indicator-page', this.currentChatId);
+        }
+        if (window.ChatRealtime && typeof window.ChatRealtime.leaveConversation === 'function') {
+            window.ChatRealtime.leaveConversation(this.currentChatId);
+        }
+
+        this.renderNoConversationState();
+        if (window.ChatSidebar && typeof window.ChatSidebar.updateActiveId === 'function') {
+            window.ChatSidebar.updateActiveId(null);
+        }
+
+        if (window.location.hash.startsWith('#/messages?id=')) {
+            window.location.hash = '#/messages';
+        }
+    },
+
+    applyMuteStatus(conversationId, isMuted) {
+        const target = (conversationId || '').toLowerCase();
+        if (!target) return false;
+        let changed = false;
+
+        if ((this.currentChatId || '').toLowerCase() === target && this.currentMetaData) {
+            const nextMuted = !!isMuted;
+            if ((this.currentMetaData.isMuted ?? false) !== nextMuted) {
+                this.currentMetaData.isMuted = nextMuted;
+                changed = true;
+            }
+            this.renderInfoSidebar(this.currentMetaData);
+        }
+
+        return changed;
+    },
+
+    applyNicknameUpdate(conversationId, accountId, nickname) {
+        const convTarget = (conversationId || '').toLowerCase();
+        const accTarget = (accountId || '').toLowerCase();
+        if (!convTarget || !accTarget || !this.currentMetaData) return false;
+        if ((this.currentChatId || '').toLowerCase() !== convTarget) return false;
+
+        let changed = false;
+        if (this.currentMetaData.otherMember && (this.currentMetaData.otherMember.accountId || '').toLowerCase() === accTarget) {
+            this.currentMetaData.otherMember.nickname = nickname || null;
+            changed = true;
+        }
+        if (Array.isArray(this.currentMetaData.members)) {
+            this.currentMetaData.members.forEach(m => {
+                if ((m.accountId || '').toLowerCase() !== accTarget) return;
+                m.nickname = nickname || null;
+                m.displayName = nickname || m.displayName;
+                changed = true;
+            });
+        }
+        if (Array.isArray(this.currentMetaData.memberSeenStatuses)) {
+            this.currentMetaData.memberSeenStatuses.forEach(m => {
+                if ((m.accountId || '').toLowerCase() !== accTarget) return;
+                if (nickname) m.displayName = nickname;
+                changed = true;
+            });
+        }
+
+        if (changed) {
+            this.renderHeader(this.currentMetaData);
+            this.renderInfoSidebar(this.currentMetaData);
+        }
+        return changed;
+    },
+
+    async toggleMuteCurrentConversation() {
+        if (!this.currentChatId) return;
+
+        const conversationId = this.currentChatId;
+        const previous = !!(this.currentMetaData?.isMuted ?? false);
+        const nextMuted = !previous;
+
+        this.applyMuteStatus(conversationId, nextMuted);
+        if (window.ChatSidebar && typeof window.ChatSidebar.setMuteStatus === 'function') {
+            window.ChatSidebar.setMuteStatus(conversationId, nextMuted, { forceRender: true });
+        }
+        if (window.ChatWindow && typeof window.ChatWindow.setMuteStatus === 'function') {
+            window.ChatWindow.setMuteStatus(conversationId, nextMuted);
+        }
+
+        try {
+            const res = await window.API.Conversations.updateMute(conversationId, nextMuted);
+            if (!res.ok) {
+                this.applyMuteStatus(conversationId, previous);
+                if (window.ChatSidebar && typeof window.ChatSidebar.setMuteStatus === 'function') {
+                    window.ChatSidebar.setMuteStatus(conversationId, previous, { forceRender: true });
+                }
+                if (window.ChatWindow && typeof window.ChatWindow.setMuteStatus === 'function') {
+                    window.ChatWindow.setMuteStatus(conversationId, previous);
+                }
+                if (window.toastError) window.toastError('Failed to update mute status');
+                return;
+            }
+            if (window.toastSuccess) window.toastSuccess(nextMuted ? 'Conversation muted' : 'Conversation unmuted');
+        } catch (error) {
+            console.error('Failed to update mute status:', error);
+            this.applyMuteStatus(conversationId, previous);
+            if (window.ChatSidebar && typeof window.ChatSidebar.setMuteStatus === 'function') {
+                window.ChatSidebar.setMuteStatus(conversationId, previous, { forceRender: true });
+            }
+            if (window.ChatWindow && typeof window.ChatWindow.setMuteStatus === 'function') {
+                window.ChatWindow.setMuteStatus(conversationId, previous);
+            }
+            if (window.toastError) window.toastError('Failed to update mute status');
+        }
+    },
+
+    async softDeleteCurrentConversation() {
+        if (!this.currentChatId) return;
+        const conversationId = this.currentChatId;
+
+        ChatCommon.showConfirm({
+            title: 'Delete chat history?',
+            message: 'This will remove the conversation from your list. Other members will still see the history.',
+            confirmText: 'Delete',
+            cancelText: 'Cancel',
+            isDanger: true,
+            onConfirm: async () => {
+                try {
+                    const res = await window.API.Conversations.deleteHistory(conversationId);
+                    if (!res.ok) {
+                        if (window.toastError) window.toastError('Failed to delete conversation');
+                        return;
+                    }
+
+                    if (window.ChatSidebar && typeof window.ChatSidebar.removeConversation === 'function') {
+                        window.ChatSidebar.removeConversation(conversationId);
+                    }
+                    if (window.ChatWindow && typeof window.ChatWindow.removeConversation === 'function') {
+                        window.ChatWindow.removeConversation(conversationId);
+                    }
+                    this.applyConversationRemoved(conversationId, 'soft-delete');
+
+                    if (typeof scheduleGlobalUnreadRefresh === 'function') {
+                        scheduleGlobalUnreadRefresh();
+                    }
+                    if (window.toastSuccess) window.toastSuccess('Conversation removed from your sidebar');
+                } catch (error) {
+                    console.error('Failed to soft delete conversation:', error);
+                    if (window.toastError) window.toastError('Failed to delete conversation');
+                }
+            }
+        });
+    },
+
+    async promptEditNickname(accountId, displayName = 'User', currentNickname = null) {
+        if (!this.currentChatId || !accountId) return;
+        const currentLabel = (currentNickname || '').trim();
+
+        ChatCommon.showPrompt({
+            title: `Edit nickname for ${displayName}`,
+            placeholder: 'Enter nickname...',
+            value: currentLabel,
+            confirmText: 'Save',
+            cancelText: 'Cancel',
+            onConfirm: async (input) => {
+                const nextNickname = (input || '').trim();
+                const payload = {
+                    accountId,
+                    nickname: nextNickname.length ? nextNickname : null
+                };
+
+                try {
+                    const res = await window.API.Conversations.updateNickname(this.currentChatId, payload);
+                    if (!res.ok) {
+                        if (window.toastError) window.toastError('Failed to update nickname');
+                        return;
+                    }
+                    this.applyNicknameUpdate(this.currentChatId, accountId, payload.nickname);
+                    if (window.ChatSidebar && typeof window.ChatSidebar.applyNicknameUpdate === 'function') {
+                        window.ChatSidebar.applyNicknameUpdate(this.currentChatId, accountId, payload.nickname);
+                    }
+                    if (window.ChatWindow && typeof window.ChatWindow.applyNicknameUpdate === 'function') {
+                        window.ChatWindow.applyNicknameUpdate(this.currentChatId, accountId, payload.nickname);
+                    }
+                    if (window.toastSuccess) window.toastSuccess('Nickname updated');
+                } catch (error) {
+                    console.error('Failed to update nickname:', error);
+                    if (window.toastError) window.toastError('Failed to update nickname');
+                }
+            }
+        });
+    },
+
     renderInfoSidebar(meta) {
         if (!meta || !this.infoContent) return;
 
         const avatarUrl = ChatCommon.getAvatar(meta);
         const displayName = ChatCommon.getDisplayName(meta);
         const isGroup = meta.isGroup;
+        const isMuted = !!(meta.isMuted ?? meta.IsMuted ?? false);
+        const muteLabel = isMuted ? 'Unmute' : 'Mute';
+        const muteIcon = isMuted ? 'bell' : 'bell-off';
+        const muteDescription = isMuted ? 'Unmute notifications' : 'Mute notifications';
+        const privateTargetId = meta.otherMember?.accountId || meta.otherMemberId || '';
+        const privateTargetName = meta.otherMember?.fullName || meta.otherMember?.username || 'User';
+        const privateTargetNickname = meta.otherMember?.nickname || '';
         
         let statusHtml = '';
         if (!isGroup && meta.otherMember) {
@@ -892,9 +1122,9 @@ const ChatPage = {
                     <div class="chat-info-quick-icon"><i data-lucide="user"></i></div>
                     <span>Profile</span>
                 </button>
-                <button class="chat-info-quick-btn" onclick="window.toastInfo('Mute feature coming soon')">
-                    <div class="chat-info-quick-icon"><i data-lucide="bell"></i></div>
-                    <span>Mute</span>
+                <button class="chat-info-quick-btn" id="chat-info-mute-btn">
+                    <div class="chat-info-quick-icon"><i data-lucide="${muteIcon}"></i></div>
+                    <span>${muteLabel}</span>
                 </button>
                 <button class="chat-info-quick-btn" onclick="window.toastInfo('Search feature coming soon')">
                     <div class="chat-info-quick-icon"><i data-lucide="search"></i></div>
@@ -926,10 +1156,12 @@ const ChatPage = {
                             <i data-lucide="palette"></i>
                             <span>Change theme</span>
                         </div>
-                        <div class="chat-info-item" onclick="window.toastInfo('Nicknames coming soon')">
+                        ${!isGroup && privateTargetId ? `
+                        <div class="chat-info-item" id="chat-info-edit-private-nickname">
                             <i data-lucide="at-sign"></i>
                             <span>Edit nicknames</span>
                         </div>
+                        ` : ''}
                     </div>
                 </div>
 
@@ -941,10 +1173,14 @@ const ChatPage = {
                     </div>
                     <div class="chat-info-section-content">
                         ${(meta.members || []).map(m => `
-                            <div class="chat-info-item chat-info-member">
+                            <div class="chat-info-item chat-info-member chat-info-member-edit"
+                                data-account-id="${m.accountId || ''}"
+                                data-display-name="${escapeHtml(m.displayName || m.nickname || 'Unknown')}"
+                                data-nickname="${escapeHtml(m.nickname || '')}">
                                 <img src="${m.avatarUrl || window.APP_CONFIG?.DEFAULT_AVATAR}" class="chat-info-member-avatar">
                                 <span class="chat-info-member-name">${m.displayName || m.nickname || 'Unknown'}</span>
                                 ${m.role === 1 ? '<span class="chat-info-member-role">Admin</span>' : ''}
+                                <i data-lucide="pencil" style="margin-left:auto;"></i>
                             </div>
                         `).join('')}
                     </div>
@@ -974,17 +1210,17 @@ const ChatPage = {
                         <i data-lucide="chevron-down" class="chevron"></i>
                     </div>
                     <div class="chat-info-section-content">
-                        <div class="chat-info-item" onclick="window.toastInfo('Mute coming soon')">
-                            <i data-lucide="bell-off"></i>
-                            <span>Mute notifications</span>
+                        <div class="chat-info-item" id="chat-info-mute-detail-btn">
+                            <i data-lucide="${muteIcon}"></i>
+                            <span>${muteDescription}</span>
                         </div>
                         <div class="chat-info-item danger" onclick="window.toastInfo('Feature coming soon')">
                             <i data-lucide="${isGroup ? 'log-out' : 'slash'}"></i>
                             <span>${isGroup ? 'Leave group' : 'Block user'}</span>
                         </div>
-                        <div class="chat-info-item danger" onclick="window.toastInfo('Delete conversation feature coming soon')">
+                        <div class="chat-info-item danger" id="chat-info-delete-conversation-btn">
                             <i data-lucide="trash-2"></i>
-                            <span>Delete conversation</span>
+                            <span>Delete chat history</span>
                         </div>
                     </div>
                 </div>
@@ -993,6 +1229,35 @@ const ChatPage = {
 
         this.infoContent.innerHTML = html;
         if (window.lucide) lucide.createIcons();
+
+        const muteBtn = document.getElementById('chat-info-mute-btn');
+        if (muteBtn) {
+            muteBtn.onclick = () => this.toggleMuteCurrentConversation();
+        }
+
+        const muteDetailBtn = document.getElementById('chat-info-mute-detail-btn');
+        if (muteDetailBtn) {
+            muteDetailBtn.onclick = () => this.toggleMuteCurrentConversation();
+        }
+
+        const deleteBtn = document.getElementById('chat-info-delete-conversation-btn');
+        if (deleteBtn) {
+            deleteBtn.onclick = () => this.softDeleteCurrentConversation();
+        }
+
+        const privateNicknameBtn = document.getElementById('chat-info-edit-private-nickname');
+        if (privateNicknameBtn && privateTargetId) {
+            privateNicknameBtn.onclick = () => this.promptEditNickname(privateTargetId, privateTargetName, privateTargetNickname);
+        }
+
+        this.infoContent.querySelectorAll('.chat-info-member-edit').forEach(el => {
+            el.onclick = () => {
+                const accountId = (el.dataset.accountId || '').toLowerCase();
+                const displayName = el.dataset.displayName || 'User';
+                const nickname = el.dataset.nickname || '';
+                this.promptEditNickname(accountId, displayName, nickname);
+            };
+        });
     },
 
     toggleInfoSection(titleEl) {
@@ -1032,13 +1297,16 @@ const ChatPage = {
                 const data = await res.json();
                 
                 if (data.metaData) {
-                    this.currentMetaData = data.metaData;
-                    this.renderHeader(data.metaData);
-                    this.renderInfoSidebar(data.metaData);
+                    this.currentMetaData = {
+                        ...(this.currentMetaData || {}),
+                        ...data.metaData
+                    };
+                    this.renderHeader(this.currentMetaData);
+                    this.renderInfoSidebar(this.currentMetaData);
                     this.updateInputState();
                     
                     // Render where members are currently at
-                    setTimeout(() => this.updateMemberSeenStatuses(data.metaData), 100);
+                    setTimeout(() => this.updateMemberSeenStatuses(this.currentMetaData), 100);
                 }
 
                 const messages = data.messages.items || [];
@@ -1088,7 +1356,7 @@ const ChatPage = {
                     
                     // Render seen indicators after DOM is ready - use longer timeout for stability
                     if (data.metaData) {
-                        setTimeout(() => this.updateMemberSeenStatuses(data.metaData), 200);
+                        setTimeout(() => this.updateMemberSeenStatuses(this.currentMetaData), 200);
                     }
 
                     // Auto mark seen when opening chat-page

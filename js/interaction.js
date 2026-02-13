@@ -7,6 +7,7 @@ const InteractionModule = (function () {
     let currentPage = 1;
     let targetId = null;
     let targetType = 'post'; // 'post' or 'comment'
+    let currentTotalCount = null;
     let hasNextPage = false;
     let isLoading = false;
     const PAGE_SIZE = window.APP_CONFIG?.INTERACTIONS_PAGE_SIZE || 10;
@@ -31,6 +32,7 @@ const InteractionModule = (function () {
         targetId = id;
         targetType = type;
         currentPage = 1;
+        currentTotalCount = null;
 
         try {
             // 1. First fetch to verify and get initial data
@@ -52,6 +54,9 @@ const InteractionModule = (function () {
                 if (window.toastInfo) toastInfo("No one has reacted yet");
                 return;
             }
+            currentTotalCount = Number.isFinite(Number(data.totalItems))
+                ? Number(data.totalItems)
+                : null;
 
             // 2. Ensure modal exists
             let modal = document.getElementById(MODAL_ID);
@@ -69,9 +74,6 @@ const InteractionModule = (function () {
 
             // 4. Handle rendering first page and state update
             _handleDataResponse(data, listContainer);
-
-            // Sync back to UI in case FE count was out of sync
-            syncCountToUI();
 
         } catch (error) {
             console.error(error);
@@ -111,7 +113,10 @@ const InteractionModule = (function () {
         renderReactList(data.items, container);
 
         currentPage = data.page;
-        hasNextPage = data.hasNextPage;
+        hasNextPage = data.hasNextPage ?? (data.page < data.totalPages);
+        if (Number.isFinite(Number(data.totalItems))) {
+            currentTotalCount = Number(data.totalItems);
+        }
 
         const loader = document.getElementById("interactionLoader");
         if (loader) {
@@ -293,9 +298,9 @@ const InteractionModule = (function () {
      */
     function syncCountToUI() {
         if (!targetId) return;
-        
-        const countText = document.getElementById("interactionTotalCount")?.textContent;
-        const newCount = parseInt(countText) || 0;
+        if (!Number.isFinite(currentTotalCount)) return;
+
+        const newCount = currentTotalCount;
         
         if (targetType === 'post') {
             const detailLikeCount = document.getElementById("detailLikeCount");
@@ -330,6 +335,7 @@ const InteractionModule = (function () {
             modal.classList.remove("show");
             if (window.unlockScroll) unlockScroll();
             targetId = null;
+            currentTotalCount = null;
         }
     }
 

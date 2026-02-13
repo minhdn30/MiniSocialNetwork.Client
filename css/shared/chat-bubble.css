@@ -562,3 +562,110 @@
 .chat-box .received .msg-time-tooltip {
     left: 30px;
 }
+
+/* --- Generic Chat Confirmation (Discard Style) --- */
+.chat-common-confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--overlay-bg, rgba(0, 0, 0, 0.4));
+  backdrop-filter: blur(4px);
+  z-index: 31000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.chat-common-confirm-overlay.show {
+  opacity: 1;
+}
+
+.chat-common-confirm-popup {
+  background: var(--border-primary, #242526);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 320px;
+  overflow: hidden;
+  transform: scale(0.9);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: var(--shadow-2xl);
+}
+
+.chat-common-confirm-overlay.show .chat-common-confirm-popup {
+  transform: scale(1);
+}
+
+.chat-common-confirm-content {
+  padding: 24px 20px;
+  text-align: center;
+  border-bottom: 1px solid var(--border-secondary, rgba(255, 255, 255, 0.1));
+}
+
+.chat-common-confirm-content h3 {
+  color: var(--text-primary, #ffffff);
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+}
+
+.chat-common-confirm-content p {
+  color: var(--text-tertiary, #b0b3b8);
+  font-size: 14px;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.chat-common-confirm-actions {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-common-confirm-btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary, #ffffff);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.1s;
+  border-bottom: 1px solid var(--border-secondary, rgba(255, 255, 255, 0.1));
+}
+
+.chat-common-confirm-btn:last-child {
+  border-bottom: none;
+}
+
+.chat-common-confirm-btn:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.05));
+}
+
+.chat-common-confirm-confirm {
+  color: var(--danger, #ef4444);
+}
+
+/* Prompt Input */
+.chat-common-confirm-input-wrapper {
+  margin-top: 16px;
+  width: 100%;
+}
+
+.chat-common-confirm-input {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg-tertiary, #1c1d1e);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+}
+
+.chat-common-confirm-input:focus {
+  border-color: var(--accent-primary);
+}
