@@ -478,6 +478,8 @@
       getById: (conversationId) => apiFetch(`/Conversations/${conversationId}`),
       getMessages: (conversationId, page = 1, pageSize = window.APP_CONFIG?.CHATPAGE_MESSAGES_PAGE_SIZE || 20) => 
         apiFetch(`/Conversations/${conversationId}/messages?page=${page}&pageSize=${pageSize}`),
+      getMessageContext: (conversationId, messageId, pageSize = window.APP_CONFIG?.CHATPAGE_MESSAGES_PAGE_SIZE || 20) =>
+        apiFetch(`/Conversations/${conversationId}/messages/context?messageId=${messageId}&pageSize=${pageSize}`),
       getPrivateWithMessages: (otherId, page = 1, pageSize = window.APP_CONFIG?.CHATPAGE_MESSAGES_PAGE_SIZE || 20) =>
         apiFetch(`/Conversations/private/${otherId}?page=${page}&pageSize=${pageSize}`),
       updateNickname: (conversationId, data) =>

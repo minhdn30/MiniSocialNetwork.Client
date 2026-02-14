@@ -17,6 +17,11 @@ const ChatPage = {
     _blobUrls: new Map(), // key -> Set<blobUrl>
     _emojiOutsideBound: false,
     runtimeCtx: null,
+    // Context mode state (for "Jump to message" feature)
+    _isContextMode: false,
+    _contextPage: null,
+    _hasMoreNewer: false,
+    _newerPage: null,
 
     async init() {
         this.cleanupEventListeners();
@@ -35,6 +40,11 @@ const ChatPage = {
         this.pendingFiles = []; 
         this.retryFiles.clear();
         this.runtimeCtx = null;
+        this._isContextMode = false;
+        this._contextPage = null;
+        this._hasMoreNewer = false;
+        this._newerPage = null;
+        this.removeJumpToBottomBtn();
         
         this.cacheElements();
         this.getRuntimeCtx();
@@ -354,12 +364,20 @@ const ChatPage = {
         if (!msgContainer) return;
 
         msgContainer.onscroll = () => {
-            if (this.isLoading || !this.hasMore) return;
+            if (this.isLoading) return;
+
+            const ctx = this._getContextAdapter();
             
-            // If scrolled to top (threshold 50px)
-            if (msgContainer.scrollTop <= 50) {
+            // Scroll UP → load older
+            if (msgContainer.scrollTop <= 50 && this.hasMore) {
                 this.loadMessages(this.currentChatId, true);
             }
+
+            // Scroll DOWN → load newer (context mode)
+            ChatCommon.contextHandleScroll(ctx, msgContainer);
+
+            // Show/hide jump-to-bottom button based on scroll position
+            ChatCommon.updateJumpBtnOnScroll(ctx, msgContainer);
         };
     },
 
@@ -463,10 +481,18 @@ const ChatPage = {
         return msgContainer.scrollHeight - msgContainer.scrollTop - msgContainer.clientHeight <= threshold;
     },
 
-    scrollToBottom(force = false) {
+    scrollToBottom(behavior = 'auto') {
         const msgContainer = document.getElementById('chat-view-messages');
         if (!msgContainer) return;
         
+        if (behavior === 'smooth') {
+            msgContainer.scrollTo({
+                top: msgContainer.scrollHeight,
+                behavior: 'smooth'
+            });
+            return;
+        }
+
         const doScroll = () => {
             msgContainer.scrollTop = msgContainer.scrollHeight;
         };
@@ -478,6 +504,63 @@ const ChatPage = {
         setTimeout(doScroll, 50);
         setTimeout(doScroll, 150);
         setTimeout(doScroll, 300);
+    },
+
+    // ─── Context mode methods (shared via ChatCommon) ──────────────────
+
+    _getContextAdapter() {
+        const self = this;
+        return {
+            getState: () => ({
+                isLoading: self.isLoading,
+                page: self.page,
+                hasMore: self.hasMore,
+                _isContextMode: self._isContextMode,
+                _contextPage: self._contextPage,
+                _newerPage: self._newerPage,
+                _hasMoreNewer: self._hasMoreNewer,
+            }),
+            setState: (patch) => { Object.assign(self, patch); },
+            getContainerId: () => 'chat-view-messages',
+            getPageSize: () => self.pageSize,
+            getConversationId: () => self.currentChatId,
+            getMyId: () => (localStorage.getItem('accountId') || sessionStorage.getItem('accountId') || '').toLowerCase(),
+            isGroup: () => self.currentMetaData?.isGroup || false,
+            renderMessages: (items, container) => {
+                const html = self.renderMessageList(items, false);
+                if (html) self.insertHtmlBeforeTypingIndicator(container, html);
+            },
+            reloadLatest: () => { self.loadMessages(self.currentChatId, false); },
+            scrollToBottom: (behavior) => { self.scrollToBottom(behavior); },
+            getBtnParent: () => document.querySelector('.chat-view'),
+            getBtnId: () => 'chatJumpBottomBtn',
+            getMetaData: () => self.currentMetaData,
+            setMetaData: (meta) => { self.currentMetaData = meta; },
+        };
+    },
+
+    async loadMessageContext(conversationId, messageId) {
+        await ChatCommon.contextLoadMessageContext(this._getContextAdapter(), messageId);
+    },
+
+    async loadNewerMessages() {
+        await ChatCommon.contextLoadNewerMessages(this._getContextAdapter());
+    },
+
+    jumpToBottom() {
+        ChatCommon.contextJumpToBottom(this._getContextAdapter());
+    },
+
+    resetContextMode() {
+        ChatCommon.contextResetMode(this._getContextAdapter());
+    },
+
+    showJumpToBottomBtn() {
+        ChatCommon.contextShowJumpBtn(this._getContextAdapter());
+    },
+
+    removeJumpToBottomBtn() {
+        ChatCommon.contextRemoveJumpBtn(this._getContextAdapter());
     },
 
     registerRealtimeHandlers() {
@@ -843,6 +926,7 @@ const ChatPage = {
         this.page = 1;
         this.hasMore = true;
         this.isLoading = false;
+        this.resetContextMode();
         this.getRuntimeCtx();
         
         // 4. Optimization: Join target FIRST to maintain session during handoff from Bubble
