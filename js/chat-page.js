@@ -574,6 +574,9 @@ const ChatPage = {
 
             const wasNearBottom = this.isNearBottom();
             this.appendMessage(msg, wasNearBottom);
+            if (window.ChatActions && typeof window.ChatActions.syncPinStateFromSystemMessage === 'function') {
+                window.ChatActions.syncPinStateFromSystemMessage(msg, convId);
+            }
             if (messageId) {
                 this.applyPendingSeenForMessage(convId, messageId);
             }
@@ -1197,6 +1200,20 @@ const ChatPage = {
         }
     },
 
+    openPinnedMessagesCurrentConversation() {
+        const conversationId = (this.currentChatId || '').toString().toLowerCase();
+        if (!conversationId) return;
+        if (!window.ChatActions || typeof window.ChatActions.showPinnedMessages !== 'function') {
+            if (window.toastError) window.toastError('Pinned messages are unavailable');
+            return;
+        }
+
+        const title = (typeof window.ChatActions.getPinnedConversationTitle === 'function')
+            ? window.ChatActions.getPinnedConversationTitle(conversationId)
+            : 'Pinned messages';
+        window.ChatActions.showPinnedMessages(conversationId, { title });
+    },
+
     async promptChangeThemeCurrentConversation() {
         if (!this.currentChatId || !this.currentMetaData) return;
         const conversationId = this.currentChatId;
@@ -1528,7 +1545,7 @@ const ChatPage = {
                         <i data-lucide="chevron-down" class="chevron"></i>
                     </div>
                     <div class="chat-info-section-content">
-                        <div class="chat-info-item" onclick="window.toastInfo('Pinned messages coming soon')">
+                        <div class="chat-info-item" id="chat-info-view-pinned-btn">
                             <i data-lucide="pin"></i>
                             <span>View pinned messages</span>
                         </div>
@@ -1645,6 +1662,11 @@ const ChatPage = {
         const changeThemeBtn = document.getElementById('chat-info-change-theme-btn');
         if (changeThemeBtn) {
             changeThemeBtn.onclick = () => this.promptChangeThemeCurrentConversation();
+        }
+
+        const viewPinnedBtn = document.getElementById('chat-info-view-pinned-btn');
+        if (viewPinnedBtn) {
+            viewPinnedBtn.onclick = () => this.openPinnedMessagesCurrentConversation();
         }
 
         this.infoContent.querySelectorAll('.chat-info-member-edit').forEach(el => {

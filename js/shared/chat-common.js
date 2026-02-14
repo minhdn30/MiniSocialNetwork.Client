@@ -459,33 +459,51 @@ const ChatCommon = {
         return normalized.startsWith('@') ? normalized : `@${normalized}`;
     },
 
-    getSystemMessageText(msg) {
+    parseSystemMessageData(msg) {
         const systemDataRaw = msg?.systemMessageDataJson ?? msg?.SystemMessageDataJson ?? '';
-        if (typeof systemDataRaw === 'string' && systemDataRaw.trim().length) {
-            try {
-                const parsed = JSON.parse(systemDataRaw);
-                const actor = this.toMentionUsername(parsed?.actorUsername || parsed?.actorDisplayName || '');
-                const target = this.toMentionUsername(parsed?.targetUsername || parsed?.targetDisplayName || '');
-                const actionRaw = parsed?.action ?? parsed?.Action;
-                const action = Number(actionRaw);
-                const hasNicknameField = Object.prototype.hasOwnProperty.call(parsed || {}, 'nickname');
-                const nickname = this.normalizeNickname(parsed?.nickname);
+        if (typeof systemDataRaw !== 'string' || !systemDataRaw.trim().length) {
+            return null;
+        }
 
-                if (actor && Number.isFinite(action) && action === 9) {
-                    const normalizedTheme = this.normalizeConversationTheme(parsed?.theme);
-                    if (normalizedTheme) {
-                        return `${actor} changed the chat theme to "${this.getConversationThemeLabel(normalizedTheme)}".`;
-                    }
-                    return `${actor} reset the chat theme.`;
-                }
+        try {
+            const parsed = JSON.parse(systemDataRaw);
+            if (!parsed || typeof parsed !== 'object') return null;
+            return parsed;
+        } catch (_err) {
+            return null;
+        }
+    },
 
-                if (actor && target && hasNicknameField) {
-                    return nickname
-                        ? `${actor} set nickname for ${target} to "${nickname}".`
-                        : `${actor} removed nickname for ${target}.`;
+    getSystemMessageText(msg) {
+        const parsed = this.parseSystemMessageData(msg);
+        if (parsed) {
+            const actor = this.toMentionUsername(parsed?.actorUsername || parsed?.actorDisplayName || '');
+            const target = this.toMentionUsername(parsed?.targetUsername || parsed?.targetDisplayName || '');
+            const actionRaw = parsed?.action ?? parsed?.Action;
+            const action = Number(actionRaw);
+            const hasNicknameField = Object.prototype.hasOwnProperty.call(parsed || {}, 'nickname');
+            const nickname = this.normalizeNickname(parsed?.nickname);
+
+            if (actor && Number.isFinite(action) && action === 9) {
+                const normalizedTheme = this.normalizeConversationTheme(parsed?.theme);
+                if (normalizedTheme) {
+                    return `${actor} changed the chat theme to "${this.getConversationThemeLabel(normalizedTheme)}".`;
                 }
-            } catch (_err) {
-                // Keep silent fallback for malformed JSON payloads.
+                return `${actor} reset the chat theme.`;
+            }
+
+            if (actor && Number.isFinite(action) && action === 10) {
+                return `${actor} pinned a message.`;
+            }
+
+            if (actor && Number.isFinite(action) && action === 11) {
+                return `${actor} unpinned a message.`;
+            }
+
+            if (actor && target && hasNicknameField) {
+                return nickname
+                    ? `${actor} set nickname for ${target} to "${nickname}".`
+                    : `${actor} removed nickname for ${target}.`;
             }
         }
 
@@ -621,7 +639,18 @@ const ChatCommon = {
         }
         
         // Medias
-        if (!m.medias && m.Medias) m.medias = m.Medias;
+        const rawMedias = m.medias || m.Medias;
+        if (Array.isArray(rawMedias)) {
+            m.medias = rawMedias.map(item => ({
+                mediaUrl: item.mediaUrl || item.MediaUrl || '',
+                mediaType: item.mediaType !== undefined ? item.mediaType : (item.MediaType !== undefined ? item.MediaType : 0),
+                thumbnailUrl: item.thumbnailUrl || item.ThumbnailUrl || null,
+                fileName: item.fileName || item.FileName || '',
+                fileSize: item.fileSize || item.FileSize || 0
+            }));
+        } else {
+            m.medias = [];
+        }
 
         // Message type / system payload
         const messageType = this.getMessageType(m);
@@ -635,6 +664,14 @@ const ChatCommon = {
             m.isRecalled = recalledRaw.toLowerCase() === 'true';
         } else {
             m.isRecalled = !!recalledRaw;
+        }
+        const pinnedRaw = (m.isPinned !== undefined) ? m.isPinned : m.IsPinned;
+        if (typeof pinnedRaw === 'boolean') {
+            m.isPinned = pinnedRaw;
+        } else if (typeof pinnedRaw === 'string') {
+            m.isPinned = pinnedRaw.toLowerCase() === 'true';
+        } else {
+            m.isPinned = !!pinnedRaw;
         }
         if (!m.systemMessageDataJson && m.SystemMessageDataJson) {
             m.systemMessageDataJson = m.SystemMessageDataJson;
@@ -756,6 +793,7 @@ const ChatCommon = {
         const messageType = this.getMessageType(msg);
         const isSystemMessage = this.isSystemMessage(msg);
         const isRecalled = !!(msg.isRecalled ?? msg.IsRecalled);
+        const isPinned = !!(msg.isPinned ?? msg.IsPinned);
         const recalledText = window.APP_CONFIG?.CHAT_RECALLED_MESSAGE_TEXT || 'Message was recalled';
 
         const dataMessageIdAttr = messageId ? ` data-message-id="${messageId}"` : '';
@@ -778,7 +816,7 @@ const ChatCommon = {
         }
 
         // --- Media ---
-        const allMedias = msg.medias || msg.Medias || [];
+        const allMedias = msg.medias || [];
         const hasMedia = !isRecalled && allMedias.length > 0;
         let mediaHtml = '';
         if (hasMedia) {
@@ -788,20 +826,21 @@ const ChatCommon = {
             const gridClass = `count-${Math.min(allMedias.length, 4)}`;
 
             // Escaping JSON for HTML attribute safely
+            // We use camelCase properties because we normalized them in normalizeMessage
             const mediaListJson = JSON.stringify(allMedias).replace(/"/g, '&quot;');
 
             mediaHtml = `
-                <div class="msg-media-grid ${gridClass}">
+                <div class="msg-media-grid ${gridClass}" data-medias="${mediaListJson}">
                     ${displayMedias.map((m, idx) => {
                         const isLast = idx === 3 && remainingCount > 0;
                         let inner = '';
                         let onclickStr = '';
-                        let dblclickStr = `ondblclick="window.previewMedia && window.previewMedia('', ${idx}, ${mediaListJson})"`;
+                        let dblclickStr = `ondblclick="ChatCommon.previewGridMedia(this, ${idx}, event)"`;
 
                         if (m.mediaType === 0) {
                             inner = `<img src="${m.mediaUrl}" alt="media" loading="lazy">`;
                             // Image: single click opens preview
-                            onclickStr = `onclick="window.previewMedia && window.previewMedia('', ${idx}, ${mediaListJson})"`;
+                            onclickStr = `onclick="ChatCommon.previewGridMedia(this, ${idx}, event)"`;
                             dblclickStr = ''; 
                         } else if (m.mediaType === 1) {
                             inner = `
@@ -814,13 +853,13 @@ const ChatCommon = {
                                     </div>
                                 </div>
                             `;
-                            // Video: dblclick to zoom, single click handled by overlay
+                            // Video: single click handled by overlay, dblclick for zoom
                         }
 
                         return `
                             <div class="msg-media-item" ${onclickStr} ${dblclickStr}>
                                 ${inner}
-                                ${isLast ? `<div class="msg-media-more-overlay" onclick="event.stopPropagation(); window.previewMedia && window.previewMedia('', 3, ${mediaListJson})">+${remainingCount}</div>` : ''}
+                                ${isLast ? `<div class="msg-media-more-overlay" onclick="event.stopPropagation(); ChatCommon.previewGridMedia(this, 3, event)">+${remainingCount}</div>` : ''}
                             </div>
                         `;
                     }).join('')}
@@ -848,6 +887,9 @@ const ChatCommon = {
 
         // --- Build Actions (Messenger Style) ---
         const isPage = !!options.isPage;
+        const pinnedBadgeHtml = isPinned
+            ? `<div class="msg-pinned-badge" title="Pinned message"><i data-lucide="pin"></i></div>`
+            : '';
         const msgActionsHtml = `
             <div class="msg-actions">
                 ${isPage ? `
@@ -876,6 +918,7 @@ const ChatCommon = {
                  data-avatar-url="${avatarSrc}"
                  data-author-name="${(authorName || '').replace(/"/g, '&quot;')}"
                  data-is-recalled="${isRecalled ? 'true' : 'false'}"
+                 data-is-pinned="${isPinned ? 'true' : 'false'}"
                  ${dataMessageIdAttr}
                  ${dataMessageTypeAttr}
                  ${msg.status ? `data-status="${msg.status}"` : ''}>
@@ -883,6 +926,7 @@ const ChatCommon = {
                 <div class="msg-row">
                     ${avatarHtml}
                     <div class="msg-content-container">
+                        ${pinnedBadgeHtml}
                         ${mediaHtml}
                         ${(isRecalled || msg.content)
                             ? `<div class="msg-bubble${isRecalled ? ' msg-bubble-recalled' : ''}">${isRecalled ? escapeHtml(recalledText) : linkify(escapeHtml(msg.content))}</div>`
@@ -899,6 +943,27 @@ const ChatCommon = {
                 ` : ''}
             </div>
         `;
+    },
+
+    /**
+     * Preview media from a grid (reads JSON from data-medias attribute)
+     */
+    previewGridMedia(el, index, event) {
+        if (event) event.stopPropagation();
+        if (!el || typeof index !== 'number') return;
+        const grid = el.closest('.msg-media-grid');
+        if (!grid) return;
+        
+        try {
+            const raw = grid.dataset.medias;
+            if (!raw) return;
+            const medias = JSON.parse(raw);
+            if (window.previewMedia) {
+                window.previewMedia('', index, medias);
+            }
+        } catch (e) {
+            console.error('Failed to preview grid media:', e);
+        }
     },
 
     /**

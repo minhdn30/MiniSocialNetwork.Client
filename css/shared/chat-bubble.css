@@ -179,7 +179,41 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
+}
+
+.msg-pinned-badge {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 24px;
+  height: 24px;
+  color: #3b82f6 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: none;
+  transform: rotate(35deg);
+  filter: drop-shadow(1px 2px 2px rgba(0, 0, 0, 0.4));
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.received .msg-pinned-badge {
+  color: #ef4444 !important;
+}
+
+/* Ensure the pin pops on hover if we want, but it's pointer-events none */
+.msg-bubble-wrapper:hover .msg-pinned-badge {
+  transform: rotate(35deg) scale(1.1);
+}
+
+
+.msg-pinned-badge i,
+.msg-pinned-badge svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* --- Author name for Group Chat --- */
@@ -425,6 +459,168 @@
 
 .msg-confirm-btn:hover {
   background: var(--bg-hover);
+}
+
+.msg-bubble-wrapper.msg-jump-highlight .msg-content-container {
+  animation: msgPinnedJumpPulse 2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes msgPinnedJumpPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(var(--accent-primary-rgb, 59, 130, 246), 0.7);
+    background: rgba(var(--accent-primary-rgb, 59, 130, 246), 0.15);
+  }
+  30% {
+    box-shadow: 0 0 0 15px rgba(var(--accent-primary-rgb, 59, 130, 246), 0);
+    background: rgba(var(--accent-primary-rgb, 59, 130, 246), 0.15);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(var(--accent-primary-rgb, 59, 130, 246), 0);
+    background: transparent;
+  }
+}
+
+/* --- Pinned Messages Modal --- */
+.chat-pinned-popup {
+  width: 92%;
+  max-width: 560px !important;
+  max-height: min(78vh, 680px);
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-pinned-list {
+  padding: 8px 0;
+  overflow-y: auto;
+  max-height: min(60vh, 520px);
+}
+
+.chat-pinned-empty {
+  padding: 26px 18px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+
+.chat-pinned-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--chat-theme-border, var(--border-secondary, rgba(255, 255, 255, 0.1)));
+  transition: background 0.15s ease;
+  cursor: pointer;
+  position: relative;
+}
+
+.chat-pinned-item:hover {
+  background: var(--chat-theme-action-hover-bg, rgba(255, 255, 255, 0.03));
+}
+
+.chat-pinned-item:last-child {
+  border-bottom: none;
+}
+
+.chat-pinned-item-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.chat-pinned-item-content {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.chat-pinned-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chat-pinned-item-author {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-pinned-item-time {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.chat-pinned-item-message {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  opacity: 0.92;
+}
+
+.chat-pinned-item-message.recalled {
+  font-style: italic;
+  color: var(--text-tertiary);
+  opacity: 0.7;
+}
+
+.chat-pinned-item-message-meta {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chat-pinned-item-message-meta::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  background: var(--text-tertiary);
+  border-radius: 50%;
+  opacity: 0.5;
+}
+
+.chat-pinned-item-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+.chat-pinned-jump-btn {
+  border: 1px solid var(--chat-theme-border, var(--border-primary));
+  background: transparent;
+  color: var(--chat-theme-action-color, var(--text-primary));
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-pinned-jump-btn:hover {
+  background: var(--chat-theme-action-hover-bg, rgba(var(--accent-primary-rgb, 59, 130, 246), 0.1));
+  border-color: var(--accent-primary, #3b82f6);
+  color: var(--accent-primary, #3b82f6);
+  transform: translateY(-1px);
 }
 
 /* --- Seen Row & Avatars --- */

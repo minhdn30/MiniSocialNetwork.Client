@@ -5,6 +5,7 @@
 const ChatActions = {
     currentMenu: null,
     currentConfirm: null,
+    currentPinnedModal: null,
 
     /**
      * Find previous/next real message bubble (skip separators, typing indicator, etc.).
@@ -42,6 +43,435 @@ const ChatActions = {
         window.toastInfo && window.toastInfo('Reply feature coming soon');
     },
 
+    isGuid(value) {
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test((value || '').toString());
+    },
+
+    normalizeBool(value) {
+        if (typeof value === 'boolean') return value;
+        if (typeof value === 'string') return value.toLowerCase() === 'true';
+        return !!value;
+    },
+
+    escapeHtml(value) {
+        if (value === null || value === undefined) return '';
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    },
+
+    getCurrentAccountId() {
+        return (
+            localStorage.getItem('accountId') ||
+            sessionStorage.getItem('accountId') ||
+            window.APP_CONFIG?.CURRENT_USER_ID ||
+            ''
+        ).toString().toLowerCase();
+    },
+
+    resolveConversationId(wrapper) {
+        const fromWrapper = (wrapper?.dataset?.conversationId || '').toString().toLowerCase();
+        if (this.isGuid(fromWrapper)) return fromWrapper;
+
+        const box = wrapper?.closest?.('.chat-box');
+        const fromBoxData = (box?.dataset?.id || '').toString().toLowerCase();
+        if (this.isGuid(fromBoxData)) return fromBoxData;
+
+        const fromBoxId = (box?.id || '').toString().toLowerCase();
+        if (fromBoxId.startsWith('chat-box-')) {
+            const extracted = fromBoxId.substring('chat-box-'.length);
+            if (this.isGuid(extracted)) return extracted;
+        }
+
+        const list = wrapper?.closest?.('.chat-messages');
+        const listId = (list?.id || '').toString().toLowerCase();
+        if (listId.startsWith('chat-messages-')) {
+            const extracted = listId.substring('chat-messages-'.length);
+            if (this.isGuid(extracted)) return extracted;
+        }
+
+        const pageId = (window.ChatPage?.currentChatId || '').toString().toLowerCase();
+        if (this.isGuid(pageId)) return pageId;
+
+        return '';
+    },
+
+    getConversationMeta(conversationId) {
+        const normalizedConversationId = (conversationId || '').toString().toLowerCase();
+        if (!normalizedConversationId) return null;
+
+        if (window.ChatPage && (window.ChatPage.currentChatId || '').toString().toLowerCase() === normalizedConversationId) {
+            return window.ChatPage.currentMetaData || null;
+        }
+
+        if (window.ChatWindow?.openChats instanceof Map) {
+            for (const [id, chat] of window.ChatWindow.openChats.entries()) {
+                if ((id || '').toString().toLowerCase() === normalizedConversationId) {
+                    return chat?.data || null;
+                }
+            }
+        }
+
+        if (Array.isArray(window.ChatSidebar?.conversations)) {
+            const found = window.ChatSidebar.conversations.find(c =>
+                (c?.conversationId || c?.ConversationId || '').toString().toLowerCase() === normalizedConversationId
+            );
+            return found || null;
+        }
+
+        return null;
+    },
+
+    canPinConversation(conversationId) {
+        const normalizedConversationId = (conversationId || '').toString().toLowerCase();
+        if (!this.isGuid(normalizedConversationId)) return false;
+
+        const meta = this.getConversationMeta(normalizedConversationId);
+        if (!meta) return true;
+
+        const isGroup = this.normalizeBool(meta?.isGroup ?? meta?.IsGroup);
+        if (!isGroup) return true;
+
+        const members = meta?.members || meta?.Members || [];
+        if (!Array.isArray(members) || members.length === 0) return true;
+
+        const myId = this.getCurrentAccountId();
+        if (!myId) return false;
+
+        const myMember = members.find(m =>
+            (m?.accountId || m?.AccountId || '').toString().toLowerCase() === myId
+        );
+        if (!myMember) return false;
+
+        const role = Number(myMember?.role ?? myMember?.Role);
+        const isAdmin = this.normalizeBool(myMember?.isAdmin ?? myMember?.IsAdmin);
+        return isAdmin || role === 1;
+    },
+
+    setMessagePinnedState(messageId, isPinned) {
+        const normalizedMessageId = (messageId || '').toString().toLowerCase();
+        if (!normalizedMessageId) return false;
+
+        const shouldPin = !!isPinned;
+        const bubbles = document.querySelectorAll(`.msg-bubble-wrapper[data-message-id="${normalizedMessageId}"]`);
+        if (!bubbles.length) return false;
+
+        bubbles.forEach((bubble) => {
+            if (!bubble.classList?.contains('msg-bubble-wrapper')) return;
+            if (window.ChatCommon?.isSystemMessageElement?.(bubble)) return;
+
+            bubble.dataset.isPinned = shouldPin ? 'true' : 'false';
+            const contentContainer = bubble.querySelector('.msg-content-container');
+            if (!contentContainer) return;
+
+            const existed = contentContainer.querySelector('.msg-pinned-badge');
+            if (existed) existed.remove();
+
+            if (shouldPin) {
+                const badge = document.createElement('div');
+                badge.className = 'msg-pinned-badge';
+                badge.title = 'Pinned message';
+                badge.innerHTML = '<i data-lucide="pin"></i>';
+                contentContainer.prepend(badge);
+                if (window.lucide) lucide.createIcons({ container: badge });
+            }
+        });
+
+        return true;
+    },
+
+    removePinnedModalItem(messageId) {
+        const normalizedMessageId = (messageId || '').toString().toLowerCase();
+        if (!normalizedMessageId || !this.currentPinnedModal) return;
+
+        this.currentPinnedModal
+            .querySelectorAll(`.chat-pinned-item[data-message-id="${normalizedMessageId}"]`)
+            .forEach(el => el.remove());
+
+        const list = this.currentPinnedModal.querySelector('.chat-pinned-list');
+        if (!list) return;
+
+        if (!list.querySelector('.chat-pinned-item')) {
+            list.innerHTML = '<div class="chat-pinned-empty">No pinned messages in this conversation.</div>';
+        }
+    },
+
+    markPinnedModalMessageRecalled(messageId) {
+        const normalizedMessageId = (messageId || '').toString().toLowerCase();
+        if (!normalizedMessageId || !this.currentPinnedModal) return;
+
+        const recalledText = window.APP_CONFIG?.CHAT_RECALLED_MESSAGE_TEXT || 'Message was recalled';
+        const items = this.currentPinnedModal.querySelectorAll(`.chat-pinned-item[data-message-id="${normalizedMessageId}"]`);
+        items.forEach((item) => {
+            const contentEl = item.querySelector('.chat-pinned-item-message');
+            if (contentEl) {
+                contentEl.textContent = recalledText;
+                contentEl.classList.add('recalled');
+            }
+            item.querySelector('.chat-pinned-item-actions')?.remove();
+        });
+    },
+
+    extractSystemPinAction(message) {
+        const parsed = window.ChatCommon?.parseSystemMessageData?.(message);
+        if (!parsed) return null;
+
+        const action = Number(parsed?.action ?? parsed?.Action);
+        if (!Number.isFinite(action)) return null;
+
+        if (action === 10) {
+            const messageId = (parsed?.pinnedMessageId || parsed?.PinnedMessageId || '').toString().toLowerCase();
+            return messageId ? { action: 'pin', messageId } : null;
+        }
+
+        if (action === 11) {
+            const messageId = (parsed?.unpinnedMessageId || parsed?.UnpinnedMessageId || '').toString().toLowerCase();
+            return messageId ? { action: 'unpin', messageId } : null;
+        }
+
+        return null;
+    },
+
+    syncPinStateFromSystemMessage(message, conversationId = '') {
+        const pinAction = this.extractSystemPinAction(message);
+        if (!pinAction) return false;
+
+        if (pinAction.action === 'pin') {
+            this.setMessagePinnedState(pinAction.messageId, true);
+        } else if (pinAction.action === 'unpin') {
+            this.setMessagePinnedState(pinAction.messageId, false);
+            this.removePinnedModalItem(pinAction.messageId);
+        }
+
+        const normalizedConversationId = (conversationId || message?.conversationId || message?.ConversationId || '').toString().toLowerCase();
+        this.refreshPinnedModalIfOpen(normalizedConversationId);
+        return true;
+    },
+
+    async pinMessage(conversationId, messageId) {
+        const normalizedConversationId = (conversationId || '').toString().toLowerCase();
+        const normalizedMessageId = (messageId || '').toString().toLowerCase();
+        if (!this.isGuid(normalizedConversationId) || !normalizedMessageId) {
+            window.toastError && window.toastError('Failed to pin message');
+            return false;
+        }
+
+        this.closeAllMenus();
+        try {
+            const res = await window.API.Messages.pin(normalizedConversationId, normalizedMessageId);
+            if (!res.ok) {
+                const data = await res.json().catch(() => null);
+                window.toastError && window.toastError(data?.message || data?.Message || 'Failed to pin message');
+                return false;
+            }
+
+            this.setMessagePinnedState(normalizedMessageId, true);
+            window.toastSuccess && window.toastSuccess('Message pinned');
+            this.refreshPinnedModalIfOpen(normalizedConversationId);
+            return true;
+        } catch (error) {
+            console.error('Error pinning message:', error);
+            window.toastError && window.toastError('Failed to pin message');
+            return false;
+        }
+    },
+
+    async unpinMessage(conversationId, messageId) {
+        const normalizedConversationId = (conversationId || '').toString().toLowerCase();
+        const normalizedMessageId = (messageId || '').toString().toLowerCase();
+        if (!this.isGuid(normalizedConversationId) || !normalizedMessageId) {
+            window.toastError && window.toastError('Failed to unpin message');
+            return false;
+        }
+
+        this.closeAllMenus();
+        try {
+            const res = await window.API.Messages.unpin(normalizedConversationId, normalizedMessageId);
+            if (!res.ok) {
+                const data = await res.json().catch(() => null);
+                window.toastError && window.toastError(data?.message || data?.Message || 'Failed to unpin message');
+                return false;
+            }
+
+            this.setMessagePinnedState(normalizedMessageId, false);
+            this.removePinnedModalItem(normalizedMessageId);
+            window.toastSuccess && window.toastSuccess('Message unpinned');
+            this.refreshPinnedModalIfOpen(normalizedConversationId);
+            return true;
+        } catch (error) {
+            console.error('Error unpinning message:', error);
+            window.toastError && window.toastError('Failed to unpin message');
+            return false;
+        }
+    },
+
+    closePinnedMessagesModal() {
+        const overlay = this.currentPinnedModal;
+        if (!overlay) return;
+        overlay.classList.remove('show');
+        if (window.unlockScroll) unlockScroll();
+        setTimeout(() => {
+            if (overlay.parentNode) overlay.remove();
+            if (this.currentPinnedModal === overlay) this.currentPinnedModal = null;
+        }, 200);
+    },
+
+    getPinnedMediaLabel(medias) {
+        if (!Array.isArray(medias) || !medias.length) return '';
+        const first = medias[0] || {};
+        const mediaType = Number(first?.mediaType ?? first?.MediaType);
+        if (mediaType === 1) return '[Video]';
+        return '[Image]';
+    },
+
+    getPinnedConversationTitle(conversationId, fallbackTitle = 'Pinned messages') {
+        const normalizedConversationId = (conversationId || '').toString().toLowerCase();
+        const meta = this.getConversationMeta(normalizedConversationId);
+        const displayName = window.ChatCommon?.getDisplayName?.(meta) || '';
+        return displayName ? `Pinned messages - ${displayName}` : fallbackTitle;
+    },
+
+    async renderPinnedModalContent(conversationId, listEl) {
+        if (!listEl) return;
+        listEl.innerHTML = '<div class="chat-pinned-empty">Loading...</div>';
+
+        try {
+            const res = await window.API.Messages.getPinned(conversationId);
+            if (!res.ok) {
+                const data = await res.json().catch(() => null);
+                listEl.innerHTML = `<div class="chat-pinned-empty">${this.escapeHtml(data?.message || data?.Message || 'Failed to load pinned messages')}</div>`;
+                return;
+            }
+
+            const items = await res.json().catch(() => []);
+            const pinnedItems = Array.isArray(items) ? items : [];
+            if (!pinnedItems.length) {
+                listEl.innerHTML = '<div class="chat-pinned-empty">No pinned messages in this conversation.</div>';
+                return;
+            }
+
+            const recalledText = window.APP_CONFIG?.CHAT_RECALLED_MESSAGE_TEXT || 'Message was recalled';
+            listEl.innerHTML = pinnedItems.map((item) => {
+                const messageId = (item?.messageId || item?.MessageId || '').toString().toLowerCase();
+                const sender = item?.sender || item?.Sender || {};
+                const senderName = sender?.nickname || sender?.Nickname || sender?.username || sender?.Username || sender?.fullName || sender?.FullName || 'Unknown';
+                const avatarUrl = sender?.avatarUrl || sender?.AvatarUrl || window.APP_CONFIG?.DEFAULT_AVATAR;
+                const medias = item?.medias || item?.Medias || [];
+                const isRecalled = this.normalizeBool(item?.isRecalled ?? item?.IsRecalled);
+                const contentRaw = item?.content ?? item?.Content;
+                const fallbackMediaLabel = this.getPinnedMediaLabel(medias);
+                const messageText = isRecalled
+                    ? recalledText
+                    : ((typeof contentRaw === 'string' && contentRaw.trim().length) ? contentRaw.trim() : (fallbackMediaLabel || '[Message]'));
+
+                const pinnedAt = item?.pinnedAt || item?.PinnedAt;
+                const sentAt = item?.sentAt || item?.SentAt;
+                const sentLabel = window.ChatCommon?.formatTime?.(sentAt) || '';
+                const pinnedLabel = window.ChatCommon?.formatTime?.(pinnedAt) || '';
+
+                return `
+                    <div class="chat-pinned-item" data-message-id="${this.escapeHtml(messageId)}" onclick="window.ChatActions.jumpToMessage('${conversationId}', '${messageId}')">
+                        <img class="chat-pinned-item-avatar" src="${this.escapeHtml(avatarUrl)}" alt="" onerror="this.src='${window.APP_CONFIG?.DEFAULT_AVATAR}'">
+                        <div class="chat-pinned-item-content">
+                            <div class="chat-pinned-item-top">
+                                <div class="chat-pinned-item-author" title="${this.escapeHtml(senderName)}">${this.escapeHtml(senderName)}</div>
+                                <div class="chat-pinned-item-time">${this.escapeHtml(sentLabel)}</div>
+                            </div>
+                            <div class="chat-pinned-item-message${isRecalled ? ' recalled' : ''}">${this.escapeHtml(messageText)}</div>
+                            <div class="chat-pinned-item-message-meta">Pinned ${this.escapeHtml(pinnedLabel)}</div>
+                            ${isRecalled
+                                ? ''
+                                : `<div class="chat-pinned-item-actions"><button class="chat-pinned-jump-btn"><i data-lucide="corner-right-down"></i>Jump</button></div>`}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            if (window.lucide) lucide.createIcons({ container: listEl });
+        } catch (error) {
+            console.error('Error loading pinned messages:', error);
+            listEl.innerHTML = '<div class="chat-pinned-empty">Failed to load pinned messages.</div>';
+        }
+    },
+
+    async showPinnedMessages(conversationId, options = {}) {
+        const normalizedConversationId = (conversationId || '').toString().toLowerCase();
+        if (!this.isGuid(normalizedConversationId)) {
+            window.toastInfo && window.toastInfo('Pinned messages are available after the conversation is created');
+            return;
+        }
+
+        this.closePinnedMessagesModal();
+        this.closeAllMenus();
+
+        const title = options.title || this.getPinnedConversationTitle(normalizedConversationId);
+        const overlay = document.createElement('div');
+        overlay.className = 'chat-common-confirm-overlay chat-pinned-overlay';
+        overlay.dataset.conversationId = normalizedConversationId;
+        overlay.innerHTML = `
+            <div class="chat-common-confirm-popup chat-pinned-popup">
+                <div class="chat-nicknames-header">
+                    <h3>${this.escapeHtml(title)}</h3>
+                    <div class="chat-nicknames-close" id="chatPinnedCloseBtn">
+                        <i data-lucide="x"></i>
+                    </div>
+                </div>
+                <div class="chat-pinned-list"></div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+        this.currentPinnedModal = overlay;
+
+        if (window.lockScroll) lockScroll();
+        if (window.lucide) lucide.createIcons({ props: { size: 18 }, container: overlay });
+        requestAnimationFrame(() => overlay.classList.add('show'));
+
+        const closeBtn = overlay.querySelector('#chatPinnedCloseBtn');
+        if (closeBtn) closeBtn.onclick = () => this.closePinnedMessagesModal();
+        overlay.onclick = (evt) => {
+            if (evt.target === overlay) this.closePinnedMessagesModal();
+        };
+
+        const listEl = overlay.querySelector('.chat-pinned-list');
+        await this.renderPinnedModalContent(normalizedConversationId, listEl);
+    },
+
+    refreshPinnedModalIfOpen(conversationId) {
+        const overlay = this.currentPinnedModal;
+        if (!overlay) return;
+
+        const currentConversationId = (overlay.dataset?.conversationId || '').toString().toLowerCase();
+        const targetConversationId = (conversationId || '').toString().toLowerCase();
+        if (!currentConversationId || !targetConversationId || currentConversationId !== targetConversationId) return;
+
+        const listEl = overlay.querySelector('.chat-pinned-list');
+        this.renderPinnedModalContent(currentConversationId, listEl);
+    },
+
+    jumpToMessage(conversationId, messageId) {
+        const normalizedMessageId = (messageId || '').toString().toLowerCase();
+        if (!normalizedMessageId) return false;
+
+        const target = document.querySelector(`.msg-bubble-wrapper[data-message-id="${normalizedMessageId}"]`);
+        if (!target) {
+            window.toastInfo && window.toastInfo('Pinned message is outside the loaded range. Scroll up to load older messages.');
+            return false;
+        }
+
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.classList.remove('msg-jump-highlight');
+        // Force reflow so repeated jumps retrigger animation.
+        void target.offsetWidth;
+        target.classList.add('msg-jump-highlight');
+        setTimeout(() => target.classList.remove('msg-jump-highlight'), 1600);
+
+        this.closePinnedMessagesModal();
+        return true;
+    },
+
     /**
      * Open the "More Options" context menu
      */
@@ -53,6 +483,9 @@ const ChatActions = {
         const wrapper = btn.closest('.msg-bubble-wrapper');
         const resolvedMessageId = (messageId || wrapper?.dataset?.messageId || '').toString().toLowerCase();
         const isRecalled = (wrapper?.dataset?.isRecalled || '').toString().toLowerCase() === 'true';
+        const isPinned = (wrapper?.dataset?.isPinned || '').toString().toLowerCase() === 'true';
+        const conversationId = this.resolveConversationId(wrapper);
+        const canPin = this.canPinConversation(conversationId);
         
         // Mark as active so CSS can keep buttons visible
         if (wrapper) wrapper.classList.add('menu-active');
@@ -85,11 +518,23 @@ const ChatActions = {
                 <i data-lucide="forward"></i>
                 <span>Forward</span>
             </div>
-            <div class="msg-more-item" onclick="window.toastInfo('Pin coming soon')">
-                <i data-lucide="pin"></i>
-                <span>Pin</span>
-            </div>
         `;
+
+        if (resolvedMessageId && canPin) {
+            itemsHtml += isPinned
+                ? `
+                    <div class="msg-more-item" onclick="window.ChatActions.unpinMessage('${conversationId}', '${resolvedMessageId}')">
+                        <i data-lucide="pin-off"></i>
+                        <span>Unpin</span>
+                    </div>
+                `
+                : `
+                    <div class="msg-more-item" onclick="window.ChatActions.pinMessage('${conversationId}', '${resolvedMessageId}')">
+                        <i data-lucide="pin"></i>
+                        <span>Pin</span>
+                    </div>
+                `;
+        }
 
         if (isOwn && !isRecalled) {
             itemsHtml = `
@@ -212,6 +657,7 @@ const ChatActions = {
     removeMessageFromUI(messageId) {
         if (!messageId) return;
         const normId = messageId.toString().toLowerCase();
+        this.removePinnedModalItem(normId);
         
         // We use querySelectorAll because the same message might be in both chat-page and chat-window
         const bubbles = document.querySelectorAll(`[data-message-id="${normId}"]`);
@@ -472,6 +918,7 @@ const ChatActions = {
             textBubble.textContent = recalledText;
         });
 
+        this.markPinnedModalMessageRecalled(normalizedMessageId);
         return true;
     },
 

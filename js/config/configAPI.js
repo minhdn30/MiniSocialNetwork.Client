@@ -511,6 +511,11 @@
       sendGroup: (conversationId, formData, onProgress) =>
         uploadFormDataWithProgress(`/Messages/group/${conversationId}`, formData, onProgress),
 
+      getPinned: (conversationId) => apiFetch(`/Messages/pinned/${conversationId}`),
+      pin: (conversationId, messageId) =>
+        apiFetch(`/Messages/pin/${conversationId}/${messageId}`, { method: "POST" }),
+      unpin: (conversationId, messageId) =>
+        apiFetch(`/Messages/unpin/${conversationId}/${messageId}`, { method: "DELETE" }),
       hide: (messageId) => apiFetch(`/Messages/hide/${messageId}`, { method: "POST" }),
       recall: (messageId) => apiFetch(`/Messages/recall/${messageId}`, { method: "POST" }),
     },

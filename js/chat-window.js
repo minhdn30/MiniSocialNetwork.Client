@@ -862,6 +862,12 @@ const ChatWindow = {
 
     const wasNearBottom = this.isNearBottom(convId);
     this.appendMessage(convId, incoming, wasNearBottom);
+    if (
+      window.ChatActions &&
+      typeof window.ChatActions.syncPinStateFromSystemMessage === "function"
+    ) {
+      window.ChatActions.syncPinStateFromSystemMessage(incoming, convId);
+    }
     if (messageId) {
       this.applyPendingSeenForMessage(convId, messageId);
     }
@@ -2571,7 +2577,7 @@ const ChatWindow = {
                     <i data-lucide="user"></i>
                     <span>View profile</span>
                 </button>
-                <button class="chat-menu-item" onclick="ChatWindow.closeHeaderMenu(); window.toastInfo('Pinned messages coming soon')">
+                <button class="chat-menu-item" onclick="ChatWindow.closeHeaderMenu(); ChatWindow.openPinnedMessages('${id}')">
                     <i data-lucide="pin"></i>
                     <span>View pinned messages</span>
                 </button>
@@ -2690,6 +2696,23 @@ const ChatWindow = {
       }
       if (window.toastError) window.toastError("Failed to update mute status");
     }
+  },
+
+  openPinnedMessages(id) {
+    const normalizedId = (id || "").toString().toLowerCase();
+    if (
+      !window.ChatActions ||
+      typeof window.ChatActions.showPinnedMessages !== "function"
+    ) {
+      if (window.toastError) window.toastError("Pinned messages are unavailable");
+      return;
+    }
+
+    const title =
+      typeof window.ChatActions.getPinnedConversationTitle === "function"
+        ? window.ChatActions.getPinnedConversationTitle(normalizedId)
+        : "Pinned messages";
+    window.ChatActions.showPinnedMessages(normalizedId, { title });
   },
 
   promptChangeTheme(id) {
