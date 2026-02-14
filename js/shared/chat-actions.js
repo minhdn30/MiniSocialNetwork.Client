@@ -328,10 +328,70 @@ const ChatActions = {
     },
 
     getPinnedConversationTitle(conversationId, fallbackTitle = 'Pinned messages') {
-        const normalizedConversationId = (conversationId || '').toString().toLowerCase();
-        const meta = this.getConversationMeta(normalizedConversationId);
-        const displayName = window.ChatCommon?.getDisplayName?.(meta) || '';
-        return displayName ? `Pinned messages - ${displayName}` : fallbackTitle;
+        return fallbackTitle;
+    },
+
+    _truncateLength: 150,
+
+    togglePinnedTruncate(btn) {
+        const msgEl = btn?.closest('.chat-pinned-item-content')?.querySelector('.chat-pinned-item-message');
+        if (!msgEl) return;
+        msgEl.classList.toggle('truncated');
+        btn.textContent = msgEl.classList.contains('truncated') ? 'more' : 'less';
+    },
+
+    closePinnedItemMenu() {
+        document.querySelectorAll('.chat-pinned-more-menu').forEach(m => m.remove());
+    },
+
+    openPinnedItemMenu(e, conversationId, messageId) {
+        e.stopPropagation();
+        this.closePinnedItemMenu();
+
+        const btn = e.currentTarget;
+        const rect = btn.getBoundingClientRect();
+        const menu = document.createElement('div');
+        menu.className = 'chat-pinned-more-menu';
+        menu.innerHTML = `
+            <div class="chat-pinned-more-menu-item" data-action="view">
+                <i data-lucide="message-circle"></i>
+                <span>View in chat</span>
+            </div>
+            <div class="chat-pinned-more-menu-item danger" data-action="unpin">
+                <i data-lucide="pin-off"></i>
+                <span>Unpin</span>
+            </div>
+        `;
+        document.body.appendChild(menu);
+
+        const menuH = menu.offsetHeight || 80;
+        let top = rect.bottom + 4;
+        let left = rect.right - menu.offsetWidth;
+        if (top + menuH > window.innerHeight) top = rect.top - menuH - 4;
+        if (left < 8) left = 8;
+        menu.style.top = `${top}px`;
+        menu.style.left = `${left}px`;
+
+        if (window.lucide) lucide.createIcons({ container: menu });
+
+        menu.querySelector('[data-action="view"]').onclick = (ev) => {
+            ev.stopPropagation();
+            this.closePinnedItemMenu();
+            this.jumpToMessage(conversationId, messageId);
+        };
+        menu.querySelector('[data-action="unpin"]').onclick = (ev) => {
+            ev.stopPropagation();
+            this.closePinnedItemMenu();
+            this.unpinMessage(conversationId, messageId);
+        };
+
+        const closeHandler = (ev) => {
+            if (!menu.contains(ev.target) && ev.target !== btn) {
+                this.closePinnedItemMenu();
+                document.removeEventListener('click', closeHandler);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', closeHandler), 10);
     },
 
     async renderPinnedModalContent(conversationId, listEl) {
@@ -372,20 +432,43 @@ const ChatActions = {
                 const sentLabel = window.ChatCommon?.formatTime?.(sentAt) || '';
                 const pinnedLabel = window.ChatCommon?.formatTime?.(pinnedAt) || '';
 
+                // Truncation
+                const needsTruncate = !isRecalled && messageText.length > this._truncateLength;
+                const truncateClass = needsTruncate ? ' truncated' : '';
+                const truncateBtn = needsTruncate ? `<button class="chat-pinned-toggle-btn" onclick="event.stopPropagation(); window.ChatActions.togglePinnedTruncate(this)">more</button>` : '';
+
+                // Media thumbnails
+                let mediaThumbs = '';
+                if (!isRecalled && Array.isArray(medias) && medias.length) {
+                    const thumbItems = medias.slice(0, 4).map(m => {
+                        const url = m?.thumbnailUrl || m?.ThumbnailUrl || m?.mediaUrl || m?.MediaUrl || '';
+                        const mtype = Number(m?.mediaType ?? m?.MediaType);
+                        if (mtype === 1) {
+                            // Video
+                            return `<div class="chat-pinned-media-thumb video"><img src="${this.escapeHtml(url)}" alt="" onerror="this.style.display='none'"><div class="chat-pinned-media-play"><i data-lucide="play"></i></div></div>`;
+                        }
+                        return `<div class="chat-pinned-media-thumb"><img src="${this.escapeHtml(url)}" alt="" onerror="this.style.display='none'"></div>`;
+                    }).join('');
+                    mediaThumbs = `<div class="chat-pinned-media-preview">${thumbItems}</div>`;
+                }
+
+                // More button (replaces Jump button)
+                const moreBtn = isRecalled ? '' : `<button class="chat-pinned-more-btn" onclick="event.stopPropagation(); window.ChatActions.openPinnedItemMenu(event, '${conversationId}', '${messageId}')" title="More options"><i data-lucide="ellipsis"></i></button>`;
+
                 return `
-                    <div class="chat-pinned-item" data-message-id="${this.escapeHtml(messageId)}" onclick="window.ChatActions.jumpToMessage('${conversationId}', '${messageId}')">
+                    <div class="chat-pinned-item" data-message-id="${this.escapeHtml(messageId)}">
                         <img class="chat-pinned-item-avatar" src="${this.escapeHtml(avatarUrl)}" alt="" onerror="this.src='${window.APP_CONFIG?.DEFAULT_AVATAR}'">
-                        <div class="chat-pinned-item-content">
+                        <div class="chat-pinned-item-content" onclick="window.ChatActions.jumpToMessage('${conversationId}', '${messageId}')">
                             <div class="chat-pinned-item-top">
                                 <div class="chat-pinned-item-author" title="${this.escapeHtml(senderName)}">${this.escapeHtml(senderName)}</div>
                                 <div class="chat-pinned-item-time">${this.escapeHtml(sentLabel)}</div>
                             </div>
-                            <div class="chat-pinned-item-message${isRecalled ? ' recalled' : ''}">${this.escapeHtml(messageText)}</div>
+                            <div class="chat-pinned-item-message${isRecalled ? ' recalled' : ''}${truncateClass}">${this.escapeHtml(messageText)}</div>
+                            ${truncateBtn}
+                            ${mediaThumbs}
                             <div class="chat-pinned-item-message-meta">Pinned ${this.escapeHtml(pinnedLabel)}</div>
-                            ${isRecalled
-                                ? ''
-                                : `<div class="chat-pinned-item-actions"><button class="chat-pinned-jump-btn"><i data-lucide="corner-right-down"></i>Jump</button></div>`}
                         </div>
+                        ${moreBtn}
                     </div>
                 `;
             }).join('');
@@ -451,25 +534,51 @@ const ChatActions = {
         this.renderPinnedModalContent(currentConversationId, listEl);
     },
 
-    jumpToMessage(conversationId, messageId) {
-        const normalizedMessageId = (messageId || '').toString().toLowerCase();
-        if (!normalizedMessageId) return false;
-
-        const target = document.querySelector(`.msg-bubble-wrapper[data-message-id="${normalizedMessageId}"]`);
-        if (!target) {
-            window.toastInfo && window.toastInfo('Pinned message is outside the loaded range. Scroll up to load older messages.');
-            return false;
-        }
-
-        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    highlightMessage(target) {
+        if (!target) return;
         target.classList.remove('msg-jump-highlight');
-        // Force reflow so repeated jumps retrigger animation.
         void target.offsetWidth;
         target.classList.add('msg-jump-highlight');
         setTimeout(() => target.classList.remove('msg-jump-highlight'), 1600);
+    },
 
-        this.closePinnedMessagesModal();
-        return true;
+    jumpToMessage(conversationId, messageId) {
+        const normalizedMessageId = (messageId || '').toString().toLowerCase();
+        const normalizedConvId = (conversationId || '').toString().toLowerCase();
+        if (!normalizedMessageId) return false;
+
+        this.closePinnedItemMenu();
+
+        // Case 1: Message is in the DOM
+        const target = document.querySelector(`.msg-bubble-wrapper[data-message-id="${normalizedMessageId}"]`);
+        if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            this.highlightMessage(target);
+            this.closePinnedMessagesModal();
+            return true;
+        }
+
+        // Case 2: Message not in DOM — load context from API
+        // Try ChatPage first
+        if (window.ChatPage && normalizedConvId &&
+            (window.ChatPage.currentChatId || '').toLowerCase() === normalizedConvId) {
+            this.closePinnedMessagesModal();
+            window.ChatPage.loadMessageContext(normalizedConvId, normalizedMessageId);
+            return true;
+        }
+
+        // Try ChatWindow
+        if (window.ChatWindow && normalizedConvId) {
+            const openId = window.ChatWindow.getOpenChatId?.(normalizedConvId);
+            if (openId && window.ChatWindow.openChats?.has(openId)) {
+                this.closePinnedMessagesModal();
+                window.ChatWindow.loadMessageContext(openId, normalizedMessageId);
+                return true;
+            }
+        }
+
+        window.toastInfo && window.toastInfo('Could not locate message in current chat.');
+        return false;
     },
 
     /**

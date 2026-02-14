@@ -62,6 +62,7 @@ body.is-dragging-chat #chat-windows-stack {
 
 /* Individual Chat Box (Open state) */
 .chat-box {
+    position: relative;
     width: 328px;
     height: 450px;
     background: var(--chat-theme-surface, var(--bg-primary));

@@ -1688,7 +1688,272 @@ const ChatCommon = {
         };
 
         renderList();
-    }
+    },
+
+    // ─── Shared Context Mode Utilities (Jump to Message) ──────────────────
+    // ctx adapter shape:
+    //   getState()           → { isLoading, page, hasMore, _isContextMode, _contextPage, _newerPage, _hasMoreNewer }
+    //   setState(patch)      → merges patch into state
+    //   getContainerId()     → the message container DOM id (e.g. 'chat-view-messages' or 'chat-messages-{id}')
+    //   getPageSize()        → page size number
+    //   getConversationId()  → conversation id string
+    //   isGroup()            → boolean
+    //   getMyId()            → current user id (lowercase)
+    //   renderMessages(items, container) → render reversed items into container (module-specific)
+    //   reloadLatest()       → reload page 1 (latest messages)
+    //   getBtnParent()       → DOM element to append jump-to-bottom button
+    //   getBtnId()           → unique button id string
+    //   getMetaData()        → current metaData or null
+    //   setMetaData(meta)    → store metaData
+
+    /**
+     * Load a context page around a target message, clear and re-render.
+     */
+    async contextLoadMessageContext(ctx, messageId) {
+        const state = ctx.getState();
+        if (state.isLoading) return;
+        ctx.setState({ isLoading: true });
+
+        const pageSize = ctx.getPageSize();
+        const conversationId = ctx.getConversationId();
+
+        try {
+            const res = await window.API.Conversations.getMessageContext(conversationId, messageId, pageSize);
+            if (!res.ok) {
+                window.toastError && window.toastError('Failed to jump to message');
+                ctx.setState({ isLoading: false });
+                return;
+            }
+
+            const data = await res.json();
+            const pageInfo = data?.messages || data?.Messages || {};
+            const items = pageInfo?.items || pageInfo?.Items || [];
+            const totalItems = pageInfo?.totalItems || pageInfo?.TotalItems || 0;
+            const targetPage = pageInfo?.page || pageInfo?.Page || 1;
+            const totalPages = Math.ceil(totalItems / pageSize) || 1;
+
+            // Store metadata
+            const metaData = data?.metaData || data?.MetaData;
+            if (metaData) ctx.setMetaData(metaData);
+
+            // Enter context mode
+            ctx.setState({
+                _isContextMode: true,
+                _contextPage: targetPage,
+                page: targetPage + 1,
+                hasMore: targetPage < totalPages,
+                _newerPage: targetPage - 1,
+                _hasMoreNewer: targetPage > 1,
+            });
+
+            // Clear and render
+            const msgContainer = document.getElementById(ctx.getContainerId());
+            if (!msgContainer) {
+                ctx.setState({ isLoading: false });
+                return;
+            }
+            msgContainer.innerHTML = '';
+
+            const reversed = [...items].reverse();
+            ctx.renderMessages(reversed, msgContainer);
+            ChatCommon.cleanTimeSeparators(msgContainer);
+
+            if (window.lucide) lucide.createIcons({ container: msgContainer });
+            if (typeof window.initializeChatEmojiElements === 'function') window.initializeChatEmojiElements(msgContainer);
+            if (typeof window.replaceSVGEmojis === 'function') window.replaceSVGEmojis(msgContainer);
+
+            // Show jump-to-bottom
+            ChatCommon.contextShowJumpBtn(ctx);
+
+            ctx.setState({ isLoading: false });
+
+            // Scroll to target and highlight
+            requestAnimationFrame(() => {
+                const target = msgContainer.querySelector(`.msg-bubble-wrapper[data-message-id="${messageId}"]`);
+                if (target) {
+                    target.scrollIntoView({ behavior: 'auto', block: 'center' });
+                    window.ChatActions?.highlightMessage(target);
+                }
+            });
+        } catch (err) {
+            console.error('contextLoadMessageContext error:', err);
+            window.toastError && window.toastError('Failed to jump to message');
+            ctx.setState({ isLoading: false });
+        }
+    },
+
+    /**
+     * Load newer messages (scrolling down in context mode).
+     */
+    async contextLoadNewerMessages(ctx) {
+        const state = ctx.getState();
+        if (state.isLoading || !state._isContextMode || !state._hasMoreNewer) return;
+        if (state._newerPage < 1) {
+            ctx.setState({ _hasMoreNewer: false });
+            return;
+        }
+
+        ctx.setState({ isLoading: true });
+        const conversationId = ctx.getConversationId();
+        const pageSize = ctx.getPageSize();
+
+        try {
+            const res = await window.API.Conversations.getMessages(conversationId, state._newerPage, pageSize);
+            if (!res.ok) {
+                ctx.setState({ isLoading: false });
+                return;
+            }
+
+            const data = await res.json();
+            const pageInfo = data?.messages || data?.Messages || data || {};
+            const items = pageInfo?.items || pageInfo?.Items || [];
+
+            if (!items.length) {
+                ctx.setState({ _hasMoreNewer: false, isLoading: false });
+                return;
+            }
+
+            const msgContainer = document.getElementById(ctx.getContainerId());
+            if (!msgContainer) {
+                ctx.setState({ isLoading: false });
+                return;
+            }
+
+            const reversed = [...items].reverse();
+            ctx.renderMessages(reversed, msgContainer);
+            ChatCommon.cleanTimeSeparators(msgContainer);
+
+            if (window.lucide) lucide.createIcons({ container: msgContainer });
+            if (typeof window.initializeChatEmojiElements === 'function') window.initializeChatEmojiElements(msgContainer);
+            if (typeof window.replaceSVGEmojis === 'function') window.replaceSVGEmojis(msgContainer);
+
+            const newPage = state._newerPage - 1;
+            if (newPage < 1) {
+                ctx.setState({ _newerPage: newPage, _hasMoreNewer: false, isLoading: false });
+                ChatCommon.contextResetMode(ctx);
+            } else {
+                ctx.setState({ _newerPage: newPage, isLoading: false });
+            }
+        } catch (err) {
+            console.error('contextLoadNewerMessages error:', err);
+            ctx.setState({ isLoading: false });
+        }
+    },
+
+    /**
+     * Jump to bottom — exit context mode and reload latest.
+     */
+    contextJumpToBottom(ctx) {
+        ChatCommon.contextResetMode(ctx);
+        ChatCommon.contextRemoveJumpBtn(ctx, true);
+        ctx.setState({ page: 1, hasMore: true, isLoading: false });
+
+        const msgContainer = document.getElementById(ctx.getContainerId());
+        if (msgContainer) msgContainer.innerHTML = '';
+
+        ctx.reloadLatest();
+    },
+
+    /**
+     * Reset context mode state.
+     */
+    contextResetMode(ctx) {
+        ctx.setState({
+            _isContextMode: false,
+            _contextPage: null,
+            _hasMoreNewer: false,
+            _newerPage: null,
+        });
+        // Don't remove the button here — it may still be needed for normal scroll-up
+    },
+
+    /**
+     * Show the jump-to-bottom floating button.
+     * Smart click handler: context mode → reload page 1, normal → scroll to bottom.
+     */
+    contextShowJumpBtn(ctx) {
+        ChatCommon.contextRemoveJumpBtn(ctx);
+        const parent = ctx.getBtnParent();
+        if (!parent) return;
+
+        const btn = document.createElement('button');
+        btn.className = 'chat-jump-bottom-btn';
+        btn.id = ctx.getBtnId();
+        btn.title = 'Jump to bottom';
+        btn.innerHTML = '<i data-lucide="chevrons-down"></i>';
+        btn.onclick = () => {
+            const state = ctx.getState();
+            if (state._isContextMode) {
+                // For context mode, we reload, usually no time for animation
+                ChatCommon.contextJumpToBottom(ctx);
+            } else {
+                ChatCommon.contextRemoveJumpBtn(ctx, true);
+                ctx.scrollToBottom('smooth');
+            }
+        };
+
+        parent.appendChild(btn);
+        if (window.lucide) lucide.createIcons({ container: btn });
+    },
+
+    /**
+     * Remove the jump-to-bottom button with an optional exit animation.
+     */
+    contextRemoveJumpBtn(ctx, useAnimation = false) {
+        const btn = document.getElementById(ctx.getBtnId());
+        if (!btn) return;
+
+        if (useAnimation) {
+            btn.classList.add('is-exiting');
+            setTimeout(() => {
+                if (btn.parentNode) btn.remove();
+            }, 200); // Matches CSS animation duration
+        } else {
+            btn.remove();
+        }
+    },
+
+    /**
+     * Show/hide the jump button based on scroll position.
+     * Call this inside the onscroll handler for both normal and context mode.
+     */
+    updateJumpBtnOnScroll(ctx, msgContainer, threshold = 200) {
+        if (!msgContainer) return;
+        const nearBottom = msgContainer.scrollHeight
+            - msgContainer.scrollTop - msgContainer.clientHeight <= threshold;
+
+        if (nearBottom) {
+            // At bottom + not in context mode → hide button
+            const state = ctx.getState();
+            if (!state._isContextMode) {
+                ChatCommon.contextRemoveJumpBtn(ctx, true);
+            }
+        } else {
+            // Scrolled up → show button if not already present
+            const existing = document.getElementById(ctx.getBtnId());
+            if (!existing) {
+                ChatCommon.contextShowJumpBtn(ctx);
+            }
+        }
+    },
+
+    /**
+     * Handle context-mode scroll (load newer pages when scrolling down).
+     * Call this INSIDE the onscroll handler.
+     * Returns true if a context-mode load was triggered.
+     */
+    contextHandleScroll(ctx, msgContainer) {
+        const state = ctx.getState();
+        if (!state._isContextMode || !state._hasMoreNewer || state.isLoading) return false;
+
+        const nearBottom = msgContainer.scrollHeight
+            - msgContainer.scrollTop - msgContainer.clientHeight <= 50;
+        if (nearBottom) {
+            ChatCommon.contextLoadNewerMessages(ctx);
+            return true;
+        }
+        return false;
+    },
 };
 
 window.ChatCommon = ChatCommon;

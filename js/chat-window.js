@@ -1140,11 +1140,19 @@ const ChatWindow = {
     return msgContainer.scrollHeight - msgContainer.scrollTop - msgContainer.clientHeight <= threshold;
   },
 
-  scrollToBottom(conversationId) {
+  scrollToBottom(conversationId, behavior = 'auto') {
     const msgContainer = document.getElementById(
       `chat-messages-${conversationId}`,
     );
     if (!msgContainer) return;
+
+    if (behavior === 'smooth') {
+      msgContainer.scrollTo({
+        top: msgContainer.scrollHeight,
+        behavior: 'smooth'
+      });
+      return;
+    }
 
     const doScroll = () => {
       msgContainer.scrollTop = msgContainer.scrollHeight;
@@ -1153,6 +1161,102 @@ const ChatWindow = {
     doScroll();
     requestAnimationFrame(doScroll);
     setTimeout(doScroll, 100);
+  },
+
+  // ─── Context mode methods (shared via ChatCommon) ─────────────────
+
+  _getContextAdapter(id) {
+    const self = this;
+    const chat = self.openChats.get(id);
+    if (!chat) return null;
+
+    return {
+      getState: () => ({
+        isLoading: chat.isLoading,
+        page: chat.page,
+        hasMore: chat.hasMore,
+        _isContextMode: chat._isContextMode,
+        _contextPage: chat._contextPage,
+        _newerPage: chat._newerPage,
+        _hasMoreNewer: chat._hasMoreNewer,
+      }),
+      setState: (patch) => { Object.assign(chat, patch); },
+      getContainerId: () => `chat-messages-${id}`,
+      getPageSize: () => window.APP_CONFIG?.CHATWINDOW_MESSAGES_PAGE_SIZE || 10,
+      getConversationId: () => id,
+      getMyId: () => (localStorage.getItem('accountId') || sessionStorage.getItem('accountId') || window.APP_CONFIG?.CURRENT_USER_ID || '').toLowerCase(),
+      isGroup: () => chat.data?.isGroup || false,
+      renderMessages: (items, container) => {
+        const isGroup = chat.data?.isGroup || false;
+        const myId = (localStorage.getItem('accountId') || sessionStorage.getItem('accountId') || window.APP_CONFIG?.CURRENT_USER_ID || '').toLowerCase();
+        let lastTime = null;
+        items.forEach((m, idx) => {
+          ChatCommon.normalizeMessage(m, myId);
+          const currentTime = new Date(m.sentAt);
+          const gap = window.APP_CONFIG?.CHAT_TIME_SEPARATOR_GAP || 15 * 60 * 1000;
+          if (!lastTime || (currentTime - lastTime > gap)) {
+            self.insertHtmlBeforeTypingIndicator(container, ChatCommon.renderChatSeparator(m.sentAt));
+          }
+          lastTime = currentTime;
+          const prevMsg = idx > 0 ? items[idx - 1] : null;
+          const nextMsg = idx < items.length - 1 ? items[idx + 1] : null;
+          const groupPos = ChatCommon.getGroupPosition(m, prevMsg, nextMsg);
+          const senderAvatar = !m.isOwn ? (m.sender?.avatarUrl || m.sender?.AvatarUrl || '') : '';
+          const authorName = isGroup && !m.isOwn
+            ? (m.sender?.nickname || m.sender?.Nickname || m.sender?.username || m.sender?.Username || m.sender?.fullName || m.sender?.FullName || '')
+            : '';
+          const html = ChatCommon.renderMessageBubble(m, { isGroup, groupPos, senderAvatar, authorName });
+          self.insertHtmlBeforeTypingIndicator(container, html);
+        });
+      },
+      reloadLatest: () => { self.loadInitialMessages(id); },
+      scrollToBottom: (behavior) => { self.scrollToBottom(id, behavior); },
+      getBtnParent: () => document.getElementById(`chat-box-${id}`),
+      getBtnId: () => `chatJumpBottomBtn-${id}`,
+      getMetaData: () => chat.data,
+      setMetaData: (meta) => { chat.data = { ...chat.data, ...meta }; },
+    };
+  },
+
+  async loadMessageContext(conversationId, messageId) {
+    const ctx = this._getContextAdapter(conversationId);
+    if (!ctx) return;
+    await ChatCommon.contextLoadMessageContext(ctx, messageId);
+  },
+
+  async loadNewerMessages(id) {
+    const ctx = this._getContextAdapter(id);
+    if (!ctx) return;
+    await ChatCommon.contextLoadNewerMessages(ctx);
+  },
+
+  jumpToBottom(id) {
+    const ctx = this._getContextAdapter(id);
+    if (!ctx) return;
+    ChatCommon.contextJumpToBottom(ctx);
+  },
+
+  resetContextMode(id) {
+    const ctx = this._getContextAdapter(id);
+    if (!ctx) return;
+    ChatCommon.contextResetMode(ctx);
+  },
+
+  showJumpToBottomBtn(id) {
+    const ctx = this._getContextAdapter(id);
+    if (!ctx) return;
+    ChatCommon.contextShowJumpBtn(ctx);
+  },
+
+  removeJumpToBottomBtn(id) {
+    const ctx = this._getContextAdapter(id);
+    if (ctx) {
+      ChatCommon.contextRemoveJumpBtn(ctx);
+    } else {
+      // Fallback: remove by ID directly when chat object is already gone
+      const btn = document.getElementById(`chatJumpBottomBtn-${id}`);
+      if (btn) btn.remove();
+    }
   },
 
   /**
@@ -3184,11 +3288,19 @@ const ChatWindow = {
 
     msgContainer.onscroll = () => {
       const chat = this.openChats.get(id);
-      if (!chat || chat.isLoading || !chat.hasMore) return;
+      if (!chat || chat.isLoading) return;
 
-      // If scrolled near top (threshold 30px for compact window)
-      if (msgContainer.scrollTop <= 30) {
+      // Scroll UP → load older
+      if (msgContainer.scrollTop <= 30 && chat.hasMore) {
         this.loadMoreMessages(id);
+      }
+
+      // Scroll DOWN → load newer (context mode)
+      const ctx = this._getContextAdapter(id);
+      if (ctx) {
+        ChatCommon.contextHandleScroll(ctx, msgContainer);
+        // Show/hide jump-to-bottom button based on scroll position
+        ChatCommon.updateJumpBtnOnScroll(ctx, msgContainer);
       }
     };
   },
@@ -3453,6 +3565,16 @@ const ChatWindow = {
       isOwn: true,
       status: "pending", // pending, sent, failed
     });
+
+    // Update Sidebar immediately (preview text, time, move to top)
+    if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
+      window.ChatSidebar.incrementUnread(id, {
+        content: hasText ? content : "",
+        medias: medias.length > 0 ? medias : null,
+        sender: { accountId: (localStorage.getItem('accountId') || '') },
+        sentAt: new Date()
+      });
+    }
 
     // Clear input and state
     this.resetInput(id);
