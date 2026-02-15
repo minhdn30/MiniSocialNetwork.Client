@@ -522,6 +522,8 @@
         apiFetch(`/Messages/pin/${conversationId}/${messageId}`, { method: "POST" }),
       unpin: (conversationId, messageId) =>
         apiFetch(`/Messages/unpin/${conversationId}/${messageId}`, { method: "DELETE" }),
+      getMediaDownloadUrl: (messageMediaId) =>
+        apiFetch(`/Messages/media/${messageMediaId}/download-url`),
       hide: (messageId) => apiFetch(`/Messages/hide/${messageId}`, { method: "POST" }),
       recall: (messageId) => apiFetch(`/Messages/recall/${messageId}`, { method: "POST" }),
     },

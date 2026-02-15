@@ -99,6 +99,90 @@ const ChatActions = {
         return '';
     },
 
+    resolveConversationIdByMessageId(messageId) {
+        const normId = (messageId || '').toString().toLowerCase();
+        if (!normId) return '';
+
+        const bubble =
+            document.querySelector(`.msg-bubble-wrapper[data-message-id="${normId}"]`) ||
+            document.querySelector(`[data-message-id="${normId}"]`);
+        if (!bubble) return '';
+
+        return this.resolveConversationId(bubble);
+    },
+
+    extractSidebarMessageFromBubble(bubble) {
+        if (!bubble || !bubble.classList?.contains('msg-bubble-wrapper')) return null;
+        const isSystemMessage = window.ChatCommon?.isSystemMessageElement?.(bubble);
+
+        const messageId = (bubble.dataset?.messageId || '').toString().toLowerCase();
+        const senderId = (bubble.dataset?.senderId || '').toString().toLowerCase();
+        const sentAt = bubble.dataset?.sentAt || new Date().toISOString();
+        const isRecalled = (bubble.dataset?.isRecalled || '').toString().toLowerCase() === 'true';
+
+        if (isSystemMessage) {
+            const systemText = (bubble.querySelector('.msg-system-text')?.textContent || '').trim();
+            return {
+                messageId,
+                sentAt,
+                sender: { accountId: senderId },
+                content: systemText,
+                messageType: 3,
+                MessageType: 3,
+                medias: [],
+                isRecalled: false,
+                IsRecalled: false
+            };
+        }
+
+        let content = '';
+        const textBubble = bubble.querySelector('.msg-bubble');
+        if (textBubble && !textBubble.classList.contains('msg-bubble-recalled')) {
+            content = (textBubble.textContent || '').trim();
+        }
+
+        let medias = [];
+        const mediaGrid = bubble.querySelector('.msg-media-grid');
+        if (mediaGrid?.dataset?.medias) {
+            try {
+                const parsed = JSON.parse(mediaGrid.dataset.medias);
+                if (Array.isArray(parsed)) {
+                    medias = parsed.map((m) => ({
+                        mediaUrl: m?.mediaUrl || m?.MediaUrl || '',
+                        mediaType: Number(m?.mediaType ?? m?.MediaType ?? 0),
+                        thumbnailUrl: m?.thumbnailUrl || m?.ThumbnailUrl || null,
+                        fileName: m?.fileName || m?.FileName || '',
+                        fileSize: m?.fileSize || m?.FileSize || 0
+                    }));
+                }
+            } catch (_err) {
+                medias = [];
+            }
+        }
+
+        if ((!Array.isArray(medias) || medias.length === 0) && bubble.querySelector('.msg-file-item')) {
+            const firstFile = bubble.querySelector('.msg-file-item');
+            const link = firstFile?.querySelector('.msg-file-link');
+            const href = (link?.getAttribute('href') || '').trim();
+            const fileName = (firstFile?.querySelector('.msg-file-name')?.textContent || '').trim();
+            medias = [{
+                mediaUrl: href,
+                mediaType: 3,
+                fileName
+            }];
+        }
+
+        return {
+            messageId,
+            sentAt,
+            sender: { accountId: senderId },
+            content,
+            medias,
+            isRecalled,
+            IsRecalled: isRecalled
+        };
+    },
+
     getConversationMeta(conversationId) {
         const normalizedConversationId = (conversationId || '').toString().toLowerCase();
         if (!normalizedConversationId) return null;
@@ -323,7 +407,11 @@ const ChatActions = {
         if (!Array.isArray(medias) || !medias.length) return '';
         const first = medias[0] || {};
         const mediaType = Number(first?.mediaType ?? first?.MediaType);
+        if (window.ChatCommon && typeof ChatCommon.getMediaTypeLabel === 'function') {
+            return ChatCommon.getMediaTypeLabel(mediaType);
+        }
         if (mediaType === 1) return '[Video]';
+        if (mediaType === 3) return '[File]';
         return '[Image]';
     },
 
@@ -447,6 +535,10 @@ const ChatActions = {
                             // Video
                             return `<div class="chat-pinned-media-thumb video"><img src="${this.escapeHtml(url)}" alt="" onerror="this.style.display='none'"><div class="chat-pinned-media-play"><i data-lucide="play"></i></div></div>`;
                         }
+                        if (mtype === 3) {
+                            // File
+                            return `<div class="chat-pinned-media-thumb file"><div class="chat-pinned-media-file-icon"><i data-lucide="file-text"></i></div></div>`;
+                        }
                         return `<div class="chat-pinned-media-thumb"><img src="${this.escapeHtml(url)}" alt="" onerror="this.style.display='none'"></div>`;
                     }).join('');
                     mediaThumbs = `<div class="chat-pinned-media-preview">${thumbItems}</div>`;
@@ -542,6 +634,53 @@ const ChatActions = {
         setTimeout(() => target.classList.remove('msg-jump-highlight'), 1600);
     },
 
+    findMessageElementInContainer(container, normalizedMessageId) {
+        if (!container || !normalizedMessageId) return null;
+
+        const exact = container.querySelector(`.msg-bubble-wrapper[data-message-id="${normalizedMessageId}"]`);
+        if (exact) return exact;
+
+        const bubbles = container.querySelectorAll('.msg-bubble-wrapper[data-message-id]');
+        for (const bubble of bubbles) {
+            const currentId = (bubble?.dataset?.messageId || '').toString().toLowerCase();
+            if (currentId && currentId === normalizedMessageId) return bubble;
+        }
+
+        return null;
+    },
+
+    findMessageElementForConversation(conversationId, normalizedMessageId) {
+        const normalizedConvId = (conversationId || '').toString().toLowerCase();
+        if (!normalizedMessageId) return null;
+
+        if (window.ChatPage && normalizedConvId &&
+            (window.ChatPage.currentChatId || '').toLowerCase() === normalizedConvId) {
+            const pageContainer = document.getElementById('chat-view-messages');
+            const pageTarget = this.findMessageElementInContainer(pageContainer, normalizedMessageId);
+            if (pageTarget) return pageTarget;
+        }
+
+        if (window.ChatWindow && normalizedConvId) {
+            const openId = window.ChatWindow.getOpenChatId?.(normalizedConvId);
+            if (openId) {
+                const windowContainer = document.getElementById(`chat-messages-${openId}`);
+                const windowTarget = this.findMessageElementInContainer(windowContainer, normalizedMessageId);
+                if (windowTarget) return windowTarget;
+            }
+        }
+
+        const globalExact = document.querySelector(`.msg-bubble-wrapper[data-message-id="${normalizedMessageId}"]`);
+        if (globalExact) return globalExact;
+
+        const allBubbles = document.querySelectorAll('.msg-bubble-wrapper[data-message-id]');
+        for (const bubble of allBubbles) {
+            const currentId = (bubble?.dataset?.messageId || '').toString().toLowerCase();
+            if (currentId && currentId === normalizedMessageId) return bubble;
+        }
+
+        return null;
+    },
+
     jumpToMessage(conversationId, messageId) {
         const normalizedMessageId = (messageId || '').toString().toLowerCase();
         const normalizedConvId = (conversationId || '').toString().toLowerCase();
@@ -550,7 +689,7 @@ const ChatActions = {
         this.closePinnedItemMenu();
 
         // Case 1: Message is in the DOM
-        const target = document.querySelector(`.msg-bubble-wrapper[data-message-id="${normalizedMessageId}"]`);
+        const target = this.findMessageElementForConversation(normalizedConvId, normalizedMessageId);
         if (target) {
             target.scrollIntoView({ behavior: 'smooth', block: 'center' });
             this.highlightMessage(target);
@@ -763,22 +902,28 @@ const ChatActions = {
     /**
      * Remove message from UI (used by both manual hide and realtime)
      */
-    removeMessageFromUI(messageId) {
-        if (!messageId) return;
+    removeMessageFromUI(messageId, fallbackConversationId = '') {
+        if (!messageId) return false;
         const normId = messageId.toString().toLowerCase();
+        const fallbackConvId = (fallbackConversationId || '').toString().toLowerCase();
         this.removePinnedModalItem(normId);
         
         // We use querySelectorAll because the same message might be in both chat-page and chat-window
         const bubbles = document.querySelectorAll(`[data-message-id="${normId}"]`);
+        if (!bubbles.length) return false;
 
         bubbles.forEach(bubble => {
             const prev = this.findPreviousMessageBubble(bubble);
             const next = this.findNextMessageBubble(bubble);
             const container = bubble.closest('.chat-messages') || bubble.closest('.chat-view-messages');
+            const conversationId = this.resolveConversationId(bubble) || fallbackConvId;
 
             // Capture "Sent" status info BEFORE removal
             const hadSentStatus = bubble.dataset.status === 'sent';
             const isLastBubbleInContainer = !!(container && !next);
+            const replacementLastMessage = isLastBubbleInContainer
+                ? this.extractSidebarMessageFromBubble(prev)
+                : null;
 
             bubble.style.transition = 'all 0.3s ease';
             bubble.style.opacity = '0';
@@ -798,8 +943,22 @@ const ChatActions = {
 
                 // Check if we left an orphaned time separator
                 this.cleanTimeSeparators(container);
+
+                if (
+                    isLastBubbleInContainer
+                    && conversationId
+                    && window.ChatSidebar
+                    && typeof window.ChatSidebar.applyMessageHidden === 'function'
+                ) {
+                    try {
+                        window.ChatSidebar.applyMessageHidden(conversationId, normId, replacementLastMessage);
+                    } catch (err) {
+                        console.error('Failed to sync sidebar after hide:', err);
+                    }
+                }
             }, 300);
         });
+        return true;
     },
 
     /**
@@ -807,8 +966,9 @@ const ChatActions = {
      */
     hideFromRealtime(data) {
         const messageId = data.messageId || data.MessageId;
+        const conversationId = (data?.conversationId || data?.ConversationId || '').toString().toLowerCase();
         if (messageId) {
-            this.removeMessageFromUI(messageId);
+            this.removeMessageFromUI(messageId, conversationId);
         }
     },
 
@@ -1067,7 +1227,9 @@ const ChatActions = {
             const contentContainer = bubble.querySelector('.msg-content-container');
             if (!contentContainer) return;
 
-            contentContainer.querySelectorAll('.msg-media-grid').forEach((grid) => grid.remove());
+            contentContainer
+                .querySelectorAll('.msg-media-grid, .msg-file-list, .msg-file-item')
+                .forEach((el) => el.remove());
 
             let textBubble = contentContainer.querySelector('.msg-bubble');
             if (!textBubble) {
@@ -1086,8 +1248,11 @@ const ChatActions = {
 
     recallFromRealtime(data) {
         const messageId = data?.messageId || data?.MessageId;
-        const conversationId = (data?.conversationId || data?.ConversationId || '').toString().toLowerCase();
+        let conversationId = (data?.conversationId || data?.ConversationId || '').toString().toLowerCase();
         if (!messageId) return;
+        if (!conversationId) {
+            conversationId = this.resolveConversationIdByMessageId(messageId);
+        }
         this.applyRecalledState(messageId);
         if (conversationId && window.ChatSidebar && typeof window.ChatSidebar.applyMessageRecalled === 'function') {
             window.ChatSidebar.applyMessageRecalled(conversationId, messageId);
@@ -1117,7 +1282,10 @@ const ChatActions = {
                     const data = await res.json().catch(() => null);
                     this.applyRecalledState(normId);
 
-                    const conversationId = (data?.conversationId || data?.ConversationId || '').toString().toLowerCase();
+                    let conversationId = (data?.conversationId || data?.ConversationId || '').toString().toLowerCase();
+                    if (!conversationId) {
+                        conversationId = this.resolveConversationIdByMessageId(normId);
+                    }
                     if (conversationId && window.ChatSidebar && typeof window.ChatSidebar.applyMessageRecalled === 'function') {
                         window.ChatSidebar.applyMessageRecalled(conversationId, normId);
                     }

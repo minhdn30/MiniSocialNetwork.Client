@@ -181,17 +181,18 @@
         const medias = messagePayload.Medias || messagePayload.medias || [];
         if (!Array.isArray(medias) || medias.length === 0) return false;
 
-        const localItems = bubble.querySelectorAll('.msg-media-item');
-        if (!localItems || localItems.length === 0) return false;
-
         let replaced = false;
         medias.forEach((m, i) => {
-            if (!localItems[i]) return;
             const mediaUrl = m.MediaUrl || m.mediaUrl;
+            const mediaId = toLowerSafe(m.MessageMediaId || m.messageMediaId || '');
             if (!mediaUrl) return;
 
-            const img = localItems[i].querySelector('img');
-            const vid = localItems[i].querySelector('video');
+            const targetItem = bubble.querySelector(`[data-media-index="${i}"]`);
+            if (!targetItem) return;
+
+            const img = targetItem.querySelector('img');
+            const vid = targetItem.querySelector('video');
+            const fileLink = targetItem.querySelector('.msg-file-link');
             if (img) {
                 if (img.src?.startsWith('blob:')) revokeBlobUrlIfNeeded(ctx, img.src);
                 img.src = mediaUrl;
@@ -200,6 +201,17 @@
             if (vid) {
                 if (vid.src?.startsWith('blob:')) revokeBlobUrlIfNeeded(ctx, vid.src);
                 vid.src = mediaUrl;
+                replaced = true;
+            }
+            if (fileLink) {
+                const oldHref = fileLink.getAttribute('href') || '';
+                if (oldHref.startsWith('blob:')) revokeBlobUrlIfNeeded(ctx, oldHref);
+                fileLink.setAttribute('href', mediaUrl);
+                if (mediaId) {
+                    fileLink.setAttribute('data-message-media-id', mediaId);
+                } else {
+                    fileLink.removeAttribute('data-message-media-id');
+                }
                 replaced = true;
             }
         });
@@ -217,9 +229,14 @@
                     medias.forEach((m, i) => {
                         if (oldMedias[i]) {
                             const url = m.MediaUrl || m.mediaUrl;
+                            const mediaId = toLowerSafe(m.MessageMediaId || m.messageMediaId || '');
                             if (url) {
                                 oldMedias[i].mediaUrl = url;
                                 if (oldMedias[i].MediaUrl) oldMedias[i].MediaUrl = url;
+                            }
+                            if (mediaId) {
+                                oldMedias[i].messageMediaId = mediaId;
+                                if (oldMedias[i].MessageMediaId) oldMedias[i].MessageMediaId = mediaId;
                             }
                         }
                     });
@@ -280,7 +297,7 @@
         }
 
         if (status === 'sent') {
-            const hadBlobMedia = !!bubble.querySelector('img[src^="blob:"], video[src^="blob:"]');
+            const hadBlobMedia = !!bubble.querySelector('img[src^="blob:"], video[src^="blob:"], .msg-file-link[href^="blob:"]');
             const replaced = replaceOptimisticMediaUrls(ctx, bubble, messagePayload, tempId);
             ctx.retryFiles.delete(tempId);
             if (!hadBlobMedia || replaced) {

@@ -507,17 +507,20 @@ const ChatWindow = {
     const medias = messagePayload.Medias || messagePayload.medias || [];
     if (!Array.isArray(medias) || medias.length === 0) return false;
 
-    const localItems = bubble.querySelectorAll(".msg-media-item");
-    if (!localItems || localItems.length === 0) return false;
-
     let replaced = false;
     medias.forEach((m, i) => {
-      if (!localItems[i]) return;
       const mediaUrl = m.MediaUrl || m.mediaUrl;
+      const mediaId = (m.MessageMediaId || m.messageMediaId || "")
+        .toString()
+        .toLowerCase();
       if (!mediaUrl) return;
 
-      const img = localItems[i].querySelector("img");
-      const vid = localItems[i].querySelector("video");
+      const targetItem = bubble.querySelector(`[data-media-index="${i}"]`);
+      if (!targetItem) return;
+
+      const img = targetItem.querySelector("img");
+      const vid = targetItem.querySelector("video");
+      const fileLink = targetItem.querySelector(".msg-file-link");
       if (img) {
         if (img.src?.startsWith("blob:")) this.revokeBlobUrl(img.src);
         img.src = mediaUrl;
@@ -526,6 +529,17 @@ const ChatWindow = {
       if (vid) {
         if (vid.src?.startsWith("blob:")) this.revokeBlobUrl(vid.src);
         vid.src = mediaUrl;
+        replaced = true;
+      }
+      if (fileLink) {
+        const oldHref = fileLink.getAttribute("href") || "";
+        if (oldHref.startsWith("blob:")) this.revokeBlobUrl(oldHref);
+        fileLink.setAttribute("href", mediaUrl);
+        if (mediaId) {
+          fileLink.setAttribute("data-message-media-id", mediaId);
+        } else {
+          fileLink.removeAttribute("data-message-media-id");
+        }
         replaced = true;
       }
     });
@@ -549,6 +563,7 @@ const ChatWindow = {
       { selector: ".typing-indicator", id: `typing-indicator-${realId}` },
       { selector: ".chat-send-btn", id: `send-btn-${realId}` },
       { selector: ".chat-window-file-input", id: `chat-file-input-${realId}` },
+      { selector: ".chat-window-doc-input", id: `chat-doc-input-${realId}` },
       {
         selector: ".chat-window-attachment-preview",
         id: `chat-window-preview-${realId}`,
@@ -580,8 +595,19 @@ const ChatWindow = {
       fileInput.onchange = () => {
         const files = fileInput.files;
         if (files && files.length > 0) {
-          this.handleMediaUpload(realId, files);
+          this.handleMediaUpload(realId, files, { source: "media" });
           fileInput.value = "";
+        }
+      };
+    }
+
+    const docInput = root.querySelector(".chat-window-doc-input");
+    if (docInput) {
+      docInput.onchange = () => {
+        const files = docInput.files;
+        if (files && files.length > 0) {
+          this.handleMediaUpload(realId, files, { source: "file" });
+          docInput.value = "";
         }
       };
     }
@@ -820,7 +846,7 @@ const ChatWindow = {
         });
 
       const hadBlobMedia = !!optimisticBubble.querySelector(
-        'img[src^="blob:"], video[src^="blob:"]',
+        'img[src^="blob:"], video[src^="blob:"], .msg-file-link[href^="blob:"]',
       );
       const replaced = this.replaceOptimisticMediaUrls(
         optimisticBubble,
@@ -1855,7 +1881,7 @@ const ChatWindow = {
                                 <button class="chat-action-btn" title="Media" onclick="ChatWindow.openFilePicker('${conv.conversationId}')">
                                     <i data-lucide="image"></i>
                                 </button>
-                                <button class="chat-action-btn" title="File" onclick="window.toastInfo && window.toastInfo('Feature coming soon')">
+                                <button class="chat-action-btn" title="File" onclick="ChatWindow.openDocumentPicker('${conv.conversationId}')">
                                     <i data-lucide="paperclip"></i>
                                 </button>
                         </div>
@@ -1874,6 +1900,7 @@ const ChatWindow = {
                     </div>
                 </div>
                 <input type="file" id="chat-file-input-${conv.conversationId}" class="chat-window-file-input" multiple accept="image/*,video/*">
+                <input type="file" id="chat-doc-input-${conv.conversationId}" class="chat-window-doc-input" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,application/zip,application/x-rar-compressed,application/x-7z-compressed">
             </div>
         `;
 
@@ -1908,8 +1935,19 @@ const ChatWindow = {
       fileInput.onchange = () => {
         const files = fileInput.files;
         if (files && files.length > 0) {
-          this.handleMediaUpload(conv.conversationId, files);
+          this.handleMediaUpload(conv.conversationId, files, { source: "media" });
           fileInput.value = "";
+        }
+      };
+    }
+
+    const docInput = chatBox.querySelector(`#chat-doc-input-${conv.conversationId}`);
+    if (docInput) {
+      docInput.onchange = () => {
+        const files = docInput.files;
+        if (files && files.length > 0) {
+          this.handleMediaUpload(conv.conversationId, files, { source: "file" });
+          docInput.value = "";
         }
       };
     }
@@ -3039,6 +3077,59 @@ const ChatWindow = {
     if (actionsGroup) actionsGroup.classList.remove("is-show");
   },
 
+  openDocumentPicker(id) {
+    const input = document.getElementById(`chat-doc-input-${id}`);
+    if (input) input.click();
+
+    // Hide expansion menu
+    const actionsGroup = document.getElementById(`chat-actions-group-${id}`);
+    if (actionsGroup) actionsGroup.classList.remove("is-show");
+  },
+
+  getPendingMediaType(file) {
+    if (!file) return 0;
+    const mime = (file.type || "").toLowerCase();
+    const fileName = (file.name || "").toLowerCase();
+
+    if (mime.startsWith("video/")) return 1;
+    if (mime.startsWith("image/")) return 0;
+
+    const documentExtRegex = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|zip|rar|7z)$/i;
+    const documentMimeSet = new Set([
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-powerpoint",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "text/plain",
+      "text/csv",
+      "application/zip",
+      "application/x-zip-compressed",
+      "application/x-rar-compressed",
+      "application/vnd.rar",
+      "application/x-7z-compressed",
+    ]);
+
+    if (documentMimeSet.has(mime) || documentExtRegex.test(fileName)) return 3;
+    return 0;
+  },
+
+  formatFileSize(bytes) {
+    const value = Number(bytes);
+    if (!Number.isFinite(value) || value <= 0) return "";
+    const units = ["B", "KB", "MB", "GB"];
+    let size = value;
+    let unitIndex = 0;
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex += 1;
+    }
+    const display = size >= 10 || unitIndex === 0 ? Math.round(size) : size.toFixed(1);
+    return `${display} ${units[unitIndex]}`;
+  },
+
   updateSendButtonState(id) {
     const chat = this.openChats.get(id);
     if (!chat) return;
@@ -3049,13 +3140,19 @@ const ChatWindow = {
     if (sendBtn) sendBtn.disabled = !(hasText || hasFiles);
   },
 
-  handleMediaUpload(id, files) {
+  handleMediaUpload(id, files, options = {}) {
     const chat = this.openChats.get(id);
     if (!chat || !files || files.length === 0) return;
 
-    const maxFiles = window.APP_CONFIG?.MAX_CHAT_MEDIA_FILES || 5;
-    const maxSizeMB = window.APP_CONFIG?.MAX_CHAT_FILE_SIZE_MB || 10;
+    const maxFiles = window.APP_CONFIG?.MAX_CHAT_ATTACHMENTS_PER_MESSAGE
+      || window.APP_CONFIG?.MAX_CHAT_MEDIA_FILES
+      || 5;
+    const maxSizeMB = window.APP_CONFIG?.MAX_CHAT_ATTACHMENT_SIZE_MB
+      || window.APP_CONFIG?.MAX_CHAT_FILE_SIZE_MB
+      || 10;
     const currentCount = chat.pendingFiles.length;
+    const source = (options?.source || "media").toString().toLowerCase();
+    const documentOnly = source === "file";
 
     if (currentCount + files.length > maxFiles) {
       if (window.toastError)
@@ -3068,8 +3165,19 @@ const ChatWindow = {
       if (file.size > maxSizeMB * 1024 * 1024) {
         if (window.toastError)
           window.toastError(
-            `File "${file.name}" is too large (Max ${maxSizeMB}MB)`,
+            `Attachment "${file.name}" is too large (Max ${maxSizeMB}MB)`,
           );
+        continue;
+      }
+      const mediaType = this.getPendingMediaType(file);
+      if (documentOnly && mediaType !== 3) {
+        if (window.toastError)
+          window.toastError(`"${file.name}" is not a supported document file`);
+        continue;
+      }
+      if (!documentOnly && mediaType === 3) {
+        if (window.toastInfo)
+          window.toastInfo(`Use the File button to send "${file.name}"`);
         continue;
       }
       validFiles.push(file);
@@ -3092,28 +3200,67 @@ const ChatWindow = {
     previewEl.innerHTML = "";
 
     chat.pendingFiles.forEach((file, index) => {
-      const isVideo = file.type.startsWith("video/");
-      const url = this.trackBlobUrl(URL.createObjectURL(file), `preview:${id}`);
+      const mediaType = this.getPendingMediaType(file);
+      const isVideo = mediaType === 1;
+      const isImage = mediaType === 0;
+      const isDocument = mediaType === 3;
+      const url =
+        isVideo || isImage
+          ? this.trackBlobUrl(URL.createObjectURL(file), `preview:${id}`)
+          : "";
+      const safeName = escapeHtml(file.name || "Document");
+      const sizeText = this.formatFileSize(file.size);
 
       const item = document.createElement("div");
-      item.className = "chat-window-preview-item";
-      item.innerHTML = `
-                ${isVideo ? `<video src="${url}"></video>` : `<img src="${url}" alt="preview">`}
-                <div class="chat-window-preview-remove" onclick="ChatWindow.removeAttachment('${id}', ${index})">
-                    <i data-lucide="x"></i>
-                </div>
-            `;
+      item.className = `chat-window-preview-item${isDocument ? " file" : ""}`;
+      if (isVideo) {
+        item.innerHTML = `
+                  <video src="${url}"></video>
+                  <div class="chat-window-preview-remove" onclick="ChatWindow.removeAttachment('${id}', ${index})">
+                      <i data-lucide="x"></i>
+                  </div>
+              `;
+      } else if (isImage) {
+        item.innerHTML = `
+                  <img src="${url}" alt="preview">
+                  <div class="chat-window-preview-remove" onclick="ChatWindow.removeAttachment('${id}', ${index})">
+                      <i data-lucide="x"></i>
+                  </div>
+              `;
+      } else {
+        item.innerHTML = `
+                  <div class="chat-window-preview-file-card" title="${safeName}">
+                      <div class="chat-window-preview-file-icon"><i data-lucide="file-text"></i></div>
+                      <div class="chat-window-preview-file-meta">
+                          <div class="chat-window-preview-file-name">${safeName}</div>
+                          <div class="chat-window-preview-file-size">${escapeHtml(sizeText || "File")}</div>
+                      </div>
+                  </div>
+                  <div class="chat-window-preview-remove" onclick="ChatWindow.removeAttachment('${id}', ${index})">
+                      <i data-lucide="x"></i>
+                  </div>
+              `;
+      }
       previewEl.appendChild(item);
     });
 
     // Add the "+" button like Facebook Messenger if under limit
-    const maxFiles = window.APP_CONFIG?.MAX_CHAT_MEDIA_FILES || 5;
+    const maxFiles = window.APP_CONFIG?.MAX_CHAT_ATTACHMENTS_PER_MESSAGE
+      || window.APP_CONFIG?.MAX_CHAT_MEDIA_FILES
+      || 5;
     if (chat.pendingFiles.length > 0 && chat.pendingFiles.length < maxFiles) {
+      const hasOnlyDocuments = chat.pendingFiles.every(
+        (file) => this.getPendingMediaType(file) === 3,
+      );
       const addBtn = document.createElement("div");
       addBtn.className = "chat-window-preview-add-btn";
       addBtn.innerHTML = '<i data-lucide="plus"></i>';
-      addBtn.onclick = () =>
-        document.getElementById(`chat-file-input-${id}`).click();
+      addBtn.onclick = () => {
+        const targetInputId = hasOnlyDocuments
+          ? `chat-doc-input-${id}`
+          : `chat-file-input-${id}`;
+        document.getElementById(targetInputId)?.click();
+      };
       previewEl.appendChild(addBtn);
     }
 
@@ -3540,7 +3687,9 @@ const ChatWindow = {
     const filesToSend = [...(chat.pendingFiles || [])];
     const medias = filesToSend.map((file) => ({
       mediaUrl: this.trackBlobUrl(URL.createObjectURL(file), tempId),
-      mediaType: file.type.startsWith("video/") ? 1 : 0,
+      mediaType: this.getPendingMediaType(file),
+      fileName: file.name || "",
+      fileSize: Number(file.size) || 0,
     }));
 
     if (filesToSend.length > 0) {
@@ -3626,6 +3775,22 @@ const ChatWindow = {
 
       if (res.ok) {
         const msg = await res.json();
+        if (
+          window.ChatSidebar &&
+          typeof window.ChatSidebar.incrementUnread === "function"
+        ) {
+          const sidebarConversationId = (
+            msg?.conversationId ||
+            msg?.ConversationId ||
+            id ||
+            ""
+          )
+            .toString()
+            .toLowerCase();
+          if (sidebarConversationId) {
+            window.ChatSidebar.incrementUnread(sidebarConversationId, msg, true);
+          }
+        }
         const realMessageId = msg?.messageId || msg?.MessageId;
         this.updateMessageStatus(
           id,
@@ -3712,7 +3877,7 @@ const ChatWindow = {
 
     if (status === "sent") {
       const hadBlobMedia = !!msgEl.querySelector(
-        'img[src^="blob:"], video[src^="blob:"]',
+        'img[src^="blob:"], video[src^="blob:"], .msg-file-link[href^="blob:"]',
       );
       const replaced = this.replaceOptimisticMediaUrls(
         msgEl,
@@ -3817,6 +3982,22 @@ const ChatWindow = {
 
       if (res.ok) {
         const msg = await res.json();
+        if (
+          window.ChatSidebar &&
+          typeof window.ChatSidebar.incrementUnread === "function"
+        ) {
+          const sidebarConversationId = (
+            msg?.conversationId ||
+            msg?.ConversationId ||
+            chatId ||
+            ""
+          )
+            .toString()
+            .toLowerCase();
+          if (sidebarConversationId) {
+            window.ChatSidebar.incrementUnread(sidebarConversationId, msg, true);
+          }
+        }
         const realMessageId = msg?.messageId || msg?.MessageId;
         this.updateMessageStatus(
           chatId,

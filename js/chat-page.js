@@ -3,6 +3,24 @@
  * Logic for the full-screen /messages page.
  * Note: The conversation list is handled by the global ChatSidebar.
  */
+const CHAT_DOCUMENT_EXT_REGEX = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|zip|rar|7z)$/i;
+const CHAT_DOCUMENT_MIME_SET = new Set([
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'text/plain',
+    'text/csv',
+    'application/zip',
+    'application/x-zip-compressed',
+    'application/x-rar-compressed',
+    'application/vnd.rar',
+    'application/x-7z-compressed'
+]);
+
 const ChatPage = {
     currentChatId: null,
     page: 1,
@@ -156,6 +174,32 @@ const ChatPage = {
         this._blobUrls.delete(tempId);
     },
 
+    getPendingMediaType(file) {
+        if (!file) return 0;
+        const mime = (file.type || '').toLowerCase();
+        const fileName = (file.name || '').toLowerCase();
+
+        if (mime.startsWith('video/')) return 1;
+        if (mime.startsWith('image/')) return 0;
+
+        if (CHAT_DOCUMENT_MIME_SET.has(mime) || CHAT_DOCUMENT_EXT_REGEX.test(fileName)) return 3;
+        return 0;
+    },
+
+    formatFileSize(bytes) {
+        const value = Number(bytes);
+        if (!Number.isFinite(value) || value <= 0) return '';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let size = value;
+        let unitIndex = 0;
+        while (size >= 1024 && unitIndex < units.length - 1) {
+            size /= 1024;
+            unitIndex += 1;
+        }
+        const display = size >= 10 || unitIndex === 0 ? Math.round(size) : size.toFixed(1);
+        return `${display} ${units[unitIndex]}`;
+    },
+
     replaceOptimisticMediaUrls(bubble, messagePayload, tempId = null) {
         const ctx = this.getRuntimeCtx();
         if (ctx) {
@@ -165,17 +209,18 @@ const ChatPage = {
         const medias = messagePayload.Medias || messagePayload.medias || [];
         if (!Array.isArray(medias) || medias.length === 0) return false;
 
-        const localItems = bubble.querySelectorAll('.msg-media-item');
-        if (!localItems || localItems.length === 0) return false;
-
         let replaced = false;
         medias.forEach((m, i) => {
-            if (!localItems[i]) return;
             const mediaUrl = m.MediaUrl || m.mediaUrl;
+            const mediaId = (m.MessageMediaId || m.messageMediaId || '').toString().toLowerCase();
             if (!mediaUrl) return;
 
-            const img = localItems[i].querySelector('img');
-            const vid = localItems[i].querySelector('video');
+            const targetItem = bubble.querySelector(`[data-media-index="${i}"]`);
+            if (!targetItem) return;
+
+            const img = targetItem.querySelector('img');
+            const vid = targetItem.querySelector('video');
+            const fileLink = targetItem.querySelector('.msg-file-link');
             if (img) {
                 if (img.src?.startsWith('blob:')) this.revokeBlobUrl(img.src);
                 img.src = mediaUrl;
@@ -184,6 +229,17 @@ const ChatPage = {
             if (vid) {
                 if (vid.src?.startsWith('blob:')) this.revokeBlobUrl(vid.src);
                 vid.src = mediaUrl;
+                replaced = true;
+            }
+            if (fileLink) {
+                const oldHref = fileLink.getAttribute('href') || '';
+                if (oldHref.startsWith('blob:')) this.revokeBlobUrl(oldHref);
+                fileLink.setAttribute('href', mediaUrl);
+                if (mediaId) {
+                    fileLink.setAttribute('data-message-media-id', mediaId);
+                } else {
+                    fileLink.removeAttribute('data-message-media-id');
+                }
                 replaced = true;
             }
         });
@@ -275,17 +331,34 @@ const ChatPage = {
 
         // Upload media button
         const uploadBtn = document.getElementById('chat-upload-btn');
-        const fileInput = document.getElementById('chat-file-input');
-        if (uploadBtn && fileInput) {
+        const mediaInput = document.getElementById('chat-file-input');
+        if (uploadBtn && mediaInput) {
             uploadBtn.onclick = (e) => {
                 e.stopPropagation();
-                fileInput.click();
+                mediaInput.click();
             };
-            fileInput.onchange = () => {
-                const files = fileInput.files;
+            mediaInput.onchange = () => {
+                const files = mediaInput.files;
                 if (files.length > 0) {
-                    this.handleMediaUpload(files);
-                    fileInput.value = ''; // Reset
+                    this.handleMediaUpload(files, { source: 'media' });
+                    mediaInput.value = ''; // Reset
+                }
+            };
+        }
+
+        // Upload document button
+        const attachmentBtn = document.getElementById('chat-attachment-btn');
+        const documentInput = document.getElementById('chat-document-input');
+        if (attachmentBtn && documentInput) {
+            attachmentBtn.onclick = (e) => {
+                e.stopPropagation();
+                documentInput.click();
+            };
+            documentInput.onchange = () => {
+                const files = documentInput.files;
+                if (files.length > 0) {
+                    this.handleMediaUpload(files, { source: 'file' });
+                    documentInput.value = ''; // Reset
                 }
             };
         }
@@ -628,7 +701,7 @@ const ChatPage = {
                 });
 
                 // Replace local blob URLs with real server URLs
-                const hadBlobMedia = !!optimisticBubble.querySelector('img[src^="blob:"], video[src^="blob:"]');
+                const hadBlobMedia = !!optimisticBubble.querySelector('img[src^="blob:"], video[src^="blob:"], .msg-file-link[href^="blob:"]');
                 const replaced = this.replaceOptimisticMediaUrls(optimisticBubble, msg, tempId);
 
                 const seenRow = optimisticBubble.querySelector('.msg-seen-row');
@@ -2025,14 +2098,17 @@ const ChatPage = {
             const item = document.createElement('div');
             item.className = 'chat-search-item';
 
-            const sender = msg.sender || {};
+            const sender = msg.sender || msg.Sender || {};
             const avatar = sender.avatarUrl || window.APP_CONFIG?.DEFAULT_AVATAR;
             const name = sender.username || sender.fullName || 'User';
+            const messageId = (msg.messageId || msg.MessageId || msg.id || msg.Id || '').toString().toLowerCase();
+            const messageContent = msg.content ?? msg.Content ?? '';
+            const messageSentAt = msg.sentAt || msg.SentAt;
 
             // Build smart snippet with keyword highlighted
-            const contentHtml = this._buildSearchSnippet(msg.content || '', this.searchKeyword);
+            const contentHtml = this._buildSearchSnippet(messageContent, this.searchKeyword);
 
-            const timeLabel = window.PostUtils?.timeAgo ? window.PostUtils.timeAgo(msg.sentAt) : '';
+            const timeLabel = window.PostUtils?.timeAgo ? window.PostUtils.timeAgo(messageSentAt) : '';
 
             item.innerHTML = `
                 <img class="chat-search-item-avatar" src="${avatar}" alt="" onerror="this.src='${window.APP_CONFIG?.DEFAULT_AVATAR}'">
@@ -2044,8 +2120,12 @@ const ChatPage = {
             `;
 
             item.onclick = () => {
+                if (!messageId) {
+                    window.toastInfo && window.toastInfo('Could not locate this message.');
+                    return;
+                }
                 if (window.ChatActions && typeof window.ChatActions.jumpToMessage === 'function') {
-                    window.ChatActions.jumpToMessage(this.currentChatId || '', msg.messageId || '');
+                    window.ChatActions.jumpToMessage(this.currentChatId || '', messageId);
                 }
             };
 
@@ -2812,7 +2892,9 @@ const ChatPage = {
         // Prepare local preview URLs for optimistic UI if there are files
         const medias = this.pendingFiles.map(file => ({
             mediaUrl: this.trackBlobUrl(URL.createObjectURL(file), tempId), // Local preview link
-            mediaType: file.type.startsWith('video/') ? 1 : 0
+            mediaType: this.getPendingMediaType(file),
+            fileName: file.name || '',
+            fileSize: Number(file.size) || 0
         }));
 
         // New outgoing message: clear any previous "Sent" indicators
@@ -2838,6 +2920,7 @@ const ChatPage = {
         if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
             window.ChatSidebar.incrementUnread(this.currentChatId, {
                 content,
+                medias: medias.length > 0 ? medias : null,
                 sender: { accountId: (localStorage.getItem('accountId') || '') },
                 sentAt: new Date()
             });
@@ -2898,6 +2981,12 @@ const ChatPage = {
             
             if (res.ok) {
                 const msg = await res.json();
+                if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
+                    const sidebarConversationId = (msg?.conversationId || msg?.ConversationId || this.currentChatId || '').toString().toLowerCase();
+                    if (sidebarConversationId) {
+                        window.ChatSidebar.incrementUnread(sidebarConversationId, msg, true);
+                    }
+                }
                 this.updateMessageStatus(tempId, 'sent', content, msg?.messageId || msg?.MessageId, msg);
             } else {
                 this.updateMessageStatus(tempId, 'failed', content);
@@ -2925,12 +3014,18 @@ const ChatPage = {
         if (sendBtn) sendBtn.disabled = !canSend;
     },
 
-    async handleMediaUpload(files) {
+    async handleMediaUpload(files, options = {}) {
         if (!files || files.length === 0 || !this.currentChatId) return;
 
-        const maxFiles = window.APP_CONFIG?.MAX_CHAT_MEDIA_FILES || 5;
-        const maxSizeMB = window.APP_CONFIG?.MAX_CHAT_FILE_SIZE_MB || 10;
+        const maxFiles = window.APP_CONFIG?.MAX_CHAT_ATTACHMENTS_PER_MESSAGE
+            || window.APP_CONFIG?.MAX_CHAT_MEDIA_FILES
+            || 5;
+        const maxSizeMB = window.APP_CONFIG?.MAX_CHAT_ATTACHMENT_SIZE_MB
+            || window.APP_CONFIG?.MAX_CHAT_FILE_SIZE_MB
+            || 10;
         const currentCount = this.pendingFiles.length;
+        const source = (options?.source || 'media').toString().toLowerCase();
+        const documentOnly = source === 'file';
         
         if (currentCount + files.length > maxFiles) {
             if (window.toastError) window.toastError(`Maximum ${maxFiles} files allowed`);
@@ -2940,7 +3035,16 @@ const ChatPage = {
         const validFiles = [];
         for (let file of files) {
             if (file.size > maxSizeMB * 1024 * 1024) {
-                if (window.toastError) window.toastError(`File "${file.name}" is too large (Max ${maxSizeMB}MB)`);
+                if (window.toastError) window.toastError(`Attachment "${file.name}" is too large (Max ${maxSizeMB}MB)`);
+                continue;
+            }
+            const mediaType = this.getPendingMediaType(file);
+            if (documentOnly && mediaType !== 3) {
+                if (window.toastError) window.toastError(`"${file.name}" is not a supported document file`);
+                continue;
+            }
+            if (!documentOnly && mediaType === 3) {
+                if (window.toastInfo) window.toastInfo(`Use the File button to send "${file.name}"`);
                 continue;
             }
             validFiles.push(file);
@@ -2962,11 +3066,18 @@ const ChatPage = {
         previewEl.innerHTML = '';
         
         this.pendingFiles.forEach((file, index) => {
-            const isVideo = file.type.startsWith('video/');
-            const url = this.trackBlobUrl(URL.createObjectURL(file), 'preview');
+            const mediaType = this.getPendingMediaType(file);
+            const isVideo = mediaType === 1;
+            const isImage = mediaType === 0;
+            const isDocument = mediaType === 3;
+            const url = (isVideo || isImage)
+                ? this.trackBlobUrl(URL.createObjectURL(file), 'preview')
+                : '';
+            const safeName = escapeHtml(file.name || 'Document');
+            const sizeText = this.formatFileSize(file.size);
 
             const item = document.createElement('div');
-            item.className = 'chat-preview-item';
+            item.className = `chat-preview-item${isDocument ? ' file' : ''}`;
             
             if (isVideo) {
                 item.innerHTML = `
@@ -2975,9 +3086,22 @@ const ChatPage = {
                         <i data-lucide="x"></i>
                     </div>
                 `;
-            } else {
+            } else if (isImage) {
                 item.innerHTML = `
                     <img src="${url}" alt="preview">
+                    <div class="chat-preview-remove" onclick="ChatPage.removeAttachment(${index})">
+                        <i data-lucide="x"></i>
+                    </div>
+                `;
+            } else {
+                item.innerHTML = `
+                    <div class="chat-preview-file-card" title="${safeName}">
+                        <div class="chat-preview-file-icon"><i data-lucide="file-text"></i></div>
+                        <div class="chat-preview-file-meta">
+                            <div class="chat-preview-file-name">${safeName}</div>
+                            <div class="chat-preview-file-size">${escapeHtml(sizeText || 'File')}</div>
+                        </div>
+                    </div>
                     <div class="chat-preview-remove" onclick="ChatPage.removeAttachment(${index})">
                         <i data-lucide="x"></i>
                     </div>
@@ -2987,12 +3111,18 @@ const ChatPage = {
         });
 
         // Add the "+" button like Facebook Messenger if under limit
-        const maxFiles = window.APP_CONFIG?.MAX_CHAT_MEDIA_FILES || 10;
+        const maxFiles = window.APP_CONFIG?.MAX_CHAT_ATTACHMENTS_PER_MESSAGE
+            || window.APP_CONFIG?.MAX_CHAT_MEDIA_FILES
+            || 5;
         if (this.pendingFiles.length > 0 && this.pendingFiles.length < maxFiles) {
+            const hasOnlyDocuments = this.pendingFiles.every(file => this.getPendingMediaType(file) === 3);
             const addBtn = document.createElement('div');
             addBtn.className = 'chat-preview-add-btn';
             addBtn.innerHTML = '<i data-lucide="plus"></i>';
-            addBtn.onclick = () => document.getElementById('chat-file-input').click();
+            addBtn.onclick = () => {
+                const targetInputId = hasOnlyDocuments ? 'chat-document-input' : 'chat-file-input';
+                document.getElementById(targetInputId)?.click();
+            };
             previewEl.appendChild(addBtn);
         }
 
@@ -3056,7 +3186,7 @@ const ChatPage = {
         }
 
         if (status === 'sent') {
-            const hadBlobMedia = !!bubble.querySelector('img[src^="blob:"], video[src^="blob:"]');
+            const hadBlobMedia = !!bubble.querySelector('img[src^="blob:"], video[src^="blob:"], .msg-file-link[href^="blob:"]');
             const replaced = this.replaceOptimisticMediaUrls(bubble, messagePayload, tempId);
             this.retryFiles.delete(tempId);
             if (!hadBlobMedia || replaced) {
@@ -3142,6 +3272,12 @@ const ChatPage = {
             
             if (res.ok) {
                 const msg = await res.json();
+                if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
+                    const sidebarConversationId = (msg?.conversationId || msg?.ConversationId || this.currentChatId || '').toString().toLowerCase();
+                    if (sidebarConversationId) {
+                        window.ChatSidebar.incrementUnread(sidebarConversationId, msg, true);
+                    }
+                }
                 this.updateMessageStatus(tempId, 'sent', content, msg?.messageId || msg?.MessageId, msg);
             } else {
                 this.updateMessageStatus(tempId, 'failed', content);

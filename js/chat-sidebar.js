@@ -495,6 +495,99 @@ const ChatSidebar = {
         return changed;
     },
 
+    renderConversationLastMessage(conv) {
+        if (!conv) return false;
+        const item = document.querySelector(`.chat-item[data-conversation-id="${conv.conversationId}"]`);
+        if (!item) return true;
+
+        let previewText = ChatCommon.getLastMsgPreview(conv);
+        const myId = (localStorage.getItem('accountId') || '').toLowerCase();
+        const lastMessage = conv.lastMessage || {};
+        const isSystemLastMessage = window.ChatCommon && typeof ChatCommon.isSystemMessage === 'function'
+            ? ChatCommon.isSystemMessage(lastMessage)
+            : false;
+        const lastMsgSenderId = (
+            lastMessage?.sender?.accountId ||
+            lastMessage?.sender?.AccountId ||
+            lastMessage?.Sender?.accountId ||
+            lastMessage?.Sender?.AccountId ||
+            ''
+        ).toLowerCase();
+
+        if (lastMsgSenderId && !isSystemLastMessage) {
+            if (lastMsgSenderId === myId) {
+                previewText = `You: ${previewText}`;
+            } else if (conv.isGroup) {
+                const sender = lastMessage?.sender || lastMessage?.Sender || {};
+                const senderName = sender.nickname || sender.Nickname || sender.username || sender.Username || sender.fullName || sender.FullName || 'User';
+                previewText = `${senderName}: ${previewText}`;
+            }
+        }
+
+        const preview = item.querySelector('.chat-last-msg');
+        if (preview) preview.textContent = previewText;
+
+        const msgRow = item.querySelector('.chat-msg-row');
+        if (!msgRow) return true;
+
+        msgRow.querySelectorAll('.chat-msg-dot, .chat-meta').forEach(el => el.remove());
+        const sentAt = conv.lastMessageSentAt || conv.lastMessage?.sentAt || conv.lastMessage?.SentAt || null;
+        if (sentAt) {
+            const dot = document.createElement('span');
+            dot.className = 'chat-msg-dot';
+            dot.textContent = '·';
+            const time = document.createElement('span');
+            time.className = 'chat-meta';
+            time.textContent = PostUtils.timeAgo(sentAt, true);
+            msgRow.appendChild(dot);
+            msgRow.appendChild(time);
+        }
+
+        return true;
+    },
+
+    getMessageIdentity(message) {
+        if (!message || typeof message !== 'object') return '';
+        return (
+            message.messageId ||
+            message.MessageId ||
+            message.id ||
+            message.Id ||
+            message.tempId ||
+            message.TempId ||
+            ''
+        ).toString().toLowerCase();
+    },
+
+    applyMessageHidden(conversationId, messageId, replacementMessage = null) {
+        const convTarget = (conversationId || '').toLowerCase();
+        const msgTarget = (messageId || '').toString().toLowerCase();
+        if (!convTarget || !msgTarget) return false;
+
+        const conv = this.conversations.find(c => (c.conversationId || '').toLowerCase() === convTarget);
+        if (!conv) return false;
+
+        const lastMessageId = this.getMessageIdentity(conv.lastMessage);
+        if (conv.lastMessage && lastMessageId && lastMessageId !== msgTarget) return false;
+
+        if (replacementMessage) {
+            conv.lastMessage = replacementMessage;
+            conv.lastMessageSentAt = replacementMessage.sentAt || replacementMessage.SentAt || null;
+            conv.lastMessagePreview = null;
+        } else {
+            conv.lastMessage = null;
+            conv.lastMessageSentAt = null;
+            conv.lastMessagePreview = conv.isGroup ? 'Group created' : 'Started a conversation';
+        }
+
+        conv.lastMessageSeenBy = [];
+        conv.lastMessageSeenCount = 0;
+        const rendered = this.renderConversationLastMessage(conv);
+        const item = document.querySelector(`.chat-item[data-conversation-id="${conv.conversationId}"]`);
+        item?.querySelector('.chat-item-end .chat-seen-avatars')?.remove();
+        return rendered;
+    },
+
     applyMessageRecalled(conversationId, messageId) {
         const convTarget = (conversationId || '').toLowerCase();
         const msgTarget = (messageId || '').toString().toLowerCase();
@@ -503,46 +596,15 @@ const ChatSidebar = {
         const conv = this.conversations.find(c => (c.conversationId || '').toLowerCase() === convTarget);
         if (!conv || !conv.lastMessage) return false;
 
-        const lastMessageId = (
-            conv.lastMessage.messageId ||
-            conv.lastMessage.MessageId ||
-            ''
-        ).toString().toLowerCase();
-
-        if (!lastMessageId || lastMessageId !== msgTarget) return false;
+        const lastMessageId = this.getMessageIdentity(conv.lastMessage);
+        if (lastMessageId && lastMessageId !== msgTarget) return false;
 
         conv.lastMessage.isRecalled = true;
         conv.lastMessage.IsRecalled = true;
         conv.lastMessage.content = null;
         conv.lastMessage.Content = null;
         conv.lastMessagePreview = 'Message recalled';
-
-        const item = document.querySelector(`.chat-item[data-conversation-id="${conv.conversationId}"]`);
-        if (!item) return true;
-
-        let previewText = ChatCommon.getLastMsgPreview(conv);
-        const myId = (localStorage.getItem('accountId') || '').toLowerCase();
-        const lastMsgSenderId = (
-            conv.lastMessage?.sender?.accountId ||
-            conv.lastMessage?.sender?.AccountId ||
-            conv.lastMessage?.Sender?.accountId ||
-            conv.lastMessage?.Sender?.AccountId ||
-            ''
-        ).toLowerCase();
-
-        if (lastMsgSenderId) {
-            if (lastMsgSenderId === myId) {
-                previewText = `You: ${previewText}`;
-            } else if (conv.isGroup) {
-                const sender = conv.lastMessage.sender || conv.lastMessage.Sender || {};
-                const senderName = sender.nickname || sender.Nickname || sender.username || sender.Username || sender.fullName || sender.FullName || 'User';
-                previewText = `${senderName}: ${previewText}`;
-            }
-        }
-
-        const preview = item.querySelector('.chat-last-msg');
-        if (preview) preview.textContent = previewText;
-        return true;
+        return this.renderConversationLastMessage(conv);
     },
 
     /**
@@ -614,7 +676,10 @@ const ChatSidebar = {
                 content = ChatCommon.getSystemMessageText(message);
             } else if (!content && isMedia) {
                 const firstMedia = (message.medias || message.Medias)[0];
-                const type = firstMedia.mediaType === 0 ? '[Image]' : '[Video]';
+                const mediaType = Number(firstMedia?.mediaType ?? firstMedia?.MediaType ?? 0);
+                const type = (window.ChatCommon && typeof ChatCommon.getMediaTypeLabel === 'function')
+                    ? ChatCommon.getMediaTypeLabel(mediaType)
+                    : (mediaType === 1 ? '[Video]' : (mediaType === 3 ? '[File]' : '[Image]'));
                 content = type;
             }
 

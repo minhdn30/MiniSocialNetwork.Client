@@ -140,6 +140,89 @@
   cursor: pointer;
 }
 
+/* Document attachments */
+.msg-content-container .msg-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  width: 100%;
+  max-width: 100%;
+}
+
+.msg-content-container .msg-file-item {
+  width: 100%;
+  max-width: 100%;
+}
+
+.msg-content-container .msg-file-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--chat-theme-border, var(--border-primary));
+  background: var(--chat-theme-surface-alt, var(--bg-secondary));
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: background 0.2s, transform 0.2s;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.msg-content-container .msg-file-link:hover {
+  background: var(--chat-theme-action-hover-bg, var(--bg-hover));
+  transform: translateY(-1px);
+}
+
+.msg-content-container .msg-file-icon {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  border-radius: 8px;
+  background: var(--chat-theme-action-hover-bg, var(--bg-active));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--chat-theme-action-color, var(--text-primary));
+}
+
+.msg-content-container .msg-file-icon i,
+.msg-content-container .msg-file-icon svg {
+  width: 16px;
+  height: 16px;
+  color: inherit;
+}
+
+.msg-content-container .msg-file-meta {
+  flex: 1;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.msg-content-container .msg-file-name {
+  display: block;
+  max-width: 100%;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.msg-content-container .msg-file-size {
+  font-size: 11px;
+  color: var(--chat-theme-system-text, var(--text-tertiary));
+  white-space: nowrap;
+}
+
 /* Chat Link Styles */
 .msg-bubble a {
     cursor: pointer;

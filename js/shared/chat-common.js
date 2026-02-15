@@ -642,6 +642,7 @@ const ChatCommon = {
         const rawMedias = m.medias || m.Medias;
         if (Array.isArray(rawMedias)) {
             m.medias = rawMedias.map(item => ({
+                messageMediaId: (item.messageMediaId || item.MessageMediaId || '').toString().toLowerCase(),
                 mediaUrl: item.mediaUrl || item.MediaUrl || '',
                 mediaType: item.mediaType !== undefined ? item.mediaType : (item.MediaType !== undefined ? item.MediaType : 0),
                 thumbnailUrl: item.thumbnailUrl || item.ThumbnailUrl || null,
@@ -717,6 +718,27 @@ const ChatCommon = {
         }
 
         return m;
+    },
+
+    getMediaTypeLabel(mediaType) {
+        const normalized = Number(mediaType);
+        if (normalized === 1) return '[Video]';
+        if (normalized === 3) return '[File]';
+        return '[Image]';
+    },
+
+    formatAttachmentSize(bytes) {
+        const value = Number(bytes);
+        if (!Number.isFinite(value) || value <= 0) return '';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let size = value;
+        let unitIndex = 0;
+        while (size >= 1024 && unitIndex < units.length - 1) {
+            size /= 1024;
+            unitIndex += 1;
+        }
+        const display = size >= 10 || unitIndex === 0 ? Math.round(size) : size.toFixed(1);
+        return `${display} ${units[unitIndex]}`;
     },
 
     /**
@@ -816,36 +838,40 @@ const ChatCommon = {
         }
 
         // --- Media ---
-        const allMedias = msg.medias || [];
-        const hasMedia = !isRecalled && allMedias.length > 0;
+        const allMedias = Array.isArray(msg.medias) ? msg.medias : [];
+        const indexedMedias = allMedias.map((media, index) => ({
+            media,
+            index,
+            mediaType: Number(media?.mediaType ?? media?.MediaType ?? 0)
+        }));
+        const visualMedias = indexedMedias.filter(item => item.mediaType === 0 || item.mediaType === 1);
+        const documentMedias = indexedMedias.filter(item => item.mediaType === 3);
+
         let mediaHtml = '';
-        if (hasMedia) {
-            // Only show up to 4 items in the grid
-            const displayMedias = allMedias.slice(0, 4);
-            const remainingCount = allMedias.length - 4;
-            const gridClass = `count-${Math.min(allMedias.length, 4)}`;
+        if (!isRecalled && visualMedias.length > 0) {
+            const displayMedias = visualMedias.slice(0, 4);
+            const remainingCount = visualMedias.length - 4;
+            const gridClass = `count-${Math.min(visualMedias.length, 4)}`;
+            const mediaListJson = JSON.stringify(visualMedias.map(item => item.media)).replace(/"/g, '&quot;');
 
-            // Escaping JSON for HTML attribute safely
-            // We use camelCase properties because we normalized them in normalizeMessage
-            const mediaListJson = JSON.stringify(allMedias).replace(/"/g, '&quot;');
-
-            mediaHtml = `
+            mediaHtml += `
                 <div class="msg-media-grid ${gridClass}" data-medias="${mediaListJson}">
-                    ${displayMedias.map((m, idx) => {
+                    ${displayMedias.map((entry, idx) => {
+                        const m = entry.media || {};
                         const isLast = idx === 3 && remainingCount > 0;
+                        const safeMediaUrl = (m.mediaUrl || '').replace(/"/g, '&quot;');
                         let inner = '';
                         let onclickStr = '';
                         let dblclickStr = `ondblclick="ChatCommon.previewGridMedia(this, ${idx}, event)"`;
 
-                        if (m.mediaType === 0) {
-                            inner = `<img src="${m.mediaUrl}" alt="media" loading="lazy">`;
-                            // Image: single click opens preview
+                        if (entry.mediaType === 0) {
+                            inner = `<img src="${safeMediaUrl}" alt="media" loading="lazy">`;
                             onclickStr = `onclick="ChatCommon.previewGridMedia(this, ${idx}, event)"`;
-                            dblclickStr = ''; 
-                        } else if (m.mediaType === 1) {
+                            dblclickStr = '';
+                        } else {
                             inner = `
                                 <div class="msg-video-container">
-                                    <video src="${m.mediaUrl}" loop muted playsinline></video>
+                                    <video src="${safeMediaUrl}" loop muted playsinline></video>
                                     <div class="msg-video-overlay" onclick="ChatCommon.toggleChatVideo(event, this)">
                                         <div class="play-button-wrapper">
                                             <i data-lucide="play" class="play-icon"></i>
@@ -853,13 +879,43 @@ const ChatCommon = {
                                     </div>
                                 </div>
                             `;
-                            // Video: single click handled by overlay, dblclick for zoom
                         }
 
                         return `
-                            <div class="msg-media-item" ${onclickStr} ${dblclickStr}>
+                            <div class="msg-media-item" data-media-index="${entry.index}" ${onclickStr} ${dblclickStr}>
                                 ${inner}
                                 ${isLast ? `<div class="msg-media-more-overlay" onclick="event.stopPropagation(); ChatCommon.previewGridMedia(this, 3, event)">+${remainingCount}</div>` : ''}
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        if (!isRecalled && documentMedias.length > 0) {
+            mediaHtml += `
+                <div class="msg-file-list">
+                    ${documentMedias.map((entry) => {
+                        const m = entry.media || {};
+                        const mediaUrl = (m.mediaUrl || '').toString();
+                        const safeMediaUrl = mediaUrl.replace(/"/g, '&quot;');
+                        const mediaId = (m.messageMediaId || m.MessageMediaId || '').toString().toLowerCase();
+                        const safeMediaId = mediaId.replace(/"/g, '&quot;');
+                        const rawFileName = (m.fileName || m.FileName || mediaUrl.split('/').pop()?.split('?')[0] || `File ${entry.index + 1}`).toString();
+                        const safeFileName = escapeHtml(rawFileName);
+                        const safeDownloadName = rawFileName.replace(/"/g, '&quot;');
+                        const sizeText = this.formatAttachmentSize(m.fileSize || m.FileSize);
+                        const safeSize = escapeHtml(sizeText || 'File');
+
+                        return `
+                            <div class="msg-file-item" data-media-index="${entry.index}">
+                                <a class="msg-file-link" href="${safeMediaUrl}" download="${safeDownloadName}" data-message-media-id="${safeMediaId}" onclick="return ChatCommon.handleFileLinkClick(event, this)">
+                                    <span class="msg-file-icon"><i data-lucide="file-text"></i></span>
+                                    <span class="msg-file-meta">
+                                        <span class="msg-file-name" title="${safeFileName}">${safeFileName}</span>
+                                        <span class="msg-file-size">${safeSize}</span>
+                                    </span>
+                                </a>
                             </div>
                         `;
                     }).join('')}
@@ -981,6 +1037,91 @@ const ChatCommon = {
             }
         } catch (e) {
             console.error('Failed to preview grid media:', e);
+        }
+    },
+
+    handleFileLinkClick(event, linkEl) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+
+        const href = (linkEl?.getAttribute('href') || '').trim();
+        if (!href) return false;
+
+        const fileName = (linkEl?.getAttribute('download') || '').trim();
+        this.downloadAttachmentFromLink(linkEl, href, fileName);
+        return false;
+    },
+
+    async downloadAttachmentFromLink(linkEl, fallbackUrl, fileName = '') {
+        const messageMediaId = (linkEl?.dataset?.messageMediaId || '').trim().toLowerCase();
+        let downloadUrl = fallbackUrl;
+
+        if (messageMediaId && window.API?.Messages?.getMediaDownloadUrl) {
+            try {
+                const res = await window.API.Messages.getMediaDownloadUrl(messageMediaId);
+                if (res?.ok) {
+                    const payload = await res.json();
+                    const signedUrl = (payload?.url || payload?.Url || '').toString().trim();
+                    if (signedUrl) {
+                        downloadUrl = signedUrl;
+                    }
+                } else if (window.toastError) {
+                    window.toastError('Unable to get download link for this file.');
+                }
+            } catch (error) {
+                console.error('Failed to request download URL:', error);
+                if (window.toastError) {
+                    window.toastError('Failed to request file download link.');
+                }
+            }
+        }
+
+        const success = await this.downloadAttachment(downloadUrl, fileName);
+        if (!success && downloadUrl !== fallbackUrl) {
+            await this.downloadAttachment(fallbackUrl, fileName);
+        }
+    },
+
+    async downloadAttachment(url, fileName = '') {
+        const targetUrl = (url || '').toString().trim();
+        if (!targetUrl) return false;
+
+        const fallbackName = targetUrl.split('/').pop()?.split('?')[0] || 'file';
+        const safeName = (fileName || fallbackName || 'file').toString().trim();
+
+        try {
+            const response = await fetch(targetUrl, { method: 'GET', credentials: 'omit' });
+            if (!response.ok) {
+                throw new Error(`Download failed with status ${response.status}`);
+            }
+
+            const fileBlob = await response.blob();
+            if (!fileBlob || fileBlob.size <= 0) {
+                throw new Error('Downloaded file is empty.');
+            }
+
+            const blobUrl = URL.createObjectURL(fileBlob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = safeName;
+            a.rel = 'noopener';
+            a.style.display = 'none';
+            document.body.appendChild(a);
+
+            a.click();
+            setTimeout(() => {
+                URL.revokeObjectURL(blobUrl);
+                a.remove();
+            }, 1000);
+            return true;
+        } catch (error) {
+            console.error('File download failed:', error);
+            if (window.toastError) {
+                window.toastError('Failed to start file download.');
+            }
+            return false;
         }
     },
 
@@ -1181,7 +1322,7 @@ const ChatCommon = {
         if (Array.isArray(medias) && medias.length > 0) {
             const first = medias[0] || {};
             const mediaType = Number(first.mediaType ?? first.MediaType);
-            return mediaType === 1 ? '[Video]' : '[Image]';
+            return this.getMediaTypeLabel(mediaType);
         }
 
         return conv?.isGroup ? 'Group created' : 'Started a conversation';

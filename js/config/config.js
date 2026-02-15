@@ -135,8 +135,10 @@
   CHATWINDOW_MESSAGES_PAGE_SIZE: 10, // Số lượng tin nhắn load mỗi lần tại cửa sổ Chat nhỏ (Floating)
   MAX_CHAT_MESSAGE_LENGTH: 1000, // Số ký tự tối đa cho mỗi tin nhắn chat
   MAX_CHAT_NICKNAME_LENGTH: 50, // Số ký tự tối đa cho nickname trong chat
-  MAX_CHAT_FILE_SIZE_MB: 10, // Dung lượng tối đa mỗi file khi gửi chat (MB)
-  MAX_CHAT_MEDIA_FILES: 5, // Số lượng ảnh/video tối đa có thể gửi trong 1 tin nhắn chat
+  MAX_CHAT_ATTACHMENT_SIZE_MB: 10, // Max size per chat attachment (image/video/file) in MB
+  MAX_CHAT_ATTACHMENTS_PER_MESSAGE: 5, // Max number of attachments (image/video/file) per chat message
+  MAX_CHAT_FILE_SIZE_MB: 10, // Legacy key (fallback)
+  MAX_CHAT_MEDIA_FILES: 5, // Legacy key (fallback)
   CHAT_RECALLED_MESSAGE_TEXT: "Message was recalled", // Text shown when a message is recalled
   CHAT_TIME_SEPARATOR_GAP: 15 * 60 * 1000, // Gap (ms) to show time separator (15 mins)
   CHAT_GROUPING_GAP: 2 * 60 * 1000, // Gap (ms) to break message grouping (2 mins)
