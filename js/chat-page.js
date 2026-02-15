@@ -44,6 +44,9 @@ const ChatPage = {
         this._contextPage = null;
         this._hasMoreNewer = false;
         this._newerPage = null;
+        this._savedInfoHtml = null;
+        this._activeInfoPanel = null;
+        this.resetMediaPanelState();
         this.removeJumpToBottomBtn();
         
         this.cacheElements();
@@ -927,6 +930,9 @@ const ChatPage = {
         this.hasMore = true;
         this.isLoading = false;
         this.resetContextMode();
+        this._savedInfoHtml = null;
+        this._activeInfoPanel = null;
+        this.resetMediaPanelState(conversationId);
         this.getRuntimeCtx();
         
         // 4. Optimization: Join target FIRST to maintain session during handoff from Bubble
@@ -1026,6 +1032,9 @@ const ChatPage = {
     renderNoConversationState() {
         this.currentChatId = null;
         this.currentMetaData = null;
+        this._savedInfoHtml = null;
+        this._activeInfoPanel = null;
+        this.resetMediaPanelState();
         this.getRuntimeCtx();
         this.applyThemeVisual(null);
 
@@ -1303,6 +1312,392 @@ const ChatPage = {
         window.ChatActions.showPinnedMessages(conversationId, { title });
     },
 
+    resetMediaPanelState(conversationId = null) {
+        const targetConversationId = (conversationId || this.currentChatId || '').toString().toLowerCase() || null;
+        const pageSize = Number(window.APP_CONFIG?.CHAT_MEDIA_PAGE_SIZE) || this._mediaPanel?.pageSize || 60;
+        this._mediaPanel = {
+            conversationId: targetConversationId,
+            page: 1,
+            hasMore: true,
+            isLoading: false,
+            items: [],
+            keySet: new Set(),
+            scrollTop: 0,
+            pageSize
+        };
+    },
+
+    openMediaPanel() {
+        if (!this.currentChatId) return;
+
+        if (this.infoSidebar?.classList.contains('hidden')) {
+            this.infoSidebar.classList.remove('hidden');
+            const infoBtn = document.getElementById('chat-info-btn');
+            if (infoBtn) infoBtn.classList.add('active');
+        }
+
+        const infoContent = document.getElementById('chat-info-content');
+        if (!infoContent) return;
+
+        this._savedInfoHtml = infoContent.innerHTML;
+        this._activeInfoPanel = 'media';
+        this.resetMediaPanelState(this.currentChatId);
+        this._mediaPanel.activeTab = 'media';
+
+        infoContent.innerHTML = `
+            <div class="chat-media-panel-inline">
+                <div class="chat-media-header">
+                    <button class="chat-media-back-btn" id="chat-media-back-btn" title="Close media panel">
+                        <i data-lucide="arrow-left"></i>
+                    </button>
+                    <span class="chat-media-title">Media and files</span>
+                </div>
+                <div class="chat-media-tabs">
+                    <button class="chat-media-tab active" id="chat-media-tab-media" data-tab="media">Media files</button>
+                    <button class="chat-media-tab" id="chat-media-tab-file" data-tab="file">Files</button>
+                    <div class="chat-media-tab-indicator" id="chat-media-tab-indicator"></div>
+                </div>
+                <div class="chat-media-results" id="chat-media-results"></div>
+            </div>
+        `;
+
+        if (window.lucide) lucide.createIcons({ container: infoContent });
+
+        const backBtn = infoContent.querySelector('#chat-media-back-btn');
+        if (backBtn) backBtn.onclick = () => this.closeMediaPanel();
+
+        const tabMedia = infoContent.querySelector('#chat-media-tab-media');
+        const tabFile = infoContent.querySelector('#chat-media-tab-file');
+        if (tabMedia) tabMedia.onclick = () => this.switchMediaPanelTab('media');
+        if (tabFile) tabFile.onclick = () => this.switchMediaPanelTab('file');
+
+        const resultsEl = infoContent.querySelector('#chat-media-results');
+        if (resultsEl) {
+            resultsEl.onscroll = () => {
+                const state = this._mediaPanel;
+                if (!state) return;
+                state.scrollTop = resultsEl.scrollTop;
+                if (state.activeTab !== 'media' || state.isLoading || !state.hasMore) return;
+                if (resultsEl.scrollHeight - resultsEl.scrollTop - resultsEl.clientHeight <= 180) {
+                    this.loadMoreConversationMedia();
+                }
+            };
+        }
+
+        this.switchMediaPanelTab('media');
+    },
+
+    closeMediaPanel() {
+        const infoContent = document.getElementById('chat-info-content');
+        if (!infoContent) return;
+
+        const resultsEl = infoContent.querySelector('#chat-media-results');
+        if (resultsEl && this._mediaPanel) {
+            this._mediaPanel.scrollTop = resultsEl.scrollTop;
+        }
+
+        if (this._savedInfoHtml !== null) {
+            infoContent.innerHTML = `<div class="chat-info-main-reveal">${this._savedInfoHtml}</div>`;
+            this._savedInfoHtml = null;
+            if (window.lucide) lucide.createIcons({ container: infoContent });
+            this._reattachInfoSidebarListeners();
+        }
+        this._activeInfoPanel = null;
+    },
+
+    switchMediaPanelTab(tabKey = 'media') {
+        const state = this._mediaPanel;
+        const infoContent = document.getElementById('chat-info-content');
+        if (!state || !infoContent) return;
+
+        const normalizedTab = (tabKey || '').toLowerCase() === 'file' ? 'file' : 'media';
+        state.activeTab = normalizedTab;
+
+        infoContent.querySelectorAll('.chat-media-tab').forEach((tabEl) => {
+            const isActive = (tabEl.dataset.tab || '').toLowerCase() === normalizedTab;
+            tabEl.classList.toggle('active', isActive);
+        });
+
+        // Update sliding indicator position
+        const activeTabEl = infoContent.querySelector(`.chat-media-tab[data-tab="${normalizedTab}"]`);
+        const indicator = infoContent.querySelector('#chat-media-tab-indicator');
+        if (activeTabEl && indicator) {
+            indicator.style.width = `${activeTabEl.offsetWidth}px`;
+            indicator.style.left = `${activeTabEl.offsetLeft}px`;
+        }
+
+        if (normalizedTab === 'file') {
+            const resultsEl = document.getElementById('chat-media-results');
+            if (resultsEl) {
+                resultsEl.innerHTML = `
+                    <div class="chat-media-empty-state">
+                        <i data-lucide="file-text"></i>
+                        <p>File gallery will be added in a next update.</p>
+                    </div>
+                `;
+                if (window.lucide) lucide.createIcons({ container: resultsEl });
+            }
+            return;
+        }
+
+        this.renderMediaPanelResults({ preserveScrollTop: state.scrollTop });
+        if (state.items.length === 0 && state.hasMore && !state.isLoading) {
+            this.ensureConversationMediaAtIndex(0);
+        }
+    },
+
+    _extractConversationMediaItems(rawItems) {
+        if (!Array.isArray(rawItems) || rawItems.length === 0) return [];
+        const normalized = [];
+
+        rawItems.forEach((item, itemIndex) => {
+            const mediaType = Number(item?.mediaType ?? item?.MediaType ?? 0);
+            if (mediaType !== 0 && mediaType !== 1) return;
+
+            const mediaUrl = item?.mediaUrl || item?.MediaUrl || '';
+            if (!mediaUrl) return;
+
+            const sentAt = item?.sentAt || item?.SentAt || item?.createdAt || item?.CreatedAt || null;
+            const sentTime = sentAt ? new Date(sentAt).getTime() : 0;
+            const messageId = (item?.messageId || item?.MessageId || '').toString().toLowerCase();
+            const messageMediaId = (item?.messageMediaId || item?.MessageMediaId || '').toString().toLowerCase();
+            const key = messageMediaId || `${messageId}:${mediaUrl}:${itemIndex}`;
+            const thumbnailUrl = item?.thumbnailUrl || item?.ThumbnailUrl || mediaUrl;
+
+            normalized.push({
+                key,
+                messageId,
+                messageMediaId,
+                mediaUrl,
+                thumbnailUrl,
+                mediaType,
+                sentAt,
+                sentTime: Number.isFinite(sentTime) ? sentTime : 0
+            });
+        });
+
+        return normalized;
+    },
+
+    removeRecalledMediaFromPanel(messageId, conversationId = '') {
+        const state = this._mediaPanel;
+        const normalizedMessageId = (messageId || '').toString().toLowerCase();
+        if (!state || !normalizedMessageId || !Array.isArray(state.items) || state.items.length === 0) return 0;
+
+        const normalizedConversationId = (conversationId || '').toString().toLowerCase();
+        const stateConversationId = (state.conversationId || '').toString().toLowerCase();
+        if (normalizedConversationId && stateConversationId && normalizedConversationId !== stateConversationId) {
+            return 0;
+        }
+
+        let removedCount = 0;
+        const nextItems = [];
+        const nextKeySet = new Set();
+
+        state.items.forEach((item) => {
+            const itemMessageId = (item?.messageId || item?.MessageId || '').toString().toLowerCase();
+            if (itemMessageId === normalizedMessageId) {
+                removedCount += 1;
+                return;
+            }
+            nextItems.push(item);
+            if (item?.key) nextKeySet.add(item.key);
+        });
+
+        if (removedCount === 0) return 0;
+
+        state.items = nextItems;
+        state.keySet = nextKeySet;
+
+        if (state.activeTab === 'media' && this._activeInfoPanel === 'media') {
+            const resultsEl = document.getElementById('chat-media-results');
+            const preserveScrollTop = resultsEl ? resultsEl.scrollTop : state.scrollTop;
+            this.renderMediaPanelResults({ preserveScrollTop });
+        }
+
+        return removedCount;
+    },
+
+    renderMediaPanelResults({ preserveScrollTop = null } = {}) {
+        const state = this._mediaPanel;
+        const resultsEl = document.getElementById('chat-media-results');
+        if (!state || !resultsEl || state.activeTab !== 'media') return;
+
+        if (state.items.length === 0 && state.isLoading) {
+            resultsEl.innerHTML = `
+                <div class="chat-media-loading-state">
+                    <div class="spinner chat-spinner"></div>
+                    <p>Loading media...</p>
+                </div>
+            `;
+            return;
+        }
+
+        if (state.items.length === 0 && !state.hasMore) {
+            resultsEl.innerHTML = `
+                <div class="chat-media-empty-state">
+                    <i data-lucide="image-off"></i>
+                    <p>No media files in this conversation yet.</p>
+                </div>
+            `;
+            if (window.lucide) lucide.createIcons({ container: resultsEl });
+            return;
+        }
+
+        if (state.items.length === 0 && state.hasMore) {
+            resultsEl.innerHTML = `
+                <div class="chat-media-loading-state">
+                    <div class="spinner chat-spinner"></div>
+                    <p>Looking for media files...</p>
+                </div>
+            `;
+            return;
+        }
+
+        let animatedCount = 0;
+        const cells = state.items.map((item, index) => {
+            const safeThumb = (item.thumbnailUrl || item.mediaUrl || '').replace(/"/g, '&quot;');
+            const safeMedia = (item.mediaUrl || '').replace(/"/g, '&quot;');
+            const shouldAnimate = !!item.animateOnRender;
+            const revealClass = shouldAnimate ? ' chat-media-thumb-reveal' : '';
+            const revealOrder = shouldAnimate ? Math.min(animatedCount++, 24) : 0;
+            const revealStyle = shouldAnimate
+                ? ` style="--media-reveal-delay:${revealOrder * 30}ms"`
+                : '';
+
+            if (item.mediaType === 1) {
+                return `
+                    <button class="chat-media-thumb chat-media-thumb-video${revealClass}"${revealStyle} onclick="ChatPage.openConversationMediaPreview(${index})" title="Open media">
+                        <video src="${safeMedia}" muted playsinline preload="metadata"></video>
+                        <span class="chat-media-video-badge"><i data-lucide="play"></i></span>
+                    </button>
+                `;
+            }
+
+            return `
+                <button class="chat-media-thumb${revealClass}"${revealStyle} onclick="ChatPage.openConversationMediaPreview(${index})" title="Open media">
+                    <img src="${safeThumb}" alt="media" loading="lazy">
+                </button>
+            `;
+        }).join('');
+
+        const html = `<div class="chat-media-grid">${cells}</div>`;
+
+        const footer = state.isLoading
+            ? `<div class="chat-media-inline-loader"><div class="spinner chat-spinner"></div><span>Loading more...</span></div>`
+            : (!state.hasMore ? `<div class="chat-media-end">All media loaded</div>` : '');
+
+        resultsEl.innerHTML = `${html}${footer}`;
+        if (window.lucide) lucide.createIcons({ container: resultsEl });
+
+        if (state.items.some(item => item?.animateOnRender)) {
+            requestAnimationFrame(() => {
+                state.items.forEach((item) => {
+                    if (item) item.animateOnRender = false;
+                });
+            });
+        }
+
+        if (preserveScrollTop !== null) {
+            resultsEl.scrollTop = preserveScrollTop;
+            state.scrollTop = preserveScrollTop;
+        } else if (state.scrollTop > 0) {
+            resultsEl.scrollTop = state.scrollTop;
+        }
+    },
+
+    async loadMoreConversationMedia() {
+        const state = this._mediaPanel;
+        if (!state || state.isLoading || !state.hasMore || !this.currentChatId) return false;
+        if ((state.conversationId || '') !== (this.currentChatId || '').toString().toLowerCase()) return false;
+
+        const resultsEl = document.getElementById('chat-media-results');
+        const preserveScrollTop = resultsEl ? resultsEl.scrollTop : state.scrollTop;
+
+        state.isLoading = true;
+        if (state.activeTab === 'media') {
+            this.renderMediaPanelResults({ preserveScrollTop });
+        }
+
+        let loadedAnyItem = false;
+        try {
+            const res = await window.API.Conversations.getMedia(this.currentChatId, state.page, state.pageSize);
+            if (!res.ok) return false;
+
+            const data = await res.json();
+            const rawItems = data?.items || [];
+            const extractedItems = this._extractConversationMediaItems(rawItems);
+
+            extractedItems.forEach((item) => {
+                if (state.keySet.has(item.key)) return;
+                item.animateOnRender = true;
+                state.keySet.add(item.key);
+                state.items.push(item);
+                loadedAnyItem = true;
+            });
+
+            if (rawItems.length < state.pageSize) {
+                state.hasMore = false;
+            } else if (typeof data?.hasNextPage === 'boolean') {
+                state.hasMore = data.hasNextPage;
+            }
+            state.page += 1;
+            return loadedAnyItem;
+        } catch (error) {
+            console.error('Failed to load conversation media:', error);
+            return false;
+        } finally {
+            state.isLoading = false;
+            if (state.activeTab === 'media') {
+                this.renderMediaPanelResults({ preserveScrollTop });
+            }
+        }
+    },
+
+    async ensureConversationMediaAtIndex(targetIndex) {
+        const state = this._mediaPanel;
+        const normalizedTarget = Number(targetIndex);
+        if (!state || !Number.isFinite(normalizedTarget)) return false;
+
+        if (normalizedTarget < state.items.length) return true;
+
+        while (normalizedTarget >= state.items.length && state.hasMore) {
+            const beforeCount = state.items.length;
+            const loaded = await this.loadMoreConversationMedia();
+            if (!loaded && state.items.length === beforeCount) {
+                break;
+            }
+        }
+
+        return normalizedTarget < state.items.length;
+    },
+
+    openConversationMediaPreview(startIndex = 0) {
+        const state = this._mediaPanel;
+        if (!state || !Array.isArray(state.items) || state.items.length === 0) return;
+
+        const index = Number(startIndex);
+        if (!Number.isFinite(index) || index < 0 || index >= state.items.length) return;
+
+        if (typeof window.previewMedia !== 'function') return;
+
+        window.previewMedia('', index, state.items, {
+            source: 'conversation-media-panel',
+            conversationId: (this.currentChatId || '').toString().toLowerCase(),
+            loop: false,
+            thumbnailMode: 'windowed',
+            thumbnailWindowSize: 7,
+            getMediaList: () => this._mediaPanel?.items || [],
+            canNavigatePrev: ({ currentIndex }) => currentIndex > 0,
+            canNavigateNext: ({ currentIndex }) => {
+                const latest = this._mediaPanel;
+                if (!latest) return false;
+                return currentIndex < latest.items.length - 1 || latest.hasMore;
+            },
+            requestNext: async ({ currentIndex }) => this.ensureConversationMediaAtIndex(currentIndex + 1)
+        });
+    },
+
     // --- Message Search ---
     searchPage: 1,
     searchKeyword: '',
@@ -1310,9 +1705,21 @@ const ChatPage = {
     hasMoreSearch: false,
     _searchDebounceTimer: null,
     _savedInfoHtml: null,
+    _activeInfoPanel: null,
+    _mediaPanel: {
+        conversationId: null,
+        page: 1,
+        hasMore: true,
+        isLoading: false,
+        items: [],
+        keySet: new Set(),
+        scrollTop: 0,
+        pageSize: window.APP_CONFIG?.CHAT_MEDIA_PAGE_SIZE || 60
+    },
 
     openSearchPanel() {
         if (!this.currentChatId) return;
+        this._activeInfoPanel = 'search';
 
         // Ensure info sidebar is visible
         if (this.infoSidebar?.classList.contains('hidden')) {
@@ -1336,8 +1743,8 @@ const ChatPage = {
         infoContent.innerHTML = `
             <div class="chat-search-panel-inline">
                 <div class="chat-search-header">
-                    <button class="chat-search-back-btn" id="chat-search-back-btn" title="Close search">
-                        <i data-lucide="x"></i>
+                    <button class="chat-search-back-btn" id="chat-search-back-btn" title="Back">
+                        <i data-lucide="arrow-left"></i>
                     </button>
                     <span class="chat-search-title">Search</span>
                 </div>
@@ -1403,7 +1810,7 @@ const ChatPage = {
 
         // Restore original info sidebar content
         if (this._savedInfoHtml !== null) {
-            infoContent.innerHTML = this._savedInfoHtml;
+            infoContent.innerHTML = `<div class="chat-info-main-reveal">${this._savedInfoHtml}</div>`;
             this._savedInfoHtml = null;
             if (window.lucide) lucide.createIcons({ container: infoContent });
             // Re-attach event listeners for info sidebar buttons
@@ -1414,6 +1821,7 @@ const ChatPage = {
         this.searchPage = 1;
         this.isSearching = false;
         this.hasMoreSearch = false;
+        this._activeInfoPanel = null;
     },
 
     /**
@@ -1438,6 +1846,12 @@ const ChatPage = {
 
         const viewPinnedBtn = document.getElementById('chat-info-view-pinned-btn');
         if (viewPinnedBtn) viewPinnedBtn.onclick = () => this.openPinnedMessagesCurrentConversation();
+
+        const mediaBtn = document.getElementById('chat-info-open-media-btn');
+        if (mediaBtn) mediaBtn.onclick = () => this.openMediaPanel();
+
+        const filesBtn = document.getElementById('chat-info-open-files-btn');
+        if (filesBtn) filesBtn.onclick = () => window.toastInfo?.('File gallery will be added in a next update.');
 
         const infoContent = document.getElementById('chat-info-content');
         if (infoContent) {
@@ -1544,7 +1958,7 @@ const ChatPage = {
             if (resultsTarget) {
                 resultsTarget.innerHTML = `
                     <div class="chat-search-loading">
-                        <div class="chat-spinner"></div>
+                        <div class="spinner chat-spinner"></div>
                         <p>Searching...</p>
                     </div>
                 `;
@@ -1899,6 +2313,8 @@ const ChatPage = {
 
     renderInfoSidebar(meta) {
         if (!meta || !this.infoContent) return;
+        this._savedInfoHtml = null;
+        this._activeInfoPanel = null;
 
         const avatarUrl = ChatCommon.getAvatar(meta);
         const displayName = ChatCommon.getDisplayName(meta);
@@ -2032,11 +2448,11 @@ const ChatPage = {
                         <i data-lucide="chevron-down" class="chevron"></i>
                     </div>
                     <div class="chat-info-section-content">
-                        <div class="chat-info-item" onclick="window.toastInfo('Media gallery coming soon')">
+                        <div class="chat-info-item" id="chat-info-open-media-btn">
                             <i data-lucide="image"></i>
                             <span>Media</span>
                         </div>
-                        <div class="chat-info-item" onclick="window.toastInfo('File gallery coming soon')">
+                        <div class="chat-info-item" id="chat-info-open-files-btn">
                             <i data-lucide="file-text"></i>
                             <span>Files</span>
                         </div>
@@ -2097,6 +2513,16 @@ const ChatPage = {
         const viewPinnedBtn = document.getElementById('chat-info-view-pinned-btn');
         if (viewPinnedBtn) {
             viewPinnedBtn.onclick = () => this.openPinnedMessagesCurrentConversation();
+        }
+
+        const mediaBtn = document.getElementById('chat-info-open-media-btn');
+        if (mediaBtn) {
+            mediaBtn.onclick = () => this.openMediaPanel();
+        }
+
+        const filesBtn = document.getElementById('chat-info-open-files-btn');
+        if (filesBtn) {
+            filesBtn.onclick = () => window.toastInfo?.('File gallery will be added in a next update.');
         }
 
         this.infoContent.querySelectorAll('.chat-info-member-edit').forEach(el => {

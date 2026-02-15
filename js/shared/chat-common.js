@@ -957,9 +957,27 @@ const ChatCommon = {
         try {
             const raw = grid.dataset.medias;
             if (!raw) return;
+            const messageWrapper = grid.closest('.msg-bubble-wrapper');
+            const messageId = (messageWrapper?.dataset?.messageId || '').toString().toLowerCase();
+            const container = grid.closest('[id^="chat-messages-"], #chat-view-messages');
+            const containerId = (container?.id || '').toString();
+            const conversationId = containerId.startsWith('chat-messages-')
+                ? containerId.substring('chat-messages-'.length).toLowerCase()
+                : '';
+
             const medias = JSON.parse(raw);
+            const enrichedMedias = Array.isArray(medias)
+                ? medias.map((m) => ({
+                    ...m,
+                    messageId: (m?.messageId || m?.MessageId || messageId || '').toString().toLowerCase()
+                }))
+                : [];
             if (window.previewMedia) {
-                window.previewMedia('', index, medias);
+                window.previewMedia('', index, enrichedMedias, {
+                    source: 'message-media-grid',
+                    messageId,
+                    conversationId
+                });
             }
         } catch (e) {
             console.error('Failed to preview grid media:', e);
