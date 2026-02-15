@@ -502,6 +502,8 @@
         }),
       deleteHistory: (conversationId) => apiFetch(`/Conversations/${conversationId}/history`, { method: "DELETE" }),
       getUnreadCount: () => apiFetch('/Conversations/unread-count'),
+      searchMessages: (conversationId, keyword, page = 1, pageSize = 20) =>
+        apiFetch(`/Conversations/${conversationId}/messages/search?keyword=${encodeURIComponent(keyword)}&page=${page}&pageSize=${pageSize}`),
     },
 
     Messages: {

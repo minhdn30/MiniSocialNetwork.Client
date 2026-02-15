@@ -143,5 +143,6 @@
   CHAT_THEME_OPTIONS: chatThemeOptions, // Theme options per conversation (full palette per dark/light mode)
   MAX_OPEN_CHAT_WINDOWS: 3, // Số lượng cửa sổ chat được mở tối đa cùng lúc
   MAX_TOTAL_CHAT_WINDOWS: 8, // Tổng số lượng chat (cả cửa sổ và bong bóng) tối đa được phép duy trì
+  CHAT_SEARCH_PAGE_SIZE: 20, // Số lượng kết quả tìm kiếm tin nhắn load mỗi lần
   };
 })(window);

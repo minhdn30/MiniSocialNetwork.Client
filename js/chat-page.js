@@ -1099,6 +1099,11 @@ const ChatPage = {
         if (window.ChatCommon && typeof window.ChatCommon.applyConversationTheme === 'function') {
             if (this.mainArea) window.ChatCommon.applyConversationTheme(this.mainArea, normalizedTheme);
             if (this.infoSidebar) window.ChatCommon.applyConversationTheme(this.infoSidebar, normalizedTheme);
+            // Apply to .main-content so its scrollbar follows chat theme
+            const mainContent = document.querySelector('.main-content');
+            if (mainContent && mainContent !== this.mainArea) {
+                window.ChatCommon.applyConversationTheme(mainContent, normalizedTheme);
+            }
             return normalizedTheme;
         }
 
@@ -1297,6 +1302,347 @@ const ChatPage = {
             : 'Pinned messages';
         window.ChatActions.showPinnedMessages(conversationId, { title });
     },
+
+    // --- Message Search ---
+    searchPage: 1,
+    searchKeyword: '',
+    isSearching: false,
+    hasMoreSearch: false,
+    _searchDebounceTimer: null,
+    _savedInfoHtml: null,
+
+    openSearchPanel() {
+        if (!this.currentChatId) return;
+
+        // Ensure info sidebar is visible
+        if (this.infoSidebar?.classList.contains('hidden')) {
+            this.infoSidebar.classList.remove('hidden');
+            const infoBtn = document.getElementById('chat-info-btn');
+            if (infoBtn) infoBtn.classList.add('active');
+        }
+
+        const infoContent = document.getElementById('chat-info-content');
+        if (!infoContent) return;
+
+        // Save current info HTML so we can restore on close
+        this._savedInfoHtml = infoContent.innerHTML;
+
+        // Reset search state
+        this.searchKeyword = '';
+        this.searchPage = 1;
+        this.isSearching = false;
+        this.hasMoreSearch = false;
+
+        infoContent.innerHTML = `
+            <div class="chat-search-panel-inline">
+                <div class="chat-search-header">
+                    <button class="chat-search-back-btn" id="chat-search-back-btn" title="Close search">
+                        <i data-lucide="x"></i>
+                    </button>
+                    <span class="chat-search-title">Search</span>
+                </div>
+                <div class="chat-search-input-wrapper">
+                    <i data-lucide="search" class="chat-search-icon"></i>
+                    <input type="text" class="chat-search-input" id="chat-search-input" placeholder="Search in conversation..." autocomplete="off">
+                    <span class="chat-search-count hidden" id="chat-search-count"></span>
+                    <button class="chat-search-clear-btn hidden" id="chat-search-clear-btn" title="Clear">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
+                <div class="chat-search-results" id="chat-search-results">
+                    <div class="chat-search-empty">
+                        <i data-lucide="search" style="width: 40px; height: 40px; opacity: 0.18;"></i>
+                        <p>Enter a keyword to search</p>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        if (window.lucide) lucide.createIcons({ container: infoContent });
+
+        const input = infoContent.querySelector('#chat-search-input');
+        const clearBtn = infoContent.querySelector('#chat-search-clear-btn');
+        const backBtn = infoContent.querySelector('#chat-search-back-btn');
+
+        requestAnimationFrame(() => input?.focus());
+
+        input.oninput = (e) => {
+            const val = e.target.value.trim();
+            clearBtn.classList.toggle('hidden', val.length === 0);
+
+            clearTimeout(this._searchDebounceTimer);
+            this._searchDebounceTimer = setTimeout(() => {
+                this.performSearch(val);
+            }, 400);
+        };
+
+        clearBtn.onclick = () => {
+            input.value = '';
+            input.focus();
+            clearBtn.classList.add('hidden');
+            this.performSearch('');
+        };
+
+        backBtn.onclick = () => this.closeSearchPanel();
+
+        // Scroll-based load more
+        const resultsEl = infoContent.querySelector('#chat-search-results');
+        if (resultsEl) {
+            resultsEl.onscroll = () => {
+                if (this.isSearching || !this.hasMoreSearch) return;
+                if (resultsEl.scrollHeight - resultsEl.scrollTop - resultsEl.clientHeight <= 80) {
+                    this.performSearch(this.searchKeyword, true);
+                }
+            };
+        }
+    },
+
+    closeSearchPanel() {
+        const infoContent = document.getElementById('chat-info-content');
+        if (!infoContent) return;
+
+        // Restore original info sidebar content
+        if (this._savedInfoHtml !== null) {
+            infoContent.innerHTML = this._savedInfoHtml;
+            this._savedInfoHtml = null;
+            if (window.lucide) lucide.createIcons({ container: infoContent });
+            // Re-attach event listeners for info sidebar buttons
+            this._reattachInfoSidebarListeners();
+        }
+
+        this.searchKeyword = '';
+        this.searchPage = 1;
+        this.isSearching = false;
+        this.hasMoreSearch = false;
+    },
+
+    /**
+     * Re-attach event listeners for info sidebar buttons after restoring HTML.
+     * This mirrors the event binding done at the end of renderInfoSidebar().
+     */
+    _reattachInfoSidebarListeners() {
+        const muteBtn = document.getElementById('chat-info-mute-btn');
+        if (muteBtn) muteBtn.onclick = () => this.toggleMuteCurrentConversation();
+
+        const muteDetailBtn = document.getElementById('chat-info-mute-detail-btn');
+        if (muteDetailBtn) muteDetailBtn.onclick = () => this.toggleMuteCurrentConversation();
+
+        const deleteBtn = document.getElementById('chat-info-delete-conversation-btn');
+        if (deleteBtn) deleteBtn.onclick = () => this.softDeleteCurrentConversation();
+
+        const editNicknamesBtn = document.getElementById('chat-info-edit-nicknames-btn');
+        if (editNicknamesBtn) editNicknamesBtn.onclick = () => this.promptEditNicknames();
+
+        const changeThemeBtn = document.getElementById('chat-info-change-theme-btn');
+        if (changeThemeBtn) changeThemeBtn.onclick = () => this.promptChangeThemeCurrentConversation();
+
+        const viewPinnedBtn = document.getElementById('chat-info-view-pinned-btn');
+        if (viewPinnedBtn) viewPinnedBtn.onclick = () => this.openPinnedMessagesCurrentConversation();
+
+        const infoContent = document.getElementById('chat-info-content');
+        if (infoContent) {
+            infoContent.querySelectorAll('.chat-info-member-edit').forEach(el => {
+                el.onclick = () => {
+                    const accountId = (el.dataset.accountId || '').toLowerCase();
+                    const displayName = el.dataset.displayName || 'User';
+                    const nickname = el.dataset.nickname || '';
+                    this.promptEditNickname(accountId, displayName, nickname);
+                };
+            });
+        }
+    },
+
+    /**
+     * Build a smart keyword-in-context (KWIC) snippet.
+     * If the keyword is near the start, show from the start.
+     * Otherwise, show a window around the first keyword occurrence.
+     * Returns HTML with keyword highlighted.
+     */
+    _buildSearchSnippet(rawContent, keyword, maxLen = 100) {
+        if (!rawContent) return '';
+        const escaped = escapeHtml(rawContent);
+        if (!keyword || keyword.length < 2) return escaped;
+
+        // Escape regex special characters
+        const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const words = keyword.split(/\s+/).filter(w => w.length >= 2);
+        if (words.length === 0) return escaped;
+
+        // Find the earliest position of any keyword word (case-insensitive, in original text)
+        const lowerContent = rawContent.toLowerCase();
+        let earliestPos = -1;
+        let matchedWord = '';
+        for (const word of words) {
+            const idx = lowerContent.indexOf(word.toLowerCase());
+            if (idx !== -1 && (earliestPos === -1 || idx < earliestPos)) {
+                earliestPos = idx;
+                matchedWord = word;
+            }
+        }
+
+        let snippet;
+        if (earliestPos === -1) {
+            // No match found in text, show beginning
+            snippet = rawContent.length > maxLen
+                ? rawContent.substring(0, maxLen) + '...'
+                : rawContent;
+        } else {
+            // Build a window around the keyword
+            const contextBefore = 20;
+            let start = Math.max(0, earliestPos - contextBefore);
+            let end = Math.min(rawContent.length, start + maxLen);
+
+            // Adjust end if content is shorter
+            if (end - start < maxLen && start > 0) {
+                start = Math.max(0, end - maxLen);
+            }
+
+            snippet = '';
+            if (start > 0) snippet += '...';
+            snippet += rawContent.substring(start, end);
+            if (end < rawContent.length) snippet += '...';
+        }
+
+        // Now escape and highlight
+        let result = escapeHtml(snippet);
+        for (const word of words) {
+            const regex = new RegExp(`(${escapeRegex(escapeHtml(word))})`, 'gi');
+            result = result.replace(regex, '<mark class="chat-search-highlight">$1</mark>');
+        }
+        return result;
+    },
+
+    async performSearch(keyword, isLoadMore = false) {
+        if (!keyword || keyword.length < 1) {
+            this.searchKeyword = '';
+            this.searchPage = 1;
+            const resultsTarget = document.getElementById('chat-search-results');
+            const countEl = document.getElementById('chat-search-count');
+            if (countEl) { countEl.textContent = ''; countEl.classList.add('hidden'); }
+            if (resultsTarget) {
+                resultsTarget.innerHTML = `
+                    <div class="chat-search-empty">
+                        <i data-lucide="search" style="width: 40px; height: 40px; opacity: 0.18;"></i>
+                        <p>Enter a keyword to search</p>
+                    </div>
+                `;
+                if (window.lucide) lucide.createIcons({ container: resultsTarget });
+            }
+            return;
+        }
+
+        if (keyword.length < 2) return;
+
+        const pageSize = window.APP_CONFIG?.CHAT_SEARCH_PAGE_SIZE || 20;
+
+        if (isLoadMore) {
+            this.searchPage++;
+        } else {
+            this.searchPage = 1;
+            this.searchKeyword = keyword;
+            const resultsTarget = document.getElementById('chat-search-results');
+            if (resultsTarget) {
+                resultsTarget.innerHTML = `
+                    <div class="chat-search-loading">
+                        <div class="chat-spinner"></div>
+                        <p>Searching...</p>
+                    </div>
+                `;
+            }
+        }
+
+        this.isSearching = true;
+        try {
+            const res = await window.API.Conversations.searchMessages(this.currentChatId, this.searchKeyword, this.searchPage, pageSize);
+            if (res.ok) {
+                const data = await res.json();
+                this.hasMoreSearch = data.hasNextPage;
+                this.renderSearchResults(data.items, data.totalItems, isLoadMore);
+            } else {
+                window.toastError?.('Search failed');
+            }
+        } catch (err) {
+            console.error('Search error:', err);
+            window.toastError?.('Search error');
+        } finally {
+            this.isSearching = false;
+        }
+    },
+
+    renderSearchResults(items, totalCount, isLoadMore) {
+        const resultsTarget = document.getElementById('chat-search-results');
+        if (!resultsTarget) return;
+
+        // Update count badge
+        const countEl = document.getElementById('chat-search-count');
+        if (countEl) {
+            if (totalCount > 0) {
+                countEl.textContent = `${totalCount} result${totalCount > 1 ? 's' : ''}`;
+                countEl.classList.remove('hidden');
+            } else {
+                countEl.textContent = '';
+                countEl.classList.add('hidden');
+            }
+        }
+
+        if (!isLoadMore) {
+            resultsTarget.innerHTML = '';
+        } else {
+            // Remove previous loading indicator
+            const oldLoader = resultsTarget.querySelector('.chat-search-loading');
+            if (oldLoader) oldLoader.remove();
+        }
+
+        if (items.length === 0 && !isLoadMore) {
+            resultsTarget.innerHTML = `
+                <div class="chat-search-empty">
+                    <i data-lucide="frown" style="width: 40px; height: 40px; opacity: 0.18;"></i>
+                    <p>No results for "${escapeHtml(this.searchKeyword)}"</p>
+                </div>
+            `;
+            if (window.lucide) lucide.createIcons({ container: resultsTarget });
+            return;
+        }
+
+        const container = document.createElement('div');
+        container.className = 'chat-search-list';
+
+        items.forEach(msg => {
+            const item = document.createElement('div');
+            item.className = 'chat-search-item';
+
+            const sender = msg.sender || {};
+            const avatar = sender.avatarUrl || window.APP_CONFIG?.DEFAULT_AVATAR;
+            const name = sender.username || sender.fullName || 'User';
+
+            // Build smart snippet with keyword highlighted
+            const contentHtml = this._buildSearchSnippet(msg.content || '', this.searchKeyword);
+
+            const timeLabel = window.PostUtils?.timeAgo ? window.PostUtils.timeAgo(msg.sentAt) : '';
+
+            item.innerHTML = `
+                <img class="chat-search-item-avatar" src="${avatar}" alt="" onerror="this.src='${window.APP_CONFIG?.DEFAULT_AVATAR}'">
+                <div class="chat-search-item-info">
+                    <div class="chat-search-item-name">${escapeHtml(name)}</div>
+                    <div class="chat-search-item-content">${contentHtml}</div>
+                    <div class="chat-search-item-time">${escapeHtml(timeLabel)}</div>
+                </div>
+            `;
+
+            item.onclick = () => {
+                if (window.ChatActions && typeof window.ChatActions.jumpToMessage === 'function') {
+                    window.ChatActions.jumpToMessage(this.currentChatId || '', msg.messageId || '');
+                }
+            };
+
+            container.appendChild(item);
+        });
+
+        resultsTarget.appendChild(container);
+
+        if (window.lucide) lucide.createIcons({ container: resultsTarget });
+    },
+
 
     async promptChangeThemeCurrentConversation() {
         if (!this.currentChatId || !this.currentMetaData) return;
@@ -1616,7 +1962,7 @@ const ChatPage = {
                     <div class="chat-info-quick-icon"><i data-lucide="${muteIcon}"></i></div>
                     <span>${muteLabel}</span>
                 </button>
-                <button class="chat-info-quick-btn" onclick="window.toastInfo('Search feature coming soon')">
+                <button class="chat-info-quick-btn" onclick="ChatPage.openSearchPanel()">
                     <div class="chat-info-quick-icon"><i data-lucide="search"></i></div>
                     <span>Search</span>
                 </button>

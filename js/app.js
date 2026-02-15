@@ -88,6 +88,11 @@ function closeAllOverlayModals() {
       if (window.ChatPage && typeof window.ChatPage.leaveCurrentConversation === 'function') {
           window.ChatPage.leaveCurrentConversation();
       }
+      // Clear chat theme from .main-content when leaving chat page
+      var mcEl = document.querySelector('.main-content');
+      if (mcEl && window.ChatCommon && typeof window.ChatCommon._clearConversationThemeVars === 'function') {
+          window.ChatCommon._clearConversationThemeVars(mcEl);
+      }
   }
 
   if (!window.location.hash.startsWith('#/profile')) {
