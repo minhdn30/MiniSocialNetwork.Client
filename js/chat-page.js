@@ -1352,7 +1352,7 @@ const ChatPage = {
                 <div class="chat-search-results" id="chat-search-results">
                     <div class="chat-search-empty">
                         <i data-lucide="search" style="width: 40px; height: 40px; opacity: 0.18;"></i>
-                        <p>Enter a keyword to search</p>
+                        <p>Enter keywords to search</p>
                     </div>
                 </div>
             </div>
@@ -1523,7 +1523,7 @@ const ChatPage = {
                 resultsTarget.innerHTML = `
                     <div class="chat-search-empty">
                         <i data-lucide="search" style="width: 40px; height: 40px; opacity: 0.18;"></i>
-                        <p>Enter a keyword to search</p>
+                        <p>Enter keywords to search</p>
                     </div>
                 `;
                 if (window.lucide) lucide.createIcons({ container: resultsTarget });

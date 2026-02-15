@@ -340,10 +340,11 @@
   overflow-y: hidden; /* Ensure no vertical scroll */
   gap: 12px;
   padding: 12px 4px;
-  border-bottom: 1px solid var(--border-primary);
+  border-bottom: 1px solid var(--chat-theme-border, var(--border-primary));
   margin-bottom: 4px;
   scrollbar-width: thin;
-  scrollbar-color: var(--border-primary) transparent;
+  scrollbar-color: var(--chat-theme-scrollbar-thumb, var(--border-primary)) transparent;
+  background: transparent;
 }
 
 .chat-attachment-preview:empty {
@@ -367,8 +368,8 @@
   height: 100%;
   object-fit: cover;
   border-radius: 10px;
-  border: 1px solid var(--border-primary);
-  background: var(--bg-hover);
+  border: 1px solid var(--chat-theme-border, var(--border-primary));
+  background: var(--chat-theme-surface, var(--bg-hover));
   box-shadow: var(--shadow-sm);
 }
 
@@ -378,9 +379,9 @@
   right: -8px;
   width: 18px;
   height: 18px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-primary);
+  background: var(--chat-theme-surface, var(--bg-secondary));
+  color: var(--chat-theme-action-color, var(--text-primary));
+  border: 1px solid var(--chat-theme-border, var(--border-primary));
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -392,10 +393,10 @@
 }
 
 .chat-preview-remove:hover {
-  background: var(--bg-active);
+  background: var(--chat-theme-action-hover-bg, var(--bg-active));
   color: #ef4444;
   transform: scale(1.1);
-  border-color: var(--border-primary);
+  border-color: var(--chat-theme-border, var(--border-primary));
 }
 
 .chat-preview-remove i,
@@ -409,20 +410,20 @@
   height: 64px;
   flex-shrink: 0;
   border-radius: 10px;
-  border: 2px dashed var(--border-primary);
+  border: 2px dashed var(--chat-theme-border, var(--border-primary));
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: var(--text-tertiary);
+  color: var(--chat-theme-system-text, var(--text-tertiary));
   transition: all 0.2s;
-  background: var(--bg-primary);
+  background: var(--chat-theme-surface, var(--bg-primary));
 }
 
 .chat-preview-add-btn:hover {
-  color: var(--accent-primary);
-  border-color: var(--accent-primary);
-  background: var(--bg-hover);
+  color: var(--accent-primary, var(--color-primary));
+  border-color: var(--accent-primary, var(--color-primary));
+  background: var(--chat-theme-action-hover-bg, var(--bg-hover));
 }
 
 /* Custom Horizontal Scrollbar Styling (Match ChatWindow) */
@@ -976,6 +977,21 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  animation: search-panel-morph 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: top center;
+}
+
+@keyframes search-panel-morph {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(-10px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
 }
 
 .chat-search-header {
@@ -996,10 +1012,14 @@
   justify-content: center;
   cursor: pointer;
   color: var(--chat-theme-action-color, var(--text-primary));
-  transition: background 0.2s, color 0.2s;
+  transition: background 0.2s, color 0.2s, transform 0.2s;
   background: none;
   border: none;
   padding: 0;
+}
+
+.chat-search-back-btn:active {
+  transform: scale(0.9);
 }
 
 .chat-search-back-btn i,
@@ -1035,6 +1055,7 @@
   width: 15px;
   height: 15px;
   pointer-events: none;
+  z-index: 1;
 }
 
 .chat-search-input {
@@ -1047,15 +1068,29 @@
   color: var(--text-primary);
   font-size: 13px;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  animation: search-input-expand 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
+
+@keyframes search-input-expand {
+  from {
+    width: 20%;
+    opacity: 0;
+  }
+  to {
+    width: 100%;
+    opacity: 1;
+  }
+}
+
 
 .chat-search-input::placeholder {
   color: var(--chat-theme-system-text, var(--text-tertiary));
 }
 
 .chat-search-input:focus {
-  border-color: var(--chat-theme-accent, var(--color-primary));
+  border-color: var(--accent-primary, var(--color-primary));
+  box-shadow: 0 0 0 2px rgba(var(--accent-primary-rgb), 0.15);
 }
 
 .chat-search-count {

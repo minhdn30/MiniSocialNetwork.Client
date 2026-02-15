@@ -208,6 +208,26 @@
             revokeMediaUrlsForTemp(ctx, tempId);
         }
 
+        // Update data-medias JSON on the grid so previewGridMedia reads the correct URLs
+        if (replaced) {
+            const grid = bubble.querySelector('.msg-media-grid');
+            if (grid && grid.dataset.medias) {
+                try {
+                    const oldMedias = JSON.parse(grid.dataset.medias);
+                    medias.forEach((m, i) => {
+                        if (oldMedias[i]) {
+                            const url = m.MediaUrl || m.mediaUrl;
+                            if (url) {
+                                oldMedias[i].mediaUrl = url;
+                                if (oldMedias[i].MediaUrl) oldMedias[i].MediaUrl = url;
+                            }
+                        }
+                    });
+                    grid.dataset.medias = JSON.stringify(oldMedias);
+                } catch (e) { /* ignore parse errors */ }
+            }
+        }
+
         return replaced;
     }
 
