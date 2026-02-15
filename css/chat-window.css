@@ -251,7 +251,6 @@ body.is-dragging-chat #chat-windows-stack {
     cursor: pointer;
     background: var(--bg-primary);
     box-shadow: var(--shadow-lg);
-    border: 1px solid var(--border-primary);
     transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     animation: bubbleAppear 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -474,6 +473,7 @@ body.is-dragging-chat #chat-windows-stack {
     overflow-x: auto;
     overflow-y: hidden; /* Ensure no vertical scroll */
     padding: 12px 4px;
+    border-bottom: 1px solid var(--chat-theme-border, var(--border-primary));
     background: transparent;
     scrollbar-width: thin;
     scrollbar-color: var(--chat-theme-scrollbar-thumb, var(--border-primary)) transparent;

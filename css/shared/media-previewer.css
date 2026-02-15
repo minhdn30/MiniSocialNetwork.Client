@@ -15,15 +15,43 @@
     
     /* Base theme background + Dynamic Glow behind the media */
     background-color: rgba(0, 0, 0, 0.9);
-    background-image: radial-gradient(circle at center, var(--dynamic-bg, rgba(0,0,0,0)) 0%, rgba(0,0,0,0.95) 100%);
+    background-image:
+        radial-gradient(circle at center, var(--dynamic-bg, rgba(0,0,0,0)) 0%, rgba(0,0,0,0.95) 70%),
+        linear-gradient(155deg, var(--dynamic-linear-from, rgba(8, 14, 30, 0.84)) 0%, var(--dynamic-linear-to, rgba(1, 2, 8, 0.96)) 78%);
     backdrop-filter: blur(25px);
     -webkit-backdrop-filter: blur(25px);
+    overflow: hidden;
+}
+
+.media-preview-overlay::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at 50% 58%, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 62%);
+    opacity: 0.45;
+    transition: opacity 0.3s ease;
+}
+
+.media-preview-overlay.video-mode {
+    backdrop-filter: blur(30px) saturate(130%);
+    -webkit-backdrop-filter: blur(30px) saturate(130%);
+}
+
+.media-preview-overlay.video-mode::before {
+    opacity: 0.8;
 }
 
 /* Light mode tweak */
 body.light-mode .media-preview-overlay {
     background-color: rgba(255, 255, 255, 0.85);
-    background-image: radial-gradient(circle at center, var(--dynamic-bg, rgba(255,255,255,0)) 0%, rgba(255,255,255,0.9) 100%);
+    background-image:
+        radial-gradient(circle at center, var(--dynamic-bg, rgba(255,255,255,0)) 0%, rgba(255,255,255,0.9) 70%),
+        linear-gradient(155deg, var(--dynamic-linear-from, rgba(246, 249, 255, 0.92)) 0%, var(--dynamic-linear-to, rgba(231, 238, 252, 0.96)) 78%);
+}
+
+body.light-mode .media-preview-overlay::before {
+    background: radial-gradient(circle at 50% 58%, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 62%);
 }
 
 .media-preview-overlay.active {
@@ -75,6 +103,7 @@ body.light-mode .media-preview-overlay {
     display: flex;
     align-items: center;
     justify-content: center;
+    z-index: 1;
 }
 
 #media-preview-body {
@@ -83,6 +112,8 @@ body.light-mode .media-preview-overlay {
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
+    z-index: 1;
 }
 
 .media-preview-content {
@@ -126,6 +157,12 @@ body.light-mode .media-preview-overlay {
 .media-preview-nav.prev { left: -75px; }
 .media-preview-nav.next { right: -75px; }
 
+.media-preview-nav.disabled {
+    opacity: 0.35;
+    pointer-events: none;
+    transform: translateY(-50%);
+}
+
 /* Footer & Thumbnails */
 .media-preview-footer {
     position: absolute;
@@ -148,6 +185,11 @@ body.light-mode .media-preview-overlay {
     max-width: 95%;
     overflow-x: auto;
     background: transparent; /* Ensure no background */
+}
+
+.media-preview-thumbs.windowed {
+    justify-content: center;
+    overflow-x: hidden;
 }
 
 .preview-thumb {
@@ -180,6 +222,72 @@ body.light-mode .media-preview-overlay {
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+.preview-thumb video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.preview-thumb-media {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+.preview-thumb-video {
+    background: rgba(0, 0, 0, 0.45);
+}
+
+.preview-thumb-video-img,
+.preview-thumb-video-fallback {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.preview-thumb-video-fallback {
+    display: none;
+}
+
+.preview-thumb-video.use-video-fallback .preview-thumb-video-img {
+    display: none;
+}
+
+.preview-thumb-video.use-video-fallback .preview-thumb-video-fallback {
+    display: block;
+}
+
+.preview-thumb-video::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.05));
+    pointer-events: none;
+}
+
+.preview-thumb-video-indicator {
+    position: absolute;
+    inset: auto auto 4px 4px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.68);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.preview-thumb-video-indicator i,
+.preview-thumb-video-indicator svg {
+    width: 10px;
+    height: 10px;
 }
 
 .thumb-video-icon {

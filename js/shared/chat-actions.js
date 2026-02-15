@@ -994,6 +994,59 @@ const ChatActions = {
         });
     },
 
+    handleMediaRecallEffects(messageId, conversationId = '') {
+        const normalizedMessageId = (messageId || '').toString().toLowerCase();
+        if (!normalizedMessageId) return;
+
+        const normalizedConversationId = (conversationId || '').toString().toLowerCase();
+        let removedFromPanel = 0;
+
+        if (window.ChatPage && typeof window.ChatPage.removeRecalledMediaFromPanel === 'function') {
+            try {
+                removedFromPanel = Number(
+                    window.ChatPage.removeRecalledMediaFromPanel(normalizedMessageId, normalizedConversationId)
+                ) || 0;
+            } catch (err) {
+                console.error('Failed to remove recalled media from panel:', err);
+            }
+        }
+
+        const previewer = window.MediaPreviewer;
+        if (!previewer || typeof previewer.isOpen !== 'function' || !previewer.isOpen()) return;
+
+        const previewSource = (typeof previewer.getSource === 'function' ? previewer.getSource() : '').toLowerCase();
+        const previewConversationId = (typeof previewer.getConversationId === 'function'
+            ? previewer.getConversationId()
+            : '').toLowerCase();
+
+        if (previewSource === 'conversation-media-panel') {
+            if (normalizedConversationId && previewConversationId && normalizedConversationId !== previewConversationId) {
+                return;
+            }
+
+            const affected = removedFromPanel > 0
+                || (typeof previewer.isViewingMessage === 'function'
+                    && previewer.isViewingMessage(normalizedMessageId, { checkAny: true }));
+            if (!affected) return;
+
+            if (typeof previewer.syncAfterExternalListMutation === 'function') {
+                previewer.syncAfterExternalListMutation({ closeIfEmpty: true });
+            }
+            return;
+        }
+
+        const isViewingRecalled = typeof previewer.isViewingMessage === 'function'
+            && previewer.isViewingMessage(normalizedMessageId, { checkAny: true });
+        if (!isViewingRecalled) return;
+
+        if (typeof previewer.close === 'function') {
+            previewer.close();
+        }
+        if (window.toastInfo) {
+            window.toastInfo('This media is no longer available because the message was recalled.');
+        }
+    },
+
     applyRecalledState(messageId, options = {}) {
         if (!messageId) return false;
         const recalledText = options.recalledText || window.APP_CONFIG?.CHAT_RECALLED_MESSAGE_TEXT || 'Message was recalled';
@@ -1039,6 +1092,7 @@ const ChatActions = {
         if (conversationId && window.ChatSidebar && typeof window.ChatSidebar.applyMessageRecalled === 'function') {
             window.ChatSidebar.applyMessageRecalled(conversationId, messageId);
         }
+        this.handleMediaRecallEffects(messageId, conversationId);
     },
 
     recallMessage(messageId) {
@@ -1067,6 +1121,7 @@ const ChatActions = {
                     if (conversationId && window.ChatSidebar && typeof window.ChatSidebar.applyMessageRecalled === 'function') {
                         window.ChatSidebar.applyMessageRecalled(conversationId, normId);
                     }
+                    this.handleMediaRecallEffects(normId, conversationId);
                 } catch (error) {
                     console.error('Error recalling message:', error);
                     window.toastError && window.toastError('An error occurred');
