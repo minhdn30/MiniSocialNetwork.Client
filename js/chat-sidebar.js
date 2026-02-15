@@ -221,7 +221,22 @@ const ChatSidebar = {
             this.page = 1;
             this.hasMore = true;
             // Show skeleton or loader for fresh load
-            listContainer.innerHTML = '<div class="loading-conversations" style="padding: 20px; text-align: center; color: var(--text-tertiary);">Loading...</div>';
+            listContainer.innerHTML = `
+                <div class="chat-sidebar-loader">
+                    <div class="spinner spinner-medium"></div>
+                    <p>Loading chats...</p>
+                </div>
+            `;
+        } else {
+            // Append small loader at bottom
+            const existingLoader = document.getElementById('chat-sidebar-more-loader');
+            if (!existingLoader) {
+                listContainer.insertAdjacentHTML('beforeend', `
+                    <div id="chat-sidebar-more-loader" class="chat-sidebar-more-loader">
+                        <div class="spinner spinner-small"></div>
+                    </div>
+                `);
+            }
         }
 
         try {
@@ -248,7 +263,13 @@ const ChatSidebar = {
         } catch (error) {
             console.error('Failed to load conversations:', error);
             if (!isLoadMore) {
-                listContainer.innerHTML = '<div style="padding:20px; text-align:center;">Error loading messages</div>';
+                listContainer.innerHTML = `
+                    <div class="chat-sidebar-loader">
+                        <i data-lucide="alert-circle" style="width:24px; height:24px; color:var(--text-tertiary);"></i>
+                        <p>Error loading chats</p>
+                    </div>
+                `;
+                if (window.lucide) lucide.createIcons({ container: listContainer });
             }
         } finally {
             this.isLoading = false;
@@ -339,6 +360,10 @@ const ChatSidebar = {
         }).join('');
         
         if (isAppend) {
+            // Remove previous "load more" loader if exists
+            const existingLoader = document.getElementById('chat-sidebar-more-loader');
+            if (existingLoader) existingLoader.remove();
+            
             listContainer.insertAdjacentHTML('beforeend', html);
         } else {
             listContainer.innerHTML = html;

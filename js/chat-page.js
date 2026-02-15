@@ -1400,7 +1400,21 @@ const ChatPage = {
         };
     },
 
-    openMediaPanel() {
+    resetFilePanelState(conversationId = null) {
+        const targetConversationId = (conversationId || this.currentChatId || '').toString().toLowerCase() || null;
+        this._filePanel = {
+            conversationId: targetConversationId,
+            page: 1,
+            hasMore: true,
+            isLoading: false,
+            items: [],
+            keySet: new Set(),
+            scrollTop: 0,
+            pageSize: window.APP_CONFIG?.CHAT_FILES_PAGE_SIZE || 20
+        };
+    },
+
+    openMediaPanel(initialTab = 'media') {
         if (!this.currentChatId) return;
 
         if (this.infoSidebar?.classList.contains('hidden')) {
@@ -1415,7 +1429,10 @@ const ChatPage = {
         this._savedInfoHtml = infoContent.innerHTML;
         this._activeInfoPanel = 'media';
         this.resetMediaPanelState(this.currentChatId);
-        this._mediaPanel.activeTab = 'media';
+        this.resetFilePanelState(this.currentChatId);
+        
+        const targetTab = (initialTab || '').toLowerCase() === 'file' ? 'file' : 'media';
+        this._mediaPanel.activeTab = targetTab;
 
         infoContent.innerHTML = `
             <div class="chat-media-panel-inline">
@@ -1450,14 +1467,23 @@ const ChatPage = {
                 const state = this._mediaPanel;
                 if (!state) return;
                 state.scrollTop = resultsEl.scrollTop;
-                if (state.activeTab !== 'media' || state.isLoading || !state.hasMore) return;
-                if (resultsEl.scrollHeight - resultsEl.scrollTop - resultsEl.clientHeight <= 180) {
-                    this.loadMoreConversationMedia();
+                if (state.activeTab === 'media') {
+                    if (state.isLoading || !state.hasMore) return;
+                    if (resultsEl.scrollHeight - resultsEl.scrollTop - resultsEl.clientHeight <= 180) {
+                        this.loadMoreConversationMedia();
+                    }
+                } else if (state.activeTab === 'file') {
+                    const fileState = this._filePanel;
+                    if (!fileState || fileState.isLoading || !fileState.hasMore) return;
+                    fileState.scrollTop = resultsEl.scrollTop;
+                    if (resultsEl.scrollHeight - resultsEl.scrollTop - resultsEl.clientHeight <= 180) {
+                        this.loadMoreConversationFiles();
+                    }
                 }
             };
         }
 
-        this.switchMediaPanelTab('media');
+        this.switchMediaPanelTab(targetTab);
     },
 
     closeMediaPanel() {
@@ -1500,15 +1526,10 @@ const ChatPage = {
         }
 
         if (normalizedTab === 'file') {
-            const resultsEl = document.getElementById('chat-media-results');
-            if (resultsEl) {
-                resultsEl.innerHTML = `
-                    <div class="chat-media-empty-state">
-                        <i data-lucide="file-text"></i>
-                        <p>File gallery will be added in a next update.</p>
-                    </div>
-                `;
-                if (window.lucide) lucide.createIcons({ container: resultsEl });
+            this.renderFilePanelResults({ preserveScrollTop: this._filePanel?.scrollTop ?? 0 });
+            const fileState = this._filePanel;
+            if (fileState && fileState.items.length === 0 && fileState.hasMore && !fileState.isLoading) {
+                this.loadMoreConversationFiles();
             }
             return;
         }
@@ -1771,6 +1792,243 @@ const ChatPage = {
         });
     },
 
+    // --- File Panel ---
+    _extractConversationFileItems(rawItems) {
+        if (!Array.isArray(rawItems) || rawItems.length === 0) return [];
+        const normalized = [];
+
+        rawItems.forEach((item, itemIndex) => {
+            const mediaType = Number(item?.mediaType ?? item?.MediaType ?? 0);
+            const mediaUrl = item?.mediaUrl || item?.MediaUrl || '';
+            if (!mediaUrl) return;
+
+            const sentAt = item?.sentAt || item?.SentAt || item?.createdAt || item?.CreatedAt || null;
+            const sentTime = sentAt ? new Date(sentAt).getTime() : 0;
+            const messageId = (item?.messageId || item?.MessageId || '').toString().toLowerCase();
+            const messageMediaId = (item?.messageMediaId || item?.MessageMediaId || '').toString().toLowerCase();
+            const key = messageMediaId || `${messageId}:${mediaUrl}:${itemIndex}`;
+            const fileName = item?.fileName || item?.FileName || 'Unknown file';
+            const fileSize = item?.fileSize || item?.FileSize || 0;
+
+            normalized.push({
+                key,
+                messageId,
+                messageMediaId,
+                mediaUrl,
+                mediaType,
+                fileName,
+                fileSize,
+                sentAt,
+                sentTime: Number.isFinite(sentTime) ? sentTime : 0,
+                animateOnRender: false
+            });
+        });
+
+        return normalized;
+    },
+
+    _getFileIconName(fileName) {
+        const ext = (fileName || '').split('.').pop().toLowerCase();
+        const iconMap = {
+            'pdf': 'file-text',
+            'doc': 'file-text', 'docx': 'file-text',
+            'xls': 'file-spreadsheet', 'xlsx': 'file-spreadsheet', 'csv': 'file-spreadsheet',
+            'ppt': 'file-presentation', 'pptx': 'file-presentation',
+            'zip': 'file-archive', 'rar': 'file-archive', '7z': 'file-archive',
+            'txt': 'file-text',
+        };
+        return iconMap[ext] || 'file';
+    },
+
+    _formatFileDate(dateStr) {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return '';
+        const now = new Date();
+        const diffMs = now - d;
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffDays === 0) {
+            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+        if (diffDays === 1) return 'Yesterday';
+        if (diffDays < 7) return d.toLocaleDateString([], { weekday: 'short' });
+        return d.toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' });
+    },
+
+    renderFilePanelResults({ preserveScrollTop = null } = {}) {
+        const state = this._filePanel;
+        const resultsEl = document.getElementById('chat-media-results');
+        if (!state || !resultsEl || this._mediaPanel?.activeTab !== 'file') return;
+
+        if (state.items.length === 0 && state.isLoading) {
+            resultsEl.innerHTML = `
+                <div class="chat-media-loading-state">
+                    <div class="spinner chat-spinner"></div>
+                    <p>Loading files...</p>
+                </div>
+            `;
+            return;
+        }
+
+        if (state.items.length === 0 && !state.hasMore) {
+            resultsEl.innerHTML = `
+                <div class="chat-media-empty-state">
+                    <i data-lucide="file-x"></i>
+                    <p>No files in this conversation yet.</p>
+                </div>
+            `;
+            if (window.lucide) lucide.createIcons({ container: resultsEl });
+            return;
+        }
+
+        if (state.items.length === 0 && state.hasMore) {
+            resultsEl.innerHTML = `
+                <div class="chat-media-loading-state">
+                    <div class="spinner chat-spinner"></div>
+                    <p>Looking for files...</p>
+                </div>
+            `;
+            return;
+        }
+
+        let animatedCount = 0;
+        const rows = state.items.map((item) => {
+            const safeFileName = (item.fileName || 'Unknown file').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const safeMediaUrl = (item.mediaUrl || '#').replace(/"/g, '&quot;');
+            const safeMediaId = (item.messageMediaId || '').replace(/"/g, '&quot;');
+            const iconName = this._getFileIconName(item.fileName);
+            const sizeStr = item.fileSize ? formatFileSize(item.fileSize) : '';
+            const dateStr = this._formatFileDate(item.sentAt);
+            const shouldAnimate = !!item.animateOnRender;
+            const revealClass = shouldAnimate ? ' chat-file-item-reveal' : '';
+            const revealOrder = shouldAnimate ? Math.min(animatedCount++, 20) : 0;
+            const revealStyle = shouldAnimate
+                ? ` style="--file-reveal-delay:${revealOrder * 40}ms"`
+                : '';
+
+            return `
+                <a class="chat-file-item${revealClass}"${revealStyle} href="${safeMediaUrl}" download="${safeFileName}" data-message-media-id="${safeMediaId}" onclick="return ChatCommon.handleFileLinkClick(event, this)" title="${safeFileName}">
+                    <span class="chat-file-item-icon"><i data-lucide="${iconName}"></i></span>
+                    <span class="chat-file-item-meta">
+                        <span class="chat-file-item-name">${safeFileName}</span>
+                        <span class="chat-file-item-info">${sizeStr}${sizeStr && dateStr ? ' · ' : ''}${dateStr}</span>
+                    </span>
+                    <span class="chat-file-item-download"><i data-lucide="download"></i></span>
+                </a>
+            `;
+        }).join('');
+
+        const footer = state.isLoading
+            ? `<div class="chat-media-inline-loader"><div class="spinner chat-spinner"></div><span>Loading more...</span></div>`
+            : (!state.hasMore ? `<div class="chat-media-end">All files loaded</div>` : '');
+
+        resultsEl.innerHTML = `<div class="chat-file-list">${rows}</div>${footer}`;
+        if (window.lucide) lucide.createIcons({ container: resultsEl });
+
+        if (state.items.some(item => item?.animateOnRender)) {
+            requestAnimationFrame(() => {
+                state.items.forEach((item) => {
+                    if (item) item.animateOnRender = false;
+                });
+            });
+        }
+
+        if (preserveScrollTop !== null) {
+            resultsEl.scrollTop = preserveScrollTop;
+            state.scrollTop = preserveScrollTop;
+        } else if (state.scrollTop > 0) {
+            resultsEl.scrollTop = state.scrollTop;
+        }
+    },
+
+    async loadMoreConversationFiles() {
+        const state = this._filePanel;
+        if (!state || state.isLoading || !state.hasMore || !this.currentChatId) return false;
+        if ((state.conversationId || '') !== (this.currentChatId || '').toString().toLowerCase()) return false;
+
+        const resultsEl = document.getElementById('chat-media-results');
+        const preserveScrollTop = resultsEl ? resultsEl.scrollTop : state.scrollTop;
+
+        state.isLoading = true;
+        if (this._mediaPanel?.activeTab === 'file') {
+            this.renderFilePanelResults({ preserveScrollTop });
+        }
+
+        let loadedAnyItem = false;
+        try {
+            const res = await window.API.Conversations.getFiles(this.currentChatId, state.page, state.pageSize);
+            if (!res.ok) return false;
+
+            const data = await res.json();
+            const rawItems = data?.items || [];
+            const extractedItems = this._extractConversationFileItems(rawItems);
+
+            extractedItems.forEach((item) => {
+                if (state.keySet.has(item.key)) return;
+                item.animateOnRender = true;
+                state.keySet.add(item.key);
+                state.items.push(item);
+                loadedAnyItem = true;
+            });
+
+            if (rawItems.length < state.pageSize) {
+                state.hasMore = false;
+            } else if (typeof data?.hasNextPage === 'boolean') {
+                state.hasMore = data.hasNextPage;
+            }
+            state.page += 1;
+            return loadedAnyItem;
+        } catch (error) {
+            console.error('Failed to load conversation files:', error);
+            return false;
+        } finally {
+            state.isLoading = false;
+            if (this._mediaPanel?.activeTab === 'file') {
+                this.renderFilePanelResults({ preserveScrollTop });
+            }
+        }
+    },
+
+    removeRecalledFilesFromPanel(messageId, conversationId = '') {
+        const state = this._filePanel;
+        const normalizedMessageId = (messageId || '').toString().toLowerCase();
+        if (!state || !normalizedMessageId || !Array.isArray(state.items) || state.items.length === 0) return 0;
+
+        const normalizedConversationId = (conversationId || '').toString().toLowerCase();
+        const stateConversationId = (state.conversationId || '').toString().toLowerCase();
+        if (normalizedConversationId && stateConversationId && normalizedConversationId !== stateConversationId) {
+            return 0;
+        }
+
+        let removedCount = 0;
+        const nextItems = [];
+        const nextKeySet = new Set();
+
+        state.items.forEach((item) => {
+            const itemMessageId = (item?.messageId || item?.MessageId || '').toString().toLowerCase();
+            if (itemMessageId === normalizedMessageId) {
+                removedCount += 1;
+                return;
+            }
+            nextItems.push(item);
+            if (item?.key) nextKeySet.add(item.key);
+        });
+
+        if (removedCount === 0) return 0;
+
+        state.items = nextItems;
+        state.keySet = nextKeySet;
+
+        if (this._mediaPanel?.activeTab === 'file' && this._activeInfoPanel === 'media') {
+            const resultsEl = document.getElementById('chat-media-results');
+            const preserveScrollTop = resultsEl ? resultsEl.scrollTop : state.scrollTop;
+            this.renderFilePanelResults({ preserveScrollTop });
+        }
+
+        return removedCount;
+    },
+
     // --- Message Search ---
     searchPage: 1,
     searchKeyword: '',
@@ -1788,6 +2046,16 @@ const ChatPage = {
         keySet: new Set(),
         scrollTop: 0,
         pageSize: window.APP_CONFIG?.CHAT_MEDIA_PAGE_SIZE || 60
+    },
+    _filePanel: {
+        conversationId: null,
+        page: 1,
+        hasMore: true,
+        isLoading: false,
+        items: [],
+        keySet: new Set(),
+        scrollTop: 0,
+        pageSize: window.APP_CONFIG?.CHAT_FILES_PAGE_SIZE || 20
     },
 
     openSearchPanel() {
@@ -1921,10 +2189,10 @@ const ChatPage = {
         if (viewPinnedBtn) viewPinnedBtn.onclick = () => this.openPinnedMessagesCurrentConversation();
 
         const mediaBtn = document.getElementById('chat-info-open-media-btn');
-        if (mediaBtn) mediaBtn.onclick = () => this.openMediaPanel();
+        if (mediaBtn) mediaBtn.onclick = () => this.openMediaPanel('media');
 
         const filesBtn = document.getElementById('chat-info-open-files-btn');
-        if (filesBtn) filesBtn.onclick = () => window.toastInfo?.('File gallery will be added in a next update.');
+        if (filesBtn) filesBtn.onclick = () => this.openMediaPanel('file');
 
         const infoContent = document.getElementById('chat-info-content');
         if (infoContent) {
@@ -2597,12 +2865,12 @@ const ChatPage = {
 
         const mediaBtn = document.getElementById('chat-info-open-media-btn');
         if (mediaBtn) {
-            mediaBtn.onclick = () => this.openMediaPanel();
+            mediaBtn.onclick = () => this.openMediaPanel('media');
         }
 
         const filesBtn = document.getElementById('chat-info-open-files-btn');
         if (filesBtn) {
-            filesBtn.onclick = () => window.toastInfo?.('File gallery will be added in a next update.');
+            filesBtn.onclick = () => this.openMediaPanel('file');
         }
 
         this.infoContent.querySelectorAll('.chat-info-member-edit').forEach(el => {

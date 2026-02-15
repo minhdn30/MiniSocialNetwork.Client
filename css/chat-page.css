@@ -1528,3 +1528,123 @@
   opacity: 0.5;
 }
 
+
+/* --- Chat File Panel (List View) --- */
+.chat-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 2px;
+}
+
+.chat-file-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: background 0.2s ease, transform 0.15s ease;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.chat-file-item:hover {
+  background: var(--chat-theme-action-hover-bg, rgba(255, 255, 255, 0.06));
+}
+
+.chat-file-item:active {
+  transform: scale(0.99);
+}
+
+.chat-file-item-icon {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border-radius: 10px;
+  background: var(--chat-theme-action-hover-bg, var(--bg-active));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--chat-theme-action-color, var(--accent-primary));
+}
+
+.chat-file-item-icon i,
+.chat-file-item-icon svg {
+  width: 18px;
+  height: 18px;
+  color: inherit;
+}
+
+.chat-file-item-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.chat-file-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-file-item-info {
+  font-size: 11px;
+  color: var(--chat-theme-system-text, var(--text-tertiary));
+  white-space: nowrap;
+}
+
+.chat-file-item-download {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--chat-theme-system-text, var(--text-tertiary));
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s, color 0.2s;
+}
+
+.chat-file-item:hover .chat-file-item-download {
+  opacity: 1;
+}
+
+.chat-file-item-download:hover {
+  background: var(--chat-theme-action-hover-bg, rgba(255, 255, 255, 0.1));
+  color: var(--text-primary);
+}
+
+.chat-file-item-download i,
+.chat-file-item-download svg {
+  width: 14px;
+  height: 14px;
+  color: inherit;
+}
+
+/* File item reveal animation */
+.chat-file-item-reveal {
+  opacity: 0;
+  transform: translateY(-8px);
+  animation: chat-file-item-reveal 0.28s ease forwards;
+  animation-delay: var(--file-reveal-delay, 0ms);
+}
+
+@keyframes chat-file-item-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

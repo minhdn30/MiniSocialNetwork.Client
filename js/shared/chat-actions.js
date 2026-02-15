@@ -1171,6 +1171,14 @@ const ChatActions = {
             }
         }
 
+        if (window.ChatPage && typeof window.ChatPage.removeRecalledFilesFromPanel === 'function') {
+            try {
+                window.ChatPage.removeRecalledFilesFromPanel(normalizedMessageId, normalizedConversationId);
+            } catch (err) {
+                console.error('Failed to remove recalled files from panel:', err);
+            }
+        }
+
         const previewer = window.MediaPreviewer;
         if (!previewer || typeof previewer.isOpen !== 'function' || !previewer.isOpen()) return;
 

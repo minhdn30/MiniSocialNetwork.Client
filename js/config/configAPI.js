@@ -480,6 +480,8 @@
         apiFetch(`/Conversations/${conversationId}/messages?page=${page}&pageSize=${pageSize}`),
       getMedia: (conversationId, page = 1, pageSize = window.APP_CONFIG?.CHAT_MEDIA_PAGE_SIZE || 20) =>
         apiFetch(`/Conversations/${conversationId}/media?page=${page}&pageSize=${pageSize}`),
+      getFiles: (conversationId, page = 1, pageSize = window.APP_CONFIG?.CHAT_FILES_PAGE_SIZE || 20) =>
+        apiFetch(`/Conversations/${conversationId}/files?page=${page}&pageSize=${pageSize}`),
       getMessageContext: (conversationId, messageId, pageSize = window.APP_CONFIG?.CHATPAGE_MESSAGES_PAGE_SIZE || 20) =>
         apiFetch(`/Conversations/${conversationId}/messages/context?messageId=${messageId}&pageSize=${pageSize}`),
       getPrivateWithMessages: (otherId, page = 1, pageSize = window.APP_CONFIG?.CHATPAGE_MESSAGES_PAGE_SIZE || 20) =>

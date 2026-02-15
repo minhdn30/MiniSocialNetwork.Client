@@ -147,5 +147,6 @@
   MAX_TOTAL_CHAT_WINDOWS: 8, // Tổng số lượng chat (cả cửa sổ và bong bóng) tối đa được phép duy trì
   CHAT_SEARCH_PAGE_SIZE: 20, // Số lượng kết quả tìm kiếm tin nhắn load mỗi lần
   CHAT_MEDIA_PAGE_SIZE: 20, // Number of media items loaded per request in chat media panel
+  CHAT_FILES_PAGE_SIZE: 20, // Number of file/document items loaded per request in chat file panel
   };
 })(window);

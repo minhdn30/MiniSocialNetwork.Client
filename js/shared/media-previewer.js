@@ -127,17 +127,29 @@ const MediaPreviewer = {
         const parsed = this.parseRgbColor(baseColor);
         if (!parsed) {
             return {
-                glow: 'rgba(38, 112, 255, 0.30)',
-                linearFrom: 'rgba(12, 20, 42, 0.86)',
-                linearTo: 'rgba(2, 4, 10, 0.96)'
+                glow: 'rgba(56, 125, 255, 0.35)',
+                linearFrom: 'rgba(12, 18, 38, 0.92)',
+                linearTo: 'rgba(2, 4, 12, 0.98)'
             };
         }
 
         const { r, g, b } = parsed;
         return {
-            glow: this.toRgba(r, g, b, 0.34),
-            linearFrom: this.toRgba(r * 0.48 + 8, g * 0.48 + 8, b * 0.54 + 10, 0.86),
-            linearTo: this.toRgba(r * 0.14, g * 0.14, b * 0.18, 0.97)
+            glow: this.toRgba(r, g, b, 0.40),
+            linearFrom: this.toRgba(r * 0.45 + 10, g * 0.45 + 10, b * 0.50 + 12, 0.90),
+            linearTo: this.toRgba(r * 0.12, g * 0.12, b * 0.15, 0.98)
+        };
+    },
+
+    buildImageBackdropColors(baseColor) {
+        const parsed = this.parseRgbColor(baseColor);
+        if (!parsed) return null;
+
+        const { r, g, b } = parsed;
+        return {
+            glow: this.toRgba(r, g, b, 0.30),
+            linearFrom: this.toRgba(r * 0.35 + 8, g * 0.35 + 8, b * 0.40 + 10, 0.88),
+            linearTo: this.toRgba(0, 0, 0, 0.98)
         };
     },
 
@@ -183,10 +195,22 @@ const MediaPreviewer = {
         }
 
         this.overlay.classList.remove('video-mode');
-        if (dominantColor) this.overlay.style.setProperty('--dynamic-bg', dominantColor);
-        else this.overlay.style.removeProperty('--dynamic-bg');
-        this.overlay.style.removeProperty('--dynamic-linear-from');
-        this.overlay.style.removeProperty('--dynamic-linear-to');
+        if (dominantColor) {
+            const backdrop = this.buildImageBackdropColors(dominantColor);
+            if (backdrop) {
+                this.overlay.style.setProperty('--dynamic-bg', backdrop.glow);
+                this.overlay.style.setProperty('--dynamic-linear-from', backdrop.linearFrom);
+                this.overlay.style.setProperty('--dynamic-linear-to', backdrop.linearTo);
+            } else {
+                this.overlay.style.setProperty('--dynamic-bg', dominantColor);
+                this.overlay.style.removeProperty('--dynamic-linear-from');
+                this.overlay.style.removeProperty('--dynamic-linear-to');
+            }
+        } else {
+            this.overlay.style.removeProperty('--dynamic-bg');
+            this.overlay.style.removeProperty('--dynamic-linear-from');
+            this.overlay.style.removeProperty('--dynamic-linear-to');
+        }
     },
 
     isOpen() {
