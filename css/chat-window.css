@@ -474,10 +474,9 @@ body.is-dragging-chat #chat-windows-stack {
     overflow-x: auto;
     overflow-y: hidden; /* Ensure no vertical scroll */
     padding: 12px 4px;
-    border-bottom: 1px solid var(--chat-theme-border, var(--border-primary));
-    background: var(--chat-theme-footer-surface, var(--chat-theme-surface, var(--bg-primary)));
+    background: transparent;
     scrollbar-width: thin;
-    scrollbar-color: var(--border-primary) transparent;
+    scrollbar-color: var(--chat-theme-scrollbar-thumb, var(--border-primary)) transparent;
 }
 
 /* Custom Horizontal Scrollbar Styling */
@@ -532,8 +531,8 @@ body.is-dragging-chat #chat-windows-stack {
     height: 100%;
     object-fit: cover;
     border-radius: 10px;
-    border: 1px solid var(--border-primary);
-    background: var(--bg-hover);
+    border: 1px solid var(--chat-theme-border, var(--border-primary));
+    background: var(--chat-theme-surface, var(--bg-hover));
     box-shadow: var(--shadow-sm);
 }
 
@@ -542,20 +541,20 @@ body.is-dragging-chat #chat-windows-stack {
     height: 56px;
     flex-shrink: 0;
     border-radius: 10px;
-    border: 2px dashed var(--border-primary);
+    border: 2px dashed var(--chat-theme-border, var(--border-primary));
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    color: var(--text-tertiary);
+    color: var(--chat-theme-system-text, var(--text-tertiary));
     transition: all 0.2s;
-    background: var(--bg-primary);
+    background: var(--chat-theme-surface, var(--bg-primary));
 }
 
 .chat-window-preview-add-btn:hover {
-    color: var(--accent-primary);
-    border-color: var(--accent-primary);
-    background: var(--bg-hover);
+    color: var(--accent-primary, var(--color-primary));
+    border-color: var(--accent-primary, var(--color-primary));
+    background: var(--chat-theme-action-hover-bg, var(--bg-hover));
 }
 
 .chat-window-preview-add-btn i {
@@ -570,9 +569,9 @@ body.is-dragging-chat #chat-windows-stack {
     right: -8px;
     width: 18px;
     height: 18px;
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-primary);
+    background: var(--chat-theme-surface, var(--bg-secondary));
+    color: var(--chat-theme-action-color, var(--text-primary));
+    border: 1px solid var(--chat-theme-border, var(--border-primary));
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -584,10 +583,10 @@ body.is-dragging-chat #chat-windows-stack {
 }
 
 .chat-window-preview-remove:hover {
-    background: var(--bg-active);
+    background: var(--chat-theme-action-hover-bg, var(--bg-active));
     color: #ef4444;
     transform: scale(1.1);
-    border-color: var(--border-primary);
+    border-color: var(--chat-theme-border, var(--border-primary));
 }
 
 .chat-window-preview-remove i, .chat-window-preview-remove svg{
