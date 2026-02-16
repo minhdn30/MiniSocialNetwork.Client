@@ -1231,7 +1231,7 @@ const ChatWindow = {
           const authorName = isGroup && !m.isOwn
             ? (m.sender?.nickname || m.sender?.Nickname || m.sender?.username || m.sender?.Username || m.sender?.fullName || m.sender?.FullName || '')
             : '';
-          const html = ChatCommon.renderMessageBubble(m, { isGroup, groupPos, senderAvatar, authorName });
+          const html = ChatCommon.renderMessageBubble(m, { isGroup, groupPos, senderAvatar, authorName, isWindow: true });
           self.insertHtmlBeforeTypingIndicator(container, html);
         });
       },
@@ -3352,6 +3352,7 @@ const ChatWindow = {
             groupPos,
             senderAvatar,
             authorName,
+            isWindow: true,
           });
 
           const tempDiv = document.createElement("div");
@@ -3520,6 +3521,7 @@ const ChatWindow = {
             groupPos,
             senderAvatar,
             authorName,
+            isWindow: true,
           });
         });
 
@@ -3638,6 +3640,7 @@ const ChatWindow = {
       groupPos,
       senderAvatar,
       authorName,
+      isWindow: true,
     });
 
     const bubble = tempDiv.firstElementChild;

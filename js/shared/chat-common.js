@@ -220,6 +220,240 @@ const ChatCommon = {
         return `${r}, ${g}, ${b}`;
     },
 
+    _extractFirstGradientColorStop(gradientValue) {
+        const raw = (gradientValue || '').toString().trim();
+        if (!/^linear-gradient\(/i.test(raw)) return '';
+
+        const start = raw.indexOf('(');
+        if (start < 0 || !raw.endsWith(')')) return '';
+        const inner = raw.slice(start + 1, -1).trim();
+        if (!inner) return '';
+
+        const parts = [];
+        let current = '';
+        let depth = 0;
+        for (let i = 0; i < inner.length; i += 1) {
+            const ch = inner[i];
+            if (ch === '(') depth += 1;
+            if (ch === ')' && depth > 0) depth -= 1;
+
+            if (ch === ',' && depth === 0) {
+                parts.push(current.trim());
+                current = '';
+                continue;
+            }
+            current += ch;
+        }
+        if (current.trim()) parts.push(current.trim());
+        if (!parts.length) return '';
+
+        const firstPart = parts[0] || '';
+        const hasDirection = /^(to\s+.+|[-+]?\d*\.?\d+(deg|rad|turn|grad))$/i.test(firstPart);
+        const firstStop = hasDirection ? (parts[1] || '') : firstPart;
+        if (!firstStop) return '';
+
+        let token = '';
+        depth = 0;
+        for (let i = 0; i < firstStop.length; i += 1) {
+            const ch = firstStop[i];
+            if (ch === '(') depth += 1;
+            if (ch === ')' && depth > 0) depth -= 1;
+
+            if (depth === 0 && /\s/.test(ch)) break;
+            token += ch;
+        }
+        return token.trim();
+    },
+
+    _normalizeThemeColorValue(colorValue) {
+        let raw = (colorValue || '').toString().trim();
+        if (!raw) return '';
+        const gradientColor = this._extractFirstGradientColorStop(raw);
+        if (gradientColor) raw = gradientColor;
+        return raw;
+    },
+
+    _toOpaqueThemeColor(colorValue) {
+        let raw = this._normalizeThemeColorValue(colorValue);
+        if (!raw) return '';
+
+        const rgbaMatch = raw.match(/^rgba\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^,]+)\s*,\s*[^)]+\)$/i);
+        if (rgbaMatch) {
+            return `rgb(${rgbaMatch[1].trim()}, ${rgbaMatch[2].trim()}, ${rgbaMatch[3].trim()})`;
+        }
+
+        const hslaMatch = raw.match(/^hsla\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^,]+)\s*,\s*[^)]+\)$/i);
+        if (hslaMatch) {
+            return `hsl(${hslaMatch[1].trim()}, ${hslaMatch[2].trim()}, ${hslaMatch[3].trim()})`;
+        }
+
+        const hex = raw.replace(/^#/, '');
+        if (/^[0-9a-fA-F]{8}$/.test(hex)) return `#${hex.slice(0, 6)}`;
+        if (/^[0-9a-fA-F]{4}$/.test(hex)) return `#${hex.slice(0, 3)}`;
+
+        return raw;
+    },
+
+    _hslToRgb(h, s, l) {
+        const hue = (((h % 360) + 360) % 360) / 360;
+        const sat = Math.max(0, Math.min(1, s));
+        const light = Math.max(0, Math.min(1, l));
+
+        if (sat === 0) {
+            const gray = Math.round(light * 255);
+            return { r: gray, g: gray, b: gray };
+        }
+
+        const q = light < 0.5 ? light * (1 + sat) : light + sat - light * sat;
+        const p = 2 * light - q;
+        const toRgb = (t) => {
+            let x = t;
+            if (x < 0) x += 1;
+            if (x > 1) x -= 1;
+            if (x < 1 / 6) return p + (q - p) * 6 * x;
+            if (x < 1 / 2) return q;
+            if (x < 2 / 3) return p + (q - p) * (2 / 3 - x) * 6;
+            return p;
+        };
+
+        return {
+            r: Math.round(toRgb(hue + 1 / 3) * 255),
+            g: Math.round(toRgb(hue) * 255),
+            b: Math.round(toRgb(hue - 1 / 3) * 255)
+        };
+    },
+
+    _parseColorToRgb(colorValue) {
+        const raw = (colorValue || '').toString().trim();
+        if (!raw) return null;
+
+        const hex = raw.replace(/^#/, '');
+        if (/^[0-9a-fA-F]{3}$/.test(hex)) {
+            return {
+                r: parseInt(hex[0] + hex[0], 16),
+                g: parseInt(hex[1] + hex[1], 16),
+                b: parseInt(hex[2] + hex[2], 16)
+            };
+        }
+        if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+            return {
+                r: parseInt(hex[0] + hex[0], 16),
+                g: parseInt(hex[1] + hex[1], 16),
+                b: parseInt(hex[2] + hex[2], 16)
+            };
+        }
+        if (/^[0-9a-fA-F]{6}$/.test(hex) || /^[0-9a-fA-F]{8}$/.test(hex)) {
+            return {
+                r: parseInt(hex.slice(0, 2), 16),
+                g: parseInt(hex.slice(2, 4), 16),
+                b: parseInt(hex.slice(4, 6), 16)
+            };
+        }
+
+        const rgbMatch = raw.match(/^rgb\(\s*([+\-.\d]+)\s*,\s*([+\-.\d]+)\s*,\s*([+\-.\d]+)\s*\)$/i)
+            || raw.match(/^rgba\(\s*([+\-.\d]+)\s*,\s*([+\-.\d]+)\s*,\s*([+\-.\d]+)\s*,\s*([^)]+)\)$/i);
+        if (rgbMatch) {
+            const r = Math.max(0, Math.min(255, Math.round(Number(rgbMatch[1]))));
+            const g = Math.max(0, Math.min(255, Math.round(Number(rgbMatch[2]))));
+            const b = Math.max(0, Math.min(255, Math.round(Number(rgbMatch[3]))));
+            if ([r, g, b].every(Number.isFinite)) return { r, g, b };
+        }
+
+        const hslMatch = raw.match(/^hsl\(\s*([+\-.\d]+)(deg)?\s*,\s*([+\-.\d]+)%\s*,\s*([+\-.\d]+)%\s*\)$/i)
+            || raw.match(/^hsla\(\s*([+\-.\d]+)(deg)?\s*,\s*([+\-.\d]+)%\s*,\s*([+\-.\d]+)%\s*,\s*([^)]+)\)$/i);
+        if (hslMatch) {
+            const h = Number(hslMatch[1]);
+            const s = Number(hslMatch[3]) / 100;
+            const l = Number(hslMatch[4]) / 100;
+            if ([h, s, l].every(Number.isFinite)) {
+                return this._hslToRgb(h, s, l);
+            }
+        }
+
+        return null;
+    },
+
+    _normalizeAlphaChannel(alphaValue) {
+        const alpha = Number(alphaValue);
+        if (!Number.isFinite(alpha)) return 1;
+        return Math.max(0, Math.min(1, alpha));
+    },
+
+    _parseColorToRgba(colorValue) {
+        const raw = this._normalizeThemeColorValue(colorValue);
+        if (!raw) return null;
+
+        const hex = raw.replace(/^#/, '');
+        if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+            const rgb = this._parseColorToRgb(`#${hex}`);
+            if (!rgb) return null;
+            return {
+                r: rgb.r,
+                g: rgb.g,
+                b: rgb.b,
+                a: parseInt(hex[3] + hex[3], 16) / 255
+            };
+        }
+        if (/^[0-9a-fA-F]{8}$/.test(hex)) {
+            const rgb = this._parseColorToRgb(`#${hex}`);
+            if (!rgb) return null;
+            return {
+                r: rgb.r,
+                g: rgb.g,
+                b: rgb.b,
+                a: parseInt(hex.slice(6, 8), 16) / 255
+            };
+        }
+
+        const rgbaMatch = raw.match(/^rgba\(\s*([+\-.\d]+)\s*,\s*([+\-.\d]+)\s*,\s*([+\-.\d]+)\s*,\s*([^)]+)\)$/i);
+        if (rgbaMatch) {
+            const r = Math.max(0, Math.min(255, Math.round(Number(rgbaMatch[1]))));
+            const g = Math.max(0, Math.min(255, Math.round(Number(rgbaMatch[2]))));
+            const b = Math.max(0, Math.min(255, Math.round(Number(rgbaMatch[3]))));
+            const a = this._normalizeAlphaChannel(rgbaMatch[4]);
+            if ([r, g, b].every(Number.isFinite)) {
+                return { r, g, b, a };
+            }
+            return null;
+        }
+
+        const hslaMatch = raw.match(/^hsla\(\s*([+\-.\d]+)(deg)?\s*,\s*([+\-.\d]+)%\s*,\s*([+\-.\d]+)%\s*,\s*([^)]+)\)$/i);
+        if (hslaMatch) {
+            const h = Number(hslaMatch[1]);
+            const s = Number(hslaMatch[3]) / 100;
+            const l = Number(hslaMatch[4]) / 100;
+            const a = this._normalizeAlphaChannel(hslaMatch[5]);
+            if ([h, s, l].every(Number.isFinite)) {
+                const rgb = this._hslToRgb(h, s, l);
+                return { r: rgb.r, g: rgb.g, b: rgb.b, a };
+            }
+            return null;
+        }
+
+        const rgb = this._parseColorToRgb(raw);
+        if (!rgb) return null;
+        return { r: rgb.r, g: rgb.g, b: rgb.b, a: 1 };
+    },
+
+    _blendRgb(foreground, background, alpha) {
+        const safeAlpha = this._normalizeAlphaChannel(alpha);
+        if (!foreground || !background) return null;
+        return {
+            r: Math.max(0, Math.min(255, Math.round((foreground.r * safeAlpha) + (background.r * (1 - safeAlpha))))),
+            g: Math.max(0, Math.min(255, Math.round((foreground.g * safeAlpha) + (background.g * (1 - safeAlpha))))),
+            b: Math.max(0, Math.min(255, Math.round((foreground.b * safeAlpha) + (background.b * (1 - safeAlpha)))))
+        };
+    },
+
+    _isDarkRgb(rgb) {
+        if (!rgb) return true;
+        const r = rgb.r / 255;
+        const g = rgb.g / 255;
+        const b = rgb.b / 255;
+        const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        return luminance < 0.58;
+    },
+
     _reverseGradientDirection(direction) {
         const rawDirection = (direction || '').toString().trim();
         if (!rawDirection.length) return '';
@@ -318,6 +552,9 @@ const ChatCommon = {
             '--chat-theme-surface',
             '--chat-theme-footer-surface',
             '--chat-theme-surface-alt',
+            '--chat-theme-tooltip-bg',
+            '--chat-theme-tooltip-text',
+            '--chat-theme-tooltip-border',
             '--chat-theme-border',
             '--chat-theme-own-bubble-bg',
             '--chat-theme-own-bubble-text',
@@ -372,6 +609,73 @@ const ChatCommon = {
             }
         }
         if (palette.surfaceAlt) targetElement.style.setProperty('--chat-theme-surface-alt', palette.surfaceAlt);
+        const fallbackTooltipBg = mode === 'light' ? '#ffffff' : '#111827';
+        const tooltipBaseColor = this._normalizeThemeColorValue(
+            palette.surface || palette.otherBubbleBg || palette.ownBubbleBg || fallbackTooltipBg
+        );
+        const tooltipLayerColor = this._normalizeThemeColorValue(palette.surfaceAlt || palette.surface || '');
+        const tooltipBaseRgb = this._parseColorToRgb(this._toOpaqueThemeColor(tooltipBaseColor || fallbackTooltipBg))
+            || this._parseColorToRgb(fallbackTooltipBg);
+        const tooltipLayerRgba = this._parseColorToRgba(tooltipLayerColor);
+
+        let tooltipRgb = null;
+        if (tooltipLayerRgba) {
+            if (tooltipLayerRgba.a < 1 && tooltipBaseRgb) {
+                tooltipRgb = this._blendRgb(tooltipLayerRgba, tooltipBaseRgb, tooltipLayerRgba.a);
+            } else {
+                tooltipRgb = {
+                    r: tooltipLayerRgba.r,
+                    g: tooltipLayerRgba.g,
+                    b: tooltipLayerRgba.b
+                };
+            }
+        }
+
+        if (!tooltipRgb && tooltipBaseRgb) {
+            tooltipRgb = tooltipBaseRgb;
+        }
+        if (!tooltipRgb) {
+            tooltipRgb = mode === 'light'
+                ? { r: 248, g: 250, b: 252 }
+                : { r: 17, g: 24, b: 39 };
+        }
+        let tooltipBg = `rgb(${tooltipRgb.r}, ${tooltipRgb.g}, ${tooltipRgb.b})`;
+
+        // Keep tooltips readable without flattening every theme into one color.
+        if (tooltipRgb) {
+            const brightness = (tooltipRgb.r + tooltipRgb.g + tooltipRgb.b) / 3;
+            if (mode === 'dark' && brightness > 128) {
+                const scale = 128 / brightness;
+                tooltipRgb = {
+                    r: Math.max(0, Math.min(255, Math.round(tooltipRgb.r * scale))),
+                    g: Math.max(0, Math.min(255, Math.round(tooltipRgb.g * scale))),
+                    b: Math.max(0, Math.min(255, Math.round(tooltipRgb.b * scale)))
+                };
+                tooltipBg = `rgb(${tooltipRgb.r}, ${tooltipRgb.g}, ${tooltipRgb.b})`;
+            } else if (mode === 'light' && brightness < 168) {
+                const liftRatio = (168 - brightness) / 168;
+                const mix = Math.max(0.2, Math.min(0.86, liftRatio * 0.86));
+                tooltipRgb = {
+                    r: Math.max(0, Math.min(255, Math.round(tooltipRgb.r + (255 - tooltipRgb.r) * mix))),
+                    g: Math.max(0, Math.min(255, Math.round(tooltipRgb.g + (255 - tooltipRgb.g) * mix))),
+                    b: Math.max(0, Math.min(255, Math.round(tooltipRgb.b + (255 - tooltipRgb.b) * mix)))
+                };
+                tooltipBg = `rgb(${tooltipRgb.r}, ${tooltipRgb.g}, ${tooltipRgb.b})`;
+            }
+        }
+
+        const darkBg = this._isDarkRgb(tooltipRgb);
+        const tooltipText = darkBg ? '#f8fafc' : '#0f172a';
+        let tooltipBorder = darkBg ? 'rgba(148, 163, 184, 0.34)' : 'rgba(15, 23, 42, 0.22)';
+        const paletteBorderRgb = this._parseColorToRgb(this._toOpaqueThemeColor(palette.border || ''));
+        if (paletteBorderRgb) {
+            const borderAlpha = darkBg ? 0.52 : 0.30;
+            tooltipBorder = `rgba(${paletteBorderRgb.r}, ${paletteBorderRgb.g}, ${paletteBorderRgb.b}, ${borderAlpha})`;
+        }
+
+        targetElement.style.setProperty('--chat-theme-tooltip-bg', tooltipBg);
+        targetElement.style.setProperty('--chat-theme-tooltip-text', tooltipText);
+        targetElement.style.setProperty('--chat-theme-tooltip-border', tooltipBorder);
         if (palette.border) targetElement.style.setProperty('--chat-theme-border', palette.border);
         if (palette.ownBubbleBg) {
             targetElement.style.setProperty('--chat-theme-own-bubble-bg', palette.ownBubbleBg);
@@ -620,6 +924,271 @@ const ChatCommon = {
             : trimmed;
     },
 
+    parseReactType(value) {
+        if (value === null || value === undefined || value === '') return null;
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    },
+
+    getReactEmoji(reactType) {
+        const normalized = this.parseReactType(reactType);
+        const emojiMap = {
+            0: '👍',
+            1: '❤️',
+            2: '😆',
+            3: '😮',
+            4: '😢',
+            5: '😡'
+        };
+        return emojiMap[normalized] || '👍';
+    },
+
+    normalizeMessageReactSummaries(rawReacts) {
+        if (!Array.isArray(rawReacts)) return [];
+
+        return rawReacts
+            .map(item => {
+                const reactType = this.parseReactType(item?.reactType ?? item?.ReactType);
+                const count = Number(item?.count ?? item?.Count ?? 0);
+                if (reactType === null || !Number.isFinite(count) || count <= 0) {
+                    return null;
+                }
+                return {
+                    reactType,
+                    count
+                };
+            })
+            .filter(Boolean);
+    },
+
+    normalizeMessageReactedBy(rawReactedBy) {
+        if (!Array.isArray(rawReactedBy)) return [];
+
+        return rawReactedBy
+            .map(item => {
+                const accountId = (item?.accountId || item?.AccountId || '')
+                    .toString()
+                    .toLowerCase();
+                const reactType = this.parseReactType(item?.reactType ?? item?.ReactType);
+                if (!accountId || reactType === null) return null;
+
+                return {
+                    accountId,
+                    username: item?.username || item?.Username || '',
+                    fullName: item?.fullName || item?.FullName || '',
+                    avatarUrl: item?.avatarUrl || item?.AvatarUrl || '',
+                    nickname: this.normalizeNickname(item?.nickname ?? item?.Nickname ?? null),
+                    reactType,
+                    createdAt: item?.createdAt || item?.CreatedAt || null
+                };
+            })
+            .filter(Boolean);
+    },
+
+    buildReactSummariesFromReactedBy(reactedBy) {
+        if (!Array.isArray(reactedBy) || reactedBy.length === 0) return [];
+        const grouped = new Map();
+
+        reactedBy.forEach((reactor) => {
+            const reactType = this.parseReactType(reactor?.reactType);
+            if (reactType === null) return;
+            grouped.set(reactType, (grouped.get(reactType) || 0) + 1);
+        });
+
+        return Array.from(grouped.entries())
+            .map(([reactType, count]) => ({ reactType, count }))
+            .sort((a, b) => a.reactType - b.reactType);
+    },
+
+    getMessageReactionDisplayName(reactor) {
+        if (!reactor) return 'Unknown';
+        const nickname = this.normalizeNickname(reactor.nickname ?? reactor.Nickname ?? null);
+        if (nickname) return nickname;
+        return reactor.username || reactor.Username || reactor.fullName || reactor.FullName || 'Unknown';
+    },
+
+    getMessageReactionHoverText(reactedBy, maxNames = 3) {
+        if (!Array.isArray(reactedBy) || reactedBy.length === 0) return '';
+        const names = reactedBy
+            .map(reactor => {
+                const name = this.getMessageReactionDisplayName(reactor);
+                // Increased length for page chat
+                const isPage = document.body.classList.contains('is-chat-page');
+                const truncatedLength = isPage ? 22 : 16;
+                return this.truncateDisplayText(name, truncatedLength);
+            })
+            .filter(Boolean);
+
+        if (names.length === 0) return '';
+
+        const visibleNames = names.slice(0, maxNames);
+        if (names.length <= maxNames) {
+            return visibleNames.join('\n');
+        }
+
+        return `${visibleNames.join('\n')}\n+${names.length - maxNames} others`;
+    },
+
+    getMessageReactionData(msg) {
+        const reactedByRaw = msg?.reactedBy || msg?.ReactedBy;
+        const reactsRaw = msg?.reacts || msg?.Reacts;
+
+        const reactedBy = this.normalizeMessageReactedBy(reactedByRaw);
+        let reacts = this.normalizeMessageReactSummaries(reactsRaw);
+        if (reacts.length === 0 && reactedBy.length > 0) {
+            reacts = this.buildReactSummariesFromReactedBy(reactedBy);
+        }
+
+        const summaryTotal = reacts.reduce((sum, item) => sum + Number(item?.count || 0), 0);
+        const totalReacts = summaryTotal > 0 ? summaryTotal : reactedBy.length;
+
+        const sortedReacts = [...reacts]
+            .sort((a, b) => {
+                if (b.count !== a.count) return b.count - a.count;
+                return a.reactType - b.reactType;
+            });
+
+        const dominantReactTypes = sortedReacts
+            .slice(0, 3)
+            .map(item => item.reactType);
+
+        return {
+            reacts,
+            sortedReacts,
+            reactedBy,
+            totalReacts,
+            dominantReactTypes,
+            hoverText: this.getMessageReactionHoverText(reactedBy)
+        };
+    },
+
+    buildMessageReactionBadgeLayout(reactionData) {
+        const sortedReacts = Array.isArray(reactionData?.sortedReacts)
+            ? reactionData.sortedReacts
+            : [];
+        const totalReacts = Number(reactionData?.totalReacts || 0);
+
+        if (!sortedReacts.length || totalReacts <= 0) {
+            return { items: [], extraCount: 0 };
+        }
+
+        // > 3 reacts: show 3 representative reactions + n others
+        if (totalReacts > 3) {
+            const representativeTypes = [];
+            for (let i = 0; i < sortedReacts.length && representativeTypes.length < 3; i += 1) {
+                const item = sortedReacts[i];
+                const count = Math.max(0, Number(item?.count || 0));
+                const reactType = this.parseReactType(item?.reactType);
+                if (reactType === null || count <= 0) continue;
+                for (let j = 0; j < count && representativeTypes.length < 3; j += 1) {
+                    representativeTypes.push(reactType);
+                }
+            }
+
+            return {
+                items: representativeTypes.map((reactType) => ({
+                    reactType,
+                    count: null
+                })),
+                extraCount: Math.max(0, totalReacts - representativeTypes.length)
+            };
+        }
+
+        // <= 3 reacts:
+        // - single: icon only
+        // - duplicates: show count only for duplicated react type
+        // - different: icon(s) only
+        return {
+            items: sortedReacts.map((item) => ({
+                reactType: item.reactType,
+                count: Number(item.count) > 1 ? Number(item.count) : null
+            })),
+            extraCount: 0
+        };
+    },
+
+    renderMessageReactionBadge(msg, messageId = '') {
+        const normalizedMessageId = (messageId || msg?.messageId || msg?.MessageId || '')
+            .toString()
+            .toLowerCase();
+        if (!normalizedMessageId) return '';
+
+        const reactionData = this.getMessageReactionData(msg);
+        if (reactionData.totalReacts <= 0) return '';
+        const badgeLayout = this.buildMessageReactionBadgeLayout(reactionData);
+        if (!badgeLayout.items.length && badgeLayout.extraCount <= 0) return '';
+
+        const safeHoverText = (typeof escapeHtml === 'function'
+            ? escapeHtml(reactionData.hoverText || '')
+            : (reactionData.hoverText || ''))
+            .replace(/"/g, '&quot;')
+            .replace(/\r?\n/g, '&#10;');
+
+        const iconsHtml = badgeLayout.items
+            .map((item) => `
+                <span class="msg-reactions-item${item.count ? ' has-count' : ''}" data-react-type="${item.reactType}">
+                    <span class="msg-reactions-icon">${this.getReactEmoji(item.reactType)}</span>
+                    ${item.count ? `<span class="msg-reactions-item-count">${item.count}</span>` : ''}
+                </span>
+            `)
+            .join('');
+        const extraHtml = badgeLayout.extraCount > 0
+            ? `<span class="msg-reactions-extra">+${badgeLayout.extraCount} người khác</span>`
+            : '';
+
+        return `
+            <button type="button"
+                    class="msg-reactions-summary"
+                    data-action="view-reactors"
+                    data-message-id="${normalizedMessageId}"
+                    ${safeHoverText ? `data-react-tooltip="${safeHoverText}" aria-label="${safeHoverText}"` : ''}
+                    onclick="window.ChatActions && ChatActions.openReactorsModal('${normalizedMessageId}', event)">
+                <span class="msg-reactions-icons">${iconsHtml}</span>
+                ${extraHtml}
+            </button>
+        `;
+    },
+
+    applyMessageReactionStateToBubble(bubble, state = {}) {
+        if (!bubble || !bubble.classList?.contains('msg-bubble-wrapper')) return;
+
+        const messageId = (state?.messageId || state?.MessageId || bubble.dataset?.messageId || '')
+            .toString()
+            .toLowerCase();
+        const currentReactType = this.parseReactType(
+            state?.currentUserReactType ?? state?.CurrentUserReactType
+        );
+
+        const reacts = this.normalizeMessageReactSummaries(state?.reacts || state?.Reacts);
+        const reactedBy = this.normalizeMessageReactedBy(state?.reactedBy || state?.ReactedBy);
+        const reactionData = this.getMessageReactionData({ reacts, reactedBy });
+
+        bubble.dataset.currentReactType = currentReactType === null ? '' : String(currentReactType);
+        bubble.dataset.reacts = JSON.stringify(reactionData.reacts || []);
+        bubble.dataset.reactedBy = JSON.stringify(reactionData.reactedBy || []);
+        bubble.dataset.totalReacts = String(reactionData.totalReacts || 0);
+
+        const contentContainer = bubble.querySelector('.msg-content-container');
+        if (!contentContainer) return;
+
+        const existingBadge = contentContainer.querySelector('.msg-reactions-summary');
+        if (existingBadge) existingBadge.remove();
+
+        const isRecalled = (bubble.dataset?.isRecalled || '').toString().toLowerCase() === 'true';
+        if (isRecalled || reactionData.totalReacts <= 0) return;
+
+        const reactionBadgeHtml = this.renderMessageReactionBadge(
+            {
+                reacts: reactionData.reacts,
+                reactedBy: reactionData.reactedBy
+            },
+            messageId
+        );
+        if (!reactionBadgeHtml) return;
+
+        contentContainer.insertAdjacentHTML('beforeend', reactionBadgeHtml);
+    },
+
     /**
      * Normalize message object to have consistent property names and casing.
      */
@@ -653,6 +1222,12 @@ const ChatCommon = {
             m.medias = [];
         }
 
+        m.reacts = this.normalizeMessageReactSummaries(m.reacts || m.Reacts);
+        m.reactedBy = this.normalizeMessageReactedBy(m.reactedBy || m.ReactedBy);
+        if (m.reacts.length === 0 && m.reactedBy.length > 0) {
+            m.reacts = this.buildReactSummariesFromReactedBy(m.reactedBy);
+        }
+
         // Message type / system payload
         const messageType = this.getMessageType(m);
         if (messageType !== null && messageType !== undefined && messageType !== '') {
@@ -673,6 +1248,16 @@ const ChatCommon = {
             m.isPinned = pinnedRaw.toLowerCase() === 'true';
         } else {
             m.isPinned = !!pinnedRaw;
+        }
+        const reactRaw = (m.currentUserReactType !== undefined) ? m.currentUserReactType : m.CurrentUserReactType;
+        if (reactRaw === null || reactRaw === undefined || reactRaw === '') {
+            m.currentUserReactType = null;
+        } else {
+            m.currentUserReactType = this.parseReactType(reactRaw);
+        }
+        if (m.currentUserReactType === null && myId && Array.isArray(m.reactedBy)) {
+            const currentReact = m.reactedBy.find(r => r.accountId === myId.toLowerCase());
+            m.currentUserReactType = currentReact ? this.parseReactType(currentReact.reactType) : null;
         }
         if (!m.systemMessageDataJson && m.SystemMessageDataJson) {
             m.systemMessageDataJson = m.SystemMessageDataJson;
@@ -816,6 +1401,22 @@ const ChatCommon = {
         const isSystemMessage = this.isSystemMessage(msg);
         const isRecalled = !!(msg.isRecalled ?? msg.IsRecalled);
         const isPinned = !!(msg.isPinned ?? msg.IsPinned);
+        const reactionData = this.getMessageReactionData(msg);
+        const currentReactRaw = (msg.currentUserReactType !== undefined) ? msg.currentUserReactType : msg.CurrentUserReactType;
+        const parsedCurrentReact = this.parseReactType(currentReactRaw);
+        const hasCurrentReact = parsedCurrentReact !== null;
+        const currentReactType = hasCurrentReact ? parsedCurrentReact : null;
+        const safeReactsJson = JSON.stringify(reactionData.reacts || []).replace(/"/g, '&quot;');
+        const safeReactedByJson = JSON.stringify(reactionData.reactedBy || []).replace(/"/g, '&quot;');
+        const reactionBadgeHtml = !isRecalled
+            ? this.renderMessageReactionBadge(
+                {
+                    reacts: reactionData.reacts,
+                    reactedBy: reactionData.reactedBy
+                },
+                messageId
+            )
+            : '';
         const recalledText = window.APP_CONFIG?.CHAT_RECALLED_MESSAGE_TEXT || 'Message was recalled';
 
         const dataMessageIdAttr = messageId ? ` data-message-id="${messageId}"` : '';
@@ -943,15 +1544,19 @@ const ChatCommon = {
 
         // --- Build Actions (Messenger Style) ---
         const isPage = !!options.isPage;
+        const isWindow = !!options.isWindow;
+        const showReactAction = !!(isPage || isWindow);
         const pinnedBadgeHtml = isPinned
             ? `<div class="msg-pinned-badge" title="Pinned message"><i data-lucide="pin"></i></div>`
             : '';
         const msgActionsHtml = `
             <div class="msg-actions">
-                ${isPage ? `
-                    <button class="msg-action-btn" title="React" onclick="window.ChatActions && ChatActions.openReactMenu(event, '${messageId}')">
+                ${(showReactAction && !isRecalled) ? `
+                    <button class="msg-action-btn react${hasCurrentReact ? ' is-reacted' : ''}" title="React" data-action="react" data-react-type="${hasCurrentReact ? currentReactType : ''}" onclick="window.ChatActions && ChatActions.openReactMenu(event, '${messageId}')">
                         <i data-lucide="smile"></i>
                     </button>
+                ` : ''}
+                ${(isPage && !isRecalled) ? `
                     <button class="msg-action-btn" title="Reply" onclick="window.ChatActions && ChatActions.replyTo('${messageId}')">
                         <i data-lucide="reply"></i>
                     </button>
@@ -975,6 +1580,10 @@ const ChatCommon = {
                  data-author-name="${(authorName || '').replace(/"/g, '&quot;')}"
                  data-is-recalled="${isRecalled ? 'true' : 'false'}"
                  data-is-pinned="${isPinned ? 'true' : 'false'}"
+                 data-current-react-type="${hasCurrentReact ? currentReactType : ''}"
+                 data-reacts="${safeReactsJson}"
+                 data-reacted-by="${safeReactedByJson}"
+                 data-total-reacts="${reactionData.totalReacts}"
                  ${dataMessageIdAttr}
                  ${dataMessageTypeAttr}
                  ${msg.status ? `data-status="${msg.status}"` : ''}>
@@ -987,6 +1596,7 @@ const ChatCommon = {
                         ${(isRecalled || msg.content)
                             ? `<div class="msg-bubble${isRecalled ? ' msg-bubble-recalled' : ''}">${isRecalled ? escapeHtml(recalledText) : linkify(escapeHtml(msg.content))}</div>`
                             : ''}
+                        ${reactionBadgeHtml}
                     </div>
                     <span class="msg-time-tooltip">${this.formatTime(msg.sentAt)}</span>
                     ${msgActionsHtml}
@@ -1655,11 +2265,10 @@ const ChatCommon = {
 
         const overlay = document.createElement("div");
         overlay.className = "chat-common-confirm-overlay chat-nicknames-overlay";
+        overlay.dataset.conversationId = conversationId;
 
         const popup = document.createElement("div");
         popup.className = "chat-common-confirm-popup chat-nicknames-popup";
-
-        // Layout
         popup.innerHTML = `
             <div class="chat-nicknames-header">
                 <h3>${title}</h3>

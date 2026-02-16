@@ -24,6 +24,7 @@
             conn.off('MemberSeen');
             conn.off('Typing');
             conn.off('ReceiveMessageRecalled');
+            conn.off('ReceiveMessageReactUpdated');
             conn.off('ReceiveConversationThemeUpdated');
         } catch (err) {
             console.warn('[ChatRealtime] Failed to clear handlers:', err);
@@ -75,6 +76,16 @@
                 }
             } catch (err) {
                 console.error('[ChatRealtime] Recall handler error:', err);
+            }
+        });
+
+        conn.on('ReceiveMessageReactUpdated', (data) => {
+            try {
+                if (global.ChatActions && typeof global.ChatActions.reactFromRealtime === 'function') {
+                    global.ChatActions.reactFromRealtime(data);
+                }
+            } catch (err) {
+                console.error('[ChatRealtime] Reaction handler error:', err);
             }
         });
 

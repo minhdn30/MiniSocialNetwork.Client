@@ -116,14 +116,7 @@
   text-align: right;
 }
 
-/* Media in Chat (scoped to chat-page only to avoid leaking into chat-window) */
-.chat-page-container .sent .msg-content-container {
-  align-items: flex-end;
-}
 
-.chat-page-container .received .msg-content-container {
-  align-items: flex-start;
-}
 
 /* 1 media: Full width */
 .chat-page-container .msg-media-grid.count-1 {

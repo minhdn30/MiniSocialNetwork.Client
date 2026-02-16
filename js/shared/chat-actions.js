@@ -6,6 +6,18 @@ const ChatActions = {
     currentMenu: null,
     currentConfirm: null,
     currentPinnedModal: null,
+    currentReactorsModal: null,
+    _isThemeSyncBound: false,
+    _onThemeChanged: null,
+    _reactOptions: [
+        { type: 0, key: 'like', label: 'Like', emoji: '👍' },
+        { type: 1, key: 'love', label: 'Love', emoji: '❤️' },
+        { type: 2, key: 'haha', label: 'Haha', emoji: '😆' },
+        { type: 3, key: 'wow', label: 'Wow', emoji: '😮' },
+        { type: 4, key: 'sad', label: 'Sad', emoji: '😢' },
+        { type: 5, key: 'angry', label: 'Angry', emoji: '😡' }
+    ],
+    _reactInFlight: new Set(),
 
     /**
      * Find previous/next real message bubble (skip separators, typing indicator, etc.).
@@ -28,12 +40,515 @@ const ChatActions = {
         return null;
     },
 
-    /**
-     * Placeholder for Reaction Menu
-     */
+    parseReactType(value) {
+        if (value === null || value === undefined || value === '') return null;
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    },
+
+    getReactionThemeVars() {
+        return [
+            '--chat-theme-surface',
+            '--chat-theme-border',
+            '--chat-theme-action-color',
+            '--chat-theme-action-hover-bg',
+            '--chat-theme-tooltip-bg',
+            '--chat-theme-tooltip-border',
+            '--chat-theme-tooltip-text',
+            '--chat-theme-system-text'
+        ];
+    },
+
+    getThemeTargetFromElement(element) {
+        if (element?.closest) {
+            const scopedTarget = element.closest('.chat-box, .chat-view, .chat-panel-container');
+            if (scopedTarget) return scopedTarget;
+        }
+
+        return document.querySelector('.chat-box, .chat-view, .chat-panel-container');
+    },
+
+    getThemeTargetByMessageId(messageId) {
+        const normalizedMessageId = (messageId || '').toString().toLowerCase();
+        if (!normalizedMessageId) return null;
+
+        const bubble = document.querySelector(`.msg-bubble-wrapper[data-message-id="${normalizedMessageId}"]`);
+        return this.getThemeTargetFromElement(bubble);
+    },
+
+    getThemeTargetByConversationId(conversationId) {
+        const normalizedConversationId = (conversationId || '').toString().toLowerCase();
+        if (normalizedConversationId) {
+            const chatBox = document.getElementById(`chat-box-${normalizedConversationId}`)
+                || document.querySelector(`.chat-box[data-id="${normalizedConversationId}"]`);
+            if (chatBox) return this.getThemeTargetFromElement(chatBox);
+
+            const messageList = document.getElementById(`chat-messages-${normalizedConversationId}`);
+            if (messageList) return this.getThemeTargetFromElement(messageList);
+
+            const pageConversationId = (window.ChatPage?.currentChatId || '').toString().toLowerCase();
+            if (pageConversationId && pageConversationId === normalizedConversationId) {
+                const pageMessages = document.getElementById('chat-view-messages');
+                if (pageMessages) return this.getThemeTargetFromElement(pageMessages);
+                const pageView = document.getElementById('chat-view') || document.querySelector('.chat-view');
+                if (pageView) return this.getThemeTargetFromElement(pageView);
+            }
+        }
+
+        const fallback = document.getElementById('chat-view-messages')
+            || document.querySelector('.chat-box, .chat-view, .chat-panel-container');
+        return this.getThemeTargetFromElement(fallback);
+    },
+
+    applyFloatingThemeVars(targetElement, themeTarget, vars = null) {
+        if (!targetElement) return null;
+
+        const resolvedThemeTarget = themeTarget
+            || targetElement.__chatThemeSource
+            || this.getThemeTargetByConversationId(targetElement.dataset?.conversationId)
+            || this.getThemeTargetByMessageId(targetElement.dataset?.messageId)
+            || this.getThemeTargetFromElement(targetElement);
+        if (!resolvedThemeTarget) return null;
+
+        const varNames = Array.isArray(vars) && vars.length > 0
+            ? vars
+            : this.getReactionThemeVars();
+        const computed = getComputedStyle(resolvedThemeTarget);
+        varNames.forEach((varName) => {
+            const value = computed.getPropertyValue(varName);
+            if (value && value.trim()) {
+                targetElement.style.setProperty(varName, value.trim());
+            } else {
+                targetElement.style.removeProperty(varName);
+            }
+        });
+
+        [...targetElement.classList]
+            .filter((className) => className.startsWith('chat-theme-'))
+            .forEach((className) => targetElement.classList.remove(className));
+        const themeClass = [...resolvedThemeTarget.classList].find((className) => className.startsWith('chat-theme-'));
+        if (themeClass) targetElement.classList.add(themeClass);
+
+        targetElement.__chatThemeSource = resolvedThemeTarget;
+        return resolvedThemeTarget;
+    },
+
+    syncReactionThemeStyles() {
+        const currentMenu = this.currentMenu;
+        if (currentMenu?.classList?.contains('msg-react-menu') || currentMenu?.classList?.contains('chat-pinned-more-menu')) {
+            const messageId = currentMenu.dataset?.messageId;
+            const conversationId = currentMenu.dataset?.conversationId;
+            let themeTarget = null;
+            if (messageId) themeTarget = this.getThemeTargetByMessageId(messageId);
+            else if (conversationId) themeTarget = this.getThemeTargetByConversationId(conversationId);
+            
+            this.applyFloatingThemeVars(currentMenu, themeTarget, this.getReactionThemeVars());
+        }
+
+        const reactorsOverlay = this.currentReactorsModal;
+        if (reactorsOverlay?.classList?.contains('msg-reactors-overlay')) {
+            const themeTarget = this.getThemeTargetByMessageId(reactorsOverlay.dataset?.messageId);
+            this.applyFloatingThemeVars(reactorsOverlay, themeTarget, this.getReactionThemeVars());
+        }
+
+        const pinnedOverlay = this.currentPinnedModal;
+        if (pinnedOverlay?.classList?.contains('chat-pinned-overlay')) {
+            const themeTarget = this.getThemeTargetByConversationId(pinnedOverlay.dataset?.conversationId);
+            this.applyFloatingThemeVars(pinnedOverlay, themeTarget, this.getReactionThemeVars());
+        }
+    },
+
+    ensureThemeSyncListener() {
+        if (this._isThemeSyncBound) return;
+
+        this._onThemeChanged = () => {
+            this.syncReactionThemeStyles();
+            requestAnimationFrame(() => this.syncReactionThemeStyles());
+        };
+
+        const themeEventName = window.themeManager?.EVENT || 'app:theme-changed';
+        window.addEventListener(themeEventName, this._onThemeChanged);
+        if (themeEventName !== 'app:theme-changed') {
+            window.addEventListener('app:theme-changed', this._onThemeChanged);
+        }
+
+        this._isThemeSyncBound = true;
+    },
+
+    normalizeReactState(payload, fallbackMessageId = '') {
+        const reactType = this.parseReactType(
+            payload?.currentUserReactType
+            ?? payload?.CurrentUserReactType
+            ?? payload?.reactType
+            ?? payload?.ReactType
+        );
+        const rawIsReacted = payload?.isReacted ?? payload?.IsReacted;
+        const reacts = window.ChatCommon?.normalizeMessageReactSummaries
+            ? window.ChatCommon.normalizeMessageReactSummaries(payload?.reacts || payload?.Reacts)
+            : [];
+        const reactedBy = window.ChatCommon?.normalizeMessageReactedBy
+            ? window.ChatCommon.normalizeMessageReactedBy(payload?.reactedBy || payload?.ReactedBy)
+            : [];
+
+        const reactionData = window.ChatCommon?.getMessageReactionData
+            ? window.ChatCommon.getMessageReactionData({ reacts, reactedBy })
+            : {
+                reacts,
+                reactedBy,
+                totalReacts: reacts.reduce((sum, item) => sum + Number(item?.count || 0), 0)
+            };
+
+        let currentUserReactType = reactType;
+        if (currentUserReactType === null && Array.isArray(reactionData.reactedBy)) {
+            const myId = this.getCurrentAccountId();
+            if (myId) {
+                const currentUserReact = reactionData.reactedBy.find(
+                    (item) => (item?.accountId || '').toString().toLowerCase() === myId
+                );
+                currentUserReactType = this.parseReactType(currentUserReact?.reactType);
+            }
+        }
+
+        const isReacted = typeof rawIsReacted === 'boolean'
+            ? rawIsReacted
+            : currentUserReactType !== null;
+
+        return {
+            messageId: (payload?.messageId || payload?.MessageId || fallbackMessageId || '').toString().toLowerCase(),
+            isReacted,
+            currentUserReactType: isReacted ? currentUserReactType : null,
+            reacts: reactionData.reacts || [],
+            reactedBy: reactionData.reactedBy || [],
+            totalReacts: Number(reactionData.totalReacts || 0)
+        };
+    },
+
+    updateMessageReactStateUI(messageId, state) {
+        const normalizedMessageId = (messageId || '').toString().toLowerCase();
+        if (!normalizedMessageId) return;
+
+        const reactType = this.parseReactType(state?.currentUserReactType);
+        const isReacted = !!state?.isReacted && reactType !== null;
+        const reactValue = isReacted ? String(reactType) : '';
+        const reacts = Array.isArray(state?.reacts) ? state.reacts : [];
+        const reactedBy = Array.isArray(state?.reactedBy) ? state.reactedBy : [];
+        const totalReacts = Number.isFinite(Number(state?.totalReacts))
+            ? Number(state.totalReacts)
+            : (window.ChatCommon?.getMessageReactionData
+                ? Number(window.ChatCommon.getMessageReactionData({ reacts, reactedBy }).totalReacts || 0)
+                : 0);
+
+        const bubbles = document.querySelectorAll(`.msg-bubble-wrapper[data-message-id="${normalizedMessageId}"]`);
+        bubbles.forEach((bubble) => {
+            bubble.dataset.currentReactType = reactValue;
+            const reactBtn = bubble.querySelector('.msg-action-btn.react[data-action="react"]');
+            if (reactBtn) {
+                reactBtn.dataset.reactType = reactValue;
+                reactBtn.classList.toggle('is-reacted', isReacted);
+            }
+
+            if (window.ChatCommon?.applyMessageReactionStateToBubble) {
+                window.ChatCommon.applyMessageReactionStateToBubble(bubble, {
+                    messageId: normalizedMessageId,
+                    currentUserReactType: isReacted ? reactType : null,
+                    reacts,
+                    reactedBy,
+                    totalReacts
+                });
+            }
+        });
+    },
+
+    markReactMenuActiveOption(menuEl, reactType) {
+        if (!menuEl) return;
+        const normalizedType = this.parseReactType(reactType);
+        menuEl.querySelectorAll('.msg-react-option').forEach((btn) => {
+            const optionType = this.parseReactType(btn.dataset.reactType);
+            btn.classList.toggle('active', normalizedType !== null && optionType === normalizedType);
+        });
+    },
+
+    async getMessageReactState(messageId) {
+        const normalizedMessageId = (messageId || '').toString().toLowerCase();
+        if (!normalizedMessageId || !window.API?.Messages?.getReact) return null;
+
+        const res = await window.API.Messages.getReact(normalizedMessageId);
+        if (!res?.ok) {
+            const errorData = await res.json().catch(() => null);
+            throw new Error(errorData?.message || errorData?.Message || 'Failed to get message reaction.');
+        }
+
+        const payload = await res.json().catch(() => ({}));
+        const state = this.normalizeReactState(payload, normalizedMessageId);
+        this.updateMessageReactStateUI(normalizedMessageId, state);
+        return state;
+    },
+
+    async setMessageReact(messageId, reactType) {
+        const normalizedMessageId = (messageId || '').toString().toLowerCase();
+        const normalizedType = this.parseReactType(reactType);
+        if (!normalizedMessageId || normalizedType === null || !window.API?.Messages?.setReact) return null;
+
+        const res = await window.API.Messages.setReact(normalizedMessageId, normalizedType);
+        if (!res?.ok) {
+            const errorData = await res.json().catch(() => null);
+            throw new Error(errorData?.message || errorData?.Message || 'Failed to react message.');
+        }
+
+        const payload = await res.json().catch(() => ({}));
+        const state = this.normalizeReactState(payload, normalizedMessageId);
+        this.updateMessageReactStateUI(normalizedMessageId, state);
+        return state;
+    },
+
+    async removeMessageReact(messageId) {
+        const normalizedMessageId = (messageId || '').toString().toLowerCase();
+        if (!normalizedMessageId || !window.API?.Messages?.removeReact) return null;
+
+        const res = await window.API.Messages.removeReact(normalizedMessageId);
+        if (!res?.ok) {
+            const errorData = await res.json().catch(() => null);
+            throw new Error(errorData?.message || errorData?.Message || 'Failed to remove reaction.');
+        }
+
+        const payload = await res.json().catch(() => ({}));
+        const state = this.normalizeReactState(payload, normalizedMessageId);
+        this.updateMessageReactStateUI(normalizedMessageId, state);
+        return state;
+    },
+
     openReactMenu(e, messageId) {
         e.stopPropagation();
-        window.toastInfo && window.toastInfo('Reactions coming soon');
+        this.closeAllMenus();
+
+        const btn = e.currentTarget;
+        const wrapper = btn?.closest('.msg-bubble-wrapper');
+        const resolvedMessageId = (messageId || wrapper?.dataset?.messageId || '').toString().toLowerCase();
+        if (!resolvedMessageId) return;
+
+        const isRecalled = (wrapper?.dataset?.isRecalled || '').toString().toLowerCase() === 'true';
+        if (isRecalled) return;
+
+        if (wrapper) wrapper.classList.add('menu-active');
+        btn.classList.add('active');
+
+        const menu = document.createElement('div');
+        menu.className = 'msg-react-menu';
+        menu.innerHTML = this._reactOptions.map((option) => `
+            <button type="button" class="msg-react-option" data-react-type="${option.type}" title="${option.label}">
+                <span class="msg-react-emoji" aria-hidden="true">${option.emoji}</span>
+            </button>
+        `).join('');
+
+        const themeTarget = this.getThemeTargetFromElement(btn);
+        menu.dataset.messageId = resolvedMessageId;
+        this.applyFloatingThemeVars(menu, themeTarget, this.getReactionThemeVars());
+        this.ensureThemeSyncListener();
+
+        document.body.appendChild(menu);
+
+        const currentTypeFromDom = this.parseReactType(
+            wrapper?.dataset?.currentReactType ?? btn?.dataset?.reactType
+        );
+        this.markReactMenuActiveOption(menu, currentTypeFromDom);
+
+        const rect = btn.getBoundingClientRect();
+        const menuWidth = menu.offsetWidth || 246;
+        const menuHeight = menu.offsetHeight || 56;
+
+        let top = rect.top - menuHeight - 8;
+        if (top < 10) {
+            top = rect.bottom + 8;
+        }
+
+        let left = rect.left + (rect.width / 2) - (menuWidth / 2);
+        if (left < 8) left = 8;
+        if (left + menuWidth > window.innerWidth - 8) {
+            left = window.innerWidth - menuWidth - 8;
+        }
+
+        menu.style.top = `${top}px`;
+        menu.style.left = `${left}px`;
+        menu.addEventListener('click', (evt) => evt.stopPropagation());
+
+        menu.querySelectorAll('.msg-react-option').forEach((optionBtn) => {
+            optionBtn.onclick = async (evt) => {
+                evt.stopPropagation();
+
+                const selectedType = this.parseReactType(optionBtn.dataset.reactType);
+                if (selectedType === null) return;
+                if (this._reactInFlight.has(resolvedMessageId)) return;
+
+                this._reactInFlight.add(resolvedMessageId);
+                menu.classList.add('is-loading');
+
+                try {
+                    const nextState = await this.setMessageReact(resolvedMessageId, selectedType);
+                    this.markReactMenuActiveOption(menu, nextState?.currentUserReactType ?? null);
+                } catch (err) {
+                    console.error('Failed to react message:', err);
+                    if (window.toastError) {
+                        window.toastError(err?.message || 'Failed to react message.');
+                    }
+                } finally {
+                    this._reactInFlight.delete(resolvedMessageId);
+                    menu.classList.remove('is-loading');
+                    this.closeAllMenus();
+                }
+            };
+        });
+
+        // Sync latest react state from API for accurate highlight.
+        this.getMessageReactState(resolvedMessageId)
+            .then((state) => {
+                if (this.currentMenu !== menu) return;
+                this.markReactMenuActiveOption(menu, state?.currentUserReactType ?? null);
+            })
+            .catch(() => {
+                // Keep optimistic DOM state if API call fails.
+            });
+
+        this.currentMenu = menu;
+
+        setTimeout(() => {
+            window.addEventListener('click', this.handleOutsideClick);
+        }, 10);
+    },
+
+    getReactOption(reactType) {
+        const normalizedType = this.parseReactType(reactType);
+        if (normalizedType === null) return null;
+        return this._reactOptions.find((option) => option.type === normalizedType) || null;
+    },
+
+    getReactLabel(reactType) {
+        const option = this.getReactOption(reactType);
+        return option?.label || 'React';
+    },
+
+    getReactEmoji(reactType) {
+        if (window.ChatCommon?.getReactEmoji) {
+            return window.ChatCommon.getReactEmoji(reactType);
+        }
+        const option = this.getReactOption(reactType);
+        return option?.emoji || '👍';
+    },
+
+    closeReactorsModal() {
+        const overlay = this.currentReactorsModal;
+        if (!overlay) return;
+
+        overlay.classList.remove('show');
+        if (window.unlockScroll) unlockScroll();
+        setTimeout(() => {
+            if (overlay.parentNode) overlay.remove();
+            if (this.currentReactorsModal === overlay) this.currentReactorsModal = null;
+        }, 180);
+    },
+
+    async openReactorsModal(messageId, event = null, prefetchedState = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+
+        const normalizedMessageId = (messageId || '').toString().toLowerCase();
+        if (!normalizedMessageId) return;
+
+        let state = prefetchedState;
+        if (!state) {
+            try {
+                state = await this.getMessageReactState(normalizedMessageId);
+            } catch (err) {
+                console.error('Failed to load message reactions:', err);
+                if (window.toastError) window.toastError('Failed to load reactions.');
+                return;
+            }
+        }
+
+        const reactedBy = Array.isArray(state?.reactedBy) ? state.reactedBy : [];
+        if (!reactedBy.length) return;
+
+        this.closeReactorsModal();
+
+        const overlay = document.createElement('div');
+        overlay.className = 'msg-reactors-overlay';
+        overlay.dataset.messageId = normalizedMessageId;
+
+        const popup = document.createElement('div');
+        popup.className = 'msg-reactors-modal';
+        popup.innerHTML = `
+            <div class="msg-reactors-header">
+                <h3>Reactions</h3>
+                <button type="button" class="msg-reactors-close" aria-label="Close">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="msg-reactors-list">
+                ${reactedBy.map((item) => {
+                    const displayName = window.ChatCommon?.getMessageReactionDisplayName
+                        ? window.ChatCommon.getMessageReactionDisplayName(item)
+                        : (item?.nickname || item?.username || item?.fullName || 'Unknown');
+                    const username = (item?.username || '').toString();
+                    const avatarUrl = item?.avatarUrl || window.APP_CONFIG?.DEFAULT_AVATAR || '';
+                    const reactType = this.parseReactType(item?.reactType);
+                    const reactEmoji = this.getReactEmoji(reactType);
+                    const reactLabel = this.getReactLabel(reactType);
+
+                    const safeDisplay = this.escapeHtml(displayName);
+                    const safeUsername = this.escapeHtml(username);
+                    const safeAvatar = this.escapeHtml(avatarUrl);
+                    const safeReactLabel = this.escapeHtml(reactLabel);
+
+                    return `
+                        <div class="msg-reactors-item">
+                            <img class="msg-reactors-avatar" src="${safeAvatar}" alt="" onerror="this.src='${window.APP_CONFIG?.DEFAULT_AVATAR}'">
+                            <div class="msg-reactors-meta">
+                                <div class="msg-reactors-name">${safeDisplay}</div>
+                                ${username ? `<div class="msg-reactors-username">@${safeUsername}</div>` : ''}
+                            </div>
+                            <div class="msg-reactors-type" title="${safeReactLabel}">
+                                <span class="msg-reactors-type-emoji">${reactEmoji}</span>
+                                <span class="msg-reactors-type-label">${safeReactLabel}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+
+        overlay.appendChild(popup);
+        document.body.appendChild(overlay);
+        this.currentReactorsModal = overlay;
+
+        if (window.lockScroll) lockScroll();
+        if (window.lucide) lucide.createIcons({ container: popup });
+
+        const closeBtn = popup.querySelector('.msg-reactors-close');
+        if (closeBtn) closeBtn.onclick = () => this.closeReactorsModal();
+        overlay.onclick = (evt) => {
+            if (evt.target === overlay) {
+                this.closeReactorsModal();
+            }
+        };
+
+        requestAnimationFrame(() => overlay.classList.add('show'));
+    },
+
+    async reactFromRealtime(data) {
+        const messageId = (data?.messageId || data?.MessageId || '').toString().toLowerCase();
+        if (!messageId) return;
+        if (!document.querySelector(`.msg-bubble-wrapper[data-message-id="${messageId}"]`)) return;
+
+        try {
+            const state = await this.getMessageReactState(messageId);
+            const modalMessageId = (this.currentReactorsModal?.dataset?.messageId || '').toString().toLowerCase();
+            if (modalMessageId && modalMessageId === messageId) {
+                await this.openReactorsModal(messageId, null, state);
+            }
+        } catch (err) {
+            console.error('Failed to refresh message reaction from realtime:', err);
+        }
     },
 
     /**
@@ -428,18 +943,19 @@ const ChatActions = {
         btn.textContent = msgEl.classList.contains('truncated') ? 'more' : 'less';
     },
 
-    closePinnedItemMenu() {
-        document.querySelectorAll('.chat-pinned-more-menu').forEach(m => m.remove());
-    },
+
 
     openPinnedItemMenu(e, conversationId, messageId) {
         e.stopPropagation();
-        this.closePinnedItemMenu();
+        this.closeAllMenus(); // Close other menus first
 
         const btn = e.currentTarget;
         const rect = btn.getBoundingClientRect();
         const menu = document.createElement('div');
         menu.className = 'chat-pinned-more-menu';
+        menu.dataset.conversationId = conversationId;
+        menu.dataset.messageId = messageId;
+        
         menu.innerHTML = `
             <div class="chat-pinned-more-menu-item" data-action="view">
                 <i data-lucide="message-circle"></i>
@@ -460,22 +976,24 @@ const ChatActions = {
         menu.style.top = `${top}px`;
         menu.style.left = `${left}px`;
 
+        this.currentMenu = menu;
+
         if (window.lucide) lucide.createIcons({ container: menu });
 
         menu.querySelector('[data-action="view"]').onclick = (ev) => {
             ev.stopPropagation();
-            this.closePinnedItemMenu();
+            this.closeAllMenus();
             this.jumpToMessage(conversationId, messageId);
         };
         menu.querySelector('[data-action="unpin"]').onclick = (ev) => {
             ev.stopPropagation();
-            this.closePinnedItemMenu();
+            this.closeAllMenus();
             this.unpinMessage(conversationId, messageId);
         };
 
         const closeHandler = (ev) => {
-            if (!menu.contains(ev.target) && ev.target !== btn) {
-                this.closePinnedItemMenu();
+            if (this.currentMenu === menu && !menu.contains(ev.target) && ev.target !== btn) {
+                this.closeAllMenus();
                 document.removeEventListener('click', closeHandler);
             }
         };
@@ -529,17 +1047,25 @@ const ChatActions = {
                 let mediaThumbs = '';
                 if (!isRecalled && Array.isArray(medias) && medias.length) {
                     const thumbItems = medias.slice(0, 4).map(m => {
-                        const url = m?.thumbnailUrl || m?.ThumbnailUrl || m?.mediaUrl || m?.MediaUrl || '';
                         const mtype = Number(m?.mediaType ?? m?.MediaType);
+                        const thumbUrl = m?.thumbnailUrl || m?.ThumbnailUrl;
+                        const mediaUrl = m?.mediaUrl || m?.MediaUrl || '';
+                        const fallbackUrl = thumbUrl || mediaUrl || '';
+
                         if (mtype === 1) {
                             // Video
-                            return `<div class="chat-pinned-media-thumb video"><img src="${this.escapeHtml(url)}" alt="" onerror="this.style.display='none'"><div class="chat-pinned-media-play"><i data-lucide="play"></i></div></div>`;
+                            if (thumbUrl) {
+                                return `<div class="chat-pinned-media-thumb video"><img src="${this.escapeHtml(thumbUrl)}" alt="" onerror="this.style.display='none'"><div class="chat-pinned-media-play"><i data-lucide="play"></i></div></div>`;
+                            } else {
+                                return `<div class="chat-pinned-media-thumb video"><video src="${this.escapeHtml(mediaUrl)}#t=0.5" preload="metadata" muted playsinline></video><div class="chat-pinned-media-play"><i data-lucide="play"></i></div></div>`;
+                            }
                         }
                         if (mtype === 3) {
                             // File
                             return `<div class="chat-pinned-media-thumb file"><div class="chat-pinned-media-file-icon"><i data-lucide="file-text"></i></div></div>`;
                         }
-                        return `<div class="chat-pinned-media-thumb"><img src="${this.escapeHtml(url)}" alt="" onerror="this.style.display='none'"></div>`;
+                        // Image or unknown
+                        return `<div class="chat-pinned-media-thumb"><img src="${this.escapeHtml(fallbackUrl)}" alt="" onerror="this.style.display='none'"></div>`;
                     }).join('');
                     mediaThumbs = `<div class="chat-pinned-media-preview">${thumbItems}</div>`;
                 }
@@ -686,7 +1212,7 @@ const ChatActions = {
         const normalizedConvId = (conversationId || '').toString().toLowerCase();
         if (!normalizedMessageId) return false;
 
-        this.closePinnedItemMenu();
+        this.closeAllMenus();
 
         // Case 1: Message is in the DOM
         const target = this.findMessageElementForConversation(normalizedConvId, normalizedMessageId);
@@ -762,13 +1288,18 @@ const ChatActions = {
                 <i data-lucide="eye-off"></i>
                 <span>Hide for you</span>
             </div>
+        `;
+
+        if (!isRecalled) {
+            itemsHtml += `
             <div class="msg-more-item" onclick="window.toastInfo('Forwarding coming soon')">
                 <i data-lucide="forward"></i>
                 <span>Forward</span>
             </div>
-        `;
+            `;
+        }
 
-        if (resolvedMessageId && canPin) {
+        if (resolvedMessageId && canPin && !isRecalled) {
             itemsHtml += isPinned
                 ? `
                     <div class="msg-more-item" onclick="window.ChatActions.unpinMessage('${conversationId}', '${resolvedMessageId}')">
@@ -850,6 +1381,10 @@ const ChatActions = {
             this.currentMenu.remove();
             this.currentMenu = null;
         }
+
+        if (this.currentReactorsModal) {
+            this.closeReactorsModal();
+        }
         
         // Close ChatWindow header menu if open
         if (window.ChatWindow && typeof window.ChatWindow.closeHeaderMenu === 'function') {
@@ -906,6 +1441,10 @@ const ChatActions = {
         if (!messageId) return false;
         const normId = messageId.toString().toLowerCase();
         const fallbackConvId = (fallbackConversationId || '').toString().toLowerCase();
+        const modalMessageId = (this.currentReactorsModal?.dataset?.messageId || '').toString().toLowerCase();
+        if (modalMessageId && modalMessageId === normId) {
+            this.closeReactorsModal();
+        }
         this.removePinnedModalItem(normId);
         
         // We use querySelectorAll because the same message might be in both chat-page and chat-window
@@ -1227,7 +1766,17 @@ const ChatActions = {
             if (window.ChatCommon?.isSystemMessageElement?.(bubble)) return;
 
             bubble.dataset.isRecalled = 'true';
+            bubble.dataset.currentReactType = '';
+            bubble.dataset.reacts = '[]';
+            bubble.dataset.reactedBy = '[]';
+            bubble.dataset.totalReacts = '0';
             bubble.removeAttribute('data-status');
+
+            const reactBtn = bubble.querySelector('.msg-action-btn.react[data-action="react"]');
+            if (reactBtn) {
+                reactBtn.classList.remove('is-reacted');
+                reactBtn.dataset.reactType = '';
+            }
 
             const statusEl = bubble.querySelector('.msg-status');
             if (statusEl) statusEl.remove();
@@ -1236,7 +1785,7 @@ const ChatActions = {
             if (!contentContainer) return;
 
             contentContainer
-                .querySelectorAll('.msg-media-grid, .msg-file-list, .msg-file-item')
+                .querySelectorAll('.msg-media-grid, .msg-file-list, .msg-file-item, .msg-reactions-summary')
                 .forEach((el) => el.remove());
 
             let textBubble = contentContainer.querySelector('.msg-bubble');
@@ -1249,6 +1798,11 @@ const ChatActions = {
             textBubble.classList.add('msg-bubble-recalled');
             textBubble.textContent = recalledText;
         });
+
+        const modalMessageId = (this.currentReactorsModal?.dataset?.messageId || '').toString().toLowerCase();
+        if (modalMessageId && modalMessageId === normalizedMessageId) {
+            this.closeReactorsModal();
+        }
 
         this.markPinnedModalMessageRecalled(normalizedMessageId);
         return true;
@@ -1356,3 +1910,4 @@ const ChatActions = {
 };
 
 window.ChatActions = ChatActions;
+ChatActions.ensureThemeSyncListener();
