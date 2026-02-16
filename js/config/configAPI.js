@@ -526,6 +526,16 @@
         apiFetch(`/Messages/unpin/${conversationId}/${messageId}`, { method: "DELETE" }),
       getMediaDownloadUrl: (messageMediaId) =>
         apiFetch(`/Messages/media/${messageMediaId}/download-url`),
+      getReact: (messageId) =>
+        apiFetch(`/Messages/${messageId}/react`),
+      setReact: (messageId, reactType) =>
+        apiFetch(`/Messages/${messageId}/react`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reactType }),
+        }),
+      removeReact: (messageId) =>
+        apiFetch(`/Messages/${messageId}/react`, { method: "DELETE" }),
       hide: (messageId) => apiFetch(`/Messages/hide/${messageId}`, { method: "POST" }),
       recall: (messageId) => apiFetch(`/Messages/recall/${messageId}`, { method: "POST" }),
     },
