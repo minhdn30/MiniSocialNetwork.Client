@@ -248,7 +248,7 @@
         return replaced;
     }
 
-    function buildRetryFormData({ content, tempId, files, receiverId }) {
+    function buildRetryFormData({ content, tempId, files, receiverId, replyToMessageId }) {
         const formData = new FormData();
         const safeContent = typeof content === 'string' ? content.trim() : '';
         const safeFiles = Array.isArray(files) ? files : [];
@@ -258,6 +258,7 @@
         if (tempId) formData.append('TempId', tempId);
         safeFiles.forEach(file => formData.append('MediaFiles', file));
         if (receiverId) formData.append('ReceiverId', receiverId);
+        if (replyToMessageId) formData.append('ReplyToMessageId', replyToMessageId);
 
         return {
             formData,

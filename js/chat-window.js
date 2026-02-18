@@ -138,6 +138,24 @@ const ChatWindow = {
       this._themeModeHandler = () => this.reapplyAllConversationThemes();
       window.addEventListener(this._themeModeEvent, this._themeModeHandler);
     }
+
+    // Reply event listener – routes to the correct open chat window
+    if (!this._replyHandler) {
+      this._replyHandler = (e) => {
+        if (document.body.classList.contains('is-chat-page')) return;
+        const { messageId, senderName, contentPreview } = e.detail || {};
+        if (!messageId) return;
+        // Find which open chat contains this message
+        for (const [convId, chat] of this.openChats) {
+          const msgContainer = document.getElementById(`chat-messages-${convId}`);
+          if (msgContainer && msgContainer.querySelector(`[data-message-id="${messageId}"]`)) {
+            this.showReplyBar(convId, messageId, senderName, contentPreview);
+            return;
+          }
+        }
+      };
+      document.addEventListener('chat:reply', this._replyHandler);
+    }
   },
 
   saveState() {
@@ -1924,6 +1942,7 @@ const ChatWindow = {
       _realtimeJoined: false,
       _realtimeJoining: false,
       runtimeCtx: null,
+      _replyToMessageId: null,
     };
     this.openChats.set(conv.conversationId, chatObj);
     this.getRuntimeCtx(conv.conversationId, chatObj);
@@ -2388,6 +2407,25 @@ const ChatWindow = {
         )
         .forEach((el) => {
           el.textContent = normalizedNickname || fallbackDisplayName;
+        });
+
+      msgContainer
+        .querySelectorAll(`.msg-reply-preview[data-reply-sender-id="${accTarget}"]`)
+        .forEach((previewEl) => {
+          const authorEl = previewEl.querySelector(".msg-reply-author");
+          if (!authorEl) return;
+
+          const isOwnReplyAuthor =
+            (previewEl.dataset.replyIsOwn || "").toLowerCase() === "true" ||
+            accTarget === myId;
+          if (isOwnReplyAuthor) {
+            authorEl.textContent = "You";
+            return;
+          }
+
+          const baseName =
+            previewEl.dataset.replySenderBase || fallbackDisplayName || "User";
+          authorEl.textContent = normalizedNickname || baseName;
         });
     }
 
@@ -3669,6 +3707,50 @@ const ChatWindow = {
     if (autoScroll) msgContainer.scrollTop = msgContainer.scrollHeight;
   },
 
+  showReplyBar(id, messageId, senderName, contentPreview) {
+    const chat = this.openChats.get(id);
+    if (!chat) return;
+    chat._replyToMessageId = messageId;
+    chat._replySenderName = senderName || 'User';
+    chat._replyContentPreview = contentPreview || '';
+
+    const inputArea = document.getElementById(`chat-input-area-${id}`);
+    if (!inputArea) return;
+
+    // Remove existing reply bar if any
+    inputArea.querySelector('.chat-reply-bar')?.remove();
+
+    const bar = document.createElement('div');
+    bar.className = 'chat-reply-bar';
+    bar.innerHTML = `
+      <div class="chat-reply-bar-content">
+        <div class="chat-reply-bar-label">Replying to <strong>${escapeHtml(senderName || 'User')}</strong></div>
+        <div class="chat-reply-bar-preview">${escapeHtml(contentPreview || '')}</div>
+      </div>
+      <button class="chat-reply-bar-close" title="Cancel reply">
+        <i data-lucide="x"></i>
+      </button>
+    `;
+    bar.querySelector('.chat-reply-bar-close').onclick = () => this.clearReplyBar(id);
+    inputArea.insertBefore(bar, inputArea.firstChild);
+    if (window.lucide) lucide.createIcons();
+
+    // Focus input
+    const inputField = chat.element?.querySelector('.chat-input-field');
+    if (inputField) inputField.focus();
+  },
+
+  clearReplyBar(id) {
+    const chat = this.openChats.get(id);
+    if (chat) {
+      chat._replyToMessageId = null;
+      chat._replySenderName = null;
+      chat._replyContentPreview = null;
+    }
+    const inputArea = document.getElementById(`chat-input-area-${id}`);
+    inputArea?.querySelector('.chat-reply-bar')?.remove();
+  },
+
   async sendMessage(id) {
     const chat = this.openChats.get(id);
     if (!chat) return;
@@ -3708,6 +3790,16 @@ const ChatWindow = {
         el.querySelector(".msg-status")?.remove();
       });
 
+    // Capture reply info BEFORE appending optimistic message
+    const replyToMessageId = chat._replyToMessageId;
+    const replyTo = replyToMessageId ? {
+        messageId: replyToMessageId,
+        content: chat._replyContentPreview || null,
+        isRecalled: false,
+        sender: { displayName: chat._replySenderName || 'User', username: '' }
+    } : null;
+    this.clearReplyBar(id);
+
     // optimistic ui - show message immediately with pending state
     this.appendMessage(id, {
       tempId,
@@ -3715,7 +3807,8 @@ const ChatWindow = {
       medias: medias.length > 0 ? medias : null,
       sentAt: new Date(),
       isOwn: true,
-      status: "pending", // pending, sent, failed
+      status: "pending",
+      replyTo
     });
 
     // Update Sidebar immediately (preview text, time, move to top)
@@ -3727,6 +3820,8 @@ const ChatWindow = {
         sentAt: new Date()
       });
     }
+
+    // (reply state already captured above)
 
     // Clear input and state
     this.resetInput(id);
@@ -3752,6 +3847,7 @@ const ChatWindow = {
         formData.append("MediaFiles", file);
       });
     }
+    if (replyToMessageId) formData.append('ReplyToMessageId', replyToMessageId);
 
     try {
       let res;

@@ -555,7 +555,79 @@ const ChatActions = {
      * Placeholder for Reply Logic
      */
     replyTo(messageId) {
-        window.toastInfo && window.toastInfo('Reply feature coming soon');
+        if (!messageId) return;
+        const bubble = document.querySelector(`.msg-bubble-wrapper[data-message-id="${messageId}"]`);
+        if (!bubble) return;
+
+        // Extract sender info from the DOM bubble
+        const isOwn = bubble.classList.contains('sent');
+        const senderId = (bubble.dataset.senderId || '').toLowerCase();
+
+        // Resolve sender display name: prioritize nickname from metaData (authoritative)
+        let senderName = '';
+
+        // 1. MetaData lookup (has nickname info)
+        if (senderId) {
+            const meta = window.ChatPage?.currentMetaData || null;
+            if (meta) {
+                if (!meta.isGroup && meta.otherMember) {
+                    const otherId = (meta.otherMember.accountId || '').toLowerCase();
+                    if (senderId === otherId) {
+                        senderName = meta.otherMember.nickname || meta.otherMember.username || meta.otherMember.fullName || '';
+                    }
+                }
+                if (!senderName && Array.isArray(meta.members)) {
+                    const member = meta.members.find(m => (m.accountId || '').toLowerCase() === senderId);
+                    if (member) {
+                        senderName = member.nickname || member.username || member.displayName || '';
+                    }
+                }
+            }
+            // Also try ChatWindow
+            if (!senderName && window.ChatWindow) {
+                for (const [, chat] of window.ChatWindow.openChats || []) {
+                    const chatMeta = chat.data;
+                    if (!chatMeta) continue;
+                    if (chatMeta.otherMember && (chatMeta.otherMember.accountId || '').toLowerCase() === senderId) {
+                        senderName = chatMeta.otherMember.nickname || chatMeta.otherMember.username || chatMeta.otherMember.fullName || '';
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 2. Fallback to DOM attributes
+        if (!senderName) {
+            senderName = bubble.dataset.senderName
+                || bubble.dataset.authorName
+                || bubble.querySelector('.msg-author')?.textContent
+                || '';
+        }
+
+        const displayName = isOwn ? 'yourself' : (senderName || 'User');
+        const isRecalled = bubble.dataset.isRecalled === 'true';
+        let contentPreview = '';
+        if (isRecalled) {
+            contentPreview = 'Message was recalled';
+        } else {
+            const bubbleText = bubble.querySelector('.msg-bubble')?.textContent?.trim() || '';
+            if (bubbleText) {
+                contentPreview = bubbleText.length > 60 ? bubbleText.substring(0, 60) + '\u2026' : bubbleText;
+            } else if (bubble.querySelector('.msg-media-grid') || bubble.querySelector('.msg-file-list')) {
+                contentPreview = 'Media';
+            }
+        }
+
+
+        // Dispatch event for chat-page or chat-window to handle
+        document.dispatchEvent(new CustomEvent('chat:reply', {
+            detail: {
+                messageId,
+                senderName: displayName,
+                contentPreview,
+                isRecalled
+            }
+        }));
     },
 
     isGuid(value) {
@@ -1205,6 +1277,28 @@ const ChatActions = {
         }
 
         return null;
+    },
+
+    handleReplyClick(element, messageId) {
+        if (!element || !messageId) return;
+
+        // Try to find chat window container first
+        const windowContainer = element.closest('[id^="chat-messages-"]');
+        if (windowContainer) {
+            const conversationId = windowContainer.id.replace('chat-messages-', '');
+            this.jumpToMessage(conversationId, messageId);
+            return;
+        }
+
+        // Try to find chat page container
+        const pageContainer = element.closest('#chat-view-messages');
+        if (pageContainer) {
+            // Get current chat ID from page context
+            const conversationId = window.ChatPage?.currentChatId;
+            if (conversationId) {
+                this.jumpToMessage(conversationId, messageId);
+            }
+        }
     },
 
     jumpToMessage(conversationId, messageId) {

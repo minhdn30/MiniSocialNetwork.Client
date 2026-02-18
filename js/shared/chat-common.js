@@ -1296,10 +1296,42 @@ const ChatCommon = {
             } else if (senderId) {
                 m.sender.accountId = senderId;
             }
+            // Normalize sender fields to camelCase
+            if (!m.sender.username && m.sender.Username) m.sender.username = m.sender.Username;
+            if (!m.sender.fullName && m.sender.FullName) m.sender.fullName = m.sender.FullName;
+            if (m.sender.nickname === undefined) m.sender.nickname = this.normalizeNickname(m.sender.Nickname ?? null);
+            if (!m.sender.avatarUrl && m.sender.AvatarUrl) m.sender.avatarUrl = m.sender.AvatarUrl;
         }
 
         if (!m.senderId && senderId) {
             m.senderId = senderId;
+        }
+
+        // Reply-to info
+        const rawReplyTo = m.replyTo || m.ReplyTo || null;
+        if (rawReplyTo && typeof rawReplyTo === 'object') {
+            const rawReplySender = rawReplyTo.sender || rawReplyTo.Sender || null;
+            const replySenderId = (
+                rawReplyTo.replySenderId ||
+                rawReplyTo.ReplySenderId ||
+                rawReplySender?.accountId ||
+                rawReplySender?.AccountId ||
+                ''
+            ).toString().toLowerCase();
+            m.replyTo = {
+                messageId: (rawReplyTo.messageId || rawReplyTo.MessageId || '').toString().toLowerCase(),
+                content: rawReplyTo.content ?? rawReplyTo.Content ?? null,
+                isRecalled: !!(rawReplyTo.isRecalled ?? rawReplyTo.IsRecalled),
+                messageType: rawReplyTo.messageType ?? rawReplyTo.MessageType ?? 0,
+                replySenderId,
+                sender: rawReplySender ? {
+                    accountId: (rawReplySender?.accountId || rawReplySender?.AccountId || replySenderId || '').toString().toLowerCase(),
+                    username: rawReplySender?.username || rawReplySender?.Username || '',
+                    displayName: rawReplySender?.displayName || rawReplySender?.DisplayName || ''
+                } : null
+            };
+        } else {
+            m.replyTo = null;
         }
 
         return m;
@@ -1552,16 +1584,16 @@ const ChatCommon = {
         const msgActionsHtml = `
             <div class="msg-actions">
                 ${(showReactAction && !isRecalled) ? `
-                    <button class="msg-action-btn react${hasCurrentReact ? ' is-reacted' : ''}" title="React" data-action="react" data-react-type="${hasCurrentReact ? currentReactType : ''}" onclick="window.ChatActions && ChatActions.openReactMenu(event, '${messageId}')">
+                    <button class="msg-action-btn react${hasCurrentReact ? ' is-reacted' : ''}" title="React" data-action="react" data-react-type="${hasCurrentReact ? currentReactType : ''}" onclick="var mid=this.closest('.msg-bubble-wrapper')?.dataset?.messageId||''; if(mid) window.ChatActions && ChatActions.openReactMenu(event, mid)">
                         <i data-lucide="smile"></i>
                     </button>
                 ` : ''}
-                ${(isPage && !isRecalled) ? `
-                    <button class="msg-action-btn" title="Reply" onclick="window.ChatActions && ChatActions.replyTo('${messageId}')">
+                ${((isPage || isWindow) && !isRecalled) ? `
+                    <button class="msg-action-btn" title="Reply" onclick="var mid=this.closest('.msg-bubble-wrapper')?.dataset?.messageId||''; if(mid) window.ChatActions && ChatActions.replyTo(mid)">
                         <i data-lucide="reply"></i>
                     </button>
                 ` : ''}
-                <button class="msg-action-btn more" title="More" onclick="window.ChatActions && ChatActions.openMoreMenu(event, '${messageId}', ${isOwn})">
+                <button class="msg-action-btn more" title="More" onclick="var mid=this.closest('.msg-bubble-wrapper')?.dataset?.messageId||''; if(mid) window.ChatActions && ChatActions.openMoreMenu(event, mid, ${isOwn})">
                     <i data-lucide="more-horizontal"></i>
                 </button>
             </div>
@@ -1578,6 +1610,7 @@ const ChatCommon = {
                  data-sender-id="${msg.sender?.accountId || msg.senderId || ''}"
                  data-avatar-url="${avatarSrc}"
                  data-author-name="${(authorName || '').replace(/"/g, '&quot;')}"
+                 data-sender-name="${(msg.sender?.nickname || msg.sender?.username || msg.sender?.fullName || authorName || '').replace(/"/g, '&quot;')}"
                  data-is-recalled="${isRecalled ? 'true' : 'false'}"
                  data-is-pinned="${isPinned ? 'true' : 'false'}"
                  data-current-react-type="${hasCurrentReact ? currentReactType : ''}"
@@ -1592,6 +1625,41 @@ const ChatCommon = {
                     ${avatarHtml}
                     <div class="msg-content-container">
                         ${pinnedBadgeHtml}
+                        ${(() => {
+                            if (!msg.replyTo) return '';
+                            const rt = msg.replyTo;
+                            const currentAccountId = (
+                                localStorage.getItem('accountId') ||
+                                sessionStorage.getItem('accountId') ||
+                                window.APP_CONFIG?.CURRENT_USER_ID ||
+                                ''
+                            ).toString().toLowerCase();
+                            const rtSenderId = (rt.replySenderId || rt.sender?.accountId || '').toString().toLowerCase();
+                            const isOwnReplyAuthor = !!(rtSenderId && currentAccountId && rtSenderId === currentAccountId);
+                            const rtSenderBase = rt.sender?.username || 'User';
+                            const rtSenderName = isOwnReplyAuthor
+                                ? 'You'
+                                : (rt.sender?.displayName || rtSenderBase || 'User');
+                            let rtPreview = '';
+                            if (rt.isRecalled) {
+                                rtPreview = '<em>Message was recalled</em>';
+                            } else if (rt.content) {
+                                const maxLen = 60;
+                                const trimmed = rt.content.length > maxLen ? rt.content.substring(0, maxLen) + '…' : rt.content;
+                                rtPreview = escapeHtml(trimmed);
+                            } else {
+                                rtPreview = '<em>Media</em>';
+                            }
+                            return `<div class="msg-reply-preview"
+                                data-reply-id="${rt.messageId}"
+                                data-reply-sender-id="${escapeHtml(rtSenderId)}"
+                                data-reply-sender-base="${escapeHtml(rtSenderBase || 'User')}"
+                                data-reply-is-own="${isOwnReplyAuthor ? 'true' : 'false'}"
+                                onclick="window.ChatActions && ChatActions.handleReplyClick(this, '${rt.messageId}')">
+                                <div class="msg-reply-author">${escapeHtml(rtSenderName)}</div>
+                                <div class="msg-reply-text">${rtPreview}</div>
+                            </div>`;
+                        })()}
                         ${mediaHtml}
                         ${(isRecalled || msg.content)
                             ? `<div class="msg-bubble${isRecalled ? ' msg-bubble-recalled' : ''}">${isRecalled ? escapeHtml(recalledText) : linkify(escapeHtml(msg.content))}</div>`

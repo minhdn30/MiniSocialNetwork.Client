@@ -1959,3 +1959,150 @@ body.light-mode {
 .chat-menu-item.danger svg {
     color: #f02849;
 }
+
+/* ================================================
+   Reply Preview (inside message bubble)
+   ================================================ */
+.msg-reply-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 10px;
+    border-left: 3px solid var(--chat-theme-accent, var(--accent-primary, #6366f1));
+    border-radius: 6px;
+    background: var(--chat-theme-surface, rgba(255, 255, 255, 0.06));
+    cursor: pointer;
+    transition: background 0.15s ease;
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+body.light-mode .msg-reply-preview {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.msg-reply-preview:hover {
+    background: var(--chat-theme-action-hover-bg, rgba(255, 255, 255, 0.1));
+}
+
+body.light-mode .msg-reply-preview:hover {
+    background: rgba(0, 0, 0, 0.07);
+}
+
+.msg-reply-author {
+    font-weight: 600;
+    color: var(--chat-theme-accent, var(--accent-primary, #6366f1));
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.msg-reply-text {
+    color: var(--text-secondary, #a0a3a8);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.msg-reply-text em {
+    font-style: italic;
+    opacity: 0.7;
+}
+
+/* ================================================
+   Reply Bar (above input area)
+   ================================================ */
+.chat-reply-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--chat-theme-surface, var(--surface-secondary, rgba(255, 255, 255, 0.05)));
+    border-left: 3px solid var(--chat-theme-accent, var(--accent-primary, #6366f1));
+    border-radius: 8px 8px 0 0;
+    margin: 0;
+    animation: replyBarSlideIn 0.15s ease-out;
+}
+
+body.light-mode .chat-reply-bar {
+    background: var(--chat-theme-surface, rgba(0, 0, 0, 0.03));
+}
+
+@keyframes replyBarSlideIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.chat-reply-bar-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.chat-reply-bar-label {
+    font-size: 12px;
+    color: var(--text-secondary, #a0a3a8);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chat-reply-bar-label strong {
+    color: var(--chat-theme-accent, var(--accent-primary, #6366f1));
+}
+
+.chat-reply-bar-preview {
+    font-size: 12px;
+    color: var(--text-tertiary, #6b7280);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chat-reply-bar-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary, #a0a3a8);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.15s ease, color 0.15s ease;
+    padding: 0;
+}
+
+.chat-reply-bar-close:hover {
+    background: var(--chat-theme-action-hover-bg, rgba(255, 255, 255, 0.1));
+    color: var(--text-primary, #e5e7eb);
+}
+
+body.light-mode .chat-reply-bar-close:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: var(--text-primary, #1f2937);
+}
+
+.chat-reply-bar-close svg,
+.chat-reply-bar-close i {
+    width: 14px;
+    height: 14px;
+}
+
+/* Chat window specific */
+.chat-box .chat-reply-bar {
+    border-radius: 8px; /* Bo tròn cả 4 góc */
+    margin-bottom: 8px; /* Thêm khoảng cách nhỏ với phần input bên dưới */
+    padding: 6px 10px;
+}
+
+.chat-box .chat-reply-bar-label,
+.chat-box .chat-reply-bar-preview {
+    font-size: 11px;
+}

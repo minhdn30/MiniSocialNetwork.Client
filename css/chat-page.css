@@ -180,12 +180,30 @@
 
 /* Input Area - Facebook Style Refined */
 .chat-view-input-container {
-  padding: 14px 14px;
+  padding: 0;
   background: var(--chat-theme-footer-surface, var(--chat-theme-surface, var(--bg-primary)));
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-top: 1px solid var(--chat-theme-border, var(--border-primary));
+}
+
+.chat-input-row {
   display: flex;
   align-items: flex-end;
   gap: 5px;
-  border-top: 1px solid var(--chat-theme-border, var(--border-primary));
+  padding: 14px 14px;
+  width: 100%;
+}
+
+.chat-view-input-container .chat-reply-bar {
+  width: 100%;
+  border-radius: 8px 8px 0 0;
+  border: 1px solid var(--chat-theme-border, var(--border-primary));
+  border-left: 3px solid var(--chat-theme-accent, var(--accent-primary, #6366f1));
+  margin: 0;
+  padding: 8px 12px;
+  background: var(--chat-theme-surface, var(--surface-secondary, rgba(255, 255, 255, 0.05)));
 }
 
 .chat-input-expansion {

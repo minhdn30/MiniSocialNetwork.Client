@@ -35,6 +35,8 @@ const ChatPage = {
     _blobUrls: new Map(), // key -> Set<blobUrl>
     _emojiOutsideBound: false,
     runtimeCtx: null,
+    // Reply state
+    _replyToMessageId: null,
     // Context mode state (for "Jump to message" feature)
     _isContextMode: false,
     _contextPage: null,
@@ -58,6 +60,7 @@ const ChatPage = {
         this.pendingFiles = []; 
         this.retryFiles.clear();
         this.runtimeCtx = null;
+        this._replyToMessageId = null;
         this._isContextMode = false;
         this._contextPage = null;
         this._hasMoreNewer = false;
@@ -384,6 +387,15 @@ const ChatPage = {
         const themeEvent = window.themeManager?.EVENT || 'app:theme-changed';
         window.addEventListener(themeEvent, onThemeModeChanged);
         this._listenerRefs.push({ target: window, type: themeEvent, handler: onThemeModeChanged });
+
+        // Reply event listener
+        const onReply = (e) => {
+            if (!this.currentChatId) return;
+            const { messageId, senderName, contentPreview } = e.detail || {};
+            if (messageId) this.showReplyBar(messageId, senderName, contentPreview);
+        };
+        document.addEventListener('chat:reply', onReply);
+        this._listenerRefs.push({ target: document, type: 'chat:reply', handler: onReply });
     },
 
     queuePendingSeen(conversationId, messageId, accountId, memberInfo = null) {
@@ -1319,6 +1331,22 @@ const ChatPage = {
                 .querySelectorAll(`.seen-avatar-wrapper[data-account-id="${accTarget}"] .seen-avatar-name`)
                 .forEach(el => {
                     el.textContent = normalizedNickname || fallbackDisplayName;
+                });
+
+            msgContainer
+                .querySelectorAll(`.msg-reply-preview[data-reply-sender-id="${accTarget}"]`)
+                .forEach(previewEl => {
+                    const authorEl = previewEl.querySelector('.msg-reply-author');
+                    if (!authorEl) return;
+
+                    const isOwnReplyAuthor = (previewEl.dataset.replyIsOwn || '').toLowerCase() === 'true' || accTarget === myId;
+                    if (isOwnReplyAuthor) {
+                        authorEl.textContent = 'You';
+                        return;
+                    }
+
+                    const baseName = previewEl.dataset.replySenderBase || fallbackDisplayName || 'User';
+                    authorEl.textContent = normalizedNickname || baseName;
                 });
         }
 
@@ -3146,6 +3174,44 @@ const ChatPage = {
         if (window.lucide) lucide.createIcons();
     },
 
+    showReplyBar(messageId, senderName, contentPreview) {
+        this._replyToMessageId = messageId;
+        this._replySenderName = senderName || 'User';
+        this._replyContentPreview = contentPreview || '';
+        const container = document.querySelector('.chat-view-input-container');
+        if (!container) return;
+
+        // Remove existing reply bar if any
+        container.querySelector('.chat-reply-bar')?.remove();
+
+        const bar = document.createElement('div');
+        bar.className = 'chat-reply-bar';
+        bar.innerHTML = `
+            <div class="chat-reply-bar-content">
+                <div class="chat-reply-bar-label">Replying to <strong>${escapeHtml(senderName || 'User')}</strong></div>
+                <div class="chat-reply-bar-preview">${escapeHtml(contentPreview || '')}</div>
+            </div>
+            <button class="chat-reply-bar-close" title="Cancel reply">
+                <i data-lucide="x"></i>
+            </button>
+        `;
+        bar.querySelector('.chat-reply-bar-close').onclick = () => this.clearReplyBar();
+        container.insertBefore(bar, container.firstChild);
+        if (window.lucide) lucide.createIcons();
+
+        // Focus input
+        const input = document.getElementById('chat-message-input');
+        if (input) input.focus();
+    },
+
+    clearReplyBar() {
+        this._replyToMessageId = null;
+        this._replySenderName = null;
+        this._replyContentPreview = null;
+        const container = document.querySelector('.chat-view-input-container');
+        container?.querySelector('.chat-reply-bar')?.remove();
+    },
+
     async sendMessage() {
         const input = document.getElementById('chat-message-input');
         const content = input.value.trim();
@@ -3172,6 +3238,16 @@ const ChatPage = {
             el.querySelector('.msg-status')?.remove();
         });
 
+        // Capture reply info BEFORE appending optimistic message
+        const replyToMessageId = this._replyToMessageId;
+        const replyTo = replyToMessageId ? {
+            messageId: replyToMessageId,
+            content: this._replyContentPreview || null,
+            isRecalled: false,
+            sender: { displayName: this._replySenderName || 'User', username: '' }
+        } : null;
+        this.clearReplyBar();
+
         // optimistic ui - show message immediately with pending state
         const myId = (localStorage.getItem('accountId') || '');
         this.appendMessage({ 
@@ -3181,7 +3257,8 @@ const ChatPage = {
             sentAt: new Date(), 
             isOwn: true,
             sender: { accountId: myId },
-            status: 'pending'
+            status: 'pending',
+            replyTo
         });
         
         // Update Sidebar immediately
@@ -3199,6 +3276,8 @@ const ChatPage = {
         if (filesToSend.length > 0) {
             this.retryFiles.set(tempId, filesToSend);
         }
+
+        // (reply state already captured above)
 
         // Clear input and pending state immediately
         input.value = '';
@@ -3222,6 +3301,7 @@ const ChatPage = {
                 formData.append('MediaFiles', file);
             });
         }
+        if (replyToMessageId) formData.append('ReplyToMessageId', replyToMessageId);
 
         try {
             let res;
