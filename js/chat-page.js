@@ -23,7 +23,7 @@ const CHAT_DOCUMENT_MIME_SET = new Set([
 
 const ChatPage = {
     currentChatId: null,
-    page: 1,
+    page: null,
     isLoading: false,
     hasMore: true,
     pageSize: window.APP_CONFIG?.CHATPAGE_MESSAGES_PAGE_SIZE || 20,
@@ -37,6 +37,10 @@ const ChatPage = {
     runtimeCtx: null,
     // Reply state
     _replyToMessageId: null,
+    _replySenderName: null,
+    _replyContentPreview: null,
+    _replySenderId: null,
+    _replyIsOwn: false,
     // Context mode state (for "Jump to message" feature)
     _isContextMode: false,
     _contextPage: null,
@@ -54,13 +58,17 @@ const ChatPage = {
         
         console.log("ChatPage initialized");
         this.currentChatId = null; 
-        this.page = 1;
+        this.page = null;
         this.hasMore = true;
         this.isLoading = false;
         this.pendingFiles = []; 
         this.retryFiles.clear();
         this.runtimeCtx = null;
         this._replyToMessageId = null;
+        this._replySenderName = null;
+        this._replyContentPreview = null;
+        this._replySenderId = null;
+        this._replyIsOwn = false;
         this._isContextMode = false;
         this._contextPage = null;
         this._hasMoreNewer = false;
@@ -391,8 +399,8 @@ const ChatPage = {
         // Reply event listener
         const onReply = (e) => {
             if (!this.currentChatId) return;
-            const { messageId, senderName, contentPreview } = e.detail || {};
-            if (messageId) this.showReplyBar(messageId, senderName, contentPreview);
+            const { messageId, senderName, contentPreview, senderId, isOwnReplyAuthor } = e.detail || {};
+            if (messageId) this.showReplyBar(messageId, senderName, contentPreview, senderId, isOwnReplyAuthor);
         };
         document.addEventListener('chat:reply', onReply);
         this._listenerRefs.push({ target: document, type: 'chat:reply', handler: onReply });
@@ -1011,7 +1019,7 @@ const ChatPage = {
         this.currentChatId = conversationId;
         this.currentMetaData = null;
         this.messages = [];
-        this.page = 1;
+        this.page = null;
         this.hasMore = true;
         this.isLoading = false;
         this.resetContextMode();
@@ -1348,6 +1356,19 @@ const ChatPage = {
                     const baseName = previewEl.dataset.replySenderBase || fallbackDisplayName || 'User';
                     authorEl.textContent = normalizedNickname || baseName;
                 });
+        }
+
+        if ((this._replyToMessageId || '').toString().toLowerCase() && (this._replySenderId || '').toString().toLowerCase() === accTarget) {
+            const isOwnReplyAuthor = !!this._replyIsOwn || accTarget === myId;
+            const nextReplySenderName = isOwnReplyAuthor
+                ? 'yourself'
+                : (normalizedNickname || fallbackDisplayName || this._replySenderName || 'User');
+            this._replySenderName = nextReplySenderName;
+
+            const labelStrong = document.querySelector('.chat-view-input-container .chat-reply-bar .chat-reply-bar-label strong');
+            if (labelStrong) {
+                labelStrong.textContent = nextReplySenderName;
+            }
         }
 
         if (changed) {
@@ -2960,12 +2981,14 @@ const ChatPage = {
                     setTimeout(() => this.updateMemberSeenStatuses(this.currentMetaData), 100);
                 }
 
-                const messages = data.messages.items || [];
+                const messageInfo = data.messages || data.Messages || {};
+                const messages = messageInfo.items || messageInfo.Items || [];
+                const olderCursor = messageInfo.olderCursor ?? messageInfo.OlderCursor ?? null;
+                const hasMoreOlder = messageInfo.hasMoreOlder ?? messageInfo.HasMoreOlder ?? false;
                 if (!isLoadMore) msgContainer.innerHTML = '';
-                
-                if (messages.length < this.pageSize) {
-                    this.hasMore = false;
-                }
+
+                this.page = olderCursor;
+                this.hasMore = !!hasMoreOlder;
 
                 // API returns newest first, we want oldest first for display
                 const chatItems = [...messages].reverse();
@@ -3020,7 +3043,6 @@ const ChatPage = {
                     }
                 }
 
-                this.page++;
             }
         } catch (error) {
             console.error("Failed to load messages:", error);
@@ -3174,10 +3196,12 @@ const ChatPage = {
         if (window.lucide) lucide.createIcons();
     },
 
-    showReplyBar(messageId, senderName, contentPreview) {
+    showReplyBar(messageId, senderName, contentPreview, senderId = '', isOwnReplyAuthor = false) {
         this._replyToMessageId = messageId;
         this._replySenderName = senderName || 'User';
         this._replyContentPreview = contentPreview || '';
+        this._replySenderId = (senderId || '').toString().toLowerCase() || null;
+        this._replyIsOwn = !!isOwnReplyAuthor;
         const container = document.querySelector('.chat-view-input-container');
         if (!container) return;
 
@@ -3208,6 +3232,8 @@ const ChatPage = {
         this._replyToMessageId = null;
         this._replySenderName = null;
         this._replyContentPreview = null;
+        this._replySenderId = null;
+        this._replyIsOwn = false;
         const container = document.querySelector('.chat-view-input-container');
         container?.querySelector('.chat-reply-bar')?.remove();
     },
@@ -3244,7 +3270,13 @@ const ChatPage = {
             messageId: replyToMessageId,
             content: this._replyContentPreview || null,
             isRecalled: false,
-            sender: { displayName: this._replySenderName || 'User', username: '' }
+            isHidden: false,
+            replySenderId: this._replySenderId || '',
+            sender: {
+                accountId: this._replySenderId || '',
+                displayName: this._replySenderName || 'User',
+                username: ''
+            }
         } : null;
         this.clearReplyBar();
 

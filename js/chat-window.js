@@ -143,13 +143,13 @@ const ChatWindow = {
     if (!this._replyHandler) {
       this._replyHandler = (e) => {
         if (document.body.classList.contains('is-chat-page')) return;
-        const { messageId, senderName, contentPreview } = e.detail || {};
+        const { messageId, senderName, contentPreview, senderId, isOwnReplyAuthor } = e.detail || {};
         if (!messageId) return;
         // Find which open chat contains this message
         for (const [convId, chat] of this.openChats) {
           const msgContainer = document.getElementById(`chat-messages-${convId}`);
           if (msgContainer && msgContainer.querySelector(`[data-message-id="${messageId}"]`)) {
-            this.showReplyBar(convId, messageId, senderName, contentPreview);
+            this.showReplyBar(convId, messageId, senderName, contentPreview, senderId, isOwnReplyAuthor);
             return;
           }
         }
@@ -1935,7 +1935,7 @@ const ChatWindow = {
       minimized: false,
       unreadCount:
         this.getSyncUnreadCount(conv.conversationId) || conv.unreadCount || 0,
-      page: 1,
+      page: null,
       hasMore: true,
       isLoading: false,
       pendingFiles: [],
@@ -1943,6 +1943,10 @@ const ChatWindow = {
       _realtimeJoining: false,
       runtimeCtx: null,
       _replyToMessageId: null,
+      _replySenderName: null,
+      _replyContentPreview: null,
+      _replySenderId: null,
+      _replyIsOwn: false,
     };
     this.openChats.set(conv.conversationId, chatObj);
     this.getRuntimeCtx(conv.conversationId, chatObj);
@@ -2042,7 +2046,7 @@ const ChatWindow = {
         data: data,
         minimized: true,
         unreadCount: data?.unreadCount || 0,
-        page: 1,
+        page: null,
         hasMore: true,
         isLoading: false,
         pendingFiles: [],
@@ -2397,7 +2401,7 @@ const ChatWindow = {
       });
     }
 
-    if (!changed) return false;
+    let domChanged = false;
 
     const msgContainer = document.getElementById(`chat-messages-${openId}`);
     if (msgContainer) {
@@ -2407,6 +2411,7 @@ const ChatWindow = {
         )
         .forEach((el) => {
           el.textContent = normalizedNickname || fallbackDisplayName;
+          domChanged = true;
         });
 
       msgContainer
@@ -2420,14 +2425,34 @@ const ChatWindow = {
             accTarget === myId;
           if (isOwnReplyAuthor) {
             authorEl.textContent = "You";
+            domChanged = true;
             return;
           }
 
           const baseName =
             previewEl.dataset.replySenderBase || fallbackDisplayName || "User";
           authorEl.textContent = normalizedNickname || baseName;
+          domChanged = true;
         });
     }
+
+    if ((chat._replyToMessageId || '').toString().toLowerCase()
+      && (chat._replySenderId || '').toString().toLowerCase() === accTarget) {
+      const isOwnReplyAuthor = !!chat._replyIsOwn || accTarget === myId;
+      const nextReplySenderName = isOwnReplyAuthor
+        ? 'yourself'
+        : (normalizedNickname || fallbackDisplayName || chat._replySenderName || 'User');
+      chat._replySenderName = nextReplySenderName;
+
+      const inputArea = document.getElementById(`chat-input-area-${openId}`);
+      const labelStrong = inputArea?.querySelector('.chat-reply-bar .chat-reply-bar-label strong');
+      if (labelStrong) {
+        labelStrong.textContent = nextReplySenderName;
+        domChanged = true;
+      }
+    }
+
+    if (!changed && !domChanged) return false;
 
     const nextName = ChatCommon.getDisplayName(chat.data);
     if (chat.element) {
@@ -3334,11 +3359,14 @@ const ChatWindow = {
     ).toLowerCase();
 
     try {
-      const res = await window.API.Conversations.getMessages(id, 1, pageSize);
+      const res = await window.API.Conversations.getMessages(id, null, pageSize);
       if (res.ok) {
         const data = await res.json();
+        const messageInfo = data.messages || data.Messages || {};
+        const olderCursor = messageInfo.olderCursor ?? messageInfo.OlderCursor ?? null;
+        const hasMoreOlder = messageInfo.hasMoreOlder ?? messageInfo.HasMoreOlder ?? false;
         msgContainer.innerHTML = "";
-        const messages = (data.messages?.items || []).reverse();
+        const messages = (messageInfo.items || messageInfo.Items || []).reverse();
 
         let lastTime = null;
 
@@ -3411,9 +3439,8 @@ const ChatWindow = {
         });
 
         // Update pagination state
-        const pageSize = window.APP_CONFIG?.CHATWINDOW_MESSAGES_PAGE_SIZE || 10;
-        chat.page = 2;
-        chat.hasMore = messages.length >= pageSize;
+        chat.page = olderCursor;
+        chat.hasMore = !!hasMoreOlder;
 
         // Attach scroll listener for load-more
         this.initScrollListener(id);
@@ -3515,11 +3542,13 @@ const ChatWindow = {
       );
       if (res.ok) {
         const data = await res.json();
-        const messages = (data.messages?.items || []).reverse();
+        const messageInfo = data.messages || data.Messages || {};
+        const olderCursor = messageInfo.olderCursor ?? messageInfo.OlderCursor ?? null;
+        const hasMoreOlder = messageInfo.hasMoreOlder ?? messageInfo.HasMoreOlder ?? false;
+        const messages = (messageInfo.items || messageInfo.Items || []).reverse();
 
-        if (messages.length < pageSize) {
-          chat.hasMore = false;
-        }
+        chat.page = olderCursor;
+        chat.hasMore = !!hasMoreOlder;
 
         // Build HTML to prepend
         let html = "";
@@ -3593,7 +3622,6 @@ const ChatWindow = {
           msgContainer.scrollTop = msgContainer.scrollHeight - oldScrollHeight;
         });
 
-        chat.page++;
       }
     } catch (error) {
       console.error("Failed to load more messages:", error);
@@ -3707,12 +3735,14 @@ const ChatWindow = {
     if (autoScroll) msgContainer.scrollTop = msgContainer.scrollHeight;
   },
 
-  showReplyBar(id, messageId, senderName, contentPreview) {
+  showReplyBar(id, messageId, senderName, contentPreview, senderId = '', isOwnReplyAuthor = false) {
     const chat = this.openChats.get(id);
     if (!chat) return;
     chat._replyToMessageId = messageId;
     chat._replySenderName = senderName || 'User';
     chat._replyContentPreview = contentPreview || '';
+    chat._replySenderId = (senderId || '').toString().toLowerCase() || null;
+    chat._replyIsOwn = !!isOwnReplyAuthor;
 
     const inputArea = document.getElementById(`chat-input-area-${id}`);
     if (!inputArea) return;
@@ -3746,6 +3776,8 @@ const ChatWindow = {
       chat._replyToMessageId = null;
       chat._replySenderName = null;
       chat._replyContentPreview = null;
+      chat._replySenderId = null;
+      chat._replyIsOwn = false;
     }
     const inputArea = document.getElementById(`chat-input-area-${id}`);
     inputArea?.querySelector('.chat-reply-bar')?.remove();
@@ -3796,7 +3828,13 @@ const ChatWindow = {
         messageId: replyToMessageId,
         content: chat._replyContentPreview || null,
         isRecalled: false,
-        sender: { displayName: chat._replySenderName || 'User', username: '' }
+        isHidden: false,
+        replySenderId: chat._replySenderId || '',
+        sender: {
+          accountId: chat._replySenderId || '',
+          displayName: chat._replySenderName || 'User',
+          username: ''
+        }
     } : null;
     this.clearReplyBar(id);
 

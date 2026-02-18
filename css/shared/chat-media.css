@@ -8,6 +8,27 @@
   margin-top: 4px;
 }
 
+.msg-media-anchor,
+.msg-file-anchor {
+  position: relative;
+  overflow: visible;
+  max-width: 100%;
+}
+
+.msg-media-anchor {
+  margin-top: 4px;
+}
+
+.msg-file-anchor {
+  margin-top: 4px;
+  width: 100%;
+}
+
+.msg-media-anchor > .msg-media-grid,
+.msg-content-container .msg-file-anchor > .msg-file-list {
+  margin-top: 0;
+}
+
 /* Logic layouts for different counts */
 .msg-media-grid.count-1 { grid-template-columns: 1fr; }
 .msg-media-grid.count-2 { grid-template-columns: repeat(2, 1fr); }
@@ -151,6 +172,8 @@
 }
 
 .msg-content-container .msg-file-item {
+  position: relative;
+  overflow: visible;
   width: 100%;
   max-width: 100%;
 }

@@ -213,6 +213,11 @@
   transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
+.msg-pinned-badge.msg-pinned-badge-media-anchor {
+  top: -10px;
+  right: -10px;
+}
+
 .received .msg-pinned-badge {
   color: #ef4444 !important;
 }
@@ -366,12 +371,13 @@ body.light-mode {
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  max-width: min(100%, 300px);
+  max-width: min(300px, calc(100vw - 72px));
   width: fit-content;
   white-space: nowrap;
   position: absolute;
   top: 100%;
   transform: translateY(-11px);
+  transform-origin: center top;
   z-index: 20; /* High enough to stay above media grid overlays (10) */
 }
 
@@ -382,11 +388,28 @@ body.light-mode {
 
 /* Place badge outside side of message bubble and grow inward on long width */
 .sent .msg-reactions-summary {
-  left: 0; /* anchor at left edge for own message */
+  left: 0; /* anchor at left edge so long badge grows inward */
+  right: auto;
+  transform-origin: left top;
 }
 
 .received .msg-reactions-summary {
-  right: 0; /* anchor at right edge for others' message */
+  left: auto;
+  right: 0; /* anchor at right edge so long badge grows inward */
+  transform-origin: right top;
+}
+
+/* When badge is wider than the bubble, flip to anchor at the inner edge */
+.sent .msg-reactions-summary.msg-reactions-overflow {
+  left: auto;
+  right: 0;
+  transform-origin: right top;
+}
+
+.received .msg-reactions-summary.msg-reactions-overflow {
+  left: 0;
+  right: auto;
+  transform-origin: left top;
 }
 
 .msg-reactions-summary:hover {

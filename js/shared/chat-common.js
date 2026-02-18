@@ -1187,6 +1187,44 @@ const ChatCommon = {
         if (!reactionBadgeHtml) return;
 
         contentContainer.insertAdjacentHTML('beforeend', reactionBadgeHtml);
+
+        // After insertion, check if badge overflows the container and toggle class
+        requestAnimationFrame(() => this.syncReactionBadgeOverflow(contentContainer));
+    },
+
+    /**
+     * Check if a reaction badge inside a container is wider than the container.
+     * If so, add msg-reactions-overflow class to flip the anchor edge.
+     * @param {HTMLElement} contentContainer - The .msg-content-container element
+     */
+    syncReactionBadgeOverflow(contentContainer) {
+        if (!contentContainer) return;
+        const badge = contentContainer.querySelector('.msg-reactions-summary');
+        if (!badge) return;
+        const containerWidth = contentContainer.offsetWidth;
+        const badgeWidth = badge.offsetWidth;
+        badge.classList.toggle('msg-reactions-overflow', badgeWidth > containerWidth);
+    },
+
+    /**
+     * Batch sync all reaction badge overflow states inside a container.
+     * Call this after rendering a batch of messages (initial load, prepend, etc.)
+     * @param {HTMLElement} container - Parent container holding message bubbles
+     */
+    syncAllReactionBadgeOverflows(container) {
+        if (!container) return;
+        const badges = container.querySelectorAll('.msg-reactions-summary');
+        if (!badges.length) return;
+        requestAnimationFrame(() => {
+            badges.forEach(badge => {
+                const cc = badge.closest('.msg-content-container');
+                if (!cc) return;
+                badge.classList.toggle(
+                    'msg-reactions-overflow',
+                    badge.offsetWidth > cc.offsetWidth
+                );
+            });
+        });
     },
 
     /**
@@ -1322,6 +1360,7 @@ const ChatCommon = {
                 messageId: (rawReplyTo.messageId || rawReplyTo.MessageId || '').toString().toLowerCase(),
                 content: rawReplyTo.content ?? rawReplyTo.Content ?? null,
                 isRecalled: !!(rawReplyTo.isRecalled ?? rawReplyTo.IsRecalled),
+                isHidden: !!(rawReplyTo.isHidden ?? rawReplyTo.IsHidden),
                 messageType: rawReplyTo.messageType ?? rawReplyTo.MessageType ?? 0,
                 replySenderId,
                 sender: rawReplySender ? {
@@ -1480,16 +1519,27 @@ const ChatCommon = {
         const visualMedias = indexedMedias.filter(item => item.mediaType === 0 || item.mediaType === 1);
         const documentMedias = indexedMedias.filter(item => item.mediaType === 3);
 
+        const hasAnyMedia = visualMedias.length > 0 || documentMedias.length > 0;
+        const shouldPinOnMedia = isPinned && !isRecalled && hasAnyMedia;
+        const pinHostType = shouldPinOnMedia
+            ? (visualMedias.length > 0 ? 'visual' : (documentMedias.length > 0 ? 'file' : 'none'))
+            : 'none';
+
         let mediaHtml = '';
         if (!isRecalled && visualMedias.length > 0) {
             const displayMedias = visualMedias.slice(0, 4);
             const remainingCount = visualMedias.length - 4;
             const gridClass = `count-${Math.min(visualMedias.length, 4)}`;
             const mediaListJson = JSON.stringify(visualMedias.map(item => item.media)).replace(/"/g, '&quot;');
+            const pinBadgeHtml = pinHostType === 'visual'
+                ? `<div class="msg-pinned-badge msg-pinned-badge-media-anchor" title="Pinned message"><i data-lucide="pin"></i></div>`
+                : '';
 
             mediaHtml += `
-                <div class="msg-media-grid ${gridClass}" data-medias="${mediaListJson}">
-                    ${displayMedias.map((entry, idx) => {
+                <div class="msg-media-anchor">
+                    ${pinBadgeHtml}
+                    <div class="msg-media-grid ${gridClass}" data-medias="${mediaListJson}">
+                        ${displayMedias.map((entry, idx) => {
                         const m = entry.media || {};
                         const isLast = idx === 3 && remainingCount > 0;
                         const safeMediaUrl = (m.mediaUrl || '').replace(/"/g, '&quot;');
@@ -1520,15 +1570,22 @@ const ChatCommon = {
                                 ${isLast ? `<div class="msg-media-more-overlay" onclick="event.stopPropagation(); ChatCommon.previewGridMedia(this, 3, event)">+${remainingCount}</div>` : ''}
                             </div>
                         `;
-                    }).join('')}
+                        }).join('')}
+                    </div>
                 </div>
             `;
         }
 
         if (!isRecalled && documentMedias.length > 0) {
+            const pinBadgeHtml = pinHostType === 'file'
+                ? `<div class="msg-pinned-badge msg-pinned-badge-media-anchor" title="Pinned message"><i data-lucide="pin"></i></div>`
+                : '';
+
             mediaHtml += `
-                <div class="msg-file-list">
-                    ${documentMedias.map((entry) => {
+                <div class="msg-file-anchor">
+                    ${pinBadgeHtml}
+                    <div class="msg-file-list">
+                        ${documentMedias.map((entry) => {
                         const m = entry.media || {};
                         const mediaUrl = (m.mediaUrl || '').toString();
                         const safeMediaUrl = mediaUrl.replace(/"/g, '&quot;');
@@ -1551,7 +1608,8 @@ const ChatCommon = {
                                 </a>
                             </div>
                         `;
-                    }).join('')}
+                        }).join('')}
+                    </div>
                 </div>
             `;
         }
@@ -1581,6 +1639,7 @@ const ChatCommon = {
         const pinnedBadgeHtml = isPinned
             ? `<div class="msg-pinned-badge" title="Pinned message"><i data-lucide="pin"></i></div>`
             : '';
+        const pinnedInlineBadgeHtml = shouldPinOnMedia ? '' : pinnedBadgeHtml;
         const msgActionsHtml = `
             <div class="msg-actions">
                 ${(showReactAction && !isRecalled) ? `
@@ -1624,7 +1683,7 @@ const ChatCommon = {
                 <div class="msg-row">
                     ${avatarHtml}
                     <div class="msg-content-container">
-                        ${pinnedBadgeHtml}
+                        ${pinnedInlineBadgeHtml}
                         ${(() => {
                             if (!msg.replyTo) return '';
                             const rt = msg.replyTo;
@@ -1640,8 +1699,14 @@ const ChatCommon = {
                             const rtSenderName = isOwnReplyAuthor
                                 ? 'You'
                                 : (rt.sender?.displayName || rtSenderBase || 'User');
+                            const isReplyHiddenByCurrentUser = !!(window.ChatActions
+                                && typeof window.ChatActions.isMessageHiddenForCurrentUser === 'function'
+                                && window.ChatActions.isMessageHiddenForCurrentUser(rt.messageId));
+                            const isHiddenReplyParent = !!rt.isHidden || isReplyHiddenByCurrentUser;
                             let rtPreview = '';
-                            if (rt.isRecalled) {
+                            if (isHiddenReplyParent) {
+                                rtPreview = `<em>${escapeHtml(window.APP_CONFIG?.CHAT_HIDDEN_MESSAGE_TEXT || 'Message hidden')}</em>`;
+                            } else if (rt.isRecalled) {
                                 rtPreview = '<em>Message was recalled</em>';
                             } else if (rt.content) {
                                 const maxLen = 60;
@@ -1655,15 +1720,17 @@ const ChatCommon = {
                                 data-reply-sender-id="${escapeHtml(rtSenderId)}"
                                 data-reply-sender-base="${escapeHtml(rtSenderBase || 'User')}"
                                 data-reply-is-own="${isOwnReplyAuthor ? 'true' : 'false'}"
+                                data-reply-parent-hidden="${isHiddenReplyParent ? 'true' : 'false'}"
+                                data-reply-parent-recalled="${rt.isRecalled ? 'true' : 'false'}"
                                 onclick="window.ChatActions && ChatActions.handleReplyClick(this, '${rt.messageId}')">
                                 <div class="msg-reply-author">${escapeHtml(rtSenderName)}</div>
                                 <div class="msg-reply-text">${rtPreview}</div>
                             </div>`;
                         })()}
-                        ${mediaHtml}
                         ${(isRecalled || msg.content)
                             ? `<div class="msg-bubble${isRecalled ? ' msg-bubble-recalled' : ''}">${isRecalled ? escapeHtml(recalledText) : linkify(escapeHtml(msg.content))}</div>`
                             : ''}
+                        ${mediaHtml}
                         ${reactionBadgeHtml}
                     </div>
                     <span class="msg-time-tooltip">${this.formatTime(msg.sentAt)}</span>
@@ -1964,6 +2031,9 @@ const ChatCommon = {
             }
             lastKeptSeparator = child;
         });
+
+        // After cleaning separators, sync reaction badge overflow state
+        this.syncAllReactionBadgeOverflows(container);
     },
 
     goToProfile(accountId) {
@@ -1989,8 +2059,6 @@ const ChatCommon = {
             return this.getSystemMessageText(lastMessage);
         }
 
-        if (conv?.lastMessagePreview) return conv.lastMessagePreview;
-
         const rawContent = lastMessage?.content ?? lastMessage?.Content ?? '';
         if (typeof rawContent === 'string' && rawContent.trim().length) {
             return rawContent.trim();
@@ -1998,10 +2066,20 @@ const ChatCommon = {
 
         const medias = lastMessage?.medias || lastMessage?.Medias || [];
         if (Array.isArray(medias) && medias.length > 0) {
+            const hasVisualMedia = medias.some((m) => {
+                const mediaType = Number(m?.mediaType ?? m?.MediaType ?? 0);
+                return mediaType === 0 || mediaType === 1;
+            });
+            if (hasVisualMedia) {
+                return '[Media]';
+            }
+
             const first = medias[0] || {};
             const mediaType = Number(first.mediaType ?? first.MediaType);
             return this.getMediaTypeLabel(mediaType);
         }
+
+        if (conv?.lastMessagePreview) return conv.lastMessagePreview;
 
         return conv?.isGroup ? 'Group created' : 'Started a conversation';
     },
@@ -2536,14 +2614,14 @@ const ChatCommon = {
     //   isGroup()            → boolean
     //   getMyId()            → current user id (lowercase)
     //   renderMessages(items, container) → render reversed items into container (module-specific)
-    //   reloadLatest()       → reload page 1 (latest messages)
+    //   reloadLatest()       → reload latest messages (cursor = null)
     //   getBtnParent()       → DOM element to append jump-to-bottom button
     //   getBtnId()           → unique button id string
     //   getMetaData()        → current metaData or null
     //   setMetaData(meta)    → store metaData
 
     /**
-     * Load a context page around a target message, clear and re-render.
+     * Load a cursor-based message slice around a target message, clear and re-render.
      */
     async contextLoadMessageContext(ctx, messageId) {
         const state = ctx.getState();
@@ -2564,9 +2642,10 @@ const ChatCommon = {
             const data = await res.json();
             const pageInfo = data?.messages || data?.Messages || {};
             const items = pageInfo?.items || pageInfo?.Items || [];
-            const totalItems = pageInfo?.totalItems || pageInfo?.TotalItems || 0;
-            const targetPage = pageInfo?.page || pageInfo?.Page || 1;
-            const totalPages = Math.ceil(totalItems / pageSize) || 1;
+            const olderCursor = pageInfo?.olderCursor ?? pageInfo?.OlderCursor ?? null;
+            const newerCursor = pageInfo?.newerCursor ?? pageInfo?.NewerCursor ?? null;
+            const hasMoreOlder = !!(pageInfo?.hasMoreOlder ?? pageInfo?.HasMoreOlder);
+            const hasMoreNewer = !!(pageInfo?.hasMoreNewer ?? pageInfo?.HasMoreNewer);
 
             // Store metadata
             const metaData = data?.metaData || data?.MetaData;
@@ -2575,11 +2654,11 @@ const ChatCommon = {
             // Enter context mode
             ctx.setState({
                 _isContextMode: true,
-                _contextPage: targetPage,
-                page: targetPage + 1,
-                hasMore: targetPage < totalPages,
-                _newerPage: targetPage - 1,
-                _hasMoreNewer: targetPage > 1,
+                _contextPage: null,
+                page: olderCursor,
+                hasMore: hasMoreOlder,
+                _newerPage: newerCursor,
+                _hasMoreNewer: hasMoreNewer,
             });
 
             // Clear and render
@@ -2624,7 +2703,7 @@ const ChatCommon = {
     async contextLoadNewerMessages(ctx) {
         const state = ctx.getState();
         if (state.isLoading || !state._isContextMode || !state._hasMoreNewer) return;
-        if (state._newerPage < 1) {
+        if (!state._newerPage) {
             ctx.setState({ _hasMoreNewer: false });
             return;
         }
@@ -2643,9 +2722,12 @@ const ChatCommon = {
             const data = await res.json();
             const pageInfo = data?.messages || data?.Messages || data || {};
             const items = pageInfo?.items || pageInfo?.Items || [];
+            const nextNewerCursor = pageInfo?.newerCursor ?? pageInfo?.NewerCursor ?? null;
+            const hasMoreNewer = !!(pageInfo?.hasMoreNewer ?? pageInfo?.HasMoreNewer);
 
             if (!items.length) {
                 ctx.setState({ _hasMoreNewer: false, isLoading: false });
+                ChatCommon.contextResetMode(ctx);
                 return;
             }
 
@@ -2663,12 +2745,11 @@ const ChatCommon = {
             if (typeof window.initializeChatEmojiElements === 'function') window.initializeChatEmojiElements(msgContainer);
             if (typeof window.replaceSVGEmojis === 'function') window.replaceSVGEmojis(msgContainer);
 
-            const newPage = state._newerPage - 1;
-            if (newPage < 1) {
-                ctx.setState({ _newerPage: newPage, _hasMoreNewer: false, isLoading: false });
+            if (!hasMoreNewer) {
+                ctx.setState({ _newerPage: nextNewerCursor, _hasMoreNewer: false, isLoading: false });
                 ChatCommon.contextResetMode(ctx);
             } else {
-                ctx.setState({ _newerPage: newPage, isLoading: false });
+                ctx.setState({ _newerPage: nextNewerCursor, _hasMoreNewer: true, isLoading: false });
             }
         } catch (err) {
             console.error('contextLoadNewerMessages error:', err);
@@ -2682,7 +2763,7 @@ const ChatCommon = {
     contextJumpToBottom(ctx) {
         ChatCommon.contextResetMode(ctx);
         ChatCommon.contextRemoveJumpBtn(ctx, true);
-        ctx.setState({ page: 1, hasMore: true, isLoading: false });
+        ctx.setState({ page: null, hasMore: true, isLoading: false });
 
         const msgContainer = document.getElementById(ctx.getContainerId());
         if (msgContainer) msgContainer.innerHTML = '';

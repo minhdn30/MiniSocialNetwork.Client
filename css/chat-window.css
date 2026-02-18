@@ -403,7 +403,7 @@ body.is-dragging-chat #chat-windows-stack {
 }
 
 .chat-box .msg-bubble-wrapper {
-    max-width: 85%;
+    max-width: 110%;
 }
 
 .chat-box .msg-bubble {

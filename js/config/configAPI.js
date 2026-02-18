@@ -476,16 +476,26 @@
         return apiFetch(url);
       },
       getById: (conversationId) => apiFetch(`/Conversations/${conversationId}`),
-      getMessages: (conversationId, page = 1, pageSize = window.APP_CONFIG?.CHATPAGE_MESSAGES_PAGE_SIZE || 20) => 
-        apiFetch(`/Conversations/${conversationId}/messages?page=${page}&pageSize=${pageSize}`),
+      getMessages: (conversationId, cursor = null, pageSize = window.APP_CONFIG?.CHATPAGE_MESSAGES_PAGE_SIZE || 20) => {
+        let url = `/Conversations/${conversationId}/messages?pageSize=${pageSize}`;
+        if (cursor !== null && cursor !== undefined && cursor !== '') {
+          url += `&cursor=${encodeURIComponent(cursor)}`;
+        }
+        return apiFetch(url);
+      },
       getMedia: (conversationId, page = 1, pageSize = window.APP_CONFIG?.CHAT_MEDIA_PAGE_SIZE || 20) =>
         apiFetch(`/Conversations/${conversationId}/media?page=${page}&pageSize=${pageSize}`),
       getFiles: (conversationId, page = 1, pageSize = window.APP_CONFIG?.CHAT_FILES_PAGE_SIZE || 20) =>
         apiFetch(`/Conversations/${conversationId}/files?page=${page}&pageSize=${pageSize}`),
       getMessageContext: (conversationId, messageId, pageSize = window.APP_CONFIG?.CHATPAGE_MESSAGES_PAGE_SIZE || 20) =>
         apiFetch(`/Conversations/${conversationId}/messages/context?messageId=${messageId}&pageSize=${pageSize}`),
-      getPrivateWithMessages: (otherId, page = 1, pageSize = window.APP_CONFIG?.CHATPAGE_MESSAGES_PAGE_SIZE || 20) =>
-        apiFetch(`/Conversations/private/${otherId}?page=${page}&pageSize=${pageSize}`),
+      getPrivateWithMessages: (otherId, cursor = null, pageSize = window.APP_CONFIG?.CHATPAGE_MESSAGES_PAGE_SIZE || 20) => {
+        let url = `/Conversations/private/${otherId}?pageSize=${pageSize}`;
+        if (cursor !== null && cursor !== undefined && cursor !== '') {
+          url += `&cursor=${encodeURIComponent(cursor)}`;
+        }
+        return apiFetch(url);
+      },
       updateNickname: (conversationId, data) =>
         apiFetch(`/Conversations/${conversationId}/members/nickname`, {
           method: "PATCH",

@@ -700,12 +700,21 @@ const ChatSidebar = {
             } else if (isSystemMessage && window.ChatCommon && typeof ChatCommon.getSystemMessageText === 'function') {
                 content = ChatCommon.getSystemMessageText(message);
             } else if (!content && isMedia) {
-                const firstMedia = (message.medias || message.Medias)[0];
-                const mediaType = Number(firstMedia?.mediaType ?? firstMedia?.MediaType ?? 0);
-                const type = (window.ChatCommon && typeof ChatCommon.getMediaTypeLabel === 'function')
-                    ? ChatCommon.getMediaTypeLabel(mediaType)
-                    : (mediaType === 1 ? '[Video]' : (mediaType === 3 ? '[File]' : '[Image]'));
-                content = type;
+                const mediaItems = (message.medias || message.Medias || []);
+                const hasVisualMedia = Array.isArray(mediaItems) && mediaItems.some((m) => {
+                    const mediaType = Number(m?.mediaType ?? m?.MediaType ?? 0);
+                    return mediaType === 0 || mediaType === 1;
+                });
+                if (hasVisualMedia) {
+                    content = '[Media]';
+                } else {
+                    const firstMedia = mediaItems[0] || {};
+                    const mediaType = Number(firstMedia?.mediaType ?? firstMedia?.MediaType ?? 0);
+                    const type = (window.ChatCommon && typeof ChatCommon.getMediaTypeLabel === 'function')
+                        ? ChatCommon.getMediaTypeLabel(mediaType)
+                        : '[File]';
+                    content = type;
+                }
             }
 
             // Group chat sender name prefix

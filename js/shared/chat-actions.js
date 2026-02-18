@@ -18,6 +18,7 @@ const ChatActions = {
         { type: 5, key: 'angry', label: 'Angry', emoji: '😡' }
     ],
     _reactInFlight: new Set(),
+    _hiddenMessageIds: new Set(),
 
     /**
      * Find previous/next real message bubble (skip separators, typing indicator, etc.).
@@ -625,7 +626,9 @@ const ChatActions = {
                 messageId,
                 senderName: displayName,
                 contentPreview,
-                isRecalled
+                isRecalled,
+                senderId,
+                isOwnReplyAuthor: isOwn
             }
         }));
     },
@@ -657,6 +660,94 @@ const ChatActions = {
             window.APP_CONFIG?.CURRENT_USER_ID ||
             ''
         ).toString().toLowerCase();
+    },
+
+    getHiddenMessageText() {
+        return window.APP_CONFIG?.CHAT_HIDDEN_MESSAGE_TEXT || 'Message hidden';
+    },
+
+    getRecalledMessageText() {
+        return window.APP_CONFIG?.CHAT_RECALLED_MESSAGE_TEXT || 'Message was recalled';
+    },
+
+    markMessageHiddenForCurrentUser(messageId, hidden = true) {
+        const normalizedMessageId = (messageId || '').toString().toLowerCase();
+        if (!normalizedMessageId) return;
+        if (hidden) this._hiddenMessageIds.add(normalizedMessageId);
+        else this._hiddenMessageIds.delete(normalizedMessageId);
+    },
+
+    isMessageHiddenForCurrentUser(messageId) {
+        const normalizedMessageId = (messageId || '').toString().toLowerCase();
+        if (!normalizedMessageId) return false;
+        return this._hiddenMessageIds.has(normalizedMessageId);
+    },
+
+    updateReplyBarsForParentState(messageId, state = {}) {
+        const normalizedMessageId = (messageId || '').toString().toLowerCase();
+        if (!normalizedMessageId) return;
+
+        const isHidden = !!state.hidden;
+        const isRecalled = !!state.recalled;
+        const previewText = isHidden
+            ? this.getHiddenMessageText()
+            : (isRecalled ? this.getRecalledMessageText() : '');
+        if (!previewText) return;
+
+        if (
+            window.ChatPage
+            && (window.ChatPage._replyToMessageId || '').toString().toLowerCase() === normalizedMessageId
+        ) {
+            window.ChatPage._replyContentPreview = previewText;
+            const pagePreviewEl = document
+                .querySelector('.chat-view-input-container .chat-reply-bar .chat-reply-bar-preview');
+            if (pagePreviewEl) pagePreviewEl.textContent = previewText;
+        }
+
+        if (window.ChatWindow?.openChats) {
+            for (const [chatId, chat] of window.ChatWindow.openChats.entries()) {
+                if ((chat?._replyToMessageId || '').toString().toLowerCase() !== normalizedMessageId) continue;
+                chat._replyContentPreview = previewText;
+                const inputArea = document.getElementById(`chat-input-area-${chatId}`);
+                const previewEl = inputArea?.querySelector('.chat-reply-bar .chat-reply-bar-preview');
+                if (previewEl) previewEl.textContent = previewText;
+            }
+        }
+    },
+
+    updateReplyPreviewStateForParent(messageId, state = {}) {
+        const normalizedMessageId = (messageId || '').toString().toLowerCase();
+        if (!normalizedMessageId) return 0;
+
+        const isHidden = !!state.hidden;
+        const isRecalled = !!state.recalled;
+        const previewText = isHidden
+            ? this.getHiddenMessageText()
+            : (isRecalled ? this.getRecalledMessageText() : '');
+        if (!previewText) return 0;
+
+        const previews = document.querySelectorAll(`.msg-reply-preview[data-reply-id="${normalizedMessageId}"]`);
+        if (!previews.length) {
+            this.updateReplyBarsForParentState(normalizedMessageId, state);
+            return 0;
+        }
+
+        previews.forEach((previewEl) => {
+            if (!previewEl) return;
+            const wasHidden = (previewEl.dataset.replyParentHidden || '').toLowerCase() === 'true';
+            if (!isHidden && wasHidden) return; // Hidden state has priority for current user.
+
+            previewEl.dataset.replyParentHidden = isHidden ? 'true' : (wasHidden ? 'true' : 'false');
+            previewEl.dataset.replyParentRecalled = isRecalled ? 'true' : 'false';
+
+            const textEl = previewEl.querySelector('.msg-reply-text');
+            if (textEl) {
+                textEl.innerHTML = `<em>${this.escapeHtml(previewText)}</em>`;
+            }
+        });
+
+        this.updateReplyBarsForParentState(normalizedMessageId, state);
+        return previews.length;
     },
 
     resolveConversationId(wrapper) {
@@ -830,6 +921,19 @@ const ChatActions = {
         const bubbles = document.querySelectorAll(`.msg-bubble-wrapper[data-message-id="${normalizedMessageId}"]`);
         if (!bubbles.length) return false;
 
+        const ensurePinHostWrapper = (target, wrapperClass) => {
+            if (!target || !wrapperClass) return target;
+            const parent = target.parentElement;
+            if (!parent) return target;
+            if (parent.classList?.contains(wrapperClass)) return parent;
+
+            const wrapper = document.createElement('div');
+            wrapper.className = wrapperClass;
+            parent.insertBefore(wrapper, target);
+            wrapper.appendChild(target);
+            return wrapper;
+        };
+
         bubbles.forEach((bubble) => {
             if (!bubble.classList?.contains('msg-bubble-wrapper')) return;
             if (window.ChatCommon?.isSystemMessageElement?.(bubble)) return;
@@ -838,15 +942,27 @@ const ChatActions = {
             const contentContainer = bubble.querySelector('.msg-content-container');
             if (!contentContainer) return;
 
-            const existed = contentContainer.querySelector('.msg-pinned-badge');
-            if (existed) existed.remove();
+            contentContainer.querySelectorAll('.msg-pinned-badge').forEach((badge) => badge.remove());
 
             if (shouldPin) {
+                let pinHost = contentContainer;
+                let isMediaAnchor = false;
+
+                const mediaGrid = contentContainer.querySelector('.msg-media-grid');
+                const fileList = contentContainer.querySelector('.msg-file-list');
+                if (mediaGrid) {
+                    pinHost = ensurePinHostWrapper(mediaGrid, 'msg-media-anchor');
+                    isMediaAnchor = true;
+                } else if (fileList) {
+                    pinHost = ensurePinHostWrapper(fileList, 'msg-file-anchor');
+                    isMediaAnchor = true;
+                }
+
                 const badge = document.createElement('div');
-                badge.className = 'msg-pinned-badge';
+                badge.className = `msg-pinned-badge${isMediaAnchor ? ' msg-pinned-badge-media-anchor' : ''}`;
                 badge.title = 'Pinned message';
                 badge.innerHTML = '<i data-lucide="pin"></i>';
-                contentContainer.prepend(badge);
+                pinHost.prepend(badge);
                 if (window.lucide) lucide.createIcons({ container: badge });
             }
         });
@@ -1100,10 +1216,10 @@ const ChatActions = {
                 const medias = item?.medias || item?.Medias || [];
                 const isRecalled = this.normalizeBool(item?.isRecalled ?? item?.IsRecalled);
                 const contentRaw = item?.content ?? item?.Content;
-                const fallbackMediaLabel = this.getPinnedMediaLabel(medias);
+                const hasContent = typeof contentRaw === 'string' && contentRaw.trim().length > 0;
                 const messageText = isRecalled
                     ? recalledText
-                    : ((typeof contentRaw === 'string' && contentRaw.trim().length) ? contentRaw.trim() : (fallbackMediaLabel || '[Message]'));
+                    : (hasContent ? contentRaw.trim() : '');
 
                 const pinnedAt = item?.pinnedAt || item?.PinnedAt;
                 const sentAt = item?.sentAt || item?.SentAt;
@@ -1111,7 +1227,7 @@ const ChatActions = {
                 const pinnedLabel = window.ChatCommon?.formatTime?.(pinnedAt) || '';
 
                 // Truncation
-                const needsTruncate = !isRecalled && messageText.length > this._truncateLength;
+                const needsTruncate = !isRecalled && hasContent && messageText.length > this._truncateLength;
                 const truncateClass = needsTruncate ? ' truncated' : '';
                 const truncateBtn = needsTruncate ? `<button class="chat-pinned-toggle-btn" onclick="event.stopPropagation(); window.ChatActions.togglePinnedTruncate(this)">more</button>` : '';
 
@@ -1144,6 +1260,9 @@ const ChatActions = {
 
                 // More button (replaces Jump button)
                 const moreBtn = isRecalled ? '' : `<button class="chat-pinned-more-btn" onclick="event.stopPropagation(); window.ChatActions.openPinnedItemMenu(event, '${conversationId}', '${messageId}')" title="More options"><i data-lucide="ellipsis"></i></button>`;
+                const messageTextHtml = (isRecalled || hasContent)
+                    ? `<div class="chat-pinned-item-message${isRecalled ? ' recalled' : ''}${truncateClass}">${this.escapeHtml(messageText)}</div>`
+                    : '';
 
                 return `
                     <div class="chat-pinned-item" data-message-id="${this.escapeHtml(messageId)}">
@@ -1153,7 +1272,7 @@ const ChatActions = {
                                 <div class="chat-pinned-item-author" title="${this.escapeHtml(senderName)}">${this.escapeHtml(senderName)}</div>
                                 <div class="chat-pinned-item-time">${this.escapeHtml(sentLabel)}</div>
                             </div>
-                            <div class="chat-pinned-item-message${isRecalled ? ' recalled' : ''}${truncateClass}">${this.escapeHtml(messageText)}</div>
+                            ${messageTextHtml}
                             ${truncateBtn}
                             ${mediaThumbs}
                             <div class="chat-pinned-item-message-meta">Pinned ${this.escapeHtml(pinnedLabel)}</div>
@@ -1535,6 +1654,8 @@ const ChatActions = {
         if (!messageId) return false;
         const normId = messageId.toString().toLowerCase();
         const fallbackConvId = (fallbackConversationId || '').toString().toLowerCase();
+        this.markMessageHiddenForCurrentUser(normId, true);
+        const updatedReplyPreviews = this.updateReplyPreviewStateForParent(normId, { hidden: true });
         const modalMessageId = (this.currentReactorsModal?.dataset?.messageId || '').toString().toLowerCase();
         if (modalMessageId && modalMessageId === normId) {
             this.closeReactorsModal();
@@ -1543,7 +1664,7 @@ const ChatActions = {
         
         // We use querySelectorAll because the same message might be in both chat-page and chat-window
         const bubbles = document.querySelectorAll(`[data-message-id="${normId}"]`);
-        if (!bubbles.length) return false;
+        if (!bubbles.length) return updatedReplyPreviews > 0;
 
         bubbles.forEach(bubble => {
             const prev = this.findPreviousMessageBubble(bubble);
@@ -1850,10 +1971,14 @@ const ChatActions = {
 
     applyRecalledState(messageId, options = {}) {
         if (!messageId) return false;
-        const recalledText = options.recalledText || window.APP_CONFIG?.CHAT_RECALLED_MESSAGE_TEXT || 'Message was recalled';
+        const recalledText = options.recalledText || this.getRecalledMessageText();
         const normalizedMessageId = messageId.toString().toLowerCase();
+        const updatedReplyPreviews = this.updateReplyPreviewStateForParent(normalizedMessageId, { recalled: true });
         const bubbles = document.querySelectorAll(`.msg-bubble-wrapper[data-message-id="${normalizedMessageId}"]`);
-        if (!bubbles.length) return false;
+        if (!bubbles.length) {
+            this.markPinnedModalMessageRecalled(normalizedMessageId);
+            return updatedReplyPreviews > 0;
+        }
 
         bubbles.forEach((bubble) => {
             if (!bubble.classList?.contains('msg-bubble-wrapper')) return;
@@ -1879,7 +2004,7 @@ const ChatActions = {
             if (!contentContainer) return;
 
             contentContainer
-                .querySelectorAll('.msg-media-grid, .msg-file-list, .msg-file-item, .msg-reactions-summary')
+                .querySelectorAll('.msg-media-anchor, .msg-file-anchor, .msg-media-grid, .msg-file-list, .msg-file-item, .msg-reactions-summary')
                 .forEach((el) => el.remove());
 
             let textBubble = contentContainer.querySelector('.msg-bubble');
