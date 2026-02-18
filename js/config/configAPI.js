@@ -518,6 +518,17 @@
       getUnreadCount: () => apiFetch('/Conversations/unread-count'),
       searchMessages: (conversationId, keyword, page = 1, pageSize = 20) =>
         apiFetch(`/Conversations/${conversationId}/messages/search?keyword=${encodeURIComponent(keyword)}&page=${page}&pageSize=${pageSize}`),
+      searchAccountsForGroupInvite: (keyword = "", excludeAccountIds = [], limit = window.APP_CONFIG?.GROUP_CHAT_INVITE_SEARCH_LIMIT || 10) => {
+        let url = `/Conversations/accounts/search?keyword=${encodeURIComponent(keyword ?? "")}&limit=${limit}`;
+        if (Array.isArray(excludeAccountIds) && excludeAccountIds.length > 0) {
+          const excludeParams = excludeAccountIds
+            .filter((id) => typeof id === "string" && id.trim().length > 0)
+            .map((id) => `excludeAccountIds=${encodeURIComponent(id)}`)
+            .join("&");
+          if (excludeParams) url += `&${excludeParams}`;
+        }
+        return apiFetch(url);
+      },
     },
 
     Messages: {

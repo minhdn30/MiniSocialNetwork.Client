@@ -112,6 +112,10 @@
     text-align: right; /* Căn phải để chữ sát vào icon */
 }
 
+#label-group-chat-invite-privacy {
+    min-width: 180px;
+}
+
 /* Description below */
 .acc-setting-description {
     font-size: 0.85rem;

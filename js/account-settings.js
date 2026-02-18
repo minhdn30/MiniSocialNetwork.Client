@@ -14,12 +14,28 @@
         2: { name: 'Private', icon: 'lock', class: 'private' }
     };
 
+    const GROUP_CHAT_INVITE_LEVELS = {
+        0: { name: 'No One', icon: 'lock', class: 'private' },
+        1: { name: 'Followers or Following', icon: 'users', class: 'follow' },
+        2: { name: 'Anyone', icon: 'globe', class: 'public' }
+    };
+
     const SETTING_KEYS = {
         phone: 'phonePrivacy',
         address: 'addressPrivacy',
         post: 'defaultPostPrivacy',
         followers: 'followerPrivacy',
-        following: 'followingPrivacy'
+        following: 'followingPrivacy',
+        'group-chat-invite': 'groupChatInvitePermission'
+    };
+
+    const SETTING_LEVEL_MAP = {
+        phone: PRIVACY_LEVELS,
+        address: PRIVACY_LEVELS,
+        post: PRIVACY_LEVELS,
+        followers: PRIVACY_LEVELS,
+        following: PRIVACY_LEVELS,
+        'group-chat-invite': GROUP_CHAT_INVITE_LEVELS
     };
 
     let originalSettings = null; // To track changes accurately
@@ -55,7 +71,8 @@
                     addressPrivacy: 2, // Private
                     defaultPostPrivacy: 0, // Public
                     followerPrivacy: 0, // Public
-                    followingPrivacy: 0 // Public
+                    followingPrivacy: 0, // Public
+                    groupChatInvitePermission: 2 // Anyone
                 };
             }
             
@@ -65,7 +82,8 @@
                 addressPrivacy: currentSettings.addressPrivacy ?? currentSettings.AddressPrivacy,
                 defaultPostPrivacy: currentSettings.defaultPostPrivacy ?? currentSettings.DefaultPostPrivacy,
                 followerPrivacy: currentSettings.followerPrivacy ?? currentSettings.FollowerPrivacy,
-                followingPrivacy: currentSettings.followingPrivacy ?? currentSettings.FollowingPrivacy
+                followingPrivacy: currentSettings.followingPrivacy ?? currentSettings.FollowingPrivacy,
+                groupChatInvitePermission: currentSettings.groupChatInvitePermission ?? currentSettings.GroupChatInvitePermission
             };
 
             populateSettings(currentSettings);
@@ -83,6 +101,7 @@
         updatePrivacyButton('post', settings.defaultPostPrivacy ?? settings.DefaultPostPrivacy ?? 0);
         updatePrivacyButton('followers', settings.followerPrivacy ?? settings.FollowerPrivacy ?? 0);
         updatePrivacyButton('following', settings.followingPrivacy ?? settings.FollowingPrivacy ?? 0);
+        updatePrivacyButton('group-chat-invite', settings.groupChatInvitePermission ?? settings.GroupChatInvitePermission ?? 2);
         
         hasUnsavedChanges = false;
     }
@@ -93,7 +112,8 @@
         
         if (!btn || !label) return;
 
-        const config = PRIVACY_LEVELS[value];
+        const settingLevelMap = SETTING_LEVEL_MAP[settingKey] || PRIVACY_LEVELS;
+        const config = settingLevelMap[value];
         if (!config) return;
 
         // Use ONLY the isolated class name
@@ -234,7 +254,8 @@
                     addressPrivacy: newSettings.addressPrivacy ?? newSettings.AddressPrivacy,
                     defaultPostPrivacy: newSettings.defaultPostPrivacy ?? newSettings.DefaultPostPrivacy,
                     followerPrivacy: newSettings.followerPrivacy ?? newSettings.FollowerPrivacy,
-                    followingPrivacy: newSettings.followingPrivacy ?? newSettings.FollowingPrivacy
+                    followingPrivacy: newSettings.followingPrivacy ?? newSettings.FollowingPrivacy,
+                    groupChatInvitePermission: newSettings.groupChatInvitePermission ?? newSettings.GroupChatInvitePermission
                 };
                 
                 hasUnsavedChanges = false;

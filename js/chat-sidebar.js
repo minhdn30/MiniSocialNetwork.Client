@@ -101,9 +101,6 @@ const ChatSidebar = {
             <div class="chat-sidebar-header">
                 <div class="chat-header-title-area">
                     <h2>${username}</h2>
-                    <button class="chat-icon-btn" title="New Message" style="margin-left: 4px; padding: 4px;">
-                        <i data-lucide="square-pen" size="18"></i>
-                    </button>
                 </div>
                 <div class="chat-header-actions">
                     <button class="chat-icon-btn chat-sidebar-close-btn" onclick="window.closeChatSidebar()" title="Close Sidebar">
@@ -120,9 +117,14 @@ const ChatSidebar = {
             </div>
 
             <div class="chat-tabs">
-                <div class="chat-tab ${this.currentFilter === null ? 'active' : ''}" data-filter="null">All</div>
-                <div class="chat-tab ${this.currentFilter === true ? 'active' : ''}" data-filter="true">Private</div>
-                <div class="chat-tab ${this.currentFilter === false ? 'active' : ''}" data-filter="false">Group</div>
+                <div class="chat-tabs-list">
+                    <div class="chat-tab ${this.currentFilter === null ? 'active' : ''}" data-filter="null">All</div>
+                    <div class="chat-tab ${this.currentFilter === true ? 'active' : ''}" data-filter="true">Private</div>
+                    <div class="chat-tab ${this.currentFilter === false ? 'active' : ''}" data-filter="false">Group</div>
+                </div>
+                <button class="chat-tabs-more-btn" id="chat-tabs-more-btn" title="More options">
+                    <i data-lucide="ellipsis" size="18"></i>
+                </button>
             </div>
 
             <div class="chat-list" id="chat-conversation-list">
@@ -134,7 +136,84 @@ const ChatSidebar = {
         
         this.initTabs();
         this.initSearch();
+        this.initMoreMenu();
         lucide.createIcons();
+    },
+
+    initMoreMenu() {
+        const moreBtn = document.getElementById('chat-tabs-more-btn');
+        if (!moreBtn) return;
+
+        moreBtn.onclick = (e) => {
+            e.stopPropagation();
+            this.toggleMoreMenu(moreBtn);
+        };
+    },
+
+    toggleMoreMenu(anchor) {
+        let menu = document.getElementById('chat-tabs-more-menu');
+        if (menu) {
+            menu.remove();
+            return;
+        }
+
+        menu = document.createElement('div');
+        menu.id = 'chat-tabs-more-menu';
+        menu.className = 'chat-tabs-popup-menu';
+        menu.innerHTML = `
+            <div class="chat-popup-item" id="chat-menu-create-group">
+                <i data-lucide="users" size="16"></i>
+                <span>Create Group</span>
+            </div>
+            <div class="chat-popup-item" id="chat-menu-blocked-users">
+                <i data-lucide="user-x" size="16"></i>
+                <span>Blocked Users</span>
+            </div>
+        `;
+
+        document.body.appendChild(menu);
+        lucide.createIcons({ container: menu });
+
+        const rect = anchor.getBoundingClientRect();
+        menu.style.position = 'fixed';
+        menu.style.top = `${rect.bottom + 8}px`;
+        menu.style.left = `${rect.right - menu.offsetWidth}px`;
+
+        // Adjust if off-screen
+        const menuRect = menu.getBoundingClientRect();
+        if (menuRect.left < 10) menu.style.left = '10px';
+
+        const closeMenu = (e) => {
+            if (!menu.contains(e.target) && e.target !== anchor) {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            }
+        };
+
+        setTimeout(() => document.addEventListener('click', closeMenu), 10);
+
+        // Menu item actions
+        const createGroupBtn = menu.querySelector('#chat-menu-create-group');
+        if (createGroupBtn) {
+            createGroupBtn.onclick = () => {
+                if (window.openCreateChatGroupModal) {
+                    window.openCreateChatGroupModal();
+                } else {
+                    console.error('openCreateChatGroupModal not found');
+                    if (window.toastInfo) window.toastInfo('Create Group feature coming soon!');
+                }
+                menu.remove();
+            };
+        }
+
+        const blockedUsersBtn = menu.querySelector('#chat-menu-blocked-users');
+        if (blockedUsersBtn) {
+            blockedUsersBtn.onclick = () => {
+                console.log('Blocked Users clicked');
+                if (window.toastInfo) window.toastInfo('Blocked Users list coming soon!');
+                menu.remove();
+            };
+        }
     },
 
     initTabs() {

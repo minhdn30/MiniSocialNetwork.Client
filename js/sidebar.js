@@ -38,8 +38,12 @@ async function loadSidebar() {
 
   // Setup auto-close on mouse leave
   setupAutoClose();
+
   // Load create post modal
   await loadCreatePostModal();
+
+  // Load create group modal
+  await loadCreateChatGroupModal();
 
   // Attach global navigation listener to sidebar menu items
   document.getElementById("sidebar").addEventListener("click", (e) => {
@@ -494,4 +498,16 @@ function openAbout(e) {
   e.stopPropagation();
   console.log("Open about");
   // TODO: Implement about page
+}
+async function loadCreateChatGroupModal() {
+  const res = await fetch("pages/create-chat-group-modal.html");
+  const modalHTML = await res.text();
+
+  // Append modal to body
+  const tempDiv = document.createElement("div");
+  tempDiv.innerHTML = modalHTML;
+  document.body.appendChild(tempDiv.firstElementChild);
+
+  // Recreate icons
+  lucide.createIcons();
 }

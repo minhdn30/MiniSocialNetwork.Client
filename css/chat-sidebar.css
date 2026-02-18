@@ -149,8 +149,65 @@ body.chat-sidebar-open #sidebar.expanded ~ .main-content {
 
 .chat-tabs {
     display: flex;
+    justify-content: space-between;
+    align-items: center;
     padding: 0 16px;
     border-bottom: 1px solid var(--border-primary);
+}
+
+.chat-tabs-list {
+    display: flex;
+    gap: 0;
+}
+
+.chat-tabs-more-btn {
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.chat-tabs-more-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.chat-tabs-popup-menu {
+    background: var(--bg-primary);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-primary);
+    border-radius: 12px;
+    box-shadow: var(--shadow-xl);
+    padding: 8px;
+    min-width: 180px;
+    z-index: 1000;
+}
+
+.chat-popup-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.chat-popup-item:hover {
+    background: var(--bg-hover);
+}
+
+.chat-popup-item i {
+    color: var(--text-secondary);
 }
 
 .chat-tab {

@@ -1,0 +1,72 @@
+<div class="modal-overlay" id="createGroupModal">
+    <div class="modal-container cg-modal">
+        <!-- Header -->
+        <div class="modal-header cg-header">
+            <h2 class="modal-title">Create New Group</h2>
+            <button class="modal-back-btn" onclick="closeCreateChatGroupModal()">
+                <i data-lucide="x" size="22"></i>
+            </button>
+        </div>
+
+        <!-- Body: Two-Column Layout -->
+        <div class="cg-body">
+            <!-- LEFT: Group Setup + Selected Members -->
+            <div class="cg-left">
+                <!-- Avatar Upload -->
+                <div class="cg-avatar-section">
+                    <div class="cg-avatar-circle" id="cg-avatar-circle" onclick="document.getElementById('group-avatar-input').click()">
+                        <i data-lucide="users" class="cg-avatar-icon" id="cg-avatar-icon"></i>
+                        <img id="group-avatar-preview" class="cg-avatar-img hidden" alt="Group Avatar">
+                        <button type="button" class="cg-avatar-remove hidden" id="group-avatar-remove-btn" onclick="event.stopPropagation()"><i data-lucide="x" size="12"></i></button>
+                    </div>
+                    <input type="file" id="group-avatar-input" hidden accept="image/*">
+                    <span class="cg-avatar-label" onclick="document.getElementById('group-avatar-input').click()">Upload Group Photo</span>
+                </div>
+
+                <!-- Group Name -->
+                <div class="cg-field">
+                    <label class="cg-label">Group Name</label>
+                    <input type="text" class="cg-input" id="group-name-input" placeholder="e.g. Design Team 🎨">
+                </div>
+
+                <!-- Selected Members Section -->
+                <div class="cg-selected-section">
+                    <div class="cg-selected-header">
+                        <span class="cg-label">Members</span>
+                        <span class="cg-selected-count" id="cg-selected-count">0 selected</span>
+                    </div>
+                    <div class="cg-selected-chips hidden" id="selected-members-list"></div>
+                    <div class="cg-no-members-hint" id="cg-no-members-hint">
+                        <i data-lucide="user-plus" size="20"></i>
+                        <span>Select members from the right panel</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT: Search + Friend List -->
+            <div class="cg-right">
+                <div class="cg-members-header">
+                    <span class="cg-label">Add Members</span>
+                </div>
+
+                <div class="cg-field cg-search-field">
+                    <i data-lucide="search" size="16" class="cg-search-icon"></i>
+                    <input type="text" class="cg-input cg-search-input" id="member-search-input" placeholder="Search users to add...">
+                </div>
+
+                <!-- Friend List -->
+                <div class="cg-friend-list" id="friend-selection-list">
+                    <div class="cg-skeleton-item"></div>
+                    <div class="cg-skeleton-item"></div>
+                    <div class="cg-skeleton-item"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="cg-footer">
+            <button class="cg-btn-cancel" onclick="closeCreateChatGroupModal()">Cancel</button>
+            <button class="cg-btn-create" id="btn-create-group" disabled>Create Group</button>
+        </div>
+    </div>
+</div>
