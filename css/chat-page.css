@@ -1960,10 +1960,14 @@
 .chat-members-pagination {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 8px 6px;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 8px 12px 12px;
   border-top: 1px solid var(--chat-theme-border, var(--border-primary));
+  font-size: 11px;
+  color: var(--chat-theme-system-text, var(--text-tertiary));
+  text-align: center;
 }
 
 .chat-members-page-btn {

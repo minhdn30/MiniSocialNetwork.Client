@@ -347,8 +347,12 @@
                 // First joiner, actually tell server
                 return invokeOrQueue('JoinConversation', [normalizedConversationId], `join:${normalizedConversationId}`)
                     .then(res => {
+                        if (res === false) {
+                            console.warn(`⛔ [SignalR] Join denied/failed: ${normalizedConversationId}`);
+                            return false;
+                        }
                         console.log(`✅ [SignalR] Network Join: ${normalizedConversationId}`);
-                        return res;
+                        return true;
                     });
             } else {
                 console.log(`📡 [Realtime] Session Added: ${normalizedConversationId} (Total: ${newCount})`);
@@ -368,8 +372,12 @@
                 groupRefCount.delete(normalizedConversationId);
                 return invokeOrQueue('LeaveConversation', [normalizedConversationId], `leave:${normalizedConversationId}`)
                     .then(res => {
+                        if (res === false) {
+                            console.warn(`⚠️ [SignalR] Leave denied/failed: ${normalizedConversationId}`);
+                            return false;
+                        }
                         console.log(`👋 [SignalR] Network Leave: ${normalizedConversationId}`);
-                        return res;
+                        return true;
                     });
             } else {
                 groupRefCount.set(normalizedConversationId, newCount);

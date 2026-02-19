@@ -502,6 +502,14 @@
         }
         return apiFetch(url);
       },
+      getPrivateConversation: (otherId) =>
+        apiFetch(`/Conversations/private?otherId=${encodeURIComponent(otherId)}`),
+      createPrivateConversation: (otherId) =>
+        apiFetch("/Conversations/private", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ otherId }),
+        }),
       createGroup: (formData, onProgress) =>
         uploadFormDataWithProgress("/Conversations/group", formData, onProgress),
       updateNickname: (conversationId, data) =>
@@ -524,6 +532,18 @@
         }),
       updateGroupInfo: (conversationId, formData, onProgress) =>
         uploadFormDataWithProgress(`/Conversations/${conversationId}/group-info`, formData, onProgress, "PATCH"),
+      kickMember: (conversationId, targetAccountId) =>
+        apiFetch(`/Conversations/${conversationId}/members/${targetAccountId}/kick`, {
+          method: "PATCH",
+        }),
+      assignAdmin: (conversationId, targetAccountId) =>
+        apiFetch(`/Conversations/${conversationId}/members/${targetAccountId}/assign-admin`, {
+          method: "PATCH",
+        }),
+      leaveGroup: (conversationId) =>
+        apiFetch(`/Conversations/${conversationId}/leave`, {
+          method: "PATCH",
+        }),
       deleteHistory: (conversationId) => apiFetch(`/Conversations/${conversationId}/history`, { method: "DELETE" }),
       getUnreadCount: () => apiFetch('/Conversations/unread-count'),
       searchMessages: (conversationId, keyword, page = 1, pageSize = 20) =>

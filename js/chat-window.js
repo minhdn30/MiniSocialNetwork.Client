@@ -3035,14 +3035,19 @@ const ChatWindow = {
                     <span>${muteText} notifications</span>
                 </button>
                 ${
-                  !isGroup
+                  isGroup
                     ? `
+                <button class="chat-menu-item danger" onclick="ChatWindow.closeHeaderMenu(); ChatWindow.confirmLeaveGroup('${id}')">
+                    <i data-lucide="log-out"></i>
+                    <span>Leave group</span>
+                </button>
+                `
+                    : `
                 <button class="chat-menu-item danger" onclick="ChatWindow.closeHeaderMenu(); window.toastInfo('Block feature coming soon')">
                     <i data-lucide="ban"></i>
                     <span>Block</span>
                 </button>
                 `
-                    : ""
                 }
             </div>
         `;
@@ -3759,6 +3764,54 @@ const ChatWindow = {
       });
   },
 
+  updateOpenChatGroupMemberRole(conversationId, targetAccountId, isAdmin) {
+    const openId = this.getOpenChatId(conversationId) || conversationId;
+    const chat = this.openChats.get(openId);
+    if (!chat || !chat.data) return false;
+
+    const normalizedTargetId = (targetAccountId || "").toString().toLowerCase();
+    if (!normalizedTargetId) return false;
+
+    let changed = false;
+    const members = Array.isArray(chat.data.members) ? chat.data.members : [];
+    for (const member of members) {
+      const memberId = (member?.accountId || member?.AccountId || "")
+        .toString()
+        .toLowerCase();
+      if (!memberId || memberId !== normalizedTargetId) continue;
+
+      const nextRole = isAdmin ? 1 : 0;
+      if ((member.role ?? member.Role ?? 0) !== nextRole) {
+        member.role = nextRole;
+        member.Role = nextRole;
+        member.isAdmin = !!isAdmin;
+        member.IsAdmin = !!isAdmin;
+        changed = true;
+      }
+    }
+
+    return changed;
+  },
+
+  removeOpenChatGroupMember(conversationId, targetAccountId) {
+    const openId = this.getOpenChatId(conversationId) || conversationId;
+    const chat = this.openChats.get(openId);
+    if (!chat || !chat.data) return false;
+
+    const normalizedTargetId = (targetAccountId || "").toString().toLowerCase();
+    if (!normalizedTargetId || !Array.isArray(chat.data.members)) return false;
+
+    const originalLength = chat.data.members.length;
+    chat.data.members = chat.data.members.filter((member) => {
+      const memberId = (member?.accountId || member?.AccountId || "")
+        .toString()
+        .toLowerCase();
+      return memberId !== normalizedTargetId;
+    });
+
+    return chat.data.members.length !== originalLength;
+  },
+
   positionWindowMembersActionMenu(menuEl, scrollContainer) {
     if (!menuEl || !scrollContainer) return;
 
@@ -3827,18 +3880,125 @@ const ChatWindow = {
     }
 
     if (normalizedAction === "kick") {
-      if (window.toastInfo)
-        window.toastInfo(
-          `Kick ${displayName || username || "member"}: coming soon`,
-        );
+      const conversationId = this._membersModal?.conversationId || null;
+      if (!conversationId) return;
+      if (!window.API?.Conversations?.kickMember) {
+        if (window.toastError) window.toastError("Kick member API is unavailable");
+        return;
+      }
+
+      const targetLabel = (username || displayName || "member").toString().trim() || "member";
+      if (!window.ChatCommon || typeof window.ChatCommon.showConfirm !== "function") {
+        if (window.toastInfo) window.toastInfo("Confirmation popup is unavailable.");
+        return;
+      }
+
+      window.ChatCommon.showConfirm({
+        title: "Kick member?",
+        message: `Remove @${targetLabel} from this group?`,
+        confirmText: "Kick",
+        cancelText: "Cancel",
+        isDanger: true,
+        onConfirm: async () => {
+          try {
+            const res = await window.API.Conversations.kickMember(
+              conversationId,
+              targetAccountId,
+            );
+            if (!res.ok) {
+              const message = await this._readConversationApiErrorMessage(
+                res,
+                "Failed to kick member",
+              );
+              if (window.toastError) window.toastError(message);
+              return;
+            }
+
+            this.removeOpenChatGroupMember(conversationId, targetAccountId);
+            if (this._membersModal && this._membersModal.conversationId === conversationId) {
+              this._membersModal.page = 1;
+              this.loadMembersModal(this._membersModal, { reset: true });
+            }
+            if (
+              window.ChatPage &&
+              typeof window.ChatPage._removeCurrentGroupMember === "function"
+            ) {
+              window.ChatPage._removeCurrentGroupMember(targetAccountId);
+            }
+            if (
+              window.ChatPage &&
+              typeof window.ChatPage.loadMembersPanel === "function"
+            ) {
+              window.ChatPage.loadMembersPanel();
+            }
+            if (window.toastSuccess) window.toastSuccess("Member kicked");
+          } catch (error) {
+            console.error("Failed to kick member in chat-window:", error);
+            if (window.toastError) window.toastError("Failed to kick member");
+          }
+        },
+      });
       return;
     }
 
     if (normalizedAction === "assign-admin") {
-      if (window.toastInfo)
-        window.toastInfo(
-          `Assign admin for ${displayName || username || "member"}: coming soon`,
-        );
+      const conversationId = this._membersModal?.conversationId || null;
+      if (!conversationId) return;
+      if (!window.API?.Conversations?.assignAdmin) {
+        if (window.toastError) window.toastError("Assign admin API is unavailable");
+        return;
+      }
+
+      const targetLabel = (username || displayName || "member").toString().trim() || "member";
+      if (!window.ChatCommon || typeof window.ChatCommon.showConfirm !== "function") {
+        if (window.toastInfo) window.toastInfo("Confirmation popup is unavailable.");
+        return;
+      }
+
+      window.ChatCommon.showConfirm({
+        title: "Assign as admin?",
+        message: `Grant admin role to @${targetLabel}?`,
+        confirmText: "Assign",
+        cancelText: "Cancel",
+        onConfirm: async () => {
+          try {
+            const res = await window.API.Conversations.assignAdmin(
+              conversationId,
+              targetAccountId,
+            );
+            if (!res.ok) {
+              const message = await this._readConversationApiErrorMessage(
+                res,
+                "Failed to assign admin",
+              );
+              if (window.toastError) window.toastError(message);
+              return;
+            }
+
+            this.updateOpenChatGroupMemberRole(conversationId, targetAccountId, true);
+            if (this._membersModal && this._membersModal.conversationId === conversationId) {
+              this._membersModal.page = 1;
+              this.loadMembersModal(this._membersModal, { reset: true });
+            }
+            if (
+              window.ChatPage &&
+              typeof window.ChatPage._updateCurrentGroupMemberRole === "function"
+            ) {
+              window.ChatPage._updateCurrentGroupMemberRole(targetAccountId, true);
+            }
+            if (
+              window.ChatPage &&
+              typeof window.ChatPage.loadMembersPanel === "function"
+            ) {
+              window.ChatPage.loadMembersPanel();
+            }
+            if (window.toastSuccess) window.toastSuccess("Member promoted to admin");
+          } catch (error) {
+            console.error("Failed to assign admin in chat-window:", error);
+            if (window.toastError) window.toastError("Failed to assign admin");
+          }
+        },
+      });
     }
   },
 
@@ -4378,6 +4538,69 @@ const ChatWindow = {
         }
         if (window.ChatSidebar) {
           window.ChatSidebar.applyNicknameUpdate(id, accId, next);
+        }
+      },
+    });
+  },
+
+  confirmLeaveGroup(id) {
+    const openId = this.getOpenChatId(id) || id;
+    const chat = this.openChats.get(openId);
+    if (!chat || !chat.data) return;
+
+    const isGroup = !!(chat.data?.isGroup ?? chat.data?.IsGroup);
+    if (!isGroup) return;
+
+    if (!this.isGuidConversationId(openId)) {
+      if (window.toastInfo)
+        window.toastInfo("Leave is available after the group is created");
+      return;
+    }
+
+    if (!window.API?.Conversations?.leaveGroup) {
+      if (window.toastError) window.toastError("Leave group API is unavailable");
+      return;
+    }
+
+    if (!window.ChatCommon || typeof window.ChatCommon.showConfirm !== "function") {
+      if (window.toastInfo) window.toastInfo("Confirmation popup is unavailable.");
+      return;
+    }
+
+    this.closeHeaderMenu();
+    window.ChatCommon.showConfirm({
+      title: "Leave group?",
+      message: "You will no longer receive messages from this group.",
+      confirmText: "Leave",
+      cancelText: "Cancel",
+      isDanger: true,
+      onConfirm: async () => {
+        try {
+          const res = await window.API.Conversations.leaveGroup(openId);
+          if (!res.ok) {
+            const message = await this._readConversationApiErrorMessage(
+              res,
+              "Failed to leave group",
+            );
+            if (window.toastError) window.toastError(message);
+            return;
+          }
+
+          this.removeConversation(openId);
+          if (window.ChatSidebar && typeof window.ChatSidebar.removeConversation === "function") {
+            window.ChatSidebar.removeConversation(openId);
+          }
+          if (window.ChatPage && typeof window.ChatPage.applyConversationRemoved === "function") {
+            window.ChatPage.applyConversationRemoved(openId, "left");
+          }
+
+          if (typeof scheduleGlobalUnreadRefresh === "function") {
+            scheduleGlobalUnreadRefresh();
+          }
+          if (window.toastSuccess) window.toastSuccess("You left the group");
+        } catch (err) {
+          console.error("Leave group error:", err);
+          if (window.toastError) window.toastError("Failed to leave group");
         }
       },
     });
