@@ -153,6 +153,8 @@
   GROUP_CHAT_MEMBERS_PAGE_SIZE: 20, // Number of members loaded per request in group members panel
   GROUP_CHAT_INVITE_SEARCH_LIMIT: 10, // Max accounts returned per invite search request
   GROUP_CHAT_INVITE_SEARCH_DEBOUNCE_MS: 300, // Debounce delay for invite member search input
+  GROUP_CHAT_ADD_MEMBER_SEARCH_LIMIT: 10, // Max accounts returned per add-member search request
+  GROUP_CHAT_ADD_MEMBER_SEARCH_DEBOUNCE_MS: 300, // Debounce delay for add-member search input
   GROUP_NAME_MIN_LENGTH: 3, // Minimum characters for group name
   GROUP_NAME_MAX_LENGTH: 50, // Maximum characters for group name
   GROUP_CHAT_AVATAR_MAX_SIZE_MB: 5, // Max allowed group avatar upload size (MB)

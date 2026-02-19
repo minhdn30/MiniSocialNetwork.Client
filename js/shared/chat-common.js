@@ -1367,6 +1367,482 @@ const ChatCommon = {
     return "System message";
   },
 
+  showAddGroupMembersModal(options = {}) {
+    const conversationId = this.normalizeEntityId(options.conversationId || "");
+    if (!conversationId) return;
+
+    if (
+      !window.API?.Conversations?.searchAccountsForAddGroupMembers ||
+      !window.API?.Conversations?.addMembers
+    ) {
+      if (window.toastError) window.toastError("Add member API is unavailable");
+      return;
+    }
+
+    const existingOverlay = document.querySelector(".chat-add-members-overlay");
+    if (existingOverlay) {
+      existingOverlay.remove();
+      if (window.unlockScroll) window.unlockScroll();
+    }
+
+    const toSafeHtml = (value) => {
+      const raw = value === null || value === undefined ? "" : String(value);
+      if (typeof escapeHtml === "function") return escapeHtml(raw);
+      return raw
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    };
+
+    const toSafeAttr = (value) => toSafeHtml(value).replace(/`/g, "&#96;");
+
+    const normalizeAccount = (raw) => {
+      if (!raw || typeof raw !== "object") return null;
+      const accountId = this.normalizeEntityId(raw.accountId || raw.AccountId || "");
+      if (!accountId) return null;
+
+      const username = (
+        raw.username ||
+        raw.userName ||
+        raw.Username ||
+        raw.UserName ||
+        ""
+      )
+        .toString()
+        .trim();
+      const fullName = (raw.fullName || raw.FullName || "").toString().trim();
+      const avatarUrl = (
+        raw.avatarUrl ||
+        raw.AvatarUrl ||
+        raw.avatar ||
+        raw.Avatar ||
+        ""
+      )
+        .toString()
+        .trim();
+
+      return {
+        id: accountId,
+        username: username || "unknown",
+        fullName: fullName || username || "Unknown user",
+        avatarUrl: avatarUrl || window.APP_CONFIG?.DEFAULT_AVATAR,
+      };
+    };
+
+    const readErrorMessage = async (res, fallback) => {
+      let message = fallback || "Request failed";
+      if (!res) return message;
+
+      try {
+        const data = await res.json();
+        if (data && typeof data === "object") {
+          if (typeof data.message === "string" && data.message.trim()) {
+            return data.message.trim();
+          }
+          if (typeof data.title === "string" && data.title.trim()) {
+            return data.title.trim();
+          }
+        }
+      } catch (_err) {}
+
+      try {
+        const text = await res.text();
+        if (typeof text === "string" && text.trim()) {
+          message = text.trim();
+        }
+      } catch (_err) {}
+
+      return message;
+    };
+
+    const searchLimit =
+      Number(window.APP_CONFIG?.GROUP_CHAT_ADD_MEMBER_SEARCH_LIMIT) ||
+      Number(window.APP_CONFIG?.GROUP_CHAT_INVITE_SEARCH_LIMIT) ||
+      10;
+    const searchDebounceMs =
+      Number(window.APP_CONFIG?.GROUP_CHAT_ADD_MEMBER_SEARCH_DEBOUNCE_MS) ||
+      Number(window.APP_CONFIG?.GROUP_CHAT_INVITE_SEARCH_DEBOUNCE_MS) ||
+      300;
+
+    const initialExcludeIds = new Set(
+      (Array.isArray(options.excludeAccountIds) ? options.excludeAccountIds : [])
+        .map((id) => this.normalizeEntityId(id))
+        .filter(Boolean),
+    );
+
+    let selectedMembers = [];
+    let searchResults = [];
+    let searchDebounceTimer = null;
+    let searchRequestSequence = 0;
+    let isSubmitting = false;
+    let isClosed = false;
+
+    const overlay = document.createElement("div");
+    overlay.className = "chat-common-confirm-overlay chat-add-members-overlay";
+
+    const popup = document.createElement("div");
+    popup.className = "chat-common-confirm-popup chat-add-members-popup";
+    popup.innerHTML = `
+      <div class="chat-add-members-shell">
+        <div class="chat-add-members-header">
+          <h3>Add members</h3>
+          <button type="button" class="chat-add-members-close-btn" title="Close">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+        <div class="chat-add-members-selected">
+          <div class="chat-add-members-selected-header">
+            <span class="cg-label">Selected members</span>
+            <span class="chat-add-members-selected-count">0 selected</span>
+          </div>
+          <div class="cg-selected-chips hidden chat-add-members-selected-chips"></div>
+          <div class="cg-no-members-hint chat-add-members-selected-hint">
+            <i data-lucide="user-plus" size="20"></i>
+            <span>Select members from the list below</span>
+          </div>
+        </div>
+        <div class="cg-field cg-search-field chat-add-members-search-field">
+          <i data-lucide="search" size="16" class="cg-search-icon"></i>
+          <input type="text" class="cg-input cg-search-input chat-add-members-search-input" placeholder="Search users to add...">
+        </div>
+        <div class="cg-friend-list chat-add-members-list"></div>
+        <div class="chat-add-members-footer">
+          <button type="button" class="cg-btn-cancel chat-add-members-cancel-btn">Cancel</button>
+          <button type="button" class="cg-btn-create chat-add-members-submit-btn" disabled>Add members</button>
+        </div>
+      </div>
+    `;
+
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
+
+    if (window.lockScroll) window.lockScroll();
+    if (window.lucide) lucide.createIcons({ container: popup });
+    requestAnimationFrame(() => overlay.classList.add("show"));
+
+    const closeBtn = popup.querySelector(".chat-add-members-close-btn");
+    const cancelBtn = popup.querySelector(".chat-add-members-cancel-btn");
+    const submitBtn = popup.querySelector(".chat-add-members-submit-btn");
+    const countEl = popup.querySelector(".chat-add-members-selected-count");
+    const chipsEl = popup.querySelector(".chat-add-members-selected-chips");
+    const hintEl = popup.querySelector(".chat-add-members-selected-hint");
+    const searchInput = popup.querySelector(".chat-add-members-search-input");
+    const listEl = popup.querySelector(".chat-add-members-list");
+
+    const closeModal = () => {
+      if (isClosed) return;
+      isClosed = true;
+
+      if (searchDebounceTimer) {
+        clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = null;
+      }
+
+      overlay.classList.remove("show");
+      if (window.unlockScroll) window.unlockScroll();
+      setTimeout(() => {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      }, 200);
+    };
+
+    const mergeAccounts = (priorityAccounts, apiAccounts) => {
+      const merged = [];
+      const seen = new Set();
+      [...(priorityAccounts || []), ...(apiAccounts || [])].forEach((account) => {
+        if (!account || !account.id) return;
+        if (seen.has(account.id)) return;
+        seen.add(account.id);
+        merged.push(account);
+      });
+      return merged;
+    };
+
+    const accountMatchesKeyword = (account, keyword) => {
+      const normalizedKeyword = (keyword || "").toString().trim().toLowerCase();
+      if (!normalizedKeyword) return true;
+
+      return (
+        (account?.username || "").toLowerCase().includes(normalizedKeyword) ||
+        (account?.fullName || "").toLowerCase().includes(normalizedKeyword)
+      );
+    };
+
+    const renderSelectedMembers = () => {
+      if (countEl) {
+        countEl.textContent = `${selectedMembers.length} selected`;
+      }
+
+      if (!chipsEl || !hintEl || !submitBtn) return;
+
+      submitBtn.disabled = isSubmitting || selectedMembers.length === 0;
+      submitBtn.textContent = isSubmitting ? "Adding..." : "Add members";
+
+      if (!selectedMembers.length) {
+        chipsEl.classList.add("hidden");
+        chipsEl.innerHTML = "";
+        hintEl.classList.remove("hidden");
+        return;
+      }
+
+      hintEl.classList.add("hidden");
+      chipsEl.classList.remove("hidden");
+      chipsEl.innerHTML = selectedMembers
+        .map(
+          (member) => `
+            <div class="cg-chip">
+              <span class="cg-chip-username">${toSafeHtml(member.username)}</span>
+              <button type="button" class="cg-chip-remove" data-account-id="${toSafeAttr(member.id)}">
+                <i data-lucide="x" size="10"></i>
+              </button>
+            </div>
+          `,
+        )
+        .join("");
+
+      if (window.lucide) lucide.createIcons({ container: chipsEl });
+      setTimeout(() => {
+        chipsEl.scrollLeft = chipsEl.scrollWidth;
+      }, 40);
+    };
+
+    const renderLoadingState = () => {
+      if (!listEl) return;
+      listEl.innerHTML = `
+        <div class="cg-skeleton-item"></div>
+        <div class="cg-skeleton-item"></div>
+        <div class="cg-skeleton-item"></div>
+      `;
+    };
+
+    const renderEmptyState = (message) => {
+      if (!listEl) return;
+      listEl.innerHTML = `<div class="cg-empty-state">${toSafeHtml(message || "No results")}</div>`;
+    };
+
+    const renderSearchResults = (accounts, keyword) => {
+      if (!listEl) return;
+
+      if (!Array.isArray(accounts) || accounts.length === 0) {
+        if ((keyword || "").trim().length === 1) {
+          renderEmptyState("Type at least 2 characters to search");
+          return;
+        }
+
+        if ((keyword || "").trim().length === 0) {
+          renderEmptyState("No recent contacts available");
+          return;
+        }
+
+        renderEmptyState("No matching users found");
+        return;
+      }
+
+      listEl.innerHTML = accounts
+        .map((account) => {
+          const isSelected = selectedMembers.some((member) => member.id === account.id);
+          const avatar = account.avatarUrl || window.APP_CONFIG?.DEFAULT_AVATAR;
+
+          return `
+            <div class="cg-friend-item ${isSelected ? "selected" : ""}"
+                 data-account-id="${toSafeAttr(account.id)}"
+                 data-username="${toSafeAttr(account.username)}"
+                 data-fullname="${toSafeAttr(account.fullName)}"
+                 data-avatar="${toSafeAttr(account.avatarUrl || "")}">
+              <img src="${toSafeAttr(avatar)}" alt="" onerror="this.src='${window.APP_CONFIG?.DEFAULT_AVATAR}'">
+              <div class="cg-friend-info">
+                <div class="cg-friend-username">${toSafeHtml(account.username)}</div>
+                <div class="cg-friend-name">${toSafeHtml(account.fullName)}</div>
+              </div>
+              <div class="cg-checkbox">
+                <i data-lucide="check" size="14"></i>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+
+      if (window.lucide) lucide.createIcons({ container: listEl });
+    };
+
+    const toggleSelectedMember = (account) => {
+      if (!account?.id) return;
+      const existingIndex = selectedMembers.findIndex((member) => member.id === account.id);
+      if (existingIndex >= 0) {
+        selectedMembers.splice(existingIndex, 1);
+      } else {
+        selectedMembers.push(account);
+      }
+
+      renderSelectedMembers();
+      renderSearchResults(searchResults, searchInput?.value || "");
+    };
+
+    const searchAccounts = async (keyword, { showLoading = true } = {}) => {
+      const normalizedKeyword = (keyword || "").toString().trim();
+      if (!listEl) return;
+
+      if (normalizedKeyword.length === 1) {
+        renderEmptyState("Type at least 2 characters to search");
+        return;
+      }
+
+      const requestSequence = ++searchRequestSequence;
+      if (showLoading) renderLoadingState();
+
+      try {
+        const excludeAccountIds = Array.from(
+          new Set([
+            ...Array.from(initialExcludeIds),
+            ...selectedMembers.map((member) => member.id),
+          ]),
+        );
+
+        const res = await window.API.Conversations.searchAccountsForAddGroupMembers(
+          conversationId,
+          normalizedKeyword,
+          excludeAccountIds,
+          searchLimit,
+        );
+
+        if (requestSequence !== searchRequestSequence) return;
+
+        if (!res.ok) {
+          const message = await readErrorMessage(res, "Failed to search members");
+          renderEmptyState(message);
+          return;
+        }
+
+        const data = await res.json();
+        const apiAccounts = (Array.isArray(data) ? data : [])
+          .map((item) => normalizeAccount(item))
+          .filter(Boolean);
+
+        const selectedMatches = selectedMembers.filter((account) =>
+          accountMatchesKeyword(account, normalizedKeyword),
+        );
+
+        searchResults = mergeAccounts(selectedMatches, apiAccounts);
+        renderSearchResults(searchResults, normalizedKeyword);
+      } catch (error) {
+        if (requestSequence !== searchRequestSequence) return;
+        console.error("Failed to search group add-member accounts:", error);
+        renderEmptyState("Could not connect to server");
+      }
+    };
+
+    const submitAddMembers = async () => {
+      if (isSubmitting || !submitBtn) return;
+      const selectedIds = Array.from(
+        new Set(selectedMembers.map((member) => member.id).filter(Boolean)),
+      );
+      if (!selectedIds.length) {
+        if (window.toastWarning) window.toastWarning("Please select at least one member");
+        return;
+      }
+
+      isSubmitting = true;
+      renderSelectedMembers();
+
+      try {
+        const res = await window.API.Conversations.addMembers(conversationId, selectedIds);
+        if (!res.ok) {
+          const message = await readErrorMessage(res, "Failed to add members");
+          if (window.toastError) window.toastError(message);
+          return;
+        }
+
+        if (typeof options.onSuccess === "function") {
+          await options.onSuccess({
+            conversationId,
+            memberIds: selectedIds,
+            members: selectedMembers.slice(),
+          });
+        }
+
+        if (window.toastSuccess) {
+          const count = selectedIds.length;
+          window.toastSuccess(
+            count === 1 ? "Member added to group" : `${count} members added to group`,
+          );
+        }
+
+        closeModal();
+      } catch (error) {
+        console.error("Failed to add group members:", error);
+        if (window.toastError) window.toastError("Failed to add members");
+      } finally {
+        isSubmitting = false;
+        renderSelectedMembers();
+      }
+    };
+
+    if (closeBtn) closeBtn.onclick = closeModal;
+    if (cancelBtn) cancelBtn.onclick = closeModal;
+    if (submitBtn) submitBtn.onclick = submitAddMembers;
+
+    overlay.onclick = (event) => {
+      if (event.target === overlay) {
+        closeModal();
+      }
+    };
+
+    if (chipsEl) {
+      chipsEl.onclick = (event) => {
+        const removeBtn = event.target.closest(".cg-chip-remove");
+        if (!removeBtn) return;
+
+        const accountId = this.normalizeEntityId(removeBtn.dataset.accountId || "");
+        if (!accountId) return;
+        const member = selectedMembers.find((item) => item.id === accountId);
+        if (!member) return;
+        toggleSelectedMember(member);
+      };
+    }
+
+    if (listEl) {
+      listEl.onclick = (event) => {
+        const item = event.target.closest(".cg-friend-item");
+        if (!item) return;
+
+        const account = normalizeAccount({
+          accountId: item.dataset.accountId || "",
+          username: item.dataset.username || "",
+          fullName: item.dataset.fullname || "",
+          avatarUrl: item.dataset.avatar || "",
+        });
+        if (!account) return;
+        toggleSelectedMember(account);
+      };
+    }
+
+    if (searchInput) {
+      searchInput.oninput = () => {
+        const keyword = (searchInput.value || "").trim();
+        if (searchDebounceTimer) {
+          clearTimeout(searchDebounceTimer);
+          searchDebounceTimer = null;
+        }
+
+        if (keyword.length === 1) {
+          renderEmptyState("Type at least 2 characters to search");
+          return;
+        }
+
+        const waitMs = keyword.length === 0 ? 0 : searchDebounceMs;
+        searchDebounceTimer = setTimeout(() => {
+          searchAccounts(keyword, { showLoading: true });
+        }, waitMs);
+      };
+    }
+
+    renderSelectedMembers();
+    renderLoadingState();
+    searchAccounts("", { showLoading: true });
+    setTimeout(() => searchInput?.focus(), 80);
+  },
+
   /**
    * Normalize a conversation member object to one consistent shape.
    * @param {Object} member

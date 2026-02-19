@@ -2387,7 +2387,46 @@ const ChatPage = {
         const root = scopeEl || document;
         root.querySelectorAll('.chat-members-actions-menu.show').forEach((menuEl) => {
             menuEl.classList.remove('show');
+            menuEl.classList.remove('is-dropup', 'is-align-left');
+            menuEl.style.maxHeight = '';
         });
+    },
+
+    _positionMembersActionMenu(menuEl, scrollContainer) {
+        if (!menuEl || !scrollContainer) return;
+
+        menuEl.classList.remove('is-dropup', 'is-align-left');
+        menuEl.style.maxHeight = '';
+
+        const safePadding = 8;
+        const containerRect = scrollContainer.getBoundingClientRect();
+        if (!containerRect || containerRect.height <= 0) return;
+
+        let menuRect = menuEl.getBoundingClientRect();
+        if (!menuRect || menuRect.height <= 0) return;
+
+        const visibleBottom = containerRect.bottom - safePadding;
+        const visibleTop = containerRect.top + safePadding;
+        const overflowBottom = menuRect.bottom - visibleBottom;
+
+        if (overflowBottom > 0) {
+            menuEl.classList.add('is-dropup');
+            menuRect = menuEl.getBoundingClientRect();
+
+            if (menuRect.top < visibleTop) {
+                const triggerRect = menuEl.parentElement?.getBoundingClientRect?.() || menuRect;
+                const availableAbove = Math.floor(triggerRect.top - visibleTop - 4);
+                if (availableAbove > 90) {
+                    menuEl.style.maxHeight = `${availableAbove}px`;
+                }
+            }
+        }
+
+        menuRect = menuEl.getBoundingClientRect();
+        const overflowLeft = containerRect.left + safePadding - menuRect.left;
+        if (overflowLeft > 0) {
+            menuEl.classList.add('is-align-left');
+        }
     },
 
     _updateCurrentGroupMemberRole(targetAccountId, isAdmin) {
@@ -2538,6 +2577,68 @@ const ChatPage = {
         return true;
     },
 
+    _collectCurrentGroupMemberIds() {
+        const ids = new Set();
+        const pushId = (rawId) => {
+            const normalized = (rawId || '').toString().toLowerCase().trim();
+            if (normalized) ids.add(normalized);
+        };
+
+        const memberSources = [
+            this.currentMetaData?.members,
+            this.currentMetaData?.Members,
+        ];
+
+        memberSources.forEach((members) => {
+            if (!Array.isArray(members)) return;
+            members.forEach((member) => {
+                pushId(member?.accountId || member?.AccountId);
+            });
+        });
+
+        const panelItems = this._membersPanel?.items;
+        if (Array.isArray(panelItems)) {
+            panelItems.forEach((member) => {
+                pushId(member?.accountId || member?.AccountId);
+            });
+        }
+
+        const myId = (localStorage.getItem('accountId') || '').toLowerCase().trim();
+        if (myId) ids.add(myId);
+
+        return Array.from(ids);
+    },
+
+    openAddMembersModal() {
+        const conversationId = (this.currentChatId || '').toString().toLowerCase();
+        if (!conversationId) return;
+
+        const isGroup = !!(this.currentMetaData?.isGroup ?? this.currentMetaData?.IsGroup);
+        if (!isGroup) {
+            if (window.toastInfo) window.toastInfo('Add member is only available for group chats');
+            return;
+        }
+
+        if (!window.ChatCommon || typeof window.ChatCommon.showAddGroupMembersModal !== 'function') {
+            if (window.toastError) window.toastError('Add member modal is unavailable');
+            return;
+        }
+
+        const excludedIds = this._collectCurrentGroupMemberIds();
+
+        window.ChatCommon.showAddGroupMembersModal({
+            conversationId,
+            excludeAccountIds: excludedIds,
+            onSuccess: async () => {
+                await this.loadMembersPanel({ reset: true });
+
+                if (window.ChatWindow && typeof window.ChatWindow.refreshMembersModal === 'function') {
+                    window.ChatWindow.refreshMembersModal(conversationId);
+                }
+            }
+        });
+    },
+
     async _handleMembersAction(action, accountId, displayName, username) {
         const normalizedAction = (action || '').toString().toLowerCase();
         const targetAccountId = (accountId || '').toString().toLowerCase();
@@ -2663,7 +2764,13 @@ const ChatPage = {
 
                 const isOpening = !menuEl.classList.contains('show');
                 this._closeMembersActionMenus(resultsEl);
-                if (isOpening) menuEl.classList.add('show');
+                if (isOpening) {
+                    menuEl.classList.add('show');
+                    requestAnimationFrame(() => {
+                        if (!menuEl.classList.contains('show')) return;
+                        this._positionMembersActionMenu(menuEl, resultsEl);
+                    });
+                }
             };
         });
 
@@ -2687,6 +2794,7 @@ const ChatPage = {
 
         const state = this._membersPanel;
         resultsEl.onscroll = () => {
+            this._closeMembersActionMenus(resultsEl);
             if (!state) return;
             state.scrollTop = resultsEl.scrollTop;
             if (state.isLoading || !state.hasMore) return;
@@ -2996,7 +3104,7 @@ const ChatPage = {
         const addBtn = infoContent.querySelector('#chat-members-add-btn');
         if (addBtn) {
             addBtn.onclick = () => {
-                if (window.toastInfo) window.toastInfo('Add member modal will be implemented next');
+                this.openAddMembersModal();
             };
         }
 

@@ -4071,8 +4071,7 @@ const ChatWindow = {
     const addBtn = popup.querySelector(".chat-window-members-add-btn");
     if (addBtn) {
       addBtn.onclick = () => {
-        if (window.toastInfo)
-          window.toastInfo("Add member modal will be implemented next");
+        this.openAddMembersModal(state.conversationId);
       };
     }
   },
@@ -4480,6 +4479,82 @@ const ChatWindow = {
     if ((this._membersModal.conversationId || "").toLowerCase() !== normalizedConversationId)
       return;
     this.loadMembersModal(this._membersModal, { reset: true });
+  },
+
+  collectGroupMemberIdsForConversation(conversationId) {
+    const normalizedConversationId = (conversationId || "").toString().toLowerCase();
+    const ids = new Set();
+    const pushId = (rawId) => {
+      const normalized = (rawId || "").toString().toLowerCase().trim();
+      if (normalized) ids.add(normalized);
+    };
+
+    const chat = this.openChats.get(normalizedConversationId);
+    const chatMembers = chat?.data?.members;
+    if (Array.isArray(chatMembers)) {
+      chatMembers.forEach((member) => {
+        pushId(member?.accountId || member?.AccountId);
+      });
+    }
+
+    if (
+      this._membersModal &&
+      (this._membersModal.conversationId || "").toLowerCase() === normalizedConversationId &&
+      Array.isArray(this._membersModal.items)
+    ) {
+      this._membersModal.items.forEach((member) => {
+        pushId(member?.accountId || member?.AccountId);
+      });
+    }
+
+    const myId = (localStorage.getItem("accountId") || "").toLowerCase().trim();
+    if (myId) ids.add(myId);
+
+    return Array.from(ids);
+  },
+
+  openAddMembersModal(conversationId) {
+    const openId = (this.getOpenChatId(conversationId) || conversationId || "")
+      .toString()
+      .toLowerCase();
+    if (!openId) return;
+
+    const chat = this.openChats.get(openId);
+    if (!chat || !chat.data) return;
+
+    const isGroup = !!(chat.data?.isGroup ?? chat.data?.IsGroup);
+    if (!isGroup) {
+      if (window.toastInfo) window.toastInfo("Add member is only available for group chats");
+      return;
+    }
+
+    if (!window.ChatCommon || typeof window.ChatCommon.showAddGroupMembersModal !== "function") {
+      if (window.toastError) window.toastError("Add member modal is unavailable");
+      return;
+    }
+
+    this.closeHeaderMenu();
+
+    window.ChatCommon.showAddGroupMembersModal({
+      conversationId: openId,
+      excludeAccountIds: this.collectGroupMemberIdsForConversation(openId),
+      onSuccess: async () => {
+        if (
+          this._membersModal &&
+          (this._membersModal.conversationId || "").toLowerCase() === openId
+        ) {
+          this.loadMembersModal(this._membersModal, { reset: true });
+        }
+
+        if (
+          window.ChatPage &&
+          (window.ChatPage.currentChatId || "").toLowerCase() === openId &&
+          typeof window.ChatPage.loadMembersPanel === "function"
+        ) {
+          window.ChatPage.loadMembersPanel({ reset: true });
+        }
+      },
+    });
   },
 
   promptEditNicknames(id) {
