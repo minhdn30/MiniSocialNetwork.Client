@@ -59,8 +59,27 @@ async function startChatHub() {
     console.warn("🔄 ChatHub reconnecting...");
   });
 
-  chatConnection.onreconnected(() => {
-    console.log("✅ ChatHub reconnected");
+  chatConnection.onreconnected((connectionId) => {
+    const normalizedConnectionId = (connectionId || "").toString();
+    console.log("✅ ChatHub reconnected", normalizedConnectionId);
+
+    // Let modules hook into reconnect lifecycle without depending on signalr.js internals.
+    window.dispatchEvent(
+      new CustomEvent("chat:hub-reconnected", {
+        detail: { connectionId: normalizedConnectionId },
+      }),
+    );
+
+    if (
+      window.ChatRealtime &&
+      typeof window.ChatRealtime.rejoinActiveConversations === "function"
+    ) {
+      window.ChatRealtime
+        .rejoinActiveConversations("signalr.js.onreconnected")
+        .catch((err) => {
+          console.warn("⚠️ ChatHub rejoin from signalr.js failed:", err);
+        });
+    }
   });
 
   chatConnection.onclose(async (err) => {

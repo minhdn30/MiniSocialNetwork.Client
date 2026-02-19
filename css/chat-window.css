@@ -166,7 +166,8 @@ body.is-dragging-chat #chat-windows-stack {
     flex-shrink: 0;
 }
 
-.chat-header-avatar img {
+.chat-header-avatar img,
+.chat-header-avatar .default-group-avatar {
     width: 32px;
     height: 32px;
     border-radius: 50%;
@@ -307,7 +308,8 @@ body.is-dragging-chat #chat-windows-stack {
     transform: translateY(-50%) translateX(0);
 }
 
-.chat-bubble img {
+.chat-bubble img,
+.chat-bubble .default-group-avatar {
     width: 100%;
     height: 100%;
     border-radius: 50%;
@@ -416,7 +418,8 @@ body.is-dragging-chat #chat-windows-stack {
     height: 24px;
 }
 
-.chat-box .msg-avatar img {
+.chat-box .msg-avatar img,
+.chat-box .msg-avatar .default-group-avatar {
     width: 24px;
     height: 24px;
 }
@@ -427,7 +430,7 @@ body.is-dragging-chat #chat-windows-stack {
 
 .chat-box .msg-author {
     font-size: 11px;
-    padding-left: 32px; /* 24px avatar + 8px gap */
+    padding-left: 38px; /* 24px avatar + 8px gap + 6px offset */
 }
 
 .chat-box .msg-row {

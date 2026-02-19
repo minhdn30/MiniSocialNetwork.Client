@@ -14,6 +14,7 @@ const ChatWindow = {
   _seenUnsub: null,
   _typingUnsub: null,
   _themeUnsub: null,
+  _groupInfoUnsub: null,
   _themeModeEvent: null,
   _themeModeHandler: null,
   _initialized: false,
@@ -340,6 +341,10 @@ const ChatWindow = {
       this._themeUnsub();
       this._themeUnsub = null;
     }
+    if (typeof this._groupInfoUnsub === "function") {
+      this._groupInfoUnsub();
+      this._groupInfoUnsub = null;
+    }
 
     this._messageUnsub = window.ChatRealtime.onMessage((msg) =>
       this.handleRealtimeMessage(msg),
@@ -355,6 +360,11 @@ const ChatWindow = {
     if (typeof window.ChatRealtime.onTheme === "function") {
       this._themeUnsub = window.ChatRealtime.onTheme((data) =>
         this.handleThemeEvent(data),
+      );
+    }
+    if (typeof window.ChatRealtime.onGroupInfo === "function") {
+      this._groupInfoUnsub = window.ChatRealtime.onGroupInfo((data) =>
+        this.handleGroupInfoEvent(data),
       );
     }
     this.rejoinAllRealtimeConversations();
@@ -1848,7 +1858,7 @@ const ChatWindow = {
                      onclick="event.stopPropagation(); ChatWindow.toggleHeaderMenu(this, '${conv.conversationId}')" 
                      style="cursor: pointer;">
                     <div class="chat-header-avatar">
-                        <img src="${avatar}" alt="${name}" onerror="this.src='${APP_CONFIG.DEFAULT_AVATAR}'">
+                        ${ChatCommon.renderAvatar(conv)}
                         ${!conv.isGroup && conv.otherMember?.isActive ? '<div class="chat-header-status"></div>' : ""}
                     </div>
                     <div class="chat-header-text">
@@ -1873,7 +1883,7 @@ const ChatWindow = {
                     <div class="typing-message-shell received msg-group-single">
                         <div class="msg-row">
                             <div class="msg-avatar">
-                                <img class="typing-avatar" src="${APP_CONFIG.DEFAULT_AVATAR}" alt="typing avatar">
+                                ${ChatCommon.renderAvatar({ isGroup: true, displayAvatar: null }, { className: 'typing-avatar' })}
                             </div>
                             <div class="msg-bubble typing-bubble" aria-label="Typing">
                                 <span class="typing-dots">
@@ -2015,7 +2025,7 @@ const ChatWindow = {
     const escapedName = escapeHtml(name);
 
     bubble.innerHTML = `
-            <img src="${avatar}" alt="${escapedName}" onerror="this.src='${APP_CONFIG.DEFAULT_AVATAR}'">
+            ${ChatCommon.renderAvatar(data)}
             <div class="chat-bubble-name">${escapedName}</div>
             ${!data.isGroup && data.otherMember?.isActive ? '<div class="chat-bubble-status"></div>' : ""}
             <button class="chat-bubble-close" title="Close" onclick="event.stopPropagation(); ChatWindow.closeChat('${id}')">
@@ -2648,6 +2658,153 @@ const ChatWindow = {
     ) {
       window.ChatPage.applyThemeStatus(conversationId, theme);
     }
+  },
+
+  handleGroupInfoEvent(data) {
+    const conversationId = (data?.conversationId || data?.ConversationId || "")
+      .toString()
+      .toLowerCase();
+    if (!conversationId) return;
+
+    const rawName = data?.conversationName ?? data?.ConversationName;
+    const hasNameInput =
+      typeof rawName === "string" && rawName.trim().length > 0;
+    const nextConversationName = hasNameInput ? rawName.trim() : null;
+
+    const hasAvatarInput = !!(
+      data?.hasConversationAvatarField ||
+      Object.prototype.hasOwnProperty.call(data || {}, "conversationAvatar")
+    );
+    const rawAvatar = data?.conversationAvatar ?? data?.ConversationAvatar;
+    const nextConversationAvatar = hasAvatarInput
+      ? typeof rawAvatar === "string" && rawAvatar.trim().length > 0
+        ? rawAvatar.trim()
+        : null
+      : null;
+
+    this.applyGroupConversationInfoUpdate(conversationId, {
+      conversationName: nextConversationName,
+      hasConversationAvatarField: hasAvatarInput,
+      conversationAvatar: nextConversationAvatar,
+    });
+
+    if (
+      window.ChatSidebar &&
+      typeof window.ChatSidebar.applyGroupConversationInfoUpdate === "function"
+    ) {
+      window.ChatSidebar.applyGroupConversationInfoUpdate(conversationId, {
+        conversationName: nextConversationName,
+        hasConversationAvatarField: hasAvatarInput,
+        conversationAvatar: nextConversationAvatar,
+      });
+    }
+
+    if (
+      window.ChatPage &&
+      typeof window.ChatPage.applyGroupConversationInfoUpdate === "function"
+    ) {
+      window.ChatPage.applyGroupConversationInfoUpdate(conversationId, {
+        conversationName: nextConversationName,
+        hasConversationAvatarField: hasAvatarInput,
+        conversationAvatar: nextConversationAvatar,
+      });
+    }
+  },
+
+  applyGroupConversationInfoUpdate(conversationId, payload = {}) {
+    const openId = this.getOpenChatId(conversationId) || conversationId;
+    const chat = this.openChats.get(openId);
+    if (!chat || !chat.data || !chat.data.isGroup) return false;
+
+    const hasNameInput =
+      typeof payload?.conversationName === "string" &&
+      payload.conversationName.trim().length > 0;
+    const nextConversationName = hasNameInput
+      ? payload.conversationName.trim()
+      : null;
+
+    const hasAvatarInput = !!(
+      payload?.hasConversationAvatarField ||
+      Object.prototype.hasOwnProperty.call(payload || {}, "conversationAvatar")
+    );
+    const nextConversationAvatar = hasAvatarInput
+      ? typeof payload?.conversationAvatar === "string" &&
+        payload.conversationAvatar.trim().length > 0
+        ? payload.conversationAvatar.trim()
+        : null
+      : null;
+
+    let changed = false;
+
+    if (hasNameInput) {
+      const currentDisplayName =
+        chat.data.displayName ?? chat.data.DisplayName ?? null;
+      const currentConversationName =
+        chat.data.conversationName ?? chat.data.ConversationName ?? null;
+      if (
+        currentDisplayName !== nextConversationName ||
+        currentConversationName !== nextConversationName
+      ) {
+        chat.data.conversationName = nextConversationName;
+        chat.data.ConversationName = nextConversationName;
+        chat.data.displayName = nextConversationName;
+        chat.data.DisplayName = nextConversationName;
+        changed = true;
+      }
+    }
+
+    if (hasAvatarInput) {
+      const currentDisplayAvatar =
+        chat.data.displayAvatar ?? chat.data.DisplayAvatar ?? null;
+      const currentConversationAvatar =
+        chat.data.conversationAvatar ?? chat.data.ConversationAvatar ?? null;
+      if (
+        currentDisplayAvatar !== nextConversationAvatar ||
+        currentConversationAvatar !== nextConversationAvatar
+      ) {
+        chat.data.conversationAvatar = nextConversationAvatar;
+        chat.data.ConversationAvatar = nextConversationAvatar;
+        chat.data.displayAvatar = nextConversationAvatar;
+        chat.data.DisplayAvatar = nextConversationAvatar;
+        changed = true;
+      }
+    }
+
+    if (!changed) return false;
+
+    if (chat.element) {
+      const nameEl = chat.element.querySelector(".chat-header-name");
+      if (nameEl) {
+        nameEl.textContent = ChatCommon.getDisplayName(chat.data);
+      }
+
+      const subtextEl = chat.element.querySelector(".chat-header-subtext");
+      if (subtextEl && chat.data.isGroup) {
+        subtextEl.textContent = "Group Chat";
+      }
+
+      const avatarContainer = chat.element.querySelector(".chat-header-avatar");
+      if (avatarContainer) {
+        avatarContainer.innerHTML = ChatCommon.renderAvatar(chat.data);
+        if (window.lucide) lucide.createIcons({ container: avatarContainer });
+      }
+    }
+
+    const bubble = chat.bubbleElement || document.getElementById(`chat-bubble-${openId}`);
+    if (bubble) {
+      const nameEl = bubble.querySelector(".chat-bubble-name");
+      if (nameEl) {
+        nameEl.textContent = ChatCommon.getDisplayName(chat.data);
+      }
+      const avatarEl = bubble.querySelector(".chat-avatar");
+      if (avatarEl) {
+        avatarEl.outerHTML = ChatCommon.renderAvatar(chat.data);
+      }
+      if (window.lucide) lucide.createIcons({ container: bubble });
+    }
+
+    this.saveState();
+    return true;
   },
 
   handleInput(field, id) {
@@ -3484,9 +3641,7 @@ const ChatWindow = {
               const subtextEl = chat.element.querySelector(
                 ".chat-header-subtext",
               );
-              const imgEl = chat.element.querySelector(
-                ".chat-header-avatar img",
-              );
+              const avatarContainer = chat.element.querySelector(".chat-header-avatar");
 
               if (nameEl)
                 nameEl.textContent = ChatCommon.getDisplayName(data.metaData);
@@ -3496,7 +3651,11 @@ const ChatWindow = {
                   : data.metaData.otherMember?.isActive
                     ? "Online"
                     : "Offline";
-              if (imgEl) imgEl.src = ChatCommon.getAvatar(data.metaData);
+              if (avatarContainer) {
+                const statusDot = avatarContainer.querySelector('.chat-header-status');
+                avatarContainer.innerHTML = ChatCommon.renderAvatar(data.metaData) + (statusDot ? statusDot.outerHTML : '');
+                if (window.lucide) lucide.createIcons({ container: avatarContainer });
+              }
             }
           }
           setTimeout(

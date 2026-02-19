@@ -516,6 +516,8 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ theme: theme ?? null }),
         }),
+      updateGroupInfo: (conversationId, formData, onProgress) =>
+        uploadFormDataWithProgress(`/Conversations/${conversationId}/group-info`, formData, onProgress, "PATCH"),
       deleteHistory: (conversationId) => apiFetch(`/Conversations/${conversationId}/history`, { method: "DELETE" }),
       getUnreadCount: () => apiFetch('/Conversations/unread-count'),
       searchMessages: (conversationId, keyword, page = 1, pageSize = 20) =>

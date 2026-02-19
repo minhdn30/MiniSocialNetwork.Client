@@ -232,6 +232,9 @@
         }
 
         el.classList.add('active');
+        if (global.lucide) {
+            global.lucide.createIcons({ container: el });
+        }
         if (shouldStickBottom) {
             pinToBottom(msgContainer);
         }

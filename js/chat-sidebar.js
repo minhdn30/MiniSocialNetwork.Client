@@ -543,7 +543,6 @@ const ChatSidebar = {
         const myId = (localStorage.getItem('accountId') || '').toLowerCase();
 
         const html = items.map(conv => {
-            const avatar = ChatCommon.getAvatar(conv);
             const name = escapeHtml(ChatCommon.getDisplayName(conv));
             
             // --- Improved Last Message Preview ---
@@ -602,7 +601,7 @@ const ChatSidebar = {
                      ondragstart="ChatSidebar.handleDragStart(event, '${conv.conversationId}')"
                      ondragend="ChatSidebar.handleDragEnd()">
                     <div class="chat-avatar-wrapper">
-                        <img src="${avatar}" alt="${name}" class="chat-avatar" onerror="this.src='${APP_CONFIG.DEFAULT_AVATAR}'">
+                        ${ChatCommon.renderAvatar(conv, { name, className: 'chat-avatar' })}
                         ${isOnline ? '<div class="chat-status-dot"></div>' : ''}
                     </div>
                     <div class="chat-info">
@@ -715,6 +714,55 @@ const ChatSidebar = {
             this.renderConversations(this.conversations, false);
         }
 
+        return changed;
+    },
+
+    applyGroupConversationInfoUpdate(conversationId, payload = {}, options = {}) {
+        const target = (conversationId || '').toLowerCase();
+        if (!target) return false;
+
+        const hasNameInput = typeof payload?.conversationName === 'string' && payload.conversationName.trim().length > 0;
+        const nextConversationName = hasNameInput ? payload.conversationName.trim() : null;
+        const hasAvatarInput = !!(payload?.hasConversationAvatarField || Object.prototype.hasOwnProperty.call(payload || {}, 'conversationAvatar'));
+        const nextConversationAvatar = hasAvatarInput
+            ? ((typeof payload?.conversationAvatar === 'string' && payload.conversationAvatar.trim().length > 0)
+                ? payload.conversationAvatar.trim()
+                : null)
+            : null;
+
+        let changed = false;
+        this.conversations.forEach(conv => {
+            if ((conv.conversationId || '').toLowerCase() !== target) return;
+            if (!conv.isGroup) return;
+
+            if (hasNameInput) {
+                const currentDisplayName = conv.displayName ?? conv.DisplayName ?? null;
+                const currentConversationName = conv.conversationName ?? conv.ConversationName ?? null;
+                if (currentDisplayName !== nextConversationName || currentConversationName !== nextConversationName) {
+                    conv.conversationName = nextConversationName;
+                    conv.ConversationName = nextConversationName;
+                    conv.displayName = nextConversationName;
+                    conv.DisplayName = nextConversationName;
+                    changed = true;
+                }
+            }
+
+            if (hasAvatarInput) {
+                const currentDisplayAvatar = conv.displayAvatar ?? conv.DisplayAvatar ?? null;
+                const currentConversationAvatar = conv.conversationAvatar ?? conv.ConversationAvatar ?? null;
+                if (currentDisplayAvatar !== nextConversationAvatar || currentConversationAvatar !== nextConversationAvatar) {
+                    conv.conversationAvatar = nextConversationAvatar;
+                    conv.ConversationAvatar = nextConversationAvatar;
+                    conv.displayAvatar = nextConversationAvatar;
+                    conv.DisplayAvatar = nextConversationAvatar;
+                    changed = true;
+                }
+            }
+        });
+
+        if (changed || options.forceRender) {
+            this.renderConversations(this.conversations, false);
+        }
         return changed;
     },
 
