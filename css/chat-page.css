@@ -265,10 +265,10 @@
   z-index: 1000;
   width: 300px;
   height: 350px;
-  background: transparent;
+  background: var(--chat-theme-surface, var(--bg-primary));
   border-radius: 12px;
-  box-shadow: none;
-  border: none;
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--chat-theme-border, var(--border-primary));
   opacity: 0;
   visibility: hidden;
   transition:
@@ -291,8 +291,19 @@
   display: block;
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid var(--chat-theme-border, var(--border-primary)) !important;
-  box-shadow: var(--shadow-xl) !important;
+  border: none !important;
+  box-shadow: none !important;
+  --background: var(--chat-theme-surface, var(--bg-primary)) !important;
+  --border-color: var(--chat-theme-border, var(--border-primary)) !important;
+  --button-active-background: var(--chat-theme-action-hover-bg, var(--bg-hover)) !important;
+  --button-hover-background: var(--chat-theme-action-hover-bg, var(--bg-hover)) !important;
+  --indicator-color: var(--accent-primary, #0095f6) !important;
+  --input-border-color: var(--chat-theme-input-border, var(--chat-theme-border, var(--border-primary))) !important;
+  --input-font-color: var(--text-primary, #ffffff) !important;
+  --input-placeholder-color: var(--chat-theme-system-text, var(--text-tertiary, #8e8e8e)) !important;
+  --outline-color: var(--accent-primary, #0095f6) !important;
+  --category-font-color: var(--chat-theme-system-text, var(--text-secondary, #999999)) !important;
+  --emoji-hover-background: var(--chat-theme-action-hover-bg, var(--bg-hover)) !important;
 }
 
 /* TRáº NG THÃI GOM (Khi Ä‘ang nháº­p liá»‡u): áº¨n ngay láº­p tá»©c, khÃ´ng cÃ³ transition Ä‘á»ƒ trÃ¡nh flash / trÆ°á»£t */

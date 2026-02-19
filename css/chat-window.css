@@ -911,10 +911,10 @@ body.is-dragging-chat #chat-windows-stack {
     transform: translateY(10px);
     transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     pointer-events: none;
-    background: transparent;
+    background: var(--chat-theme-surface, var(--bg-primary));
     border-radius: 12px;
-    border: none;
-    box-shadow: none;
+    border: 1px solid var(--chat-theme-border, var(--border-primary));
+    box-shadow: var(--shadow-xl);
     overflow: hidden;
 }
 
@@ -931,8 +931,19 @@ body.is-dragging-chat #chat-windows-stack {
     display: block;
     border-radius: 12px;
     overflow: hidden;
-    box-shadow: var(--shadow-xl);
-    border: 1px solid var(--chat-theme-border, var(--border-primary));
+    border: none;
+    box-shadow: none;
+    --background: var(--chat-theme-surface, var(--bg-primary)) !important;
+    --border-color: var(--chat-theme-border, var(--border-primary)) !important;
+    --button-active-background: var(--chat-theme-action-hover-bg, var(--bg-hover)) !important;
+    --button-hover-background: var(--chat-theme-action-hover-bg, var(--bg-hover)) !important;
+    --indicator-color: var(--accent-primary, #0095f6) !important;
+    --input-border-color: var(--chat-theme-input-border, var(--chat-theme-border, var(--border-primary))) !important;
+    --input-font-color: var(--text-primary, #ffffff) !important;
+    --input-placeholder-color: var(--chat-theme-system-text, var(--text-tertiary, #8e8e8e)) !important;
+    --outline-color: var(--accent-primary, #0095f6) !important;
+    --category-font-color: var(--chat-theme-system-text, var(--text-secondary, #999999)) !important;
+    --emoji-hover-background: var(--chat-theme-action-hover-bg, var(--bg-hover)) !important;
 }
 
 .chat-box .chat-actions-group.is-show.emoji-open {

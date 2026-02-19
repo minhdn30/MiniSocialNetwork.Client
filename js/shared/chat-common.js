@@ -2186,6 +2186,142 @@ const ChatCommon = {
         `;
   },
 
+  getReactionBadgeAnchor(contentContainer) {
+    if (!contentContainer || !(contentContainer instanceof Element)) return null;
+
+    let anchor = null;
+    Array.from(contentContainer.children || []).forEach((child) => {
+      if (!(child instanceof Element)) return;
+      if (
+        child.classList.contains("msg-bubble") ||
+        child.classList.contains("msg-media-anchor") ||
+        child.classList.contains("msg-file-anchor")
+      ) {
+        anchor = child;
+      }
+    });
+
+    return anchor || contentContainer;
+  },
+
+  ensureReactionBadgeAnchor(contentContainer, badge = null) {
+    if (!contentContainer || !(contentContainer instanceof Element)) return null;
+
+    const targetBadge =
+      badge && badge.classList?.contains("msg-reactions-summary")
+        ? badge
+        : contentContainer.querySelector(".msg-reactions-summary");
+
+    if (targetBadge && targetBadge.parentElement !== contentContainer) {
+      contentContainer.appendChild(targetBadge);
+    }
+    return this.getReactionBadgeAnchor(contentContainer) || contentContainer;
+  },
+
+  bindReactionBadgeMediaSync(contentContainer) {
+    if (!contentContainer || !(contentContainer instanceof Element)) return;
+
+    const mediaNodes = contentContainer.querySelectorAll(
+      ".msg-media-item img, .msg-media-item video",
+    );
+    if (!mediaNodes.length) return;
+
+    mediaNodes.forEach((node) => {
+      if (!(node instanceof Element)) return;
+      if (node.dataset?.reactionSyncBound === "1") return;
+      node.dataset.reactionSyncBound = "1";
+
+      const scheduleSync = () => {
+        requestAnimationFrame(() =>
+          this.syncReactionBadgeOverflow(contentContainer, true),
+        );
+      };
+
+      const tag = node.tagName.toLowerCase();
+      if (tag === "img") {
+        const img = /** @type {HTMLImageElement} */ (node);
+        if (!img.complete || img.naturalWidth <= 0) {
+          img.addEventListener("load", scheduleSync, { once: true });
+          img.addEventListener("error", scheduleSync, { once: true });
+        }
+        return;
+      }
+
+      if (tag === "video") {
+        const video = /** @type {HTMLVideoElement} */ (node);
+        if (video.readyState < 1) {
+          video.addEventListener("loadedmetadata", scheduleSync, { once: true });
+          video.addEventListener("loadeddata", scheduleSync, { once: true });
+          video.addEventListener("error", scheduleSync, { once: true });
+        }
+      }
+    });
+  },
+
+  queueReactionBadgeResync(contentContainer) {
+    if (!contentContainer || !(contentContainer instanceof Element)) return;
+
+    const currentAttempt = Number(contentContainer.dataset.reactSyncRetry || 0);
+    if (currentAttempt >= 8) return;
+
+    const nextAttempt = currentAttempt + 1;
+    contentContainer.dataset.reactSyncRetry = String(nextAttempt);
+
+    if (contentContainer._reactionBadgeRetryTimer) {
+      clearTimeout(contentContainer._reactionBadgeRetryTimer);
+    }
+
+    const delay = nextAttempt <= 2 ? 16 : nextAttempt <= 5 ? 60 : 120;
+    contentContainer._reactionBadgeRetryTimer = setTimeout(() => {
+      this.syncReactionBadgeOverflow(contentContainer, true);
+    }, delay);
+  },
+
+  positionReactionBadge(contentContainer, badge, anchor) {
+    if (!contentContainer || !badge || !anchor) return false;
+
+    const anchorHeight = anchor.offsetHeight || 0;
+    const containerWidth = contentContainer.offsetWidth || 0;
+    if (anchorHeight <= 1 || containerWidth <= 1) {
+      return false;
+    }
+
+    const anchorTop = Math.max(0, anchor.offsetTop + anchorHeight);
+    const anchorWidth = anchor.offsetWidth || contentContainer.offsetWidth || 0;
+    const badgeWidth = badge.offsetWidth || 0;
+    const overflow = anchorWidth > 0 && badgeWidth > anchorWidth;
+    badge.classList.toggle("msg-reactions-overflow", overflow);
+
+    const leftOffset = Math.max(0, anchor.offsetLeft || 0);
+    const rightOffset = Math.max(
+      0,
+      (contentContainer.offsetWidth || 0) - leftOffset - (anchor.offsetWidth || 0),
+    );
+
+    const wrapper = contentContainer.closest(".msg-bubble-wrapper");
+    const isSent = !!wrapper?.classList?.contains("sent");
+
+    badge.style.top = `${anchorTop}px`;
+    if (isSent) {
+      if (overflow) {
+        badge.style.left = "auto";
+        badge.style.right = `${rightOffset}px`;
+      } else {
+        badge.style.left = `${leftOffset}px`;
+        badge.style.right = "auto";
+      }
+    } else {
+      if (overflow) {
+        badge.style.left = `${leftOffset}px`;
+        badge.style.right = "auto";
+      } else {
+        badge.style.left = "auto";
+        badge.style.right = `${rightOffset}px`;
+      }
+    }
+    return true;
+  },
+
   applyMessageReactionStateToBubble(bubble, state = {}) {
     if (!bubble || !bubble.classList?.contains("msg-bubble-wrapper")) return;
 
@@ -2218,10 +2354,10 @@ const ChatCommon = {
     const contentContainer = bubble.querySelector(".msg-content-container");
     if (!contentContainer) return;
 
-    const existingBadge = contentContainer.querySelector(
+    const existingBadges = contentContainer.querySelectorAll(
       ".msg-reactions-summary",
     );
-    if (existingBadge) existingBadge.remove();
+    existingBadges.forEach((badge) => badge.remove());
 
     const isRecalled =
       (bubble.dataset?.isRecalled || "").toString().toLowerCase() === "true";
@@ -2249,16 +2385,25 @@ const ChatCommon = {
    * If so, add msg-reactions-overflow class to flip the anchor edge.
    * @param {HTMLElement} contentContainer - The .msg-content-container element
    */
-  syncReactionBadgeOverflow(contentContainer) {
+  syncReactionBadgeOverflow(contentContainer, fromRetry = false) {
     if (!contentContainer) return;
     const badge = contentContainer.querySelector(".msg-reactions-summary");
     if (!badge) return;
-    const containerWidth = contentContainer.offsetWidth;
-    const badgeWidth = badge.offsetWidth;
-    badge.classList.toggle(
-      "msg-reactions-overflow",
-      badgeWidth > containerWidth,
-    );
+
+    this.bindReactionBadgeMediaSync(contentContainer);
+    const anchor = this.ensureReactionBadgeAnchor(contentContainer, badge);
+    if (!anchor) return;
+
+    const positioned = this.positionReactionBadge(contentContainer, badge, anchor);
+    if (positioned) {
+      contentContainer.dataset.reactSyncRetry = "0";
+      return;
+    }
+
+    if (!fromRetry) {
+      contentContainer.dataset.reactSyncRetry = "0";
+    }
+    this.queueReactionBadgeResync(contentContainer);
   },
 
   /**
@@ -2274,10 +2419,9 @@ const ChatCommon = {
       badges.forEach((badge) => {
         const cc = badge.closest(".msg-content-container");
         if (!cc) return;
-        badge.classList.toggle(
-          "msg-reactions-overflow",
-          badge.offsetWidth > cc.offsetWidth,
-        );
+        const anchor = this.ensureReactionBadgeAnchor(cc, badge);
+        if (!anchor) return;
+        this.positionReactionBadge(cc, badge, anchor);
       });
     });
   },
