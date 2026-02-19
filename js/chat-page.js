@@ -1335,6 +1335,14 @@ const ChatPage = {
 
         const msgContainer = document.getElementById('chat-view-messages');
         if (msgContainer) {
+            const authorDisplayName = normalizedNickname || fallbackDisplayName || 'User';
+            if (window.ChatCommon && typeof ChatCommon.updateMessageAuthorDisplay === 'function') {
+                const updatedAuthorCount = ChatCommon.updateMessageAuthorDisplay(msgContainer, accTarget, authorDisplayName);
+                if (updatedAuthorCount > 0) {
+                    changed = true;
+                }
+            }
+
             msgContainer
                 .querySelectorAll(`.seen-avatar-wrapper[data-account-id="${accTarget}"] .seen-avatar-name`)
                 .forEach(el => {
@@ -3083,7 +3091,11 @@ const ChatPage = {
             const senderAvatar = !m.isOwn ? avatarRaw : '';
             
             const authorName = isGroup && !m.isOwn
-                ? (m.sender?.nickname || m.sender?.Nickname || m.sender?.username || m.sender?.Username || m.sender?.fullName || m.sender?.FullName || '')
+                ? ChatCommon.getPreferredSenderName(m.sender, {
+                    conversation: this.currentMetaData,
+                    conversationId: this.currentChatId || this.currentMetaData?.conversationId || this.currentMetaData?.ConversationId || '',
+                    fallback: ''
+                })
                 : '';
 
             html += ChatCommon.renderMessageBubble(m, {
@@ -3149,7 +3161,11 @@ const ChatPage = {
         const avatarRaw = msg.Sender?.AvatarUrl || msg.sender?.avatarUrl || msg.sender?.AvatarUrl || '';
         const senderAvatar = !isOwn ? avatarRaw : '';
         
-        const authorRaw = msg.sender?.nickname || msg.sender?.Nickname || msg.sender?.username || msg.sender?.Username || msg.sender?.fullName || msg.sender?.FullName || '';
+        const authorRaw = ChatCommon.getPreferredSenderName(msg.sender, {
+            conversation: this.currentMetaData,
+            conversationId: this.currentChatId || this.currentMetaData?.conversationId || this.currentMetaData?.ConversationId || '',
+            fallback: ''
+        });
         const authorName = isGroup && !isOwn ? authorRaw : '';
         
         // Ensure msg.sender object exists for renderMessageBubble if missing

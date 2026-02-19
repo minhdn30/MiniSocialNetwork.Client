@@ -14,6 +14,183 @@ const ChatSidebar = {
     pageSize: window.APP_CONFIG?.CONVERSATIONS_PAGE_SIZE || 20,
     currentActiveId: null, // ID of the currently active chat (for highlighting)
 
+    normalizeId(value) {
+        return (value || '').toString().toLowerCase();
+    },
+
+    getGroupSenderName(sender = {}, conv = null) {
+        if (window.ChatCommon && typeof ChatCommon.getPreferredSenderName === 'function') {
+            const resolved = ChatCommon.getPreferredSenderName(sender, {
+                conversation: conv,
+                conversationId: conv?.conversationId || conv?.ConversationId || '',
+                fallback: 'User'
+            });
+            if (resolved) return resolved;
+        }
+
+        const nickname = sender.nickname ?? sender.Nickname ?? null;
+        if (typeof nickname === 'string' && nickname.trim().length > 0) {
+            return nickname.trim();
+        }
+
+        const username =
+            sender.username ??
+            sender.userName ??
+            sender.Username ??
+            sender.UserName ??
+            null;
+        if (typeof username === 'string' && username.trim().length > 0) {
+            return username.trim();
+        }
+
+        return 'User';
+    },
+
+    getMemberAvatarUrl(member = {}) {
+        return member.avatarUrl || member.AvatarUrl || member.avatar || APP_CONFIG.DEFAULT_AVATAR;
+    },
+
+    getMemberDisplayName(member = {}) {
+        const nickname = member.nickname ?? member.Nickname ?? null;
+        if (typeof nickname === 'string' && nickname.trim().length > 0) {
+            return nickname.trim();
+        }
+
+        const username =
+            member.username ??
+            member.userName ??
+            member.Username ??
+            member.UserName ??
+            null;
+        if (typeof username === 'string' && username.trim().length > 0) {
+            return username.trim();
+        }
+
+        const displayName = member.displayName ?? member.DisplayName ?? null;
+        if (typeof displayName === 'string' && displayName.trim().length > 0) {
+            return displayName.trim();
+        }
+
+        const fullName = member.fullName ?? member.FullName ?? null;
+        if (typeof fullName === 'string' && fullName.trim().length > 0) {
+            return fullName.trim();
+        }
+
+        return 'User';
+    },
+
+    getOpenChatData(conversationId) {
+        const openChats = window.ChatWindow?.openChats;
+        if (!openChats || typeof openChats.entries !== 'function') {
+            return null;
+        }
+
+        const targetId = this.normalizeId(conversationId);
+        if (!targetId) return null;
+
+        for (const [openId, chat] of openChats.entries()) {
+            if (this.normalizeId(openId) !== targetId) continue;
+            return chat?.data || chat?.metaData || null;
+        }
+
+        return null;
+    },
+
+    resolveSeenMemberInfo(conv, accountId) {
+        if (!conv) return null;
+
+        const targetAccId = this.normalizeId(accountId);
+        if (!targetAccId) return null;
+
+        const candidates = [];
+        const addCandidate = (member) => {
+            if (!member || typeof member !== 'object') return;
+            const memberId = this.normalizeId(
+                member.accountId ||
+                member.AccountId
+            );
+            if (!memberId || memberId !== targetAccId) return;
+            candidates.push(member);
+        };
+        const addMany = (members) => {
+            if (!Array.isArray(members)) return;
+            members.forEach(addCandidate);
+        };
+
+        addCandidate(conv.otherMember);
+        addCandidate(conv.lastMessage?.sender);
+        addCandidate(conv.lastMessage?.Sender);
+        addMany(conv.members);
+        addMany(conv.memberSeenStatuses);
+        addMany(conv.lastMessageSeenBy);
+
+        const convIdNorm = this.normalizeId(conv.conversationId || conv.ConversationId);
+        const pageMeta = window.ChatPage?.currentMetaData;
+        if (pageMeta && this.normalizeId(pageMeta.conversationId || pageMeta.ConversationId) === convIdNorm) {
+            addCandidate(pageMeta.otherMember);
+            addMany(pageMeta.members);
+            addMany(pageMeta.memberSeenStatuses);
+        }
+
+        const openChatData = this.getOpenChatData(conv.conversationId || conv.ConversationId);
+        if (openChatData) {
+            addCandidate(openChatData.otherMember);
+            addMany(openChatData.members);
+            addMany(openChatData.memberSeenStatuses);
+        }
+
+        if (!candidates.length) return null;
+
+        let best = null;
+        let bestScore = -1;
+        candidates.forEach((candidate) => {
+            const avatarUrl = this.getMemberAvatarUrl(candidate);
+            const displayName = this.getMemberDisplayName(candidate);
+
+            let score = 0;
+            if (avatarUrl && avatarUrl !== APP_CONFIG.DEFAULT_AVATAR) score += 2;
+            if (displayName && displayName !== 'User') score += 1;
+            if (candidate === conv.otherMember) score += 1;
+
+            if (score > bestScore) {
+                bestScore = score;
+                best = {
+                    accountId: targetAccId,
+                    avatarUrl: avatarUrl || APP_CONFIG.DEFAULT_AVATAR,
+                    displayName: displayName || 'User'
+                };
+            }
+        });
+
+        return best;
+    },
+
+    normalizeSeenMembers(conv) {
+        if (!conv || !Array.isArray(conv.lastMessageSeenBy)) return;
+
+        const seenMap = new Map();
+        conv.lastMessageSeenBy.forEach((member, idx) => {
+            const rawId = member?.accountId || member?.AccountId || '';
+            const normalizedId = this.normalizeId(rawId);
+            const resolved = this.resolveSeenMemberInfo(conv, normalizedId || rawId);
+            const fallback = {
+                accountId: normalizedId || `${idx}`,
+                avatarUrl: this.getMemberAvatarUrl(member),
+                displayName: this.getMemberDisplayName(member)
+            };
+            const normalizedMember = resolved || fallback;
+            if (!normalizedMember.accountId) return;
+            seenMap.set(normalizedMember.accountId, normalizedMember);
+        });
+
+        conv.lastMessageSeenBy = Array.from(seenMap.values());
+        const currentSeenCount = Number(conv.lastMessageSeenCount || 0);
+        conv.lastMessageSeenCount = Math.max(
+            Number.isFinite(currentSeenCount) ? currentSeenCount : 0,
+            conv.lastMessageSeenBy.length
+        );
+    },
+
     handleDragStart(e, conversationId) {
         // Disable drag-drop to open floating windows if we are on the dedicated Chat Page
         if (document.body.classList.contains('is-chat-page')) {
@@ -372,13 +549,19 @@ const ChatSidebar = {
             // --- Improved Last Message Preview ---
             let previewText = ChatCommon.getLastMsgPreview(conv);
             const isSystemLastMessage = ChatCommon.isSystemMessage(conv?.lastMessage);
-            const lastMsgSenderId = (conv.lastMessage?.sender?.accountId || '').toLowerCase();
+            const lastMsgSenderId = (
+                conv.lastMessage?.sender?.accountId ||
+                conv.lastMessage?.sender?.AccountId ||
+                conv.lastMessage?.Sender?.accountId ||
+                conv.lastMessage?.Sender?.AccountId ||
+                ''
+            ).toLowerCase();
             if (lastMsgSenderId && !isSystemLastMessage) {
                 if (lastMsgSenderId === myId) {
                     previewText = `You: ${previewText}`;
                 } else if (conv.isGroup) {
                     const sender = conv.lastMessage?.sender || conv.lastMessage?.Sender || {};
-                    const senderName = sender.nickname || sender.Nickname || sender.username || sender.Username || sender.fullName || sender.FullName || 'User';
+                    const senderName = this.getGroupSenderName(sender, conv);
                     previewText = `${senderName}: ${previewText}`;
                 }
             }
@@ -396,6 +579,7 @@ const ChatSidebar = {
             // --- Seen Avatars Logic ---
             let seenHtml = '';
             if (!unread && lastMsgSenderId === myId && conv.lastMessageSeenBy && conv.lastMessageSeenBy.length > 0) {
+                this.normalizeSeenMembers(conv);
                 const seenCount = conv.lastMessageSeenCount || conv.lastMessageSeenBy.length;
                 const extraCount = Math.max(0, seenCount - conv.lastMessageSeenBy.length);
                 seenHtml = `
@@ -623,7 +807,7 @@ const ChatSidebar = {
                 previewText = `You: ${previewText}`;
             } else if (conv.isGroup) {
                 const sender = lastMessage?.sender || lastMessage?.Sender || {};
-                const senderName = sender.nickname || sender.Nickname || sender.username || sender.Username || sender.fullName || sender.FullName || 'User';
+                const senderName = this.getGroupSenderName(sender, conv);
                 previewText = `${senderName}: ${previewText}`;
             }
         }
@@ -797,15 +981,21 @@ const ChatSidebar = {
             }
 
             // Group chat sender name prefix
-            const senderId = (message.sender?.accountId || message.Sender?.AccountId || '').toLowerCase();
+            const senderId = (
+                message.sender?.accountId ||
+                message.sender?.AccountId ||
+                message.Sender?.accountId ||
+                message.Sender?.AccountId ||
+                ''
+            ).toLowerCase();
             const myId = (localStorage.getItem('accountId') || '').toLowerCase();
             
             let prefix = "";
             if (!isSystemMessage && senderId === myId) {
                 prefix = "You: ";
             } else if (!isSystemMessage && conv?.isGroup) {
-                const senderName = message.sender?.nickname || message.sender?.fullName || message.sender?.username || 
-                                 message.Sender?.Nickname || message.Sender?.FullName || message.Sender?.Username || 'User';
+                const senderPayload = message.sender || message.Sender || {};
+                const senderName = this.getGroupSenderName(senderPayload, conv);
                 prefix = `${senderName}: `;
             }
 
@@ -901,37 +1091,35 @@ const ChatSidebar = {
         }
 
         // Initialize array if needed
-        if (!conv.lastMessageSeenBy) conv.lastMessageSeenBy = [];
+        if (!Array.isArray(conv.lastMessageSeenBy)) conv.lastMessageSeenBy = [];
+        this.normalizeSeenMembers(conv);
 
-        // Check if this member already seen
-        const alreadySeen = conv.lastMessageSeenBy.find(m =>
-            (m.accountId || '').toLowerCase() === accIdNorm
+        const alreadySeenIndex = conv.lastMessageSeenBy.findIndex(m =>
+            this.normalizeId(m.accountId || m.AccountId) === accIdNorm
         );
-        if (alreadySeen) {
-            return;
-        }
+        const resolvedMemberInfo = this.resolveSeenMemberInfo(conv, accIdNorm);
 
-        // Resolve member info
-        let memberInfo = null;
-        if (!conv.isGroup && conv.otherMember && (conv.otherMember.accountId || '').toLowerCase() === accIdNorm) {
-            memberInfo = {
-                accountId: conv.otherMember.accountId,
-                avatarUrl: conv.otherMember.avatarUrl,
-                displayName: conv.otherMember.username || conv.otherMember.fullName
-            };
-        }
-        // For group chats, try to find memberInfo from lastMessage sender context or members list
-        // For now, use a fallback
-        if (!memberInfo) {
-            memberInfo = {
-                accountId: accountId,
+        if (alreadySeenIndex >= 0) {
+            if (resolvedMemberInfo) {
+                conv.lastMessageSeenBy[alreadySeenIndex] = {
+                    ...conv.lastMessageSeenBy[alreadySeenIndex],
+                    ...resolvedMemberInfo
+                };
+            }
+        } else {
+            const memberInfo = resolvedMemberInfo || {
+                accountId: accIdNorm || accountId,
                 avatarUrl: APP_CONFIG.DEFAULT_AVATAR,
                 displayName: 'User'
             };
-        }
+            conv.lastMessageSeenBy.push(memberInfo);
 
-        conv.lastMessageSeenBy.push(memberInfo);
-        conv.lastMessageSeenCount = (conv.lastMessageSeenCount || 0) + 1;
+            const currentSeenCount = Number(conv.lastMessageSeenCount || 0);
+            conv.lastMessageSeenCount = Math.max(
+                (Number.isFinite(currentSeenCount) ? currentSeenCount : 0) + 1,
+                conv.lastMessageSeenBy.length
+            );
+        }
 
         // Update DOM
         const item = document.querySelector(`.chat-item[data-conversation-id="${conv.conversationId}"]`);
@@ -949,6 +1137,7 @@ const ChatSidebar = {
             return;
         }
 
+        this.normalizeSeenMembers(conv);
         const seenCount = conv.lastMessageSeenCount || conv.lastMessageSeenBy.length;
         const extraCount = Math.max(0, seenCount - conv.lastMessageSeenBy.length);
 

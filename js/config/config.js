@@ -149,6 +149,7 @@
   CHAT_MEDIA_PAGE_SIZE: 20, // Number of media items loaded per request in chat media panel
   CHAT_FILES_PAGE_SIZE: 20, // Number of file/document items loaded per request in chat file panel
   GROUP_CHAT_MEMBER_LIMIT: 50, // Maximum members selectable when creating a group chat
+  GROUP_CHAT_MIN_SELECTED_MEMBERS: 2, // Minimum additional members to create a group (you + 2 others)
   GROUP_CHAT_INVITE_SEARCH_LIMIT: 10, // Max accounts returned per invite search request
   GROUP_CHAT_INVITE_SEARCH_DEBOUNCE_MS: 300, // Debounce delay for invite member search input
   GROUP_NAME_MIN_LENGTH: 3, // Minimum characters for group name
