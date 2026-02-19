@@ -1912,11 +1912,36 @@
   padding: 6px;
   display: none;
   z-index: 12;
+  max-height: min(260px, 52vh);
+  overflow-y: auto;
 }
 
 .chat-members-actions-menu.show {
   display: flex;
   flex-direction: column;
+}
+
+.chat-members-actions-menu.is-dropup {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.chat-members-actions-menu.is-align-left {
+  right: auto;
+  left: 0;
+}
+
+.chat-members-actions-menu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.chat-members-actions-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-members-actions-menu::-webkit-scrollbar-thumb {
+  background: var(--chat-theme-scrollbar-thumb, var(--border-primary));
+  border-radius: 10px;
 }
 
 .chat-members-action-btn {
