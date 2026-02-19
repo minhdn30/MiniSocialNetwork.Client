@@ -9,8 +9,10 @@ let cgSearchDebounceTimer = null;
 let cgSearchRequestSequence = 0;
 let cgAvatarPreviewObjectUrl = null;
 let cgIsEventBound = false;
+let cgIsCreatingGroup = false;
 
 const cgGetMemberLimit = () => window.APP_CONFIG?.GROUP_CHAT_MEMBER_LIMIT || 50;
+const cgGetMinSelectedMembers = () => window.APP_CONFIG?.GROUP_CHAT_MIN_SELECTED_MEMBERS || 2;
 const cgGetSearchLimit = () => window.APP_CONFIG?.GROUP_CHAT_INVITE_SEARCH_LIMIT || 10;
 const cgGetSearchDebounceMs = () => window.APP_CONFIG?.GROUP_CHAT_INVITE_SEARCH_DEBOUNCE_MS || 300;
 const cgGetAvatarMaxSizeMb = () => window.APP_CONFIG?.GROUP_CHAT_AVATAR_MAX_SIZE_MB || 5;
@@ -135,6 +137,7 @@ function cgEnsureEventBindings() {
 function cgResetForm() {
     cgSelectedMembers = [];
     cgSearchResults = [];
+    cgIsCreatingGroup = false;
 
     if (cgSearchDebounceTimer) {
         clearTimeout(cgSearchDebounceTimer);
@@ -155,6 +158,9 @@ function cgResetForm() {
     // Show hint
     const hint = document.getElementById('cg-no-members-hint');
     if (hint) hint.classList.remove('hidden');
+
+    const createBtn = document.getElementById('btn-create-group');
+    if (createBtn) createBtn.textContent = 'Create Group';
 
     cgRenderLoadingSkeleton();
     cgUpdateCount();
@@ -391,7 +397,7 @@ function cgRenderFriends(users, keyword) {
     list.innerHTML = users.map(user => {
         const isSelected = cgSelectedMembers.some(m => m.id === user.id);
         const displayName = user.fullName || user.username || 'Unknown user';
-        const displayUsername = user.username ? `@${user.username}` : '@unknown';
+        const displayUsername = user.username || 'unknown';
         const avatarUrl = user.avatar || cgGetDefaultAvatar();
 
         return `
@@ -492,8 +498,11 @@ function cgUpdateCreateBtn() {
     const btn = document.getElementById('btn-create-group');
     if (!nameInput || !btn) return;
 
-    const valid = nameInput.value.trim().length >= cgGetGroupNameMinLength() && cgSelectedMembers.length >= 1;
-    btn.disabled = !valid;
+    const valid =
+        nameInput.value.trim().length >= cgGetGroupNameMinLength() &&
+        cgSelectedMembers.length >= cgGetMinSelectedMembers();
+
+    btn.disabled = cgIsCreatingGroup || !valid;
 }
 
 function cgEscapeHtml(text) {
@@ -509,39 +518,124 @@ function cgEscapeHtmlAttr(text) {
     return cgEscapeHtml(text).replace(/`/g, '&#96;');
 }
 
-/* ===== Create Group Action (API pending) ===== */
+/* ===== Create Group Action ===== */
 
 async function cgHandleCreateGroup() {
     const createBtn = document.getElementById('btn-create-group');
-    if (!createBtn) return;
+    if (!createBtn || cgIsCreatingGroup) return;
 
     const name = document.getElementById('group-name-input')?.value.trim() || '';
-    const memberIds = cgSelectedMembers.map((m) => m.id);
+    const memberIds = Array.from(new Set(cgSelectedMembers.map((m) => m.id).filter(Boolean)));
     const avatarFile = document.getElementById('group-avatar-input')?.files?.[0] || null;
 
-    if (name.length < 2 || memberIds.length < 1) {
+    if (name.length < cgGetGroupNameMinLength()) {
+        if (window.toastWarning) {
+            window.toastWarning(`Group name must be at least ${cgGetGroupNameMinLength()} characters`);
+        }
         cgUpdateCreateBtn();
         return;
     }
 
+    if (memberIds.length < cgGetMinSelectedMembers()) {
+        if (window.toastWarning) {
+            window.toastWarning(`Select at least ${cgGetMinSelectedMembers()} members`);
+        }
+        cgUpdateCreateBtn();
+        return;
+    }
+
+    if (!window.API?.Conversations?.createGroup) {
+        if (window.toastError) window.toastError('Create group API is unavailable');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('GroupName', name);
+    if (avatarFile) {
+        formData.append('GroupAvatar', avatarFile);
+    }
+    memberIds.forEach((memberId) => formData.append('MemberIds', memberId));
+
+    cgIsCreatingGroup = true;
     createBtn.disabled = true;
     createBtn.innerHTML = '<div class="spinner-small" style="width:16px;height:16px;border-width:2px;margin:0 auto;"></div>';
 
     try {
-        console.log('API CALL (pending): Create Group', {
-            name,
-            memberIds,
-            avatarFileName: avatarFile?.name || null,
-        });
-
-        if (window.toastInfo) {
-            window.toastInfo('Create group API is not available yet');
+        const res = await window.API.Conversations.createGroup(formData);
+        if (!res.ok) {
+            const message = await cgReadErrorMessage(res, 'Failed to create group');
+            if (window.toastError) window.toastError(message);
+            return;
         }
+
+        const conversation = await res.json();
+        const conversationId =
+            conversation?.conversationId ||
+            conversation?.ConversationId ||
+            null;
+
+        if (window.ChatSidebar && typeof window.ChatSidebar.loadConversations === 'function') {
+            await window.ChatSidebar.loadConversations(false);
+        }
+
+        if (typeof window.scheduleGlobalUnreadRefresh === 'function') {
+            window.scheduleGlobalUnreadRefresh(0);
+        }
+
+        const isOnMessagesPage = window.location.hash.startsWith('#/messages');
+        const shouldOpenConversation = !!conversationId && isOnMessagesPage;
+        if (shouldOpenConversation) {
+            if (window.ChatSidebar && typeof window.ChatSidebar.openConversation === 'function') {
+                window.ChatSidebar.openConversation(conversationId);
+            } else {
+                window.location.hash = `#/messages?id=${conversationId}`;
+            }
+        }
+
+        if (window.toastSuccess) {
+            window.toastSuccess('Group created successfully');
+        }
+
+        window.closeCreateChatGroupModal();
     } catch (err) {
-        console.error(err);
-        if (window.toastError) window.toastError('Failed to create group');
+        console.error('Failed to create group:', err);
+        if (window.toastError) window.toastError('Could not connect to server');
     } finally {
+        cgIsCreatingGroup = false;
         createBtn.textContent = 'Create Group';
         cgUpdateCreateBtn();
     }
+}
+
+async function cgReadErrorMessage(res, fallbackMessage) {
+    let message = fallbackMessage || 'Request failed';
+
+    try {
+        const data = await res.json();
+        if (data && typeof data === 'object') {
+            if (typeof data.message === 'string' && data.message.trim()) {
+                return data.message.trim();
+            }
+            if (typeof data.title === 'string' && data.title.trim()) {
+                return data.title.trim();
+            }
+
+            if (data.errors && typeof data.errors === 'object') {
+                const firstErrorKey = Object.keys(data.errors)[0];
+                const firstErrorValue = firstErrorKey ? data.errors[firstErrorKey] : null;
+                if (Array.isArray(firstErrorValue) && firstErrorValue.length > 0) {
+                    return String(firstErrorValue[0]);
+                }
+            }
+        }
+    } catch (_) { }
+
+    try {
+        const text = await res.text();
+        if (typeof text === 'string' && text.trim()) {
+            message = text.trim();
+        }
+    } catch (_) { }
+
+    return message;
 }

@@ -7,7 +7,239 @@ const ChatCommon = {
      * Helper to get avatar URL with fallback
      */
     getAvatar(conv) {
-        return conv.displayAvatar || APP_CONFIG.DEFAULT_AVATAR;
+        const explicitAvatarRaw = conv?.displayAvatar || conv?.DisplayAvatar || '';
+        const explicitAvatar = (explicitAvatarRaw || '').toString().trim();
+
+        if (!conv?.isGroup) {
+            return explicitAvatar || APP_CONFIG.DEFAULT_AVATAR;
+        }
+
+        if (explicitAvatar && !this.isDefaultGroupAvatar(explicitAvatar)) {
+            return explicitAvatar;
+        }
+
+        return this.getDefaultGroupAvatar();
+    },
+
+    isDefaultGroupAvatar(value) {
+        const raw = (value || '').toString().trim();
+        if (!raw) return true;
+
+        const normalized = raw.toLowerCase();
+        if (normalized === 'null' || normalized === 'undefined') return true;
+        const defaultAvatar = (APP_CONFIG.DEFAULT_AVATAR || '').toLowerCase();
+        if (defaultAvatar && normalized === defaultAvatar) return true;
+
+        const defaultMarkers = [
+            'data:image/svg+xml',
+            'default-group-avatar',
+            'group-avatar-default',
+            'group-default-avatar',
+            'group_default_avatar',
+            'default-group',
+            'group-default',
+            'chat-group-default',
+            'default_chat_group',
+            'defaultchatgroup',
+            'default-avatar.jpg',
+            'default-avatar.png',
+            '/users.svg',
+            '/user-group.svg',
+            'lucide/users'
+        ];
+        return defaultMarkers.some((marker) => normalized.includes(marker));
+    },
+
+    getDefaultGroupAvatar() {
+        const svg = `
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+                <circle cx="40" cy="40" r="40" fill="#151d2a"/>
+                <g fill="none" stroke="#ff4d7d" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.95">
+                    <path d="M56.67 56.67v-3.33a6.67 6.67 0 0 0-5-6.47"/>
+                    <path d="M45 23.55a6.67 6.67 0 0 1 0 12.92"/>
+                    <path d="M43.33 56.67v-3.33a10 10 0 0 0-10-10H20a10 10 0 0 0-10 10v3.33"/>
+                    <circle cx="26.67" cy="30" r="10"/>
+                </g>
+            </svg>
+        `;
+        return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+    },
+
+    normalizeEntityId(value) {
+        return (value || '').toString().trim().toLowerCase();
+    },
+
+    getEntityUsername(entity = {}) {
+        if (!entity || typeof entity !== 'object') return '';
+        const usernameRaw =
+            entity.username ??
+            entity.userName ??
+            entity.Username ??
+            entity.UserName ??
+            '';
+        if (typeof usernameRaw !== 'string') return '';
+        const username = usernameRaw.trim();
+        return username.length > 0 ? username : '';
+    },
+
+    getEntityAccountId(entity = {}) {
+        if (!entity || typeof entity !== 'object') return '';
+        return this.normalizeEntityId(
+            entity.accountId ??
+            entity.AccountId ??
+            entity.senderId ??
+            entity.SenderId ??
+            ''
+        );
+    },
+
+    findMemberInConversationByAccountId(conversation, accountId) {
+        if (!conversation || typeof conversation !== 'object') return null;
+        const targetId = this.normalizeEntityId(accountId);
+        if (!targetId) return null;
+
+        const candidates = [];
+        const addCandidate = (member, sourceWeight = 0) => {
+            if (!member || typeof member !== 'object') return;
+            const memberId = this.getEntityAccountId(member);
+            if (!memberId || memberId !== targetId) return;
+            candidates.push({ member, sourceWeight });
+        };
+        const addMany = (members, sourceWeight = 0) => {
+            if (!Array.isArray(members)) return;
+            members.forEach((member) => addCandidate(member, sourceWeight));
+        };
+
+        addCandidate(conversation.otherMember, 5);
+        addMany(conversation.members, 4);
+        addMany(conversation.memberSeenStatuses, 3);
+        addMany(conversation.lastMessageSeenBy, 2);
+        addCandidate(conversation.lastMessage?.sender || conversation.lastMessage?.Sender, 2);
+
+        if (!candidates.length) return null;
+
+        let bestCandidate = null;
+        let bestScore = -1;
+        candidates.forEach(({ member, sourceWeight }) => {
+            const nickname = this.normalizeNickname(member.nickname ?? member.Nickname ?? null);
+            const username = this.getEntityUsername(member);
+            const avatarUrl = member.avatarUrl || member.AvatarUrl || member.avatar || '';
+
+            let score = sourceWeight;
+            if (nickname) score += 10;
+            if (username) score += 4;
+            if (avatarUrl && avatarUrl !== APP_CONFIG.DEFAULT_AVATAR) score += 1;
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestCandidate = member;
+            }
+        });
+
+        return bestCandidate;
+    },
+
+    getOpenChatMetaByConversationId(conversationId) {
+        const targetConversationId = this.normalizeEntityId(conversationId);
+        if (!targetConversationId) return null;
+
+        const openChats = window.ChatWindow?.openChats;
+        if (!openChats || typeof openChats.entries !== 'function') return null;
+
+        for (const [openId, chat] of openChats.entries()) {
+            if (this.normalizeEntityId(openId) !== targetConversationId) continue;
+            return chat?.data || chat?.metaData || null;
+        }
+
+        return null;
+    },
+
+    resolveSenderReference(senderAccountId, options = {}) {
+        const senderId = this.normalizeEntityId(senderAccountId);
+        if (!senderId) return null;
+
+        const conversationId = this.normalizeEntityId(
+            options.conversationId ||
+            options.conversation?.conversationId ||
+            options.conversation?.ConversationId ||
+            ''
+        );
+
+        const contexts = [];
+        const addContext = (context, priority) => {
+            if (!context || typeof context !== 'object') return;
+            contexts.push({ context, priority });
+        };
+
+        addContext(options.conversation, 4);
+
+        const pageMeta = window.ChatPage?.currentMetaData || null;
+        if (
+            pageMeta &&
+            (!conversationId ||
+                this.normalizeEntityId(pageMeta.conversationId || pageMeta.ConversationId) === conversationId)
+        ) {
+            addContext(pageMeta, 3);
+        }
+
+        const openChatMeta = this.getOpenChatMetaByConversationId(conversationId);
+        if (openChatMeta) {
+            addContext(openChatMeta, 2);
+        }
+
+        if (!contexts.length) return null;
+
+        let bestRef = null;
+        let bestScore = -1;
+        contexts.forEach(({ context, priority }) => {
+            const candidate = this.findMemberInConversationByAccountId(context, senderId);
+            if (!candidate) return;
+
+            const nickname = this.normalizeNickname(candidate.nickname ?? candidate.Nickname ?? null);
+            const username = this.getEntityUsername(candidate);
+
+            let score = priority;
+            if (nickname) score += 10;
+            if (username) score += 4;
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestRef = candidate;
+            }
+        });
+
+        return bestRef;
+    },
+
+    getPreferredSenderName(sender = {}, options = {}) {
+        const resolvedOptions = (typeof options === 'string')
+            ? { fallback: options }
+            : (options || {});
+        const fallback = resolvedOptions.fallback || '';
+
+        if (!sender || typeof sender !== 'object') {
+            return fallback;
+        }
+
+        const nickname = this.normalizeNickname(sender.nickname ?? sender.Nickname ?? null);
+        if (nickname) return nickname;
+
+        const senderId = this.getEntityAccountId(sender);
+        if (senderId) {
+            const senderRef = this.resolveSenderReference(senderId, resolvedOptions);
+            if (senderRef) {
+                const refNickname = this.normalizeNickname(senderRef.nickname ?? senderRef.Nickname ?? null);
+                if (refNickname) return refNickname;
+
+                const refUsername = this.getEntityUsername(senderRef);
+                if (refUsername) return refUsername;
+            }
+        }
+
+        const username = this.getEntityUsername(sender);
+        if (username) return username;
+
+        return fallback;
     },
 
     getDisplayName(conv) {
@@ -1618,7 +1850,7 @@ const ChatCommon = {
         const senderId = msg.sender?.accountId || msg.senderId || '';
         const showAuthor = isGroup && isReceived && (groupPos === 'first' || groupPos === 'single');
         const authorHtml = showAuthor && authorName
-            ? `<div class="msg-author" onclick="window.ChatCommon.goToProfile('${senderId}')">${escapeHtml(authorName)}</div>`
+            ? `<div class="msg-author">${escapeHtml(authorName)}</div>`
             : '';
 
         // --- Avatar (Received messages only) ---
@@ -1662,6 +1894,7 @@ const ChatCommon = {
         const seenRowHtml = isOwn
             ? `<div class="msg-seen-row"${messageId ? ` id="seen-row-${messageId}"` : ''}></div>`
             : '';
+        const senderDisplayName = this.getPreferredSenderName(msg.sender, authorName || '');
 
         return `
             <div class="msg-bubble-wrapper ${wrapperClass} msg-group-${groupPos}" 
@@ -1669,7 +1902,7 @@ const ChatCommon = {
                  data-sender-id="${msg.sender?.accountId || msg.senderId || ''}"
                  data-avatar-url="${avatarSrc}"
                  data-author-name="${(authorName || '').replace(/"/g, '&quot;')}"
-                 data-sender-name="${(msg.sender?.nickname || msg.sender?.username || msg.sender?.fullName || authorName || '').replace(/"/g, '&quot;')}"
+                 data-sender-name="${(senderDisplayName || '').replace(/"/g, '&quot;')}"
                  data-is-recalled="${isRecalled ? 'true' : 'false'}"
                  data-is-pinned="${isPinned ? 'true' : 'false'}"
                  data-current-react-type="${hasCurrentReact ? currentReactType : ''}"
@@ -2137,6 +2370,39 @@ const ChatCommon = {
                 authorBelow.remove();
             }
         }
+    },
+
+    updateMessageAuthorDisplay(container, accountId, authorName) {
+        if (!container || !(container instanceof Element)) return 0;
+
+        const targetId = this.normalizeEntityId(accountId);
+        if (!targetId) return 0;
+
+        const nextAuthorName = (authorName || '').toString().trim();
+        if (!nextAuthorName) return 0;
+
+        let updatedCount = 0;
+        container.querySelectorAll('.msg-bubble-wrapper').forEach((bubble) => {
+            if (!(bubble instanceof Element)) return;
+            if (bubble.classList.contains('sent')) return;
+            if (this.isSystemMessageElement(bubble)) return;
+
+            const senderId = this.normalizeEntityId(bubble.dataset.senderId || '');
+            if (!senderId || senderId !== targetId) return;
+
+            bubble.dataset.authorName = nextAuthorName;
+            bubble.dataset.senderName = nextAuthorName;
+
+            const authorEl = bubble.querySelector('.msg-author');
+            if (authorEl) {
+                authorEl.textContent = nextAuthorName;
+                authorEl.removeAttribute('onclick');
+            }
+
+            updatedCount += 1;
+        });
+
+        return updatedCount;
     },
 
     /**

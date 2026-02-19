@@ -496,6 +496,8 @@
         }
         return apiFetch(url);
       },
+      createGroup: (formData, onProgress) =>
+        uploadFormDataWithProgress("/Conversations/group", formData, onProgress),
       updateNickname: (conversationId, data) =>
         apiFetch(`/Conversations/${conversationId}/members/nickname`, {
           method: "PATCH",

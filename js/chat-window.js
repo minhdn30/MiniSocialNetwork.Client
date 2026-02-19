@@ -1247,7 +1247,11 @@ const ChatWindow = {
           const groupPos = ChatCommon.getGroupPosition(m, prevMsg, nextMsg);
           const senderAvatar = !m.isOwn ? (m.sender?.avatarUrl || m.sender?.AvatarUrl || '') : '';
           const authorName = isGroup && !m.isOwn
-            ? (m.sender?.nickname || m.sender?.Nickname || m.sender?.username || m.sender?.Username || m.sender?.fullName || m.sender?.FullName || '')
+            ? ChatCommon.getPreferredSenderName(m.sender, {
+              conversation: chat.data,
+              conversationId: id,
+              fallback: '',
+            })
             : '';
           const html = ChatCommon.renderMessageBubble(m, { isGroup, groupPos, senderAvatar, authorName, isWindow: true });
           self.insertHtmlBeforeTypingIndicator(container, html);
@@ -2405,6 +2409,21 @@ const ChatWindow = {
 
     const msgContainer = document.getElementById(`chat-messages-${openId}`);
     if (msgContainer) {
+      const authorDisplayName = normalizedNickname || fallbackDisplayName || "User";
+      if (
+        window.ChatCommon &&
+        typeof ChatCommon.updateMessageAuthorDisplay === "function"
+      ) {
+        const updatedAuthorCount = ChatCommon.updateMessageAuthorDisplay(
+          msgContainer,
+          accTarget,
+          authorDisplayName,
+        );
+        if (updatedAuthorCount > 0) {
+          domChanged = true;
+        }
+      }
+
       msgContainer
         .querySelectorAll(
           `.seen-avatar-wrapper[data-account-id="${accTarget}"] .seen-avatar-name`,
@@ -3404,13 +3423,11 @@ const ChatWindow = {
             : "";
           const authorName =
             isGroup && !m.isOwn
-              ? m.sender?.nickname ||
-                m.sender?.Nickname ||
-                m.sender?.username ||
-                m.sender?.Username ||
-                m.sender?.fullName ||
-                m.sender?.FullName ||
-                ""
+              ? ChatCommon.getPreferredSenderName(m.sender, {
+                conversation: chat?.data,
+                conversationId: id,
+                fallback: "",
+              })
               : "";
 
           const html = ChatCommon.renderMessageBubble(m, {
@@ -3574,13 +3591,11 @@ const ChatWindow = {
             : "";
           const authorName =
             isGroup && !m.isOwn
-              ? m.sender?.nickname ||
-                m.sender?.Nickname ||
-                m.sender?.username ||
-                m.sender?.Username ||
-                m.sender?.fullName ||
-                m.sender?.FullName ||
-                ""
+              ? ChatCommon.getPreferredSenderName(m.sender, {
+                conversation: chat?.data,
+                conversationId: id,
+                fallback: "",
+              })
               : "";
 
           html += ChatCommon.renderMessageBubble(m, {
@@ -3694,10 +3709,11 @@ const ChatWindow = {
     const senderAvatar = !msg.isOwn ? msg.sender?.avatarUrl || "" : "";
     const authorName =
       isGroup && !msg.isOwn
-        ? msg.sender?.nickname ||
-          msg.sender?.username ||
-          msg.sender?.fullName ||
-          ""
+        ? ChatCommon.getPreferredSenderName(msg.sender, {
+          conversation: chat?.data,
+          conversationId: id,
+          fallback: "",
+        })
         : "";
 
     const tempDiv = document.createElement("div");
