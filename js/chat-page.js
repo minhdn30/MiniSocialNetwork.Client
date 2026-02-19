@@ -675,6 +675,9 @@ const ChatPage = {
         if (window.ChatRealtime && typeof window.ChatRealtime.onTheme === 'function') {
             window.ChatRealtime.onTheme((data) => this.handleThemeEvent(data));
         }
+        if (window.ChatRealtime && typeof window.ChatRealtime.onGroupInfo === 'function') {
+            window.ChatRealtime.onGroupInfo((data) => this.handleGroupInfoEvent(data));
+        }
     },
 
     handleRealtimeMessage(msg) {
@@ -960,6 +963,42 @@ const ChatPage = {
         this.applyThemeStatus(conversationId, theme);
     },
 
+    handleGroupInfoEvent(data) {
+        const conversationId = (data?.conversationId || data?.ConversationId || '').toString().toLowerCase();
+        if (!conversationId) return;
+
+        const rawName = data?.conversationName ?? data?.ConversationName;
+        const hasNameInput = typeof rawName === 'string' && rawName.trim().length > 0;
+        const nextConversationName = hasNameInput ? rawName.trim() : null;
+
+        const hasAvatarInput = !!(data?.hasConversationAvatarField || Object.prototype.hasOwnProperty.call(data || {}, 'conversationAvatar'));
+        const rawAvatar = data?.conversationAvatar ?? data?.ConversationAvatar;
+        const nextConversationAvatar = hasAvatarInput
+            ? ((typeof rawAvatar === 'string' && rawAvatar.trim().length > 0) ? rawAvatar.trim() : null)
+            : null;
+
+        if (window.ChatSidebar && typeof window.ChatSidebar.applyGroupConversationInfoUpdate === 'function') {
+            window.ChatSidebar.applyGroupConversationInfoUpdate(conversationId, {
+                conversationName: nextConversationName,
+                hasConversationAvatarField: hasAvatarInput,
+                conversationAvatar: nextConversationAvatar
+            });
+        }
+        if (window.ChatWindow && typeof window.ChatWindow.applyGroupConversationInfoUpdate === 'function') {
+            window.ChatWindow.applyGroupConversationInfoUpdate(conversationId, {
+                conversationName: nextConversationName,
+                hasConversationAvatarField: hasAvatarInput,
+                conversationAvatar: nextConversationAvatar
+            });
+        }
+
+        this.applyGroupConversationInfoUpdate(conversationId, {
+            conversationName: nextConversationName,
+            hasConversationAvatarField: hasAvatarInput,
+            conversationAvatar: nextConversationAvatar
+        });
+    },
+
     leaveCurrentConversation() {
         if (this.currentChatId) {
             // Automatically minimize to bubble when leaving page (requested feature)
@@ -1064,11 +1103,12 @@ const ChatPage = {
         const statusText = document.getElementById('chat-view-status-text');
         const statusDot = document.getElementById('chat-view-status-dot');
 
-        if (img) {
-            const avatarUrl = ChatCommon.getAvatar(meta);
-            img.src = avatarUrl;
-            // Ensure image is visible or use default if load fails
-            img.onerror = () => { img.src = window.APP_CONFIG?.DEFAULT_AVATAR; };
+        const avatarContainer = document.getElementById('chat-view-avatar');
+        if (avatarContainer) {
+            const statusDot = document.getElementById('chat-view-status-dot');
+            const avatarHtml = ChatCommon.renderAvatar(meta, { className: 'chat-view-img' });
+            avatarContainer.innerHTML = avatarHtml + (statusDot ? statusDot.outerHTML : '');
+            if (window.lucide) lucide.createIcons({ container: avatarContainer });
         }
         if (nameEl) nameEl.innerText = ChatCommon.getDisplayName(meta) || 'Chat';
         
@@ -1244,6 +1284,59 @@ const ChatPage = {
         this.renderInfoSidebar(this.currentMetaData);
 
         return previousTheme !== normalizedTheme;
+    },
+
+    applyGroupConversationInfoUpdate(conversationId, payload = {}) {
+        const target = (conversationId || '').toLowerCase();
+        if (!target) return false;
+        if ((this.currentChatId || '').toLowerCase() !== target || !this.currentMetaData) {
+            return false;
+        }
+        if (!this.currentMetaData.isGroup) {
+            return false;
+        }
+
+        const hasNameInput = typeof payload?.conversationName === 'string' && payload.conversationName.trim().length > 0;
+        const nextConversationName = hasNameInput ? payload.conversationName.trim() : null;
+        const hasAvatarInput = !!(payload?.hasConversationAvatarField || Object.prototype.hasOwnProperty.call(payload || {}, 'conversationAvatar'));
+        const nextConversationAvatar = hasAvatarInput
+            ? ((typeof payload?.conversationAvatar === 'string' && payload.conversationAvatar.trim().length > 0)
+                ? payload.conversationAvatar.trim()
+                : null)
+            : null;
+
+        let changed = false;
+
+        if (hasNameInput) {
+            const currentDisplayName = this.currentMetaData.displayName ?? this.currentMetaData.DisplayName ?? null;
+            const currentConversationName = this.currentMetaData.conversationName ?? this.currentMetaData.ConversationName ?? null;
+            if (currentDisplayName !== nextConversationName || currentConversationName !== nextConversationName) {
+                this.currentMetaData.conversationName = nextConversationName;
+                this.currentMetaData.ConversationName = nextConversationName;
+                this.currentMetaData.displayName = nextConversationName;
+                this.currentMetaData.DisplayName = nextConversationName;
+                changed = true;
+            }
+        }
+
+        if (hasAvatarInput) {
+            const currentDisplayAvatar = this.currentMetaData.displayAvatar ?? this.currentMetaData.DisplayAvatar ?? null;
+            const currentConversationAvatar = this.currentMetaData.conversationAvatar ?? this.currentMetaData.ConversationAvatar ?? null;
+            if (currentDisplayAvatar !== nextConversationAvatar || currentConversationAvatar !== nextConversationAvatar) {
+                this.currentMetaData.conversationAvatar = nextConversationAvatar;
+                this.currentMetaData.ConversationAvatar = nextConversationAvatar;
+                this.currentMetaData.displayAvatar = nextConversationAvatar;
+                this.currentMetaData.DisplayAvatar = nextConversationAvatar;
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            this.renderHeader(this.currentMetaData);
+            this.renderInfoSidebar(this.currentMetaData);
+        }
+
+        return changed;
     },
 
     applyNicknameUpdate(conversationId, accountId, nickname) {
@@ -2242,6 +2335,12 @@ const ChatPage = {
         const changeThemeBtn = document.getElementById('chat-info-change-theme-btn');
         if (changeThemeBtn) changeThemeBtn.onclick = () => this.promptChangeThemeCurrentConversation();
 
+        const editGroupNameBtn = document.getElementById('chat-info-edit-group-name-btn');
+        if (editGroupNameBtn) editGroupNameBtn.onclick = () => this.promptEditGroupNameCurrentConversation();
+
+        const editGroupAvatarBtn = document.getElementById('chat-info-edit-group-avatar-btn');
+        if (editGroupAvatarBtn) editGroupAvatarBtn.onclick = () => this.promptEditGroupAvatarCurrentConversation();
+
         const viewPinnedBtn = document.getElementById('chat-info-view-pinned-btn');
         if (viewPinnedBtn) viewPinnedBtn.onclick = () => this.openPinnedMessagesCurrentConversation();
 
@@ -2463,6 +2562,404 @@ const ChatPage = {
     },
 
 
+    _ensureEditableGroupConversation(actionName = 'Group settings') {
+        if (!this.currentChatId || !this.currentMetaData) return null;
+
+        if (!this.currentMetaData.isGroup) {
+            if (window.toastInfo) window.toastInfo(`${actionName} is only available for group chats`);
+            return null;
+        }
+
+        const conversationId = this.currentChatId;
+        const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(conversationId);
+        if (!isGuid) {
+            if (window.toastInfo) window.toastInfo(`${actionName} can be changed after the group is created`);
+            return null;
+        }
+
+        return conversationId;
+    },
+
+    _getCurrentGroupName() {
+        const rawName =
+            this.currentMetaData?.conversationName ??
+            this.currentMetaData?.ConversationName ??
+            this.currentMetaData?.displayName ??
+            this.currentMetaData?.DisplayName ??
+            '';
+        const normalized = String(rawName || '').trim();
+        return normalized || 'Group chat';
+    },
+
+    _syncGroupInfoForConversation(conversationId, payload = {}) {
+        this.applyGroupConversationInfoUpdate(conversationId, payload);
+
+        if (window.ChatSidebar && typeof window.ChatSidebar.applyGroupConversationInfoUpdate === 'function') {
+            window.ChatSidebar.applyGroupConversationInfoUpdate(conversationId, payload);
+        }
+
+        if (window.ChatWindow && typeof window.ChatWindow.applyGroupConversationInfoUpdate === 'function') {
+            window.ChatWindow.applyGroupConversationInfoUpdate(conversationId, payload);
+        }
+    },
+
+    async _readConversationApiErrorMessage(res, fallbackMessage = 'Request failed') {
+        if (!res) return fallbackMessage;
+
+        const jsonSource = typeof res.clone === 'function' ? res.clone() : res;
+        try {
+            const data = await jsonSource.json();
+            const message = data?.message || data?.title;
+            if (typeof message === 'string' && message.trim().length > 0) {
+                return message.trim();
+            }
+        } catch (_) { }
+
+        try {
+            const text = await res.text();
+            if (typeof text === 'string' && text.trim().length > 0) {
+                return text.trim();
+            }
+        } catch (_) { }
+
+        return fallbackMessage;
+    },
+
+    async promptEditGroupNameCurrentConversation() {
+        const conversationId = this._ensureEditableGroupConversation('Group name');
+        if (!conversationId) return;
+
+        if (!window.API?.Conversations?.updateGroupInfo) {
+            if (window.toastError) window.toastError('Update group API is unavailable');
+            return;
+        }
+
+        if (!window.ChatCommon || typeof window.ChatCommon.showPrompt !== 'function') {
+            if (window.toastError) window.toastError('Prompt is unavailable');
+            return;
+        }
+
+        const minLength = window.APP_CONFIG?.GROUP_NAME_MIN_LENGTH || 3;
+        const maxLength = window.APP_CONFIG?.GROUP_NAME_MAX_LENGTH || 50;
+        const currentName = this._getCurrentGroupName();
+
+        window.ChatCommon.showPrompt({
+            title: 'Edit group name',
+            message: `Group name must be at least ${minLength} characters.`,
+            placeholder: 'Enter group name',
+            value: currentName,
+            confirmText: 'Save',
+            cancelText: 'Cancel',
+            maxLength,
+            validate: (val) => {
+                const trimmed = (val || '').trim();
+                return trimmed.length >= minLength && trimmed !== currentName;
+            },
+            onConfirm: async (nextNameRaw) => {
+                const nextName = String(nextNameRaw || '').trim();
+                // Validation is now handled by the button state, but keeping defensive checks
+                if (!nextName || nextName.length < minLength || nextName === currentName) return;
+
+                this._syncGroupInfoForConversation(conversationId, { conversationName: nextName });
+
+                try {
+                    const formData = new FormData();
+                    formData.append('ConversationName', nextName);
+
+                    const res = await window.API.Conversations.updateGroupInfo(conversationId, formData);
+                    if (!res.ok) {
+                        this._syncGroupInfoForConversation(conversationId, { conversationName: currentName });
+                        const message = await this._readConversationApiErrorMessage(res, 'Failed to update group name');
+                        if (window.toastError) window.toastError(message);
+                        return;
+                    }
+
+                    if (window.toastSuccess) window.toastSuccess('Group name updated');
+                } catch (error) {
+                    console.error('Failed to update group name:', error);
+                    this._syncGroupInfoForConversation(conversationId, { conversationName: currentName });
+                    if (window.toastError) window.toastError('Failed to update group name');
+                }
+            }
+        });
+    },
+
+    promptEditGroupAvatarCurrentConversation() {
+        const conversationId = this._ensureEditableGroupConversation('Group avatar');
+        if (!conversationId) return;
+
+        if (!window.API?.Conversations?.updateGroupInfo) {
+            if (window.toastError) window.toastError('Update group API is unavailable');
+            return;
+        }
+
+        const currentAvatarRaw =
+            this.currentMetaData?.conversationAvatar ??
+            this.currentMetaData?.ConversationAvatar ??
+            this.currentMetaData?.displayAvatar ??
+            this.currentMetaData?.DisplayAvatar ??
+            null;
+        const currentAvatar = typeof currentAvatarRaw === 'string' ? currentAvatarRaw.trim() : '';
+        const isDefaultAvatar = (value) => {
+            if (window.ChatCommon && typeof window.ChatCommon.isDefaultGroupAvatar === 'function') {
+                return window.ChatCommon.isDefaultGroupAvatar(value);
+            }
+            return !value;
+        };
+        const hasCurrentCustomAvatar = !!currentAvatar && !isDefaultAvatar(currentAvatar);
+
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.style.display = 'none';
+
+        const overlay = document.createElement('div');
+        overlay.className = 'chat-common-confirm-overlay chat-group-avatar-editor-overlay';
+
+        const popup = document.createElement('div');
+        popup.className = 'chat-common-confirm-popup chat-group-avatar-editor-popup';
+        popup.innerHTML = `
+            <div class="chat-nicknames-header">
+                <h3>Edit group avatar</h3>
+                <div class="chat-nicknames-close" id="chat-group-avatar-editor-close-btn">
+                    <i data-lucide="x"></i>
+                </div>
+            </div>
+            <div class="chat-group-avatar-editor-body">
+                <div class="cg-avatar-section">
+                    <div class="cg-avatar-circle" id="chat-group-avatar-circle">
+                        <i data-lucide="users" class="cg-avatar-icon" id="chat-group-avatar-icon"></i>
+                        <img id="chat-group-avatar-preview" class="cg-avatar-img hidden" alt="Group avatar">
+                        <button type="button" class="cg-avatar-remove hidden" id="chat-group-avatar-remove-btn">
+                            <i data-lucide="x" size="12"></i>
+                        </button>
+                    </div>
+                    <span class="cg-avatar-label" id="chat-group-avatar-upload-label">Upload Group Photo</span>
+                </div>
+                <div class="chat-group-avatar-editor-note" id="chat-group-avatar-editor-note"></div>
+            </div>
+            <div class="chat-group-avatar-editor-actions">
+                <button type="button" class="chat-group-avatar-editor-action" id="chat-group-avatar-editor-cancel-btn">Cancel</button>
+                <button type="button" class="chat-group-avatar-editor-action primary" id="chat-group-avatar-editor-save-btn">Save</button>
+            </div>
+        `;
+
+        overlay.appendChild(popup);
+        document.body.appendChild(overlay);
+        document.body.appendChild(input);
+
+        if (window.lockScroll) window.lockScroll();
+        if (window.lucide) lucide.createIcons({ container: popup });
+        requestAnimationFrame(() => overlay.classList.add('show'));
+
+        const avatarCircle = popup.querySelector('#chat-group-avatar-circle');
+        const avatarIcon = popup.querySelector('#chat-group-avatar-icon');
+        const avatarPreviewImg = popup.querySelector('#chat-group-avatar-preview');
+        const uploadLabel = popup.querySelector('#chat-group-avatar-upload-label');
+        const noteEl = popup.querySelector('#chat-group-avatar-editor-note');
+        const removeBtn = popup.querySelector('#chat-group-avatar-remove-btn');
+        const saveBtn = popup.querySelector('#chat-group-avatar-editor-save-btn');
+        const cancelBtn = popup.querySelector('#chat-group-avatar-editor-cancel-btn');
+        const closeBtn = popup.querySelector('#chat-group-avatar-editor-close-btn');
+
+        let selectedFile = null;
+        let selectedPreviewUrl = null;
+        let removeAvatar = false;
+        let isSubmitting = false;
+        let isClosed = false;
+
+        const clearPreviewUrl = () => {
+            if (!selectedPreviewUrl) return;
+            try {
+                URL.revokeObjectURL(selectedPreviewUrl);
+            } catch (_) { }
+            selectedPreviewUrl = null;
+        };
+
+        const closeModal = () => {
+            if (isClosed) return;
+            isClosed = true;
+
+            clearPreviewUrl();
+            input.value = '';
+            if (input.parentNode) input.parentNode.removeChild(input);
+
+            overlay.classList.remove('show');
+            if (window.unlockScroll) window.unlockScroll();
+            setTimeout(() => {
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            }, 200);
+        };
+
+        const renderPreview = () => {
+            if (!avatarPreviewImg || !avatarIcon) return;
+
+            const showDefault = !selectedPreviewUrl && (removeAvatar || !hasCurrentCustomAvatar);
+            const showSelected = !!selectedPreviewUrl;
+            const showCurrent = !showSelected && !showDefault && hasCurrentCustomAvatar;
+
+            if (showSelected) {
+                avatarPreviewImg.src = selectedPreviewUrl;
+                avatarPreviewImg.classList.remove('hidden');
+                avatarIcon.style.display = 'none';
+                if (noteEl) noteEl.textContent = 'New avatar preview';
+            } else if (showCurrent) {
+                avatarPreviewImg.src = currentAvatar;
+                avatarPreviewImg.classList.remove('hidden');
+                avatarIcon.style.display = 'none';
+                if (noteEl) noteEl.textContent = 'Current group avatar';
+            } else {
+                avatarPreviewImg.src = '';
+                avatarPreviewImg.classList.add('hidden');
+                avatarIcon.style.display = '';
+                if (noteEl) noteEl.textContent = 'Default group avatar';
+            }
+
+            const canSave = !!selectedFile || (removeAvatar && hasCurrentCustomAvatar);
+            if (saveBtn) saveBtn.disabled = isSubmitting || !canSave;
+            if (removeBtn) {
+                removeBtn.disabled = isSubmitting;
+                removeBtn.classList.toggle('hidden', !selectedFile && (!hasCurrentCustomAvatar || removeAvatar));
+            }
+            if (uploadLabel) uploadLabel.style.pointerEvents = isSubmitting ? 'none' : '';
+            if (avatarCircle) avatarCircle.style.pointerEvents = isSubmitting ? 'none' : '';
+        };
+
+        input.onchange = () => {
+            const file = input.files?.[0] || null;
+            if (!file) return;
+
+            const maxSizeMb = window.APP_CONFIG?.GROUP_CHAT_AVATAR_MAX_SIZE_MB || 5;
+            const maxSizeBytes = maxSizeMb * 1024 * 1024;
+            if (file.size > maxSizeBytes) {
+                if (window.toastError) window.toastError(`Image too large (max ${maxSizeMb}MB)`);
+                input.value = '';
+                return;
+            }
+
+            if (file.type && !file.type.toLowerCase().startsWith('image/')) {
+                if (window.toastWarning) window.toastWarning('Please choose an image file');
+                input.value = '';
+                return;
+            }
+
+            clearPreviewUrl();
+            selectedFile = file;
+            selectedPreviewUrl = URL.createObjectURL(file);
+            removeAvatar = false;
+            renderPreview();
+        };
+
+        if (avatarCircle) {
+            avatarCircle.onclick = () => {
+                if (isSubmitting) return;
+                input.click();
+            };
+        }
+
+        if (uploadLabel) {
+            uploadLabel.onclick = () => {
+                if (isSubmitting) return;
+                input.click();
+            };
+        }
+
+        if (removeBtn) {
+            removeBtn.onclick = (event) => {
+                if (event) event.stopPropagation();
+                if (isSubmitting) return;
+
+                if (selectedFile) {
+                    clearPreviewUrl();
+                    selectedFile = null;
+                    input.value = '';
+                    removeAvatar = false;
+                    renderPreview();
+                    return;
+                }
+
+                if (!hasCurrentCustomAvatar) return;
+                clearPreviewUrl();
+                selectedFile = null;
+                input.value = '';
+                removeAvatar = true;
+                renderPreview();
+            };
+        }
+
+        if (saveBtn) {
+            saveBtn.onclick = async () => {
+                if (isSubmitting) return;
+
+                const hasUpload = !!selectedFile;
+                const hasRemove = !!removeAvatar && !!hasCurrentCustomAvatar;
+                if (!hasUpload && !hasRemove) {
+                    closeModal();
+                    return;
+                }
+
+                isSubmitting = true;
+                saveBtn.textContent = 'Saving...';
+                renderPreview();
+
+                try {
+                    const formData = new FormData();
+                    if (hasUpload && selectedFile) {
+                        formData.append('ConversationAvatar', selectedFile);
+                    } else if (hasRemove) {
+                        formData.append('RemoveAvatar', 'true');
+                    }
+
+                    const res = await window.API.Conversations.updateGroupInfo(conversationId, formData);
+                    if (!res.ok) {
+                        const message = await this._readConversationApiErrorMessage(res, 'Failed to update group avatar');
+                        if (window.toastError) window.toastError(message);
+                        return;
+                    }
+
+                    if (hasRemove) {
+                        this._syncGroupInfoForConversation(conversationId, {
+                            hasConversationAvatarField: true,
+                            conversationAvatar: null
+                        });
+                    }
+
+                    if (window.toastSuccess) {
+                        window.toastSuccess(hasRemove ? 'Group avatar removed' : 'Group avatar updated');
+                    }
+                    closeModal();
+                } catch (error) {
+                    console.error('Failed to update group avatar:', error);
+                    if (window.toastError) window.toastError('Failed to update group avatar');
+                } finally {
+                    isSubmitting = false;
+                    if (!isClosed && saveBtn) {
+                        saveBtn.textContent = 'Save';
+                        renderPreview();
+                    }
+                }
+            };
+        }
+
+        if (cancelBtn) cancelBtn.onclick = () => {
+            if (isSubmitting) return;
+            closeModal();
+        };
+        if (closeBtn) closeBtn.onclick = () => {
+            if (isSubmitting) return;
+            closeModal();
+        };
+
+        overlay.onclick = (event) => {
+            if (event.target === overlay) {
+                if (isSubmitting) return;
+                closeModal();
+            }
+        };
+
+        renderPreview();
+    },
+
     async promptChangeThemeCurrentConversation() {
         if (!this.currentChatId || !this.currentMetaData) return;
         const conversationId = this.currentChatId;
@@ -2601,6 +3098,10 @@ const ChatPage = {
             maxLength: nicknameMaxLength,
             confirmText: 'Save',
             cancelText: 'Cancel',
+            validate: (val) => {
+                const next = normalizeNickname(val) || '';
+                return next !== currentLabel;
+            },
             onConfirm: async (input) => {
                 const nextNickname = normalizeNickname(input);
                 const payload = {
@@ -2767,7 +3268,7 @@ const ChatPage = {
         const html = `
             <div class="chat-info-header">
                 <div class="chat-info-avatar">
-                    <img src="${avatarUrl}" alt="${displayName}" onerror="this.src='${window.APP_CONFIG?.DEFAULT_AVATAR}'">
+                    ${ChatCommon.renderAvatar(meta)}
                     ${(!isGroup && meta.otherMember?.isActive) ? '<div class="status-dot"></div>' : ''}
                 </div>
                 <div class="chat-info-name">${displayName}</div>
@@ -2817,6 +3318,16 @@ const ChatPage = {
                             <i data-lucide="at-sign"></i>
                             <span>Edit nicknames</span>
                         </div>
+                        ${isGroup ? `
+                        <div class="chat-info-item" id="chat-info-edit-group-name-btn">
+                            <i data-lucide="type"></i>
+                            <span>Edit group name</span>
+                        </div>
+                        <div class="chat-info-item" id="chat-info-edit-group-avatar-btn">
+                            <i data-lucide="image"></i>
+                            <span>Edit group avatar</span>
+                        </div>
+                        ` : ''}
                     </div>
                 </div>
 
@@ -2913,6 +3424,16 @@ const ChatPage = {
         const changeThemeBtn = document.getElementById('chat-info-change-theme-btn');
         if (changeThemeBtn) {
             changeThemeBtn.onclick = () => this.promptChangeThemeCurrentConversation();
+        }
+
+        const editGroupNameBtn = document.getElementById('chat-info-edit-group-name-btn');
+        if (editGroupNameBtn) {
+            editGroupNameBtn.onclick = () => this.promptEditGroupNameCurrentConversation();
+        }
+
+        const editGroupAvatarBtn = document.getElementById('chat-info-edit-group-avatar-btn');
+        if (editGroupAvatarBtn) {
+            editGroupAvatarBtn.onclick = () => this.promptEditGroupAvatarCurrentConversation();
         }
 
         const viewPinnedBtn = document.getElementById('chat-info-view-pinned-btn');

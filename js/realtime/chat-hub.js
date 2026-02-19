@@ -8,12 +8,72 @@
     const seenHandlers = new Set();
     const typingHandlers = new Set();
     const themeHandlers = new Set();
+    const groupInfoHandlers = new Set();
     const groupRefCount = new Map(); // conversationId -> count
     let currentConnection = null;
     const pendingInvokes = new Map(); // key -> { method, args, resolve, timeoutId }
+    const REJOIN_RETRY_DELAY_MS = 1500;
+    let hasScheduledRejoinRetry = false;
+    let lastRejoinConnectionId = '';
 
     function isGuid(id) {
         return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id || '');
+    }
+
+    function normalizeConversationId(id) {
+        return (id || '').toString().toLowerCase();
+    }
+
+    function getTrackedConversationIds() {
+        const ids = [];
+        for (const [conversationId, refCount] of groupRefCount.entries()) {
+            if (!conversationId || !isGuid(conversationId)) continue;
+            if (!Number.isFinite(refCount) || refCount <= 0) continue;
+            ids.push(conversationId);
+        }
+        return ids;
+    }
+
+    function scheduleRejoinRetry() {
+        if (hasScheduledRejoinRetry) return;
+        hasScheduledRejoinRetry = true;
+        setTimeout(() => {
+            hasScheduledRejoinRetry = false;
+            rejoinTrackedConversations('retry');
+        }, REJOIN_RETRY_DELAY_MS);
+    }
+
+    async function rejoinTrackedConversations(trigger = 'unknown') {
+        if (!isReady()) return false;
+
+        const trackedIds = getTrackedConversationIds();
+        if (!trackedIds.length) return true;
+
+        const connectionId = (currentConnection?.connectionId || '').toString().toLowerCase();
+        if (connectionId && lastRejoinConnectionId === connectionId) {
+            return true;
+        }
+
+        if (connectionId) {
+            lastRejoinConnectionId = connectionId;
+        }
+
+        const joinResults = await Promise.allSettled(
+            trackedIds.map((conversationId) =>
+                currentConnection.invoke('JoinConversation', conversationId)
+            )
+        );
+
+        const failed = joinResults.filter((item) => item.status === 'rejected');
+        if (failed.length > 0) {
+            console.warn(`[ChatRealtime] Rejoin failed for ${failed.length}/${trackedIds.length} conversations after ${trigger}.`);
+            lastRejoinConnectionId = '';
+            scheduleRejoinRetry();
+            return false;
+        }
+
+        console.log(`[ChatRealtime] Rejoined ${trackedIds.length} conversation groups after ${trigger}.`);
+        return true;
     }
 
     function attachHandlers(conn) {
@@ -26,6 +86,7 @@
             conn.off('ReceiveMessageRecalled');
             conn.off('ReceiveMessageReactUpdated');
             conn.off('ReceiveConversationThemeUpdated');
+            conn.off('ReceiveGroupConversationInfoUpdated');
         } catch (err) {
             console.warn('[ChatRealtime] Failed to clear handlers:', err);
         }
@@ -107,6 +168,50 @@
                 }
             });
         });
+
+        conn.on('ReceiveGroupConversationInfoUpdated', (data) => {
+            const rawName = data?.ConversationName ?? data?.conversationName;
+            const hasAvatarField =
+                Object.prototype.hasOwnProperty.call(data || {}, 'ConversationAvatar') ||
+                Object.prototype.hasOwnProperty.call(data || {}, 'conversationAvatar');
+            const rawAvatar = data?.ConversationAvatar ?? data?.conversationAvatar;
+
+            const normalized = {
+                conversationId: (data?.ConversationId || data?.conversationId || '').toString().toLowerCase(),
+                conversationName: (typeof rawName === 'string' && rawName.trim().length > 0)
+                    ? rawName.trim()
+                    : null,
+                hasConversationAvatarField: hasAvatarField,
+                conversationAvatar: hasAvatarField
+                    ? ((typeof rawAvatar === 'string' && rawAvatar.trim().length > 0) ? rawAvatar.trim() : null)
+                    : undefined,
+                updatedBy: (data?.UpdatedBy || data?.updatedBy || '').toString().toLowerCase()
+            };
+
+            groupInfoHandlers.forEach((handler) => {
+                try {
+                    handler(normalized);
+                } catch (err) {
+                    console.error('[ChatRealtime] Group info handler error:', err);
+                }
+            });
+        });
+
+        if (!conn.__chatRealtimeRejoinBound) {
+            conn.onreconnected(() => {
+                rejoinTrackedConversations('signalr.onreconnected').catch((err) => {
+                    console.warn('[ChatRealtime] Rejoin on reconnect error:', err);
+                    lastRejoinConnectionId = '';
+                    scheduleRejoinRetry();
+                });
+            });
+
+            conn.onclose(() => {
+                lastRejoinConnectionId = '';
+            });
+
+            conn.__chatRealtimeRejoinBound = true;
+        }
     }
 
     function normalizeMessagePayload(msg) {
@@ -223,43 +328,52 @@
                 themeHandlers.delete(handler);
             };
         },
+        onGroupInfo(handler) {
+            if (typeof handler !== 'function') return () => { };
+            groupInfoHandlers.add(handler);
+            return () => {
+                groupInfoHandlers.delete(handler);
+            };
+        },
         joinConversation(conversationId) {
-            if (!isGuid(conversationId)) return Promise.reject(new Error('Invalid conversationId'));
+            const normalizedConversationId = normalizeConversationId(conversationId);
+            if (!isGuid(normalizedConversationId)) return Promise.reject(new Error('Invalid conversationId'));
             
-            const count = groupRefCount.get(conversationId) || 0;
+            const count = groupRefCount.get(normalizedConversationId) || 0;
             const newCount = count + 1;
-            groupRefCount.set(conversationId, newCount);
+            groupRefCount.set(normalizedConversationId, newCount);
 
             if (count === 0) {
                 // First joiner, actually tell server
-                return invokeOrQueue('JoinConversation', [conversationId], `join:${conversationId}`)
+                return invokeOrQueue('JoinConversation', [normalizedConversationId], `join:${normalizedConversationId}`)
                     .then(res => {
-                        console.log(`✅ [SignalR] Network Join: ${conversationId}`);
+                        console.log(`✅ [SignalR] Network Join: ${normalizedConversationId}`);
                         return res;
                     });
             } else {
-                console.log(`📡 [Realtime] Session Added: ${conversationId} (Total: ${newCount})`);
+                console.log(`📡 [Realtime] Session Added: ${normalizedConversationId} (Total: ${newCount})`);
                 return Promise.resolve(true);
             }
         },
         leaveConversation(conversationId) {
-            if (!isGuid(conversationId)) return Promise.reject(new Error('Invalid conversationId'));
+            const normalizedConversationId = normalizeConversationId(conversationId);
+            if (!isGuid(normalizedConversationId)) return Promise.reject(new Error('Invalid conversationId'));
             
-            const count = groupRefCount.get(conversationId) || 0;
+            const count = groupRefCount.get(normalizedConversationId) || 0;
             if (count <= 0) return Promise.resolve(true);
 
             const newCount = count - 1;
             if (newCount === 0) {
                 // Last joiner, actually tell server
-                groupRefCount.delete(conversationId);
-                return invokeOrQueue('LeaveConversation', [conversationId], `leave:${conversationId}`)
+                groupRefCount.delete(normalizedConversationId);
+                return invokeOrQueue('LeaveConversation', [normalizedConversationId], `leave:${normalizedConversationId}`)
                     .then(res => {
-                        console.log(`👋 [SignalR] Network Leave: ${conversationId}`);
+                        console.log(`👋 [SignalR] Network Leave: ${normalizedConversationId}`);
                         return res;
                     });
             } else {
-                groupRefCount.set(conversationId, newCount);
-                console.log(`🚪 [Realtime] Session Removed: ${conversationId} (Remaining: ${newCount})`);
+                groupRefCount.set(normalizedConversationId, newCount);
+                console.log(`🚪 [Realtime] Session Removed: ${normalizedConversationId} (Remaining: ${newCount})`);
                 return Promise.resolve(true);
             }
         },
@@ -270,6 +384,9 @@
         typing(conversationId, isTyping) {
             if (!isGuid(conversationId)) return Promise.reject(new Error('Invalid conversationId'));
             return invokeOrQueue('Typing', [conversationId, !!isTyping], `typing:${conversationId}`);
+        },
+        rejoinActiveConversations(trigger = 'manual') {
+            return rejoinTrackedConversations(trigger);
         }
     };
 

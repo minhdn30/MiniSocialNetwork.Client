@@ -18,7 +18,24 @@ const ChatCommon = {
             return explicitAvatar;
         }
 
-        return this.getDefaultGroupAvatar();
+        // Return a marker for default group icons
+        return 'ICON:users';
+    },
+
+    /**
+     * Helper to render avatar HTML (supports both img and Lucide icons)
+     */
+    renderAvatar(conv, options = {}) {
+        const avatar = this.getAvatar(conv);
+        const name = options.name || this.getDisplayName(conv);
+        const className = options.className || 'chat-avatar';
+        
+        if (avatar === 'ICON:users') {
+            return `<div class="${className} default-group-avatar" ><i data-lucide="users"></i></div>`;
+        }
+        
+        const onError = options.onError || `this.src='${APP_CONFIG.DEFAULT_AVATAR}'`;
+        return `<img src="${avatar}" alt="${escapeHtml(name)}" class="${className}" onerror="${onError}">`;
     },
 
     isDefaultGroupAvatar(value) {
@@ -26,7 +43,7 @@ const ChatCommon = {
         if (!raw) return true;
 
         const normalized = raw.toLowerCase();
-        if (normalized === 'null' || normalized === 'undefined') return true;
+        if (normalized === 'null' || normalized === 'undefined' || normalized === 'icon:users') return true;
         const defaultAvatar = (APP_CONFIG.DEFAULT_AVATAR || '').toLowerCase();
         if (defaultAvatar && normalized === defaultAvatar) return true;
 
@@ -45,24 +62,14 @@ const ChatCommon = {
             'default-avatar.png',
             '/users.svg',
             '/user-group.svg',
-            'lucide/users'
+            'lucide/users',
+            'ICON:users'
         ];
         return defaultMarkers.some((marker) => normalized.includes(marker));
     },
 
     getDefaultGroupAvatar() {
-        const svg = `
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
-                <circle cx="40" cy="40" r="40" fill="#151d2a"/>
-                <g fill="none" stroke="#ff4d7d" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.95">
-                    <path d="M56.67 56.67v-3.33a6.67 6.67 0 0 0-5-6.47"/>
-                    <path d="M45 23.55a6.67 6.67 0 0 1 0 12.92"/>
-                    <path d="M43.33 56.67v-3.33a10 10 0 0 0-10-10H20a10 10 0 0 0-10 10v3.33"/>
-                    <circle cx="26.67" cy="30" r="10"/>
-                </g>
-            </svg>
-        `;
-        return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+        return 'ICON:users';
     },
 
     normalizeEntityId(value) {
@@ -2489,7 +2496,8 @@ const ChatCommon = {
             cancelText = 'Cancel',
             onConfirm = null,
             onCancel = null,
-            maxLength = null
+            maxLength = null,
+            validate = null
         } = options;
 
         const resolvedMaxLength = Number(maxLength);
@@ -2516,8 +2524,8 @@ const ChatCommon = {
                 </div>
             </div>
             <div class="chat-common-confirm-actions">
-                <button class="chat-common-confirm-btn chat-common-confirm-confirm" id="genericConfirmBtn">${confirmText}</button>
                 <button class="chat-common-confirm-btn chat-common-confirm-cancel" id="genericCancelBtn">${cancelText}</button>
+                <button class="chat-common-confirm-btn chat-common-confirm-confirm" id="genericConfirmBtn">${confirmText}</button>
             </div>
         `;
 
@@ -2527,11 +2535,26 @@ const ChatCommon = {
         if (window.lockScroll) lockScroll();
 
         const input = document.getElementById("genericPromptInput");
+        const confirmBtn = document.getElementById("genericConfirmBtn");
+        const cancelBtn = document.getElementById("genericCancelBtn");
+
+        const updateBtnState = () => {
+            if (typeof validate === 'function') {
+                const isValid = validate(input.value);
+                if (confirmBtn) confirmBtn.disabled = !isValid;
+            }
+        };
+
         requestAnimationFrame(() => {
             overlay.classList.add("show");
             if (input) {
                 input.focus();
-                input.select();
+                // Move cursor to the end instead of selecting all
+                const val = input.value;
+                input.value = '';
+                input.value = val;
+                
+                updateBtnState();
             }
         });
 
@@ -2542,18 +2565,21 @@ const ChatCommon = {
         };
 
         const handleConfirm = () => {
+            if (confirmBtn && confirmBtn.disabled) return;
             if (onConfirm) onConfirm(input.value);
             close();
         };
 
-        const confirmBtn = document.getElementById("genericConfirmBtn");
-        const cancelBtn = document.getElementById("genericCancelBtn");
-
         if (confirmBtn) confirmBtn.onclick = handleConfirm;
         
         if (input) {
+            input.oninput = updateBtnState;
             input.onkeydown = (e) => {
                 if (e.key === 'Enter') {
+                    if (confirmBtn && confirmBtn.disabled) {
+                        e.preventDefault();
+                        return;
+                    }
                     e.preventDefault();
                     handleConfirm();
                 } else if (e.key === 'Escape') {
