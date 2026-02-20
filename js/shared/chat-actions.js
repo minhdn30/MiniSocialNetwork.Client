@@ -892,16 +892,24 @@ const ChatActions = {
         if (!this.isGuid(normalizedConversationId)) return false;
 
         const meta = this.getConversationMeta(normalizedConversationId);
-        if (!meta) return true;
+        if (!meta) return false;
 
         const isGroup = this.normalizeBool(meta?.isGroup ?? meta?.IsGroup);
         if (!isGroup) return true;
 
-        const members = meta?.members || meta?.Members || [];
-        if (!Array.isArray(members) || members.length === 0) return true;
-
         const myId = this.getCurrentAccountId();
         if (!myId) return false;
+
+        const ownerId = (meta?.owner ?? meta?.Owner ?? '').toString().toLowerCase().trim();
+        if (ownerId && ownerId === myId) return true;
+
+        const directRole = Number(meta?.currentUserRole ?? meta?.CurrentUserRole);
+        if (Number.isFinite(directRole)) {
+            return directRole === 1;
+        }
+
+        const members = meta?.members || meta?.Members || [];
+        if (!Array.isArray(members) || members.length === 0) return false;
 
         const myMember = members.find(m =>
             (m?.accountId || m?.AccountId || '').toString().toLowerCase() === myId

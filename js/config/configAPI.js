@@ -554,6 +554,14 @@
         apiFetch(`/Conversations/${conversationId}/members/${targetAccountId}/assign-admin`, {
           method: "PATCH",
         }),
+      revokeAdmin: (conversationId, targetAccountId) =>
+        apiFetch(`/Conversations/${conversationId}/members/${targetAccountId}/revoke-admin`, {
+          method: "PATCH",
+        }),
+      transferOwner: (conversationId, targetAccountId) =>
+        apiFetch(`/Conversations/${conversationId}/owner/${targetAccountId}/transfer`, {
+          method: "PATCH",
+        }),
       leaveGroup: (conversationId) =>
         apiFetch(`/Conversations/${conversationId}/leave`, {
           method: "PATCH",

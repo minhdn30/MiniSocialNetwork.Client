@@ -1400,7 +1400,9 @@ const ChatCommon = {
 
     const normalizeAccount = (raw) => {
       if (!raw || typeof raw !== "object") return null;
-      const accountId = this.normalizeEntityId(raw.accountId || raw.AccountId || "");
+      const accountId = this.normalizeEntityId(
+        raw.accountId || raw.AccountId || "",
+      );
       if (!accountId) return null;
 
       const username = (
@@ -1467,7 +1469,10 @@ const ChatCommon = {
       300;
 
     const initialExcludeIds = new Set(
-      (Array.isArray(options.excludeAccountIds) ? options.excludeAccountIds : [])
+      (Array.isArray(options.excludeAccountIds)
+        ? options.excludeAccountIds
+        : []
+      )
         .map((id) => this.normalizeEntityId(id))
         .filter(Boolean),
     );
@@ -1550,12 +1555,14 @@ const ChatCommon = {
     const mergeAccounts = (priorityAccounts, apiAccounts) => {
       const merged = [];
       const seen = new Set();
-      [...(priorityAccounts || []), ...(apiAccounts || [])].forEach((account) => {
-        if (!account || !account.id) return;
-        if (seen.has(account.id)) return;
-        seen.add(account.id);
-        merged.push(account);
-      });
+      [...(priorityAccounts || []), ...(apiAccounts || [])].forEach(
+        (account) => {
+          if (!account || !account.id) return;
+          if (seen.has(account.id)) return;
+          seen.add(account.id);
+          merged.push(account);
+        },
+      );
       return merged;
     };
 
@@ -1641,7 +1648,9 @@ const ChatCommon = {
 
       listEl.innerHTML = accounts
         .map((account) => {
-          const isSelected = selectedMembers.some((member) => member.id === account.id);
+          const isSelected = selectedMembers.some(
+            (member) => member.id === account.id,
+          );
           const avatar = account.avatarUrl || window.APP_CONFIG?.DEFAULT_AVATAR;
 
           return `
@@ -1668,7 +1677,9 @@ const ChatCommon = {
 
     const toggleSelectedMember = (account) => {
       if (!account?.id) return;
-      const existingIndex = selectedMembers.findIndex((member) => member.id === account.id);
+      const existingIndex = selectedMembers.findIndex(
+        (member) => member.id === account.id,
+      );
       if (existingIndex >= 0) {
         selectedMembers.splice(existingIndex, 1);
       } else {
@@ -1699,17 +1710,21 @@ const ChatCommon = {
           ]),
         );
 
-        const res = await window.API.Conversations.searchAccountsForAddGroupMembers(
-          conversationId,
-          normalizedKeyword,
-          excludeAccountIds,
-          searchLimit,
-        );
+        const res =
+          await window.API.Conversations.searchAccountsForAddGroupMembers(
+            conversationId,
+            normalizedKeyword,
+            excludeAccountIds,
+            searchLimit,
+          );
 
         if (requestSequence !== searchRequestSequence) return;
 
         if (!res.ok) {
-          const message = await readErrorMessage(res, "Failed to search members");
+          const message = await readErrorMessage(
+            res,
+            "Failed to search members",
+          );
           renderEmptyState(message);
           return;
         }
@@ -1738,7 +1753,8 @@ const ChatCommon = {
         new Set(selectedMembers.map((member) => member.id).filter(Boolean)),
       );
       if (!selectedIds.length) {
-        if (window.toastWarning) window.toastWarning("Please select at least one member");
+        if (window.toastWarning)
+          window.toastWarning("Please select at least one member");
         return;
       }
 
@@ -1746,7 +1762,10 @@ const ChatCommon = {
       renderSelectedMembers();
 
       try {
-        const res = await window.API.Conversations.addMembers(conversationId, selectedIds);
+        const res = await window.API.Conversations.addMembers(
+          conversationId,
+          selectedIds,
+        );
         if (!res.ok) {
           const message = await readErrorMessage(res, "Failed to add members");
           if (window.toastError) window.toastError(message);
@@ -1764,7 +1783,9 @@ const ChatCommon = {
         if (window.toastSuccess) {
           const count = selectedIds.length;
           window.toastSuccess(
-            count === 1 ? "Member added to group" : `${count} members added to group`,
+            count === 1
+              ? "Member added to group"
+              : `${count} members added to group`,
           );
         }
 
@@ -1793,7 +1814,9 @@ const ChatCommon = {
         const removeBtn = event.target.closest(".cg-chip-remove");
         if (!removeBtn) return;
 
-        const accountId = this.normalizeEntityId(removeBtn.dataset.accountId || "");
+        const accountId = this.normalizeEntityId(
+          removeBtn.dataset.accountId || "",
+        );
         if (!accountId) return;
         const member = selectedMembers.find((item) => item.id === accountId);
         if (!member) return;
@@ -2170,7 +2193,7 @@ const ChatCommon = {
       .join("");
     const extraHtml =
       badgeLayout.extraCount > 0
-        ? `<span class="msg-reactions-extra">+${badgeLayout.extraCount} người khác</span>`
+        ? `<span class="msg-reactions-extra">+${badgeLayout.extraCount}</span>`
         : "";
 
     return `
@@ -2187,7 +2210,8 @@ const ChatCommon = {
   },
 
   getReactionBadgeAnchor(contentContainer) {
-    if (!contentContainer || !(contentContainer instanceof Element)) return null;
+    if (!contentContainer || !(contentContainer instanceof Element))
+      return null;
 
     let anchor = null;
     Array.from(contentContainer.children || []).forEach((child) => {
@@ -2205,7 +2229,8 @@ const ChatCommon = {
   },
 
   ensureReactionBadgeAnchor(contentContainer, badge = null) {
-    if (!contentContainer || !(contentContainer instanceof Element)) return null;
+    if (!contentContainer || !(contentContainer instanceof Element))
+      return null;
 
     const targetBadge =
       badge && badge.classList?.contains("msg-reactions-summary")
@@ -2250,7 +2275,9 @@ const ChatCommon = {
       if (tag === "video") {
         const video = /** @type {HTMLVideoElement} */ (node);
         if (video.readyState < 1) {
-          video.addEventListener("loadedmetadata", scheduleSync, { once: true });
+          video.addEventListener("loadedmetadata", scheduleSync, {
+            once: true,
+          });
           video.addEventListener("loadeddata", scheduleSync, { once: true });
           video.addEventListener("error", scheduleSync, { once: true });
         }
@@ -2295,7 +2322,9 @@ const ChatCommon = {
     const leftOffset = Math.max(0, anchor.offsetLeft || 0);
     const rightOffset = Math.max(
       0,
-      (contentContainer.offsetWidth || 0) - leftOffset - (anchor.offsetWidth || 0),
+      (contentContainer.offsetWidth || 0) -
+        leftOffset -
+        (anchor.offsetWidth || 0),
     );
 
     const wrapper = contentContainer.closest(".msg-bubble-wrapper");
@@ -2394,7 +2423,11 @@ const ChatCommon = {
     const anchor = this.ensureReactionBadgeAnchor(contentContainer, badge);
     if (!anchor) return;
 
-    const positioned = this.positionReactionBadge(contentContainer, badge, anchor);
+    const positioned = this.positionReactionBadge(
+      contentContainer,
+      badge,
+      anchor,
+    );
     if (positioned) {
       contentContainer.dataset.reactSyncRetry = "0";
       return;

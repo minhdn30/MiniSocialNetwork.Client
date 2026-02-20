@@ -723,17 +723,29 @@ const ChatSidebar = {
 
         const hasNameInput = typeof payload?.conversationName === 'string' && payload.conversationName.trim().length > 0;
         const nextConversationName = hasNameInput ? payload.conversationName.trim() : null;
-        const hasAvatarInput = !!(payload?.hasConversationAvatarField || Object.prototype.hasOwnProperty.call(payload || {}, 'conversationAvatar'));
+        const hasAvatarInput = !!(
+            payload?.hasConversationAvatarField
+            || Object.prototype.hasOwnProperty.call(payload || {}, 'conversationAvatar')
+            || Object.prototype.hasOwnProperty.call(payload || {}, 'ConversationAvatar')
+        );
         const nextConversationAvatar = hasAvatarInput
             ? ((typeof payload?.conversationAvatar === 'string' && payload.conversationAvatar.trim().length > 0)
                 ? payload.conversationAvatar.trim()
                 : null)
             : null;
+        const hasOwnerInput = !!(
+            payload?.hasOwnerField
+            || Object.prototype.hasOwnProperty.call(payload || {}, 'owner')
+            || Object.prototype.hasOwnProperty.call(payload || {}, 'Owner')
+        );
+        const nextOwner = hasOwnerInput
+            ? ((payload?.owner || '').toString().trim().toLowerCase() || null)
+            : null;
 
         let changed = false;
         this.conversations.forEach(conv => {
             if ((conv.conversationId || '').toLowerCase() !== target) return;
-            if (!conv.isGroup) return;
+            if (!(conv?.isGroup ?? conv?.IsGroup)) return;
 
             if (hasNameInput) {
                 const currentDisplayName = conv.displayName ?? conv.DisplayName ?? null;
@@ -755,6 +767,15 @@ const ChatSidebar = {
                     conv.ConversationAvatar = nextConversationAvatar;
                     conv.displayAvatar = nextConversationAvatar;
                     conv.DisplayAvatar = nextConversationAvatar;
+                    changed = true;
+                }
+            }
+
+            if (hasOwnerInput) {
+                const currentOwner = (conv.owner ?? conv.Owner ?? null);
+                if ((currentOwner || null) !== nextOwner) {
+                    conv.owner = nextOwner;
+                    conv.Owner = nextOwner;
                     changed = true;
                 }
             }

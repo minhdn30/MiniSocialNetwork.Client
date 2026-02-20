@@ -175,6 +175,10 @@
                 Object.prototype.hasOwnProperty.call(data || {}, 'ConversationAvatar') ||
                 Object.prototype.hasOwnProperty.call(data || {}, 'conversationAvatar');
             const rawAvatar = data?.ConversationAvatar ?? data?.conversationAvatar;
+            const hasOwnerField =
+                Object.prototype.hasOwnProperty.call(data || {}, 'Owner') ||
+                Object.prototype.hasOwnProperty.call(data || {}, 'owner');
+            const rawOwner = data?.Owner ?? data?.owner;
 
             const normalized = {
                 conversationId: (data?.ConversationId || data?.conversationId || '').toString().toLowerCase(),
@@ -184,6 +188,10 @@
                 hasConversationAvatarField: hasAvatarField,
                 conversationAvatar: hasAvatarField
                     ? ((typeof rawAvatar === 'string' && rawAvatar.trim().length > 0) ? rawAvatar.trim() : null)
+                    : undefined,
+                hasOwnerField,
+                owner: hasOwnerField
+                    ? ((rawOwner || '').toString().trim().toLowerCase() || null)
                     : undefined,
                 updatedBy: (data?.UpdatedBy || data?.updatedBy || '').toString().toLowerCase()
             };

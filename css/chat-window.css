@@ -1173,6 +1173,17 @@ body.is-dragging-chat #chat-windows-stack {
     background: var(--chat-theme-action-hover-bg, rgba(255, 255, 255, 0.08));
 }
 
+.chat-window-members-add-btn:disabled,
+.chat-window-members-add-btn.disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.chat-window-members-add-btn:disabled:hover,
+.chat-window-members-add-btn.disabled:hover {
+    background: var(--chat-theme-input-wrapper-bg, var(--chat-theme-surface-alt, var(--bg-secondary)));
+}
+
 .chat-window-members-filter-btn i,
 .chat-window-members-filter-btn svg,
 .chat-window-members-add-btn i,
@@ -1282,6 +1293,11 @@ body.is-dragging-chat #chat-windows-stack {
     padding: 1px 6px;
     border-radius: 10px;
     flex-shrink: 0;
+}
+
+.chat-window-members-role.owner {
+    color: var(--chat-theme-accent, var(--accent-primary, #3b82f6));
+    border-color: color-mix(in srgb, var(--chat-theme-accent, var(--accent-primary, #3b82f6)) 45%, transparent);
 }
 
 .chat-window-members-secondary {

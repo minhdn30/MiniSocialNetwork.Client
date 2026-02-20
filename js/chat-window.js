@@ -18,11 +18,16 @@ const ChatWindow = {
   _membersModal: null,
   _themeModeEvent: null,
   _themeModeHandler: null,
+  _permissionRefreshTimers: new Map(),
+  _permissionRefreshInFlight: new Map(),
   _initialized: false,
 
   init() {
     if (this._initialized) return;
     this._initialized = true;
+    this._permissionRefreshTimers.forEach((timerId) => clearTimeout(timerId));
+    this._permissionRefreshTimers.clear();
+    this._permissionRefreshInFlight.clear();
 
     if (!document.getElementById("chat-window-wrapper")) {
       const wrapper = document.createElement("div");
@@ -923,6 +928,16 @@ const ChatWindow = {
     ) {
       window.ChatActions.syncPinStateFromSystemMessage(incoming, convId);
     }
+    if (
+      (chat?.data?.isGroup ?? chat?.data?.IsGroup) &&
+      this._shouldRefreshPermissionsFromSystemMessage(incoming)
+    ) {
+      this._scheduleGroupPermissionRefresh(convId, {
+        delayMs: 120,
+        closeMessageMenus: true,
+        reloadMembers: true,
+      });
+    }
     if (messageId) {
       this.applyPendingSeenForMessage(convId, messageId);
     }
@@ -1060,7 +1075,9 @@ const ChatWindow = {
     const msgIdRaw = data.LastSeenMessageId || data.lastSeenMessageId;
     const msgId = msgIdRaw ? msgIdRaw.toString().toLowerCase() : msgIdRaw;
     if (accId && msgId) {
-      this.moveSeenAvatar(convId, accId, msgId);
+      const memberInfo = this.resolveSeenMemberInfo(convId, accId);
+      this.upsertMemberSeenStatus(convId, accId, msgId, memberInfo);
+      this.moveSeenAvatar(convId, accId, msgId, memberInfo);
     }
 
     // Forward to sidebar to update seen indicator
@@ -1318,6 +1335,139 @@ const ChatWindow = {
     }
   },
 
+  getMemberSeenStatuses(meta) {
+    if (!meta) return [];
+    if (Array.isArray(meta.memberSeenStatuses)) return meta.memberSeenStatuses;
+    if (Array.isArray(meta.MemberSeenStatuses)) return meta.MemberSeenStatuses;
+    return [];
+  },
+
+  resolveSeenMemberInfo(conversationId, accountId) {
+    const normAccountId = accountId ? accountId.toString().toLowerCase() : "";
+    if (!normAccountId) return null;
+
+    const chatObj = this.openChats.get(conversationId);
+    const conversation = chatObj?.data;
+    if (!conversation) return null;
+
+    const seenStatuses = this.getMemberSeenStatuses(conversation);
+    if (seenStatuses.length) {
+      const fromSeen = seenStatuses.find((m) => {
+        const mId = (m.accountId || m.AccountId || "").toString().toLowerCase();
+        return mId === normAccountId;
+      });
+      if (fromSeen) {
+        const avatar = fromSeen.avatarUrl || fromSeen.AvatarUrl || null;
+        const name = fromSeen.displayName || fromSeen.DisplayName || null;
+        if (avatar || name) {
+          return { avatar, name };
+        }
+      }
+    }
+
+    if (Array.isArray(conversation.members)) {
+      const member = conversation.members.find((m) => {
+        const mId = (m.accountId || m.AccountId || "").toString().toLowerCase();
+        return mId === normAccountId;
+      });
+      if (member) {
+        return {
+          avatar: member.avatarUrl || member.AvatarUrl || null,
+          name:
+            member.nickname ||
+            member.Nickname ||
+            member.username ||
+            member.userName ||
+            member.Username ||
+            member.UserName ||
+            member.fullName ||
+            member.FullName ||
+            member.displayName ||
+            member.DisplayName ||
+            null,
+        };
+      }
+    }
+
+    const other = conversation.otherMember || conversation.OtherMember;
+    if (
+      other &&
+      (other.accountId || other.AccountId || "")
+        .toString()
+        .toLowerCase() === normAccountId
+    ) {
+      return {
+        avatar: other.avatarUrl || other.AvatarUrl || null,
+        name:
+          other.nickname ||
+          other.Nickname ||
+          other.displayName ||
+          other.DisplayName ||
+          other.username ||
+          other.Username ||
+          other.fullName ||
+          other.FullName ||
+          null,
+      };
+    }
+
+    if (!(conversation.isGroup ?? conversation.IsGroup)) {
+      return {
+        avatar: conversation.displayAvatar || conversation.DisplayAvatar || null,
+        name: conversation.displayName || conversation.DisplayName || null,
+      };
+    }
+
+    return null;
+  },
+
+  upsertMemberSeenStatus(conversationId, accountId, messageId, memberInfo = null) {
+    const normAccountId = accountId ? accountId.toString().toLowerCase() : "";
+    const normMessageId = messageId ? messageId.toString().toLowerCase() : "";
+    if (!normAccountId || !normMessageId) return;
+
+    const chatObj = this.openChats.get(conversationId);
+    if (!chatObj?.data) return;
+
+    let seenStatuses = this.getMemberSeenStatuses(chatObj.data);
+    if (!Array.isArray(chatObj.data.memberSeenStatuses)) {
+      if (seenStatuses.length) {
+        chatObj.data.memberSeenStatuses = seenStatuses;
+      } else {
+        chatObj.data.memberSeenStatuses = [];
+        seenStatuses = chatObj.data.memberSeenStatuses;
+      }
+    } else {
+      seenStatuses = chatObj.data.memberSeenStatuses;
+    }
+
+    let target = seenStatuses.find((m) => {
+      const mId = (m.accountId || m.AccountId || "").toString().toLowerCase();
+      return mId === normAccountId;
+    });
+
+    if (!target) {
+      target = { accountId: normAccountId };
+      seenStatuses.push(target);
+    }
+
+    target.accountId = normAccountId;
+    target.AccountId = target.AccountId || normAccountId;
+    target.lastSeenMessageId = normMessageId;
+    target.LastSeenMessageId = normMessageId;
+
+    const resolvedInfo =
+      memberInfo || this.resolveSeenMemberInfo(conversationId, normAccountId);
+    if (resolvedInfo?.avatar) {
+      target.avatarUrl = resolvedInfo.avatar;
+      target.AvatarUrl = resolvedInfo.avatar;
+    }
+    if (resolvedInfo?.name) {
+      target.displayName = resolvedInfo.name;
+      target.DisplayName = resolvedInfo.name;
+    }
+  },
+
   /**
    * Move (or create) a member's seen avatar to a specific message's seen row in a chat window
    */
@@ -1331,43 +1481,9 @@ const ChatWindow = {
     const myId = (localStorage.getItem("accountId") || "").toLowerCase();
     if (normAccountId === myId) return;
 
-    // Resolve info from metadata if missing (realtime event)
+    // Resolve info from latest conversation cache if realtime payload has no member info
     if (!memberInfo) {
-      const chatObj = this.openChats.get(conversationId);
-      const targetId = normAccountId;
-      if (chatObj?.metaData?.memberSeenStatuses) {
-        const member = chatObj.metaData.memberSeenStatuses.find((m) => {
-          const mId = (m.accountId || m.AccountId || "").toLowerCase();
-          return mId === targetId;
-        });
-        if (member) {
-          memberInfo = {
-            avatar: member.avatarUrl || member.AvatarUrl,
-            name: member.displayName || member.DisplayName,
-          };
-        }
-      }
-      // Fallback: use conv data (otherMember / displayAvatar) for 1:1 chats
-      if (!memberInfo && chatObj?.data) {
-        const other = chatObj.data.otherMember;
-        if (other && (other.accountId || "").toLowerCase() === targetId) {
-          memberInfo = {
-            avatar: other.avatarUrl || other.AvatarUrl,
-            name:
-              other.displayName ||
-              other.DisplayName ||
-              other.username ||
-              other.Username,
-          };
-        }
-        // Final fallback: conversation display avatar (1:1 only)
-        if (!memberInfo && !chatObj.data.isGroup) {
-          memberInfo = {
-            avatar: chatObj.data.displayAvatar,
-            name: chatObj.data.displayName,
-          };
-        }
-      }
+      memberInfo = this.resolveSeenMemberInfo(conversationId, normAccountId);
     }
 
     // 1. Remove existing if any in this window
@@ -1472,10 +1588,11 @@ const ChatWindow = {
    * Initial render for all members' seen indicators in a chat window
    */
   updateMemberSeenStatuses(conversationId, meta) {
-    if (!meta || !meta.memberSeenStatuses) return;
+    const seenStatuses = this.getMemberSeenStatuses(meta);
+    if (!seenStatuses.length) return;
     const myId = (localStorage.getItem("accountId") || "").toLowerCase();
 
-    meta.memberSeenStatuses.forEach((member) => {
+    seenStatuses.forEach((member) => {
       const memberId = (
         member.accountId ||
         member.AccountId ||
@@ -1488,10 +1605,12 @@ const ChatWindow = {
       if (!rawLastSeenId) return;
 
       const lastSeenId = rawLastSeenId.toString().toLowerCase();
-      this.moveSeenAvatar(conversationId, memberId, lastSeenId, {
+      const memberInfo = {
         avatar: member.avatarUrl || member.AvatarUrl,
         name: member.displayName || member.DisplayName,
-      });
+      };
+      this.upsertMemberSeenStatus(conversationId, memberId, lastSeenId, memberInfo);
+      this.moveSeenAvatar(conversationId, memberId, lastSeenId, memberInfo);
     });
   },
 
@@ -2193,6 +2312,13 @@ const ChatWindow = {
       }
 
       this.pendingSeenByConv.delete(id.toLowerCase());
+      const refreshKey = (id || "").toLowerCase();
+      const refreshTimer = this._permissionRefreshTimers.get(refreshKey);
+      if (refreshTimer) {
+        clearTimeout(refreshTimer);
+        this._permissionRefreshTimers.delete(refreshKey);
+      }
+      this._permissionRefreshInFlight.delete(refreshKey);
       this.revokePreviewBlobUrls(id);
       chat.pendingFiles = [];
       chat.runtimeCtx = null;
@@ -2702,7 +2828,8 @@ const ChatWindow = {
 
     const hasAvatarInput = !!(
       data?.hasConversationAvatarField ||
-      Object.prototype.hasOwnProperty.call(data || {}, "conversationAvatar")
+      Object.prototype.hasOwnProperty.call(data || {}, "conversationAvatar") ||
+      Object.prototype.hasOwnProperty.call(data || {}, "ConversationAvatar")
     );
     const rawAvatar = data?.conversationAvatar ?? data?.ConversationAvatar;
     const nextConversationAvatar = hasAvatarInput
@@ -2710,11 +2837,22 @@ const ChatWindow = {
         ? rawAvatar.trim()
         : null
       : null;
+    const hasOwnerInput = !!(
+      data?.hasOwnerField ||
+      Object.prototype.hasOwnProperty.call(data || {}, "owner") ||
+      Object.prototype.hasOwnProperty.call(data || {}, "Owner")
+    );
+    const rawOwner = data?.owner ?? data?.Owner;
+    const nextOwner = hasOwnerInput
+      ? ((rawOwner || "").toString().trim().toLowerCase() || null)
+      : null;
 
     this.applyGroupConversationInfoUpdate(conversationId, {
       conversationName: nextConversationName,
       hasConversationAvatarField: hasAvatarInput,
       conversationAvatar: nextConversationAvatar,
+      hasOwnerField: hasOwnerInput,
+      owner: nextOwner,
     });
 
     if (
@@ -2725,6 +2863,8 @@ const ChatWindow = {
         conversationName: nextConversationName,
         hasConversationAvatarField: hasAvatarInput,
         conversationAvatar: nextConversationAvatar,
+        hasOwnerField: hasOwnerInput,
+        owner: nextOwner,
       });
     }
 
@@ -2736,6 +2876,23 @@ const ChatWindow = {
         conversationName: nextConversationName,
         hasConversationAvatarField: hasAvatarInput,
         conversationAvatar: nextConversationAvatar,
+        hasOwnerField: hasOwnerInput,
+        owner: nextOwner,
+      });
+    }
+
+    const openId = this.getOpenChatId(conversationId) || conversationId;
+    const openChat = this.openChats.get(openId);
+    if (hasOwnerInput && openChat && (openChat.data?.isGroup ?? openChat.data?.IsGroup)) {
+      this.refreshPermissionUiForConversation(openId, {
+        closeMessageMenus: true,
+        reloadMembers: true,
+      });
+
+      this._scheduleGroupPermissionRefresh(openId, {
+        delayMs: 60,
+        closeMessageMenus: true,
+        reloadMembers: true,
       });
     }
   },
@@ -2743,7 +2900,8 @@ const ChatWindow = {
   applyGroupConversationInfoUpdate(conversationId, payload = {}) {
     const openId = this.getOpenChatId(conversationId) || conversationId;
     const chat = this.openChats.get(openId);
-    if (!chat || !chat.data || !chat.data.isGroup) return false;
+    if (!chat || !chat.data || !(chat.data?.isGroup ?? chat.data?.IsGroup))
+      return false;
 
     const hasNameInput =
       typeof payload?.conversationName === "string" &&
@@ -2754,13 +2912,22 @@ const ChatWindow = {
 
     const hasAvatarInput = !!(
       payload?.hasConversationAvatarField ||
-      Object.prototype.hasOwnProperty.call(payload || {}, "conversationAvatar")
+      Object.prototype.hasOwnProperty.call(payload || {}, "conversationAvatar") ||
+      Object.prototype.hasOwnProperty.call(payload || {}, "ConversationAvatar")
     );
     const nextConversationAvatar = hasAvatarInput
       ? typeof payload?.conversationAvatar === "string" &&
         payload.conversationAvatar.trim().length > 0
         ? payload.conversationAvatar.trim()
         : null
+      : null;
+    const hasOwnerInput = !!(
+      payload?.hasOwnerField ||
+      Object.prototype.hasOwnProperty.call(payload || {}, "owner") ||
+      Object.prototype.hasOwnProperty.call(payload || {}, "Owner")
+    );
+    const nextOwner = hasOwnerInput
+      ? ((payload?.owner || "").toString().trim().toLowerCase() || null)
       : null;
 
     let changed = false;
@@ -2795,6 +2962,16 @@ const ChatWindow = {
         chat.data.ConversationAvatar = nextConversationAvatar;
         chat.data.displayAvatar = nextConversationAvatar;
         chat.data.DisplayAvatar = nextConversationAvatar;
+        changed = true;
+      }
+    }
+
+    if (hasOwnerInput) {
+      const currentOwner = chat.data.owner ?? chat.data.Owner ?? null;
+      if ((currentOwner || null) !== nextOwner) {
+        chat.data.owner = nextOwner;
+        chat.data.Owner = nextOwner;
+        this._updateOpenChatCurrentUserRole(chat.data);
         changed = true;
       }
     }
@@ -2974,8 +3151,11 @@ const ChatWindow = {
       .toString()
       .toLowerCase();
 
-    const isGroup = !!chat.data.isGroup;
-    const isMuted = !!chat.data.isMuted;
+    const isGroup = !!(chat.data?.isGroup ?? chat.data?.IsGroup);
+    const currentUserIsAdmin = isGroup
+      ? this.isCurrentUserGroupAdmin(chat.data)
+      : false;
+    const isMuted = !!(chat.data?.isMuted ?? chat.data?.IsMuted);
     const muteIcon = isMuted ? "bell" : "bell-off";
     const muteText = isMuted ? "Unmute" : "Mute";
 
@@ -3015,7 +3195,7 @@ const ChatWindow = {
                     <span>Edit nicknames</span>
                 </button>
                 ${
-                  isGroup
+                  isGroup && currentUserIsAdmin
                     ? `
                 <button class="chat-menu-item" onclick="ChatWindow.closeHeaderMenu(); ChatWindow.promptEditGroupName('${id}')">
                     <i data-lucide="type"></i>
@@ -3258,10 +3438,11 @@ const ChatWindow = {
     });
   },
 
-  _ensureEditableGroupConversation(id, actionName = "Group info") {
+  _ensureEditableGroupConversation(id, actionName = "Group info", options = {}) {
     const openId = this.getOpenChatId(id) || id;
     const chat = this.openChats.get(openId);
     if (!chat || !chat.data) return null;
+    const requireAdmin = !!options.requireAdmin;
 
     const isGroup = !!(chat.data?.isGroup ?? chat.data?.IsGroup);
     if (!isGroup) {
@@ -3274,6 +3455,12 @@ const ChatWindow = {
     if (!this.isGuidConversationId(conversationId)) {
       if (window.toastInfo)
         window.toastInfo(`${actionName} can be changed after the group is created`);
+      return null;
+    }
+
+    if (requireAdmin && !this.isCurrentUserGroupAdmin(chat.data)) {
+      if (window.toastError)
+        window.toastError(`Only group admins can ${actionName.toLowerCase()}.`);
       return null;
     }
 
@@ -3335,7 +3522,9 @@ const ChatWindow = {
 
   async promptEditGroupName(id) {
     const openId = this.getOpenChatId(id) || id;
-    const conversationId = this._ensureEditableGroupConversation(openId, "Group name");
+    const conversationId = this._ensureEditableGroupConversation(openId, "Group name", {
+      requireAdmin: true,
+    });
     if (!conversationId) return;
 
     if (!window.API?.Conversations?.updateGroupInfo) {
@@ -3406,7 +3595,9 @@ const ChatWindow = {
 
   promptEditGroupAvatar(id) {
     const openId = this.getOpenChatId(id) || id;
-    const conversationId = this._ensureEditableGroupConversation(openId, "Group avatar");
+    const conversationId = this._ensureEditableGroupConversation(openId, "Group avatar", {
+      requireAdmin: true,
+    });
     if (!conversationId) return;
 
     if (!window.API?.Conversations?.updateGroupInfo) {
@@ -3710,10 +3901,39 @@ const ChatWindow = {
     renderPreview();
   },
 
+  getCurrentGroupOwnerId(chatData = null) {
+    const data = chatData || null;
+    if (!data) return null;
+    const ownerRaw = data.owner ?? data.Owner ?? null;
+    const normalized = (ownerRaw || "").toString().toLowerCase().trim();
+    if (normalized) return normalized;
+
+    const createdByRaw = data.createdBy ?? data.CreatedBy ?? null;
+    const createdBy = (createdByRaw || "").toString().toLowerCase().trim();
+    return createdBy || null;
+  },
+
+  isCurrentUserGroupOwner(chatData = null) {
+    const data = chatData || {};
+    const isGroup = !!(data?.isGroup ?? data?.IsGroup);
+    if (!isGroup) return false;
+
+    const currentId = (localStorage.getItem("accountId") || "").toLowerCase();
+    if (!currentId) return false;
+
+    const ownerId = this.getCurrentGroupOwnerId(data);
+    return !!ownerId && ownerId === currentId;
+  },
+
   isCurrentUserGroupAdmin(chatData = null) {
     const data = chatData || {};
     const isGroup = !!(data?.isGroup ?? data?.IsGroup);
     if (!isGroup) return false;
+
+    if (this.isCurrentUserGroupOwner(data)) return true;
+
+    const directRole = Number(data?.currentUserRole ?? data?.CurrentUserRole);
+    if (Number.isFinite(directRole)) return directRole === 1;
 
     const currentId = (localStorage.getItem("accountId") || "").toLowerCase();
     if (!currentId) return false;
@@ -3726,7 +3946,240 @@ const ChatWindow = {
         (m?.accountId || m?.AccountId || "").toString().toLowerCase() ===
         currentId,
     );
-    return Number(me?.role ?? me?.Role ?? 0) === 1;
+    if (!me) return false;
+
+    const role = Number(me?.role ?? me?.Role);
+    if (Number.isFinite(role)) return role === 1;
+    return !!(me?.isAdmin ?? me?.IsAdmin);
+  },
+
+  _shouldRefreshPermissionsFromSystemMessage(message) {
+    if (!window.ChatCommon || typeof window.ChatCommon.isSystemMessage !== "function") {
+      return false;
+    }
+    if (!window.ChatCommon.isSystemMessage(message)) {
+      return false;
+    }
+
+    const parsed =
+      typeof window.ChatCommon.parseSystemMessageData === "function"
+        ? window.ChatCommon.parseSystemMessageData(message)
+        : null;
+
+    if (parsed && typeof parsed === "object") {
+      const action = Number(parsed?.action ?? parsed?.Action);
+      const hasNicknameField =
+        Object.prototype.hasOwnProperty.call(parsed, "nickname") ||
+        Object.prototype.hasOwnProperty.call(parsed, "Nickname");
+      if (hasNicknameField) return false;
+      if (Number.isFinite(action) && (action === 9 || action === 10 || action === 11)) {
+        return false;
+      }
+      return true;
+    }
+
+    const rawContent = (message?.content ?? message?.Content ?? "")
+      .toString()
+      .trim()
+      .toLowerCase();
+    if (!rawContent) return true;
+
+    if (
+      rawContent.includes("set nickname for") ||
+      rawContent.includes("removed nickname for") ||
+      rawContent.includes("changed the chat theme") ||
+      rawContent.includes("reset the chat theme") ||
+      rawContent.includes("pinned a message") ||
+      rawContent.includes("unpinned a message")
+    ) {
+      return false;
+    }
+
+    return true;
+  },
+
+  _updateOpenChatCurrentUserRole(chatData, options = {}) {
+    if (!chatData || typeof chatData !== "object") return;
+
+    const myId = (localStorage.getItem("accountId") || "").toLowerCase();
+    if (!myId) return;
+    const preferDirectRole = options?.preferDirectRole === true;
+
+    if (this.isCurrentUserGroupOwner(chatData)) {
+      chatData.currentUserRole = 1;
+      chatData.CurrentUserRole = 1;
+      return;
+    }
+
+    const directRole = Number(chatData?.currentUserRole ?? chatData?.CurrentUserRole);
+    if (preferDirectRole && Number.isFinite(directRole)) {
+      const normalizedDirectRole = directRole === 1 ? 1 : 0;
+      chatData.currentUserRole = normalizedDirectRole;
+      chatData.CurrentUserRole = normalizedDirectRole;
+      return;
+    }
+
+    const members = chatData?.members || chatData?.Members || [];
+    if (!Array.isArray(members) || members.length === 0) {
+      chatData.currentUserRole = 0;
+      chatData.CurrentUserRole = 0;
+      return;
+    }
+
+    const me = members.find(
+      (m) => (m?.accountId || m?.AccountId || "").toString().toLowerCase() === myId,
+    );
+    if (!me) {
+      chatData.currentUserRole = 0;
+      chatData.CurrentUserRole = 0;
+      return;
+    }
+
+    const roleValue = Number(me?.role ?? me?.Role);
+    const isAdmin = Number.isFinite(roleValue)
+      ? roleValue === 1
+      : !!(me?.isAdmin ?? me?.IsAdmin);
+    const normalizedRole = isAdmin ? 1 : 0;
+    chatData.currentUserRole = normalizedRole;
+    chatData.CurrentUserRole = normalizedRole;
+  },
+
+  _scheduleGroupPermissionRefresh(conversationId, options = {}) {
+    const target = (conversationId || "").toString().toLowerCase();
+    if (!target) return;
+
+    const openId = this.getOpenChatId(target) || target;
+    const chat = this.openChats.get(openId);
+    if (!chat || !(chat.data?.isGroup ?? chat.data?.IsGroup)) return;
+
+    if (this._permissionRefreshTimers.has(target)) return;
+
+    const delayInput = Number(options?.delayMs);
+    const delayMs = Number.isFinite(delayInput) && delayInput >= 0 ? delayInput : 160;
+
+    const timerId = setTimeout(() => {
+      this._permissionRefreshTimers.delete(target);
+      this._refreshGroupPermissionMetaFromServer(target, options).catch((error) => {
+        console.warn("Failed to refresh group permission metadata in chat-window:", error);
+      });
+    }, delayMs);
+
+    this._permissionRefreshTimers.set(target, timerId);
+  },
+
+  async _refreshGroupPermissionMetaFromServer(conversationId, options = {}) {
+    const target = (conversationId || "").toString().toLowerCase();
+    if (!target) return false;
+    if (!window.API?.Conversations?.getMessages) return false;
+
+    const openId = this.getOpenChatId(target) || target;
+    const chat = this.openChats.get(openId);
+    if (!chat || !(chat.data?.isGroup ?? chat.data?.IsGroup)) return false;
+
+    const inFlight = this._permissionRefreshInFlight.get(target);
+    if (inFlight) return inFlight;
+
+    const request = (async () => {
+      const res = await window.API.Conversations.getMessages(openId, null, 1);
+      if (!res?.ok) return false;
+
+      const data = await res.json();
+      const nextMeta = data?.metaData || data?.MetaData || null;
+      if (!nextMeta || typeof nextMeta !== "object") return false;
+      const hasDirectRole =
+        Object.prototype.hasOwnProperty.call(nextMeta, "currentUserRole") ||
+        Object.prototype.hasOwnProperty.call(nextMeta, "CurrentUserRole");
+
+      chat.data = {
+        ...(chat.data || {}),
+        ...nextMeta,
+      };
+      this._updateOpenChatCurrentUserRole(chat.data, {
+        preferDirectRole: hasDirectRole,
+      });
+
+      if (Array.isArray(window.ChatSidebar?.conversations)) {
+        const sidebarConv = window.ChatSidebar.conversations.find(
+          (conv) =>
+            (conv?.conversationId || conv?.ConversationId || "")
+              .toString()
+              .toLowerCase() === target,
+        );
+        if (sidebarConv) {
+          Object.assign(sidebarConv, nextMeta);
+          if (hasDirectRole) {
+            const roleValue = Number(nextMeta?.currentUserRole ?? nextMeta?.CurrentUserRole);
+            if (Number.isFinite(roleValue)) {
+              const normalizedRole = roleValue === 1 ? 1 : 0;
+              sidebarConv.currentUserRole = normalizedRole;
+              sidebarConv.CurrentUserRole = normalizedRole;
+            }
+          }
+        }
+      }
+
+      this.refreshPermissionUiForConversation(openId, {
+        reloadMembers: options?.reloadMembers !== false,
+        closeMessageMenus: options?.closeMessageMenus !== false,
+      });
+      this.saveState();
+      return true;
+    })()
+      .catch((error) => {
+        console.warn("Failed to refresh group permissions in chat-window:", error);
+        return false;
+      })
+      .finally(() => {
+        this._permissionRefreshInFlight.delete(target);
+      });
+
+    this._permissionRefreshInFlight.set(target, request);
+    return request;
+  },
+
+  refreshPermissionUiForConversation(conversationId, options = {}) {
+    const target = (conversationId || "").toString().toLowerCase();
+    if (!target) return false;
+
+    const openId = this.getOpenChatId(target) || target;
+    const chat = this.openChats.get(openId);
+    if (!chat || !(chat.data?.isGroup ?? chat.data?.IsGroup)) return false;
+
+    const closeMessageMenus = options?.closeMessageMenus !== false;
+    const reloadMembers = options?.reloadMembers !== false;
+    const hadOpenHeaderMenu = !!document.getElementById(`chat-header-menu-${openId}`);
+
+    if (closeMessageMenus && window.ChatActions && typeof window.ChatActions.closeAllMenus === "function") {
+      window.ChatActions.closeAllMenus();
+    }
+
+    if (
+      this._membersModal &&
+      (this._membersModal.conversationId || "").toLowerCase() === openId.toLowerCase()
+    ) {
+      this.closeWindowMembersActionMenus(this._membersModal.popup || null);
+      if (reloadMembers) {
+        this.loadMembersModal(this._membersModal, { reset: true });
+      } else {
+        this.renderMembersModal(this._membersModal);
+      }
+    }
+
+    if (hadOpenHeaderMenu) {
+      const triggerEl = chat.element?.querySelector(".chat-header-info") || null;
+      if (triggerEl) {
+        this.toggleHeaderMenu(triggerEl, openId);
+      }
+    }
+
+    return true;
+  },
+
+  _isGroupMemberAdmin(member) {
+    if (!member || typeof member !== "object") return false;
+    const role = Number(member.role ?? member.Role);
+    if (Number.isFinite(role)) return role === 1;
+    return !!(member.isAdmin ?? member.IsAdmin);
   },
 
   normalizeGroupMemberItem(raw) {
@@ -3790,7 +4243,37 @@ const ChatWindow = {
       }
     }
 
+    const myId = (localStorage.getItem("accountId") || "").toLowerCase();
+    if (myId && normalizedTargetId === myId) {
+      const nextRole = isAdmin ? 1 : 0;
+      if ((chat.data.currentUserRole ?? chat.data.CurrentUserRole) !== nextRole) {
+        chat.data.currentUserRole = nextRole;
+        chat.data.CurrentUserRole = nextRole;
+        changed = true;
+      }
+    }
+
     return changed;
+  },
+
+  setOpenChatGroupOwner(conversationId, targetAccountId) {
+    const openId = this.getOpenChatId(conversationId) || conversationId;
+    const chat = this.openChats.get(openId);
+    if (!chat || !chat.data) return false;
+
+    const normalizedTargetId = (targetAccountId || "")
+      .toString()
+      .toLowerCase()
+      .trim();
+    const nextOwner = normalizedTargetId || null;
+    const currentOwner = chat.data.owner ?? chat.data.Owner ?? null;
+    if ((currentOwner || null) === nextOwner) return false;
+
+    chat.data.owner = nextOwner;
+    chat.data.Owner = nextOwner;
+    this._updateOpenChatCurrentUserRole(chat.data);
+
+    return true;
   },
 
   removeOpenChatGroupMember(conversationId, targetAccountId) {
@@ -3808,8 +4291,19 @@ const ChatWindow = {
         .toLowerCase();
       return memberId !== normalizedTargetId;
     });
+    const changed = chat.data.members.length !== originalLength;
 
-    return chat.data.members.length !== originalLength;
+    if (!changed) return false;
+
+    const myId = (localStorage.getItem("accountId") || "").toLowerCase();
+    if (myId && normalizedTargetId === myId) {
+      chat.data.currentUserRole = 0;
+      chat.data.CurrentUserRole = 0;
+    } else {
+      this._updateOpenChatCurrentUserRole(chat.data);
+    }
+
+    return true;
   },
 
   positionWindowMembersActionMenu(menuEl, scrollContainer) {
@@ -3999,6 +4493,143 @@ const ChatWindow = {
           }
         },
       });
+      return;
+    }
+
+    if (normalizedAction === "revoke-admin") {
+      const conversationId = this._membersModal?.conversationId || null;
+      if (!conversationId) return;
+      if (!window.API?.Conversations?.revokeAdmin) {
+        if (window.toastError) window.toastError("Revoke admin API is unavailable");
+        return;
+      }
+
+      const targetLabel = (username || displayName || "member").toString().trim() || "member";
+      if (!window.ChatCommon || typeof window.ChatCommon.showConfirm !== "function") {
+        if (window.toastInfo) window.toastInfo("Confirmation popup is unavailable.");
+        return;
+      }
+
+      window.ChatCommon.showConfirm({
+        title: "Revoke admin role?",
+        message: `Remove admin role from @${targetLabel}?`,
+        confirmText: "Revoke",
+        cancelText: "Cancel",
+        isDanger: true,
+        onConfirm: async () => {
+          try {
+            const res = await window.API.Conversations.revokeAdmin(
+              conversationId,
+              targetAccountId,
+            );
+            if (!res.ok) {
+              const message = await this._readConversationApiErrorMessage(
+                res,
+                "Failed to revoke admin",
+              );
+              if (window.toastError) window.toastError(message);
+              return;
+            }
+
+            this.updateOpenChatGroupMemberRole(conversationId, targetAccountId, false);
+            if (this._membersModal && this._membersModal.conversationId === conversationId) {
+              this._membersModal.page = 1;
+              this.loadMembersModal(this._membersModal, { reset: true });
+            }
+            if (
+              window.ChatPage &&
+              typeof window.ChatPage._updateCurrentGroupMemberRole === "function"
+            ) {
+              window.ChatPage._updateCurrentGroupMemberRole(targetAccountId, false);
+            }
+            if (
+              window.ChatPage &&
+              typeof window.ChatPage.loadMembersPanel === "function"
+            ) {
+              window.ChatPage.loadMembersPanel({ reset: true });
+            }
+            if (window.toastSuccess) window.toastSuccess("Admin role revoked");
+          } catch (error) {
+            console.error("Failed to revoke admin in chat-window:", error);
+            if (window.toastError) window.toastError("Failed to revoke admin");
+          }
+        },
+      });
+      return;
+    }
+
+    if (normalizedAction === "transfer-owner") {
+      const conversationId = this._membersModal?.conversationId || null;
+      if (!conversationId) return;
+      if (!window.API?.Conversations?.transferOwner) {
+        if (window.toastError) window.toastError("Transfer owner API is unavailable");
+        return;
+      }
+
+      const targetLabel = (username || displayName || "member").toString().trim() || "member";
+      if (!window.ChatCommon || typeof window.ChatCommon.showConfirm !== "function") {
+        if (window.toastInfo) window.toastInfo("Confirmation popup is unavailable.");
+        return;
+      }
+
+      window.ChatCommon.showConfirm({
+        title: "Transfer ownership?",
+        message: `Transfer group ownership to @${targetLabel}?`,
+        confirmText: "Transfer",
+        cancelText: "Cancel",
+        isDanger: true,
+        onConfirm: async () => {
+          try {
+            const res = await window.API.Conversations.transferOwner(
+              conversationId,
+              targetAccountId,
+            );
+            if (!res.ok) {
+              const message = await this._readConversationApiErrorMessage(
+                res,
+                "Failed to transfer ownership",
+              );
+              if (window.toastError) window.toastError(message);
+              return;
+            }
+
+            this.setOpenChatGroupOwner(conversationId, targetAccountId);
+            this.updateOpenChatGroupMemberRole(conversationId, targetAccountId, true);
+            this._scheduleGroupPermissionRefresh(conversationId, {
+              delayMs: 0,
+              closeMessageMenus: true,
+              reloadMembers: false,
+            });
+            if (this._membersModal && this._membersModal.conversationId === conversationId) {
+              this._membersModal.page = 1;
+              this.loadMembersModal(this._membersModal, { reset: true });
+            }
+            if (
+              window.ChatPage &&
+              typeof window.ChatPage._setCurrentGroupOwner === "function"
+            ) {
+              window.ChatPage._setCurrentGroupOwner(targetAccountId);
+            }
+            if (
+              window.ChatPage &&
+              typeof window.ChatPage._updateCurrentGroupMemberRole === "function"
+            ) {
+              window.ChatPage._updateCurrentGroupMemberRole(targetAccountId, true);
+            }
+            if (
+              window.ChatPage &&
+              typeof window.ChatPage.loadMembersPanel === "function"
+            ) {
+              window.ChatPage.loadMembersPanel({ reset: true });
+            }
+            if (window.toastSuccess) window.toastSuccess("Group ownership transferred");
+          } catch (error) {
+            console.error("Failed to transfer ownership in chat-window:", error);
+            if (window.toastError) window.toastError("Failed to transfer ownership");
+          }
+        },
+      });
+      return;
     }
   },
 
@@ -4070,6 +4701,15 @@ const ChatWindow = {
 
     const addBtn = popup.querySelector(".chat-window-members-add-btn");
     if (addBtn) {
+      const chat = this.openChats.get(state.conversationId);
+      const canAddMembers = this.isCurrentUserGroupAdmin(chat?.data || null);
+      addBtn.disabled = !canAddMembers;
+      addBtn.classList.toggle("disabled", !canAddMembers);
+      if (!canAddMembers) {
+        addBtn.title = "Only group admins can add members";
+      } else {
+        addBtn.removeAttribute("title");
+      }
       addBtn.onclick = () => {
         this.openAddMembersModal(state.conversationId);
       };
@@ -4090,7 +4730,9 @@ const ChatWindow = {
 
     const currentUserId = (localStorage.getItem("accountId") || "").toLowerCase();
     const chat = this.openChats.get(state.conversationId);
+    const currentUserIsOwner = this.isCurrentUserGroupOwner(chat?.data || null);
     const currentUserIsAdmin = this.isCurrentUserGroupAdmin(chat?.data || null);
+    const ownerId = this.getCurrentGroupOwnerId(chat?.data || null);
     const items = Array.isArray(state.items) ? state.items : [];
     const totalItemsRaw = Number(state.totalItems);
     const totalMembers =
@@ -4157,13 +4799,24 @@ const ChatWindow = {
         const safeNickname = escapeHtml(nicknameLabel);
         const safeNicknameRaw = escapeHtml(nicknameRaw);
 
-        const isAdmin = member.role === 1;
-        const canManage =
-          currentUserIsAdmin && !isAdmin && member.accountId !== currentUserId;
+        const memberId = (member.accountId || "").toString().toLowerCase();
+        const isAdmin = this._isGroupMemberAdmin(member);
+        const isOwner = !!ownerId && ownerId === memberId;
+        const isSelf = memberId === currentUserId;
+        const canAssignAdmin = currentUserIsOwner && !isOwner && !isAdmin && !isSelf;
+        const canRevokeAdmin = currentUserIsOwner && !isOwner && isAdmin && !isSelf;
+        const canTransferOwner = currentUserIsOwner && !isOwner && !isSelf;
+        const canKick = currentUserIsOwner
+          ? !isOwner && !isSelf
+          : currentUserIsAdmin && !currentUserIsOwner && !isOwner && !isAdmin && !isSelf;
         const actionDisplayName = escapeHtml(
           member.displayName || member.username || "user",
         );
         const actionUsername = escapeHtml(member.username || "unknown");
+
+        const roleBadgeHtml = isOwner
+          ? '<span class="chat-window-members-role owner">Owner</span>'
+          : (isAdmin ? '<span class="chat-window-members-role">Admin</span>' : "");
 
         return `
           <div class="chat-window-members-item" data-account-id="${safeAccountId}">
@@ -4171,7 +4824,7 @@ const ChatWindow = {
             <div class="chat-window-members-meta">
               <div class="chat-window-members-primary">
                 <span class="chat-window-members-name" title="${safeUsernameRaw}">${safeUsername}</span>
-                ${isAdmin ? '<span class="chat-window-members-role">Admin</span>' : ""}
+                ${roleBadgeHtml}
               </div>
               ${
                 nicknameRaw
@@ -4190,8 +4843,10 @@ const ChatWindow = {
               <div class="chat-window-members-actions-menu">
                 <button type="button" class="chat-window-members-action-btn" data-action="profile" data-account-id="${safeAccountId}" data-display-name="${actionDisplayName}" data-username="${actionUsername}"><i data-lucide="user"></i><span>Profile</span></button>
                 <button type="button" class="chat-window-members-action-btn" data-action="message" data-account-id="${safeAccountId}" data-display-name="${actionDisplayName}" data-username="${actionUsername}"><i data-lucide="send"></i><span>Message</span></button>
-                ${canManage ? `<button type="button" class="chat-window-members-action-btn" data-action="assign-admin" data-account-id="${safeAccountId}" data-display-name="${actionDisplayName}" data-username="${actionUsername}"><i data-lucide="shield-check"></i><span>Assign as admin</span></button>` : ""}
-                ${canManage ? `<button type="button" class="chat-window-members-action-btn danger" data-action="kick" data-account-id="${safeAccountId}" data-display-name="${actionDisplayName}" data-username="${actionUsername}"><i data-lucide="user-x"></i><span>Kick</span></button>` : ""}
+                ${canAssignAdmin ? `<button type="button" class="chat-window-members-action-btn" data-action="assign-admin" data-account-id="${safeAccountId}" data-display-name="${actionDisplayName}" data-username="${actionUsername}"><i data-lucide="shield-check"></i><span>Assign as admin</span></button>` : ""}
+                ${canRevokeAdmin ? `<button type="button" class="chat-window-members-action-btn" data-action="revoke-admin" data-account-id="${safeAccountId}" data-display-name="${actionDisplayName}" data-username="${actionUsername}"><i data-lucide="shield-minus"></i><span>Revoke admin</span></button>` : ""}
+                ${canTransferOwner ? `<button type="button" class="chat-window-members-action-btn" data-action="transfer-owner" data-account-id="${safeAccountId}" data-display-name="${actionDisplayName}" data-username="${actionUsername}"><i data-lucide="crown"></i><span>Transfer ownership</span></button>` : ""}
+                ${canKick ? `<button type="button" class="chat-window-members-action-btn danger" data-action="kick" data-account-id="${safeAccountId}" data-display-name="${actionDisplayName}" data-username="${actionUsername}"><i data-lucide="user-x"></i><span>Kick</span></button>` : ""}
               </div>
             </div>
           </div>
@@ -4525,6 +5180,11 @@ const ChatWindow = {
     const isGroup = !!(chat.data?.isGroup ?? chat.data?.IsGroup);
     if (!isGroup) {
       if (window.toastInfo) window.toastInfo("Add member is only available for group chats");
+      return;
+    }
+
+    if (!this.isCurrentUserGroupAdmin(chat.data)) {
+      if (window.toastError) window.toastError("Only group admins can add members.");
       return;
     }
 
@@ -5049,13 +5709,15 @@ const ChatWindow = {
         // Wait for interaction.
 
         // Update header and metadata with fresh data from server (fix for "stale header" issue)
-        if (data.metaData) {
+        const metaData =
+          data.metaData || data.MetaData || data.metadata || data.Metadata || null;
+        if (metaData) {
           const chat = this.openChats.get(id);
           if (chat) {
-            chat.data = data.metaData;
+            chat.data = metaData;
             this.setThemeStatus(
               id,
-              data.metaData.theme ?? data.metaData.Theme ?? null,
+              metaData.theme ?? metaData.Theme ?? null,
             );
             this.getRuntimeCtx(id, chat);
             // If window is open (not bubble), refresh its header UI
@@ -5067,22 +5729,23 @@ const ChatWindow = {
               const avatarContainer = chat.element.querySelector(".chat-header-avatar");
 
               if (nameEl)
-                nameEl.textContent = ChatCommon.getDisplayName(data.metaData);
+                nameEl.textContent = ChatCommon.getDisplayName(metaData);
               if (subtextEl)
-                subtextEl.textContent = data.metaData.isGroup
+                subtextEl.textContent = (metaData.isGroup ?? metaData.IsGroup)
                   ? "Group Chat"
-                  : data.metaData.otherMember?.isActive
+                  : (metaData.otherMember?.isActive ??
+                    metaData.OtherMember?.isActive)
                     ? "Online"
                     : "Offline";
               if (avatarContainer) {
                 const statusDot = avatarContainer.querySelector('.chat-header-status');
-                avatarContainer.innerHTML = ChatCommon.renderAvatar(data.metaData) + (statusDot ? statusDot.outerHTML : '');
+                avatarContainer.innerHTML = ChatCommon.renderAvatar(metaData) + (statusDot ? statusDot.outerHTML : '');
                 if (window.lucide) lucide.createIcons({ container: avatarContainer });
               }
             }
           }
           setTimeout(
-            () => this.updateMemberSeenStatuses(id, data.metaData),
+            () => this.updateMemberSeenStatuses(id, metaData),
             50,
           );
         }
