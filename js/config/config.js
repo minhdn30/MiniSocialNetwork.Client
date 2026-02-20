@@ -125,6 +125,9 @@
   INTERACTIONS_PAGE_SIZE: 10, // Số lượng người react load mỗi lần
   PROFILE_POSTS_PAGE_SIZE: 12, // Số lượng post load mỗi lần ở trang cá nhân (nên là bội số của 3)
   PREVIEW_BIO_TRUNCATE_LENGTH: 80, // Chiều dài tối đa của bio trong thẻ preview trước khi bị cắt
+  REGISTER_USERNAME_MIN_LENGTH: 6, // Số ký tự tối thiểu cho username khi đăng ký
+  REGISTER_USERNAME_MAX_LENGTH: 30, // Số ký tự tối đa cho username khi đăng ký
+  REGISTER_FULLNAME_MIN_LENGTH: 2, // Số ký tự tối thiểu cho full name khi đăng ký
   MAX_PROFILE_FULLNAME_LENGTH: 25, // Số ký tự tối đa cho Full Name
   MAX_PROFILE_BIO_LENGTH: 200, // Số ký tự tối đa cho Bio
   MAX_PROFILE_PHONE_LENGTH: 15, // Số ký tự tối đa cho Phone

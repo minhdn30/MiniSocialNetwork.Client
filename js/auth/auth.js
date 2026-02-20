@@ -32,6 +32,309 @@ document.querySelectorAll(".toggle-password").forEach((icon) => {
   });
 });
 
+const appConfig = window.APP_CONFIG || {};
+const REGISTER_USERNAME_MIN_LENGTH =
+  Number(appConfig.REGISTER_USERNAME_MIN_LENGTH) > 0
+    ? Number(appConfig.REGISTER_USERNAME_MIN_LENGTH)
+    : 6;
+const REGISTER_USERNAME_MAX_LENGTH =
+  Number(appConfig.REGISTER_USERNAME_MAX_LENGTH) > 0
+    ? Number(appConfig.REGISTER_USERNAME_MAX_LENGTH)
+    : 30;
+const REGISTER_FULLNAME_MIN_LENGTH =
+  Number(appConfig.REGISTER_FULLNAME_MIN_LENGTH) > 0
+    ? Number(appConfig.REGISTER_FULLNAME_MIN_LENGTH)
+    : 2;
+const REGISTER_FULLNAME_MAX_LENGTH =
+  Number(appConfig.MAX_PROFILE_FULLNAME_LENGTH) > 0
+    ? Number(appConfig.MAX_PROFILE_FULLNAME_LENGTH)
+    : 25;
+const REGISTER_PASSWORD_MIN_LENGTH = 6;
+
+const signupRuleUsernameLength = document.getElementById("signup-rule-username-length");
+const signupRuleFullnameLength = document.getElementById("signup-rule-fullname-length");
+const signupRulePasswordMinLength = document.getElementById("signup-rule-password-min-length");
+
+if (signupRuleUsernameLength) {
+  signupRuleUsernameLength.textContent = `${REGISTER_USERNAME_MIN_LENGTH}-${REGISTER_USERNAME_MAX_LENGTH}`;
+}
+
+if (signupRuleFullnameLength) {
+  signupRuleFullnameLength.textContent = `${REGISTER_FULLNAME_MIN_LENGTH}-${REGISTER_FULLNAME_MAX_LENGTH}`;
+}
+
+if (signupRulePasswordMinLength) {
+  signupRulePasswordMinLength.textContent = String(REGISTER_PASSWORD_MIN_LENGTH);
+}
+
+const signupUsernameInput = document.getElementById("signup-username");
+const signupFullnameInput = document.getElementById("signup-fullname");
+
+if (signupUsernameInput) {
+  signupUsernameInput.setAttribute("minlength", String(REGISTER_USERNAME_MIN_LENGTH));
+  signupUsernameInput.setAttribute("maxlength", String(REGISTER_USERNAME_MAX_LENGTH));
+}
+
+if (signupFullnameInput) {
+  signupFullnameInput.setAttribute("minlength", String(REGISTER_FULLNAME_MIN_LENGTH));
+  signupFullnameInput.setAttribute("maxlength", String(REGISTER_FULLNAME_MAX_LENGTH));
+}
+
+function syncFloatingFieldState(input) {
+  const floatingField = input.closest(".floating-field");
+  if (!floatingField) {
+    return;
+  }
+
+  floatingField.classList.toggle("has-value", input.value.length > 0);
+}
+
+function initFloatingFields() {
+  document.querySelectorAll(".floating-field input").forEach((input) => {
+    const syncState = () => syncFloatingFieldState(input);
+    input.addEventListener("input", syncState);
+    input.addEventListener("change", syncState);
+    syncState();
+  });
+}
+
+initFloatingFields();
+
+const verifyPopup = document.getElementById("verify-popup");
+const verifyTitle = document.getElementById("verify-title");
+const verifyDescription = document.getElementById("verify-description");
+const verifyStepSend = document.getElementById("verify-step-send");
+const verifyStepCode = document.getElementById("verify-step-code");
+const sendCodeBtn = document.getElementById("send-code-btn");
+const verifyBtn = document.getElementById("verify-btn");
+const resendBtn = document.getElementById("resend-btn");
+const popupContent = document.querySelector(
+  "#verify-popup .verify-popup-content",
+);
+const codeInputs = document.querySelectorAll(".code-input");
+
+const VERIFY_MODAL_MODE = {
+  SIGNUP: "signup",
+  LOGIN: "login",
+};
+
+const VERIFY_MODAL_STEP = {
+  SEND: "send",
+  CODE: "code",
+};
+
+let pendingAutoLogin = null;
+
+function setPendingAutoLogin(email, password) {
+  const normalizedEmail = (email || "").trim();
+  const normalizedPassword = (password || "").trim();
+
+  if (!normalizedEmail || !normalizedPassword) {
+    pendingAutoLogin = null;
+    return;
+  }
+
+  pendingAutoLogin = {
+    email: normalizedEmail,
+    password: normalizedPassword,
+  };
+}
+
+function clearPendingAutoLogin() {
+  pendingAutoLogin = null;
+}
+
+function persistSessionFromLoginResponse(data) {
+  if (window.AuthStore && typeof window.AuthStore.clearAccessToken === "function") {
+    window.AuthStore.clearAccessToken("login-reset");
+  }
+
+  if (window.AuthStore && typeof window.AuthStore.setAccessToken === "function") {
+    window.AuthStore.setAccessToken(data.accessToken, "login");
+  }
+
+  localStorage.setItem("fullname", data.fullname || "");
+  localStorage.setItem("username", data.username || "");
+  localStorage.setItem("avatarUrl", data.avatarUrl || "");
+  localStorage.setItem("accountId", data.accountId || "");
+  localStorage.setItem("defaultPostPrivacy", data.defaultPostPrivacy ?? data.DefaultPostPrivacy ?? 0);
+}
+
+function isEmailNotVerifiedResponse(response, data) {
+  const status = data?.status ?? data?.Status;
+  if (status === 5) {
+    return true;
+  }
+
+  if (response?.status !== 401) {
+    return false;
+  }
+
+  const message = (data?.message || data?.Message || "").toLowerCase();
+  return (
+    message.includes("email is not verified") ||
+    message.includes("verify your email")
+  );
+}
+
+function focusFirstCodeInput() {
+  if (codeInputs.length > 0) {
+    codeInputs[0].focus();
+  }
+}
+
+function resetCodeInputs(shouldFocus = true) {
+  codeInputs.forEach((input) => (input.value = ""));
+  if (shouldFocus) {
+    focusFirstCodeInput();
+  }
+}
+
+function setVerifyModalStep(step) {
+  if (!verifyStepSend || !verifyStepCode || !verifyPopup) {
+    return;
+  }
+
+  verifyStepSend.classList.toggle("active", step === VERIFY_MODAL_STEP.SEND);
+  verifyStepCode.classList.toggle("active", step === VERIFY_MODAL_STEP.CODE);
+  verifyPopup.dataset.step = step;
+}
+
+function setVerifyModalContent(mode, step) {
+  if (!verifyTitle || !verifyDescription) {
+    return;
+  }
+
+  const isLoginMode = mode === VERIFY_MODAL_MODE.LOGIN;
+  verifyTitle.textContent = isLoginMode ? "Verify Email to Continue" : "Verify Email";
+
+  if (step === VERIFY_MODAL_STEP.SEND) {
+    verifyDescription.textContent =
+      "Your account is not verified yet. Click Send Code to receive a 6-digit code.";
+    return;
+  }
+
+  verifyDescription.textContent = "Enter the 6-digit code sent to your email";
+}
+
+function openVerifyModal({
+  email,
+  mode = VERIFY_MODAL_MODE.SIGNUP,
+  step = VERIFY_MODAL_STEP.CODE,
+} = {}) {
+  if (!verifyPopup) {
+    return;
+  }
+
+  verifyPopup.dataset.email = email || "";
+  verifyPopup.dataset.mode = mode;
+  verifyPopup.style.display = "flex";
+
+  setVerifyModalContent(mode, step);
+  setVerifyModalStep(step);
+
+  if (step === VERIFY_MODAL_STEP.CODE) {
+    resetCodeInputs();
+  } else {
+    resetCodeInputs(false);
+  }
+}
+
+function closeVerifyModal() {
+  if (!verifyPopup) {
+    return;
+  }
+
+  verifyPopup.style.display = "none";
+  verifyPopup.dataset.email = "";
+  verifyPopup.dataset.mode = "";
+  verifyPopup.dataset.step = "";
+  resetCodeInputs(false);
+  clearPendingAutoLogin();
+}
+
+async function sendVerificationCode(email, { switchToCode = true } = {}) {
+  if (!email) {
+    showToast("Email not found.", "error");
+    return false;
+  }
+
+  try {
+    const res = await API.Auth.sendEmail(email);
+    const data = await res.json();
+
+    if (!res.ok) {
+      showToast(data.message || data.Message || "Failed to send code.", "error");
+      return false;
+    }
+
+    showToast("Verification email sent! Please check your inbox.", "success");
+
+    if (switchToCode) {
+      const mode = verifyPopup?.dataset.mode || VERIFY_MODAL_MODE.SIGNUP;
+      setVerifyModalContent(mode, VERIFY_MODAL_STEP.CODE);
+      setVerifyModalStep(VERIFY_MODAL_STEP.CODE);
+      resetCodeInputs();
+    }
+
+    return true;
+  } catch (err) {
+    console.error(err);
+    showToast("Server error. Please try again later.", "error");
+    return false;
+  }
+}
+
+async function loginAfterEmailVerification() {
+  if (!pendingAutoLogin?.email || !pendingAutoLogin?.password) {
+    return false;
+  }
+
+  try {
+    const res = await API.Auth.login(pendingAutoLogin.email, pendingAutoLogin.password);
+    const data = await res.json();
+
+    if (!res.ok) {
+      showToast(data.message || "Email verified. Please sign in.", "error");
+      return false;
+    }
+
+    persistSessionFromLoginResponse(data);
+
+    if (data.status === 1) {
+      showToast(
+        `<div>
+          <p style="margin-bottom: 8px;">Your account is currently Inactive. Please reactivate to continue.</p>
+          <div class="toast-actions">
+            <button class="toast-btn" onclick="window.reactivateAccountAction()">Reactivate Now</button>
+            <button class="toast-btn secondary" onclick="window.location.href='auth.html'">Later</button>
+          </div>
+        </div>`,
+        "error",
+        0,
+        true,
+      );
+      return false;
+    }
+
+    if (data.status === 5) {
+      showToast("Email is not verified. Please request a new code.", "error");
+      return false;
+    }
+
+    showToast("Email verified and login successful!", "success");
+    setTimeout(() => {
+      window.location.href = "index.html";
+    }, 600);
+
+    return true;
+  } catch (err) {
+    console.error(err);
+    showToast("Server error. Please try again later.", "error");
+    return false;
+  }
+}
+
 // === LOGIN FORM ===
 const loginForm = document.querySelector(".sign-in-container form");
 loginForm.addEventListener("submit", async (e) => {
@@ -56,21 +359,18 @@ loginForm.addEventListener("submit", async (e) => {
 
     if (!res.ok) {
       showToast(data.message || "Login failed", "error");
+      if (isEmailNotVerifiedResponse(res, data)) {
+        setPendingAutoLogin(email, password);
+        openVerifyModal({
+          email,
+          mode: VERIFY_MODAL_MODE.LOGIN,
+          step: VERIFY_MODAL_STEP.SEND,
+        });
+      }
       return;
     }
 
-    if (window.AuthStore && typeof window.AuthStore.clearAccessToken === "function") {
-      window.AuthStore.clearAccessToken("login-reset");
-    }
-    // Lưu token + thông tin
-    if (window.AuthStore && typeof window.AuthStore.setAccessToken === "function") {
-      window.AuthStore.setAccessToken(data.accessToken, "login");
-    }
-    localStorage.setItem("fullname", data.fullname || "");
-    localStorage.setItem("username", data.username || "");
-    localStorage.setItem("avatarUrl", data.avatarUrl || "");
-    localStorage.setItem("accountId", data.accountId || "");
-    localStorage.setItem("defaultPostPrivacy", data.defaultPostPrivacy ?? data.DefaultPostPrivacy ?? 0);
+    persistSessionFromLoginResponse(data);
 
     // Check Account Status
     if (data.status === 1) { // Inactive
@@ -88,6 +388,16 @@ loginForm.addEventListener("submit", async (e) => {
       );
       return; // Stop here, don't redirect to index yet
     } 
+    if (data.status === 5) { // EmailNotVerified
+      showToast("Email is not verified. Please verify your email.", "error");
+      setPendingAutoLogin(email, password);
+      openVerifyModal({
+        email,
+        mode: VERIFY_MODAL_MODE.LOGIN,
+        step: VERIFY_MODAL_STEP.SEND,
+      });
+      return;
+    }
 
     showToast("Login successful!", "success");
     setTimeout(() => {
@@ -114,29 +424,49 @@ signupForm.addEventListener("submit", async (e) => {
     showToast("Please fill in all fields completely.", "error");
     return;
   }
-  if (username.length < 6) {
-    showToast("Username  must be at least 6 characters long.", "error");
-    return;
-  }
-  const usernameRegex = /^[a-zA-Z0-9_]+$/;
-  if (!usernameRegex.test(username)) {
+
+  if (
+    username.length < REGISTER_USERNAME_MIN_LENGTH ||
+    username.length > REGISTER_USERNAME_MAX_LENGTH
+  ) {
     showToast(
-      "Username cannot contain accents or special characters.",
+      `Username must be between ${REGISTER_USERNAME_MIN_LENGTH} and ${REGISTER_USERNAME_MAX_LENGTH} characters.`,
       "error",
     );
     return;
   }
-  if (password.length < 6) {
-    showToast("Password must be at least 6 characters long.", "error");
+
+  const usernameRegex = /^[A-Za-z0-9_]+$/;
+  if (!usernameRegex.test(username)) {
+    showToast(
+      "Username can only include letters, numbers, underscore (_), without spaces or accents.",
+      "error",
+    );
     return;
   }
-  const vietCharRegex =
-    /[ÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠàáâãèéêìíòóôõùúăđĩũơƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼỀỀỂẾỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰ]/i;
 
-  if (password.includes(" ") || vietCharRegex.test(password)) {
+  if (
+    fullname.length < REGISTER_FULLNAME_MIN_LENGTH ||
+    fullname.length > REGISTER_FULLNAME_MAX_LENGTH
+  ) {
+    showToast(
+      `Full name must be between ${REGISTER_FULLNAME_MIN_LENGTH} and ${REGISTER_FULLNAME_MAX_LENGTH} characters.`,
+      "error",
+    );
+    return;
+  }
+
+  if (password.length < REGISTER_PASSWORD_MIN_LENGTH) {
+    showToast(`Password must be at least ${REGISTER_PASSWORD_MIN_LENGTH} characters long.`, "error");
+    return;
+  }
+
+  const accentRegex = /[\u00C0-\u024F\u1E00-\u1EFF]/u;
+  if (password.includes(" ") || accentRegex.test(password)) {
     showToast("Password cannot contain Vietnamese accents or spaces.", "error");
     return;
   }
+
   if (password !== cfpassword) {
     showToast("Password and Confirm Password do not match.", "error");
     return;
@@ -148,40 +478,39 @@ signupForm.addEventListener("submit", async (e) => {
     const data = await res.json();
 
     if (!res.ok) {
-      showToast(data.message || "Sign up failed", "error");
+      showToast(data.message || data.Message || "Sign up failed", "error");
       return;
     }
 
     showToast("Registration successful!", "success");
-    const emailRes = await API.Auth.sendEmail(email);
-
-    if (!emailRes.ok) {
-      showToast("Failed to send verification email.", "error");
+    const sent = await sendVerificationCode(email, { switchToCode: false });
+    if (!sent) {
       return;
     }
 
-    showToast("Verification email sent! Please check your inbox.", "success");
-    // Hiển popup verify
-    const verifyPopup = document.getElementById("verify-popup");
-    verifyPopup.style.display = "flex";
+    setPendingAutoLogin(email, password);
 
-    setTimeout(() => {
-      const first = document.querySelector(".code-input");
-      if (first) first.focus();
-    }, 200);
-    // Lưu email để gửi verify
-    verifyPopup.dataset.email = email;
+    openVerifyModal({
+      email,
+      mode: VERIFY_MODAL_MODE.SIGNUP,
+      step: VERIFY_MODAL_STEP.CODE,
+    });
   } catch (err) {
     console.error(err);
     showToast("Server error. Please try again later.", "error");
   }
 });
 //=== Verify code form ===
-document.getElementById("verify-btn").addEventListener("click", async () => {
+verifyBtn.addEventListener("click", async () => {
   const code = Array.from(document.querySelectorAll(".code-input"))
     .map((input) => input.value)
     .join("");
-  const email = document.getElementById("verify-popup").dataset.email;
+  const email = verifyPopup?.dataset.email;
+
+  if (!email) {
+    showToast("Email not found.", "error");
+    return;
+  }
 
   if (code.length !== 6) {
     showToast("Please enter 6-digit code", "error");
@@ -199,11 +528,14 @@ document.getElementById("verify-btn").addEventListener("click", async () => {
       return;
     }
 
-    showToast("Email verified successfully!", "success");
-    document.getElementById("verify-popup").style.display = "none";
+    const autoLoggedIn = await loginAfterEmailVerification();
+    closeVerifyModal();
 
-    // Chuyển sang login
-    container.classList.remove("right-panel-active");
+    if (!autoLoggedIn) {
+      showToast("Email verified successfully!", "success");
+      // Chuyển sang login nếu không auto-login được
+      container.classList.remove("right-panel-active");
+    }
   } catch (err) {
     console.error(err);
     showToast("Server error. Please try again later.", "error");
@@ -213,12 +545,10 @@ document.getElementById("verify-btn").addEventListener("click", async () => {
 document
   .querySelector("#verify-popup .close-popup")
   .addEventListener("click", () => {
-    document.getElementById("verify-popup").style.display = "none";
+    closeVerifyModal();
   });
 
 // Auto move focus in verify code inputs
-const codeInputs = document.querySelectorAll(".code-input");
-
 codeInputs.forEach((input, idx) => {
   input.addEventListener("input", (e) => {
     const value = e.target.value;
@@ -243,11 +573,7 @@ codeInputs.forEach((input, idx) => {
   });
 });
 
-// Khi popup hiện, focus ô đầu tiên
-const verifyPopup = document.getElementById("verify-popup");
-const popupContent = document.querySelector(
-  "#verify-popup .verify-popup-content",
-);
+// Khi popup hiện, focus ô đầu tiên của bước nhập code
 if (popupContent) {
   popupContent.addEventListener(
     "animationend",
@@ -255,46 +581,23 @@ if (popupContent) {
       if (
         e.animationName === "slideUp" &&
         verifyPopup &&
-        verifyPopup.style.display === "flex"
+        verifyPopup.style.display === "flex" &&
+        verifyPopup.dataset.step === VERIFY_MODAL_STEP.CODE
       ) {
-        const first = document.querySelector(".code-input");
-        if (first) first.focus();
+        focusFirstCodeInput();
       }
     },
     { passive: true },
   );
 }
-//reset code inputs
-function resetCodeInputs() {
-  codeInputs.forEach((input) => (input.value = ""));
-  codeInputs[0].focus();
-}
 
-//===resend code===
-const resendBtn = document.getElementById("resend-btn");
+//=== send/resend code ===
+sendCodeBtn.addEventListener("click", async () => {
+  const email = verifyPopup?.dataset.email;
+  await sendVerificationCode(email, { switchToCode: true });
+});
 
 resendBtn.addEventListener("click", async () => {
-  const verifyPopup = document.getElementById("verify-popup");
-  const email = verifyPopup.dataset.email;
-
-  if (!email) {
-    showToast("Email not found.", "error");
-    return;
-  }
-
-  try {
-    const res = await API.Auth.sendEmail(email);
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      showToast(data.message || "Failed to resend code.", "error");
-      return;
-    }
-
-    showToast("Verification email sent!", "success");
-  } catch (err) {
-    console.error(err);
-    showToast("Server error. Please try again later.", "error");
-  }
+  const email = verifyPopup?.dataset.email;
+  await sendVerificationCode(email, { switchToCode: false });
 });
