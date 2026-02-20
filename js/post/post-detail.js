@@ -15,7 +15,7 @@ let viewedPostsState = new Map(); // postId -> { reactCount, isReacted, commentC
 // Load PostEdit module dynamically
 if (!window.PostEdit) {
     const script = document.createElement('script');
-    script.src = 'js/post-edit.js';
+    script.src = 'js/post/post-edit.js';
     document.head.appendChild(script);
 }
 
@@ -199,7 +199,7 @@ async function openPostDetailByCode(postCode) {
 // Dynamic HTML Loader
 async function loadPostDetailHTML() {
     try {
-        const response = await fetch('pages/post-detail.html');
+        const response = await fetch('pages/post/post-detail.html');
         if (!response.ok) throw new Error("Failed to load template");
         const html = await response.text();
         document.body.insertAdjacentHTML('beforeend', html);

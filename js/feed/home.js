@@ -1,11 +1,11 @@
 async function loadPartial(id, page) {
-  const res = await fetch(`pages/${page}.html`);
+  const res = await fetch(`pages/feed/${page}.html`);
   document.getElementById(id).innerHTML = await res.text();
   lucide.createIcons();
 }
 
 async function loadHome() {
-  await loadPage("home");
+  await loadPage("feed/home");
   await loadPartial("story-section", "story");
   await loadPartial("feed-section", "newfeed");
 

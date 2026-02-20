@@ -29,14 +29,36 @@ const ChatCommon = {
     const avatar = this.getAvatar(conv);
     const name = options.name || this.getDisplayName(conv);
     const className = options.className || "chat-avatar";
+    const onError = options.onError || `this.src='${APP_CONFIG.DEFAULT_AVATAR}'`;
 
     if (avatar === "ICON:users") {
-      return `<div class="${className} default-group-avatar" ><i data-lucide="users"></i></div>`;
+      // Handle array of avatars fallback (from GroupAvatars)
+      const groupAvatars = conv?.groupAvatars || conv?.GroupAvatars || [];
+      // Remove sparse-array holes to keep count/layout in sync, but keep explicit null/empty
+      // entries so they can fallback to default avatar.
+      const normalizedGroupAvatars = Array.isArray(groupAvatars)
+        ? groupAvatars.filter((_, index) => index in groupAvatars)
+        : [];
+      const membersToShow = normalizedGroupAvatars.slice(0, 4);
+      
+      if (membersToShow.length > 0) {
+        // Build composite avatar UI for members
+        let compositeHtml = `<div class="${className} composite-group-avatar count-${membersToShow.length}" title="${escapeHtml(name)}">`;
+        
+        membersToShow.forEach((url, i) => {
+            const fallbackAvatar = APP_CONFIG.DEFAULT_AVATAR;
+            const safeUrl = (url && typeof url === 'string' && url.trim().length > 0) ? escapeHtml(url) : fallbackAvatar;
+            compositeHtml += `<img src="${safeUrl}" alt="Member avatar" class="composite-avatar-part item-${i}" onerror="this.src='${fallbackAvatar}';">`;
+        });
+        
+        compositeHtml += `</div>`;
+        return compositeHtml;
+      }
+
+      return `<div class="${className} default-group-avatar" title="${escapeHtml(name)}"><i data-lucide="users"></i></div>`;
     }
 
-    const onError =
-      options.onError || `this.src='${APP_CONFIG.DEFAULT_AVATAR}'`;
-    return `<img src="${avatar}" alt="${escapeHtml(name)}" class="${className}" onerror="${onError}">`;
+    return `<img src="${avatar}" alt="${escapeHtml(name)}" title="${escapeHtml(name)}" class="${className}" onerror="${onError}">`;
   },
 
   isDefaultGroupAvatar(value) {
@@ -2183,12 +2205,8 @@ const ChatCommon = {
 
     const iconsHtml = badgeLayout.items
       .map(
-        (item) => `
-                <span class="msg-reactions-item${item.count ? " has-count" : ""}" data-react-type="${item.reactType}">
-                    <span class="msg-reactions-icon">${this.getReactEmoji(item.reactType)}</span>
-                    ${item.count ? `<span class="msg-reactions-item-count">${item.count}</span>` : ""}
-                </span>
-            `,
+        (item) =>
+          `<span class="msg-reactions-item${item.count ? " has-count" : ""}" data-react-type="${item.reactType}"><span class="msg-reactions-icon">${this.getReactEmoji(item.reactType)}</span>${item.count ? `<span class="msg-reactions-item-count">${item.count}</span>` : ""}</span>`,
       )
       .join("");
     const extraHtml =
@@ -2196,17 +2214,7 @@ const ChatCommon = {
         ? `<span class="msg-reactions-extra">+${badgeLayout.extraCount}</span>`
         : "";
 
-    return `
-            <button type="button"
-                    class="msg-reactions-summary"
-                    data-action="view-reactors"
-                    data-message-id="${normalizedMessageId}"
-                    ${safeHoverText ? `data-react-tooltip="${safeHoverText}" aria-label="${safeHoverText}"` : ""}
-                    onclick="window.ChatActions && ChatActions.openReactorsModal('${normalizedMessageId}', event)">
-                <span class="msg-reactions-icons">${iconsHtml}</span>
-                ${extraHtml}
-            </button>
-        `;
+    return `<button type="button" class="msg-reactions-summary" data-action="view-reactors" data-message-id="${normalizedMessageId}" ${safeHoverText ? `data-react-tooltip="${safeHoverText}" aria-label="${safeHoverText}"` : ""} onclick="window.ChatActions && ChatActions.openReactorsModal('${normalizedMessageId}', event)"><span class="msg-reactions-icons">${iconsHtml}</span>${extraHtml}</button>`;
   },
 
   getReactionBadgeAnchor(contentContainer) {

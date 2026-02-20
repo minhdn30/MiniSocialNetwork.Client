@@ -264,7 +264,7 @@ function router() {
 
 async function showErrorPage(title, message) {
     app.innerHTML = ""; 
-    await loadPage("error");
+    await loadPage("core/error");
     
     const titleEl = document.getElementById("error-title");
     const msgEl = document.getElementById("error-message");
@@ -293,14 +293,14 @@ function loadPlaceholder(title, iconName) {
 }
 
 async function loadProfilePage() {
-    await loadPage("profile");
+    await loadPage("profile/profile");
     if (window.initProfilePage) {
         window.initProfilePage();
     }
 }
 
 async function loadChatPage() {
-    await loadPage("chat-page");
+    await loadPage("chat/chat-page");
     if (window.initChatPage) {
         window.initChatPage();
     }
@@ -308,7 +308,7 @@ async function loadChatPage() {
 
 async function loadAccountSettings() {
     PageCache.clear("#/account-settings");
-    await loadPage("account-settings");
+    await loadPage("profile/account-settings");
     if (window.initAccountSettings) {
         window.initAccountSettings();
     }

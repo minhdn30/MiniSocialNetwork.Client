@@ -39,7 +39,7 @@ const CommentModule = (function () {
 
     if (!document.getElementById("detailCommentsList")) {
       try {
-        const res = await fetch("pages/comment.html");
+        const res = await fetch("pages/post/comment.html");
         container.innerHTML = await res.text();
       } catch (err) {
         console.error("Failed to load comment.html", err);

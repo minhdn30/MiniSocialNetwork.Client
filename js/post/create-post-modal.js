@@ -225,7 +225,7 @@ function setLoadingState(loading) {
   });
 }
 
-// Global upload helpers have been moved to `js/app.js` so they are
+// Global upload helpers have been moved to `js/core/app.js` so they are
 // available application-wide: `createGlobalLoader`, `showGlobalLoader`,
 // `hideGlobalLoader`, and `uploadFormDataWithProgress`.
 

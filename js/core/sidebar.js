@@ -17,7 +17,7 @@ window.updateSidebarInfo = function (url, name) {
 };
 
 async function loadSidebar() {
-  const res = await fetch("pages/sidebar.html");
+  const res = await fetch("pages/core/sidebar.html");
   document.getElementById("sidebar").innerHTML = await res.text();
   lucide.createIcons();
 
@@ -252,7 +252,7 @@ function toggleCreateMenu(e) {
   lucide.createIcons();
 }
 async function loadCreatePostModal() {
-  const res = await fetch("pages/create-post-modal.html");
+  const res = await fetch("pages/post/create-post-modal.html");
   const modalHTML = await res.text();
 
   // Append modal vào body
@@ -500,7 +500,7 @@ function openAbout(e) {
   // TODO: Implement about page
 }
 async function loadCreateChatGroupModal() {
-  const res = await fetch("pages/create-chat-group-modal.html");
+  const res = await fetch("pages/chat/create-chat-group-modal.html");
   const modalHTML = await res.text();
 
   // Append modal to body
