@@ -26,9 +26,11 @@ function setTheme(theme) {
   updateThemeUI(theme);
 
   // Notify modules that depend on dark/light mode-specific tokens.
-  window.dispatchEvent(new CustomEvent(THEME_CHANGED_EVENT, {
-    detail: { theme }
-  }));
+  window.dispatchEvent(
+    new CustomEvent(THEME_CHANGED_EVENT, {
+      detail: { theme },
+    }),
+  );
 }
 
 // Toggle between dark and light theme

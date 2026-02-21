@@ -72,6 +72,8 @@ const signupUsernameInput = document.getElementById("signup-username");
 const signupFullnameInput = document.getElementById("signup-fullname");
 const loginEmailInput = document.getElementById("login-email");
 const loginPasswordInput = document.getElementById("login-password");
+const googleLoginBtn = document.getElementById("google-login-btn");
+const googleSigninRenderHost = document.getElementById("google-signin-render-host");
 
 if (signupUsernameInput) {
   signupUsernameInput.setAttribute("minlength", String(REGISTER_USERNAME_MIN_LENGTH));
@@ -152,6 +154,8 @@ const FORGOT_MODAL_STEP = {
 
 let forgotVerifiedCode = "";
 let prefilledPasswordClearTimer = null;
+let isGoogleIdentityInitialized = false;
+let isGoogleButtonRendered = false;
 
 let pendingAutoLogin = null;
 
@@ -255,6 +259,141 @@ async function runWithPendingButton(button, pendingText, action) {
     button.classList.remove("is-loading");
     button.removeAttribute("aria-busy");
     button.textContent = button.dataset.defaultText || defaultText;
+  }
+}
+
+function setSocialButtonPending(button, isPending) {
+  if (!button) {
+    return;
+  }
+
+  button.classList.toggle("is-loading", isPending);
+  if (isPending) {
+    button.setAttribute("aria-busy", "true");
+  } else {
+    button.removeAttribute("aria-busy");
+  }
+}
+
+function hasGoogleRenderedTarget() {
+  if (!googleSigninRenderHost) {
+    return false;
+  }
+
+  return Boolean(
+    googleSigninRenderHost.querySelector("iframe, div[role='button']"),
+  );
+}
+
+function syncGoogleReadyClass() {
+  const isReady = hasGoogleRenderedTarget();
+  if (googleLoginBtn) {
+    googleLoginBtn.classList.toggle("google-ready", isReady);
+  }
+  return isReady;
+}
+
+function ensureGoogleIdentityInitialized() {
+  const clientId = String(appConfig.GOOGLE_CLIENT_ID || "").trim();
+  if (!clientId || !window.google?.accounts?.id) {
+    return false;
+  }
+
+  if (!isGoogleIdentityInitialized) {
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: (response) => {
+        void handleGoogleCredentialResponse(response);
+      },
+      cancel_on_tap_outside: true,
+      auto_select: false,
+    });
+
+    if (!googleSigninRenderHost || !window.google?.accounts?.id?.renderButton) {
+      return false;
+    }
+
+    googleSigninRenderHost.innerHTML = "";
+    window.google.accounts.id.renderButton(googleSigninRenderHost, {
+      type: "icon",
+      theme: "outline",
+      size: "large",
+      shape: "circle",
+      logo_alignment: "center",
+    });
+
+    isGoogleIdentityInitialized = true;
+  }
+
+  isGoogleButtonRendered = syncGoogleReadyClass();
+  return isGoogleButtonRendered;
+}
+
+function startGoogleSignInPrecheck() {
+  const clientId = String(appConfig.GOOGLE_CLIENT_ID || "").trim();
+  if (!clientId) {
+    showToast("Google sign-in is not configured yet.", "error");
+    return false;
+  }
+
+  if (!ensureGoogleIdentityInitialized()) {
+    showToast("Google sign-in is initializing. Please wait a moment and try again.", "error");
+    return false;
+  }
+
+  return true;
+}
+
+async function handleGoogleCredentialResponse(response) {
+  const idToken = response?.credential;
+  if (!idToken) {
+    showToast("Google sign-in was canceled or unavailable. Please try again.", "error");
+    return;
+  }
+
+  setSocialButtonPending(googleLoginBtn, true);
+
+  try {
+    const res = await API.Auth.loginWithGoogle(idToken);
+    const data = await res.json();
+
+    if (!res.ok) {
+      showToast(data.message || data.Message || "Google sign-in failed.", "error");
+      return;
+    }
+
+    persistSessionFromLoginResponse(data);
+
+    if (data.status === 1) {
+      showToast(
+        `<div>
+          <p style="margin-bottom: 8px;">Your account is currently Inactive. Please reactivate to continue.</p>
+          <div class="toast-actions">
+            <button class="toast-btn" onclick="window.reactivateAccountAction()">Reactivate Now</button>
+            <button class="toast-btn secondary" onclick="window.location.href='auth.html'">Later</button>
+          </div>
+        </div>`,
+        "error",
+        0,
+        true,
+      );
+      return;
+    }
+
+    if (data.status === 5) {
+      showToast("Email is not verified. Please verify your email first.", "error");
+      return;
+    }
+
+    showToast("Google sign-in successful!", "success");
+    setTimeout(() => {
+      window.location.href = "index.html";
+    }, 700);
+  } catch (err) {
+    console.error(err);
+    showToast("Server error. Please try again later.", "error");
+  } finally {
+    setSocialButtonPending(googleLoginBtn, false);
   }
 }
 
@@ -695,6 +834,7 @@ async function loginAfterEmailVerification() {
 
 // === LOGIN FORM ===
 const loginForm = document.querySelector(".sign-in-container form");
+const signInSubmitBtn = loginForm?.querySelector("button[type='submit'], button");
 
 if (loginPasswordInput) {
   loginPasswordInput.addEventListener("input", () => {
@@ -710,165 +850,206 @@ if (loginPasswordInput) {
 loginForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  const email = (loginEmailInput?.value || "").trim();
-  const password = (loginPasswordInput?.value || "").trim();
+  await runWithPendingButton(signInSubmitBtn, "Signing in...", async () => {
+    const email = (loginEmailInput?.value || "").trim();
+    const password = (loginPasswordInput?.value || "").trim();
 
-  if (!email) {
-    showToast("Email is required.", "error");
-    return;
-  }
-  if (!password) {
-    showToast("Password is required.", "error");
-    return;
-  }
-
-  try {
-    if (prefilledPasswordClearTimer) {
-      clearTimeout(prefilledPasswordClearTimer);
-      prefilledPasswordClearTimer = null;
+    if (!email) {
+      showToast("Email is required.", "error");
+      return;
+    }
+    if (!password) {
+      showToast("Password is required.", "error");
+      return;
     }
 
-    const res = await API.Auth.login(email, password);
+    try {
+      if (prefilledPasswordClearTimer) {
+        clearTimeout(prefilledPasswordClearTimer);
+        prefilledPasswordClearTimer = null;
+      }
 
-    const data = await res.json();
+      const res = await API.Auth.login(email, password);
+      const data = await res.json();
 
-    if (!res.ok) {
-      showToast(data.message || "Login failed", "error");
-      if (isEmailNotVerifiedResponse(res, data)) {
+      if (!res.ok) {
+        showToast(data.message || "Login failed", "error");
+        if (isEmailNotVerifiedResponse(res, data)) {
+          setPendingAutoLogin(email, password);
+          openVerifyModal({
+            email,
+            mode: VERIFY_MODAL_MODE.LOGIN,
+            step: VERIFY_MODAL_STEP.SEND,
+          });
+        }
+        return;
+      }
+
+      persistSessionFromLoginResponse(data);
+
+      // Check Account Status
+      if (data.status === 1) { // Inactive
+        showToast(
+          `<div>
+            <p style="margin-bottom: 8px;">Your account is currently Inactive. Please reactivate to continue.</p>
+            <div class="toast-actions">
+              <button class="toast-btn" onclick="window.reactivateAccountAction()">Reactivate Now</button>
+              <button class="toast-btn secondary" onclick="window.location.href='auth.html'">Later</button>
+            </div>
+          </div>`,
+          "error",
+          0, // Persistent
+          true // HTML
+        );
+        return; // Stop here, don't redirect to index yet
+      } 
+      if (data.status === 5) { // EmailNotVerified
+        showToast("Email is not verified. Please verify your email.", "error");
         setPendingAutoLogin(email, password);
         openVerifyModal({
           email,
           mode: VERIFY_MODAL_MODE.LOGIN,
           step: VERIFY_MODAL_STEP.SEND,
         });
+        return;
       }
-      return;
+
+      showToast("Login successful!", "success");
+      setTimeout(() => {
+        window.location.href = "index.html";
+      }, 800);
+    } catch (err) {
+      console.error(err);
+      showToast("Server error. Please try again later.", "error");
     }
-
-    persistSessionFromLoginResponse(data);
-
-    // Check Account Status
-    if (data.status === 1) { // Inactive
-      showToast(
-        `<div>
-          <p style="margin-bottom: 8px;">Your account is currently Inactive. Please reactivate to continue.</p>
-          <div class="toast-actions">
-            <button class="toast-btn" onclick="window.reactivateAccountAction()">Reactivate Now</button>
-            <button class="toast-btn secondary" onclick="window.location.href='auth.html'">Later</button>
-          </div>
-        </div>`,
-        "error",
-        0, // Persistent
-        true // HTML
-      );
-      return; // Stop here, don't redirect to index yet
-    } 
-    if (data.status === 5) { // EmailNotVerified
-      showToast("Email is not verified. Please verify your email.", "error");
-      setPendingAutoLogin(email, password);
-      openVerifyModal({
-        email,
-        mode: VERIFY_MODAL_MODE.LOGIN,
-        step: VERIFY_MODAL_STEP.SEND,
-      });
-      return;
-    }
-
-    showToast("Login successful!", "success");
-    setTimeout(() => {
-      window.location.href = "index.html";
-    }, 800);
-  } catch (err) {
-    console.error(err);
-    showToast("Server error. Please try again later.", "error");
-  }
+  });
 });
+
+if (googleLoginBtn) {
+  googleLoginBtn.addEventListener("click", (e) => {
+    if (googleLoginBtn.classList.contains("google-ready")) {
+      return;
+    }
+
+    e.preventDefault();
+    startGoogleSignInPrecheck();
+  });
+}
+
+if (String(appConfig.GOOGLE_CLIENT_ID || "").trim()) {
+  const googleInitRetry = setInterval(() => {
+    if (ensureGoogleIdentityInitialized()) {
+      clearInterval(googleInitRetry);
+    }
+  }, 500);
+
+  setTimeout(() => {
+    clearInterval(googleInitRetry);
+  }, 20000);
+
+  // Keep ready-state synced in case Google render target appears a bit later.
+  const googleReadySyncInterval = setInterval(() => {
+    if (!isGoogleIdentityInitialized) {
+      return;
+    }
+
+    const ready = syncGoogleReadyClass();
+    if (ready) {
+      clearInterval(googleReadySyncInterval);
+    }
+  }, 300);
+
+  setTimeout(() => {
+    clearInterval(googleReadySyncInterval);
+  }, 20000);
+}
 
 //=== Signup form submit===
 const signupForm = document.querySelector(".sign-up-container form");
+const signupSubmitBtn = signupForm?.querySelector("button[type='submit'], button");
 signupForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  const username = document.getElementById("signup-username").value.trim();
-  const email = document.getElementById("signup-email").value.trim();
-  const fullname = document.getElementById("signup-fullname").value.trim();
-  const password = document.getElementById("signup-password").value;
-  const cfpassword = document.getElementById("cf-password").value;
+  await runWithPendingButton(signupSubmitBtn, "Signing up...", async () => {
+    const username = document.getElementById("signup-username").value.trim();
+    const email = document.getElementById("signup-email").value.trim();
+    const fullname = document.getElementById("signup-fullname").value.trim();
+    const password = document.getElementById("signup-password").value;
+    const cfpassword = document.getElementById("cf-password").value;
 
-  if (!username || !email || !fullname || !password || !cfpassword) {
-    showToast("Please fill in all fields completely.", "error");
-    return;
-  }
-
-  if (
-    username.length < REGISTER_USERNAME_MIN_LENGTH ||
-    username.length > REGISTER_USERNAME_MAX_LENGTH
-  ) {
-    showToast(
-      `Username must be between ${REGISTER_USERNAME_MIN_LENGTH} and ${REGISTER_USERNAME_MAX_LENGTH} characters.`,
-      "error",
-    );
-    return;
-  }
-
-  const usernameRegex = /^[A-Za-z0-9_]+$/;
-  if (!usernameRegex.test(username)) {
-    showToast(
-      "Username can only include letters, numbers, underscore (_), without spaces or accents.",
-      "error",
-    );
-    return;
-  }
-
-  if (
-    fullname.length < REGISTER_FULLNAME_MIN_LENGTH ||
-    fullname.length > REGISTER_FULLNAME_MAX_LENGTH
-  ) {
-    showToast(
-      `Full name must be between ${REGISTER_FULLNAME_MIN_LENGTH} and ${REGISTER_FULLNAME_MAX_LENGTH} characters.`,
-      "error",
-    );
-    return;
-  }
-
-  const passwordPolicyError = getPasswordPolicyError(password);
-  if (passwordPolicyError) {
-    showToast(passwordPolicyError, "error");
-    return;
-  }
-
-  if (password !== cfpassword) {
-    showToast("Password and Confirm Password do not match.", "error");
-    return;
-  }
-
-  try {
-    const res = await API.Auth.register({ username, email, fullname, password });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      showToast(data.message || data.Message || "Sign up failed", "error");
+    if (!username || !email || !fullname || !password || !cfpassword) {
+      showToast("Please fill in all fields completely.", "error");
       return;
     }
 
-    showToast("Registration successful!", "success");
-    const sent = await sendVerificationCode(email, { switchToCode: false });
-    if (!sent) {
+    if (
+      username.length < REGISTER_USERNAME_MIN_LENGTH ||
+      username.length > REGISTER_USERNAME_MAX_LENGTH
+    ) {
+      showToast(
+        `Username must be between ${REGISTER_USERNAME_MIN_LENGTH} and ${REGISTER_USERNAME_MAX_LENGTH} characters.`,
+        "error",
+      );
       return;
     }
 
-    setPendingAutoLogin(email, password);
+    const usernameRegex = /^[A-Za-z0-9_]+$/;
+    if (!usernameRegex.test(username)) {
+      showToast(
+        "Username can only include letters, numbers, underscore (_), without spaces or accents.",
+        "error",
+      );
+      return;
+    }
 
-    openVerifyModal({
-      email,
-      mode: VERIFY_MODAL_MODE.SIGNUP,
-      step: VERIFY_MODAL_STEP.CODE,
-    });
-  } catch (err) {
-    console.error(err);
-    showToast("Server error. Please try again later.", "error");
-  }
+    if (
+      fullname.length < REGISTER_FULLNAME_MIN_LENGTH ||
+      fullname.length > REGISTER_FULLNAME_MAX_LENGTH
+    ) {
+      showToast(
+        `Full name must be between ${REGISTER_FULLNAME_MIN_LENGTH} and ${REGISTER_FULLNAME_MAX_LENGTH} characters.`,
+        "error",
+      );
+      return;
+    }
+
+    const passwordPolicyError = getPasswordPolicyError(password);
+    if (passwordPolicyError) {
+      showToast(passwordPolicyError, "error");
+      return;
+    }
+
+    if (password !== cfpassword) {
+      showToast("Password and Confirm Password do not match.", "error");
+      return;
+    }
+
+    try {
+      const res = await API.Auth.register({ username, email, fullname, password });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showToast(data.message || data.Message || "Sign up failed", "error");
+        return;
+      }
+
+      showToast("Registration successful!", "success");
+      const sent = await sendVerificationCode(email, { switchToCode: false });
+      if (!sent) {
+        return;
+      }
+
+      setPendingAutoLogin(email, password);
+      openVerifyModal({
+        email,
+        mode: VERIFY_MODAL_MODE.SIGNUP,
+        step: VERIFY_MODAL_STEP.CODE,
+      });
+    } catch (err) {
+      console.error(err);
+      showToast("Server error. Please try again later.", "error");
+    }
+  });
 });
 //=== Verify code form ===
 verifyBtn.addEventListener("click", async () => {

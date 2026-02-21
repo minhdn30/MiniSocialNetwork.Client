@@ -63,6 +63,8 @@ h1 {
   text-align: center;
   cursor: help;
   user-select: none;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .rules-tooltip {
@@ -441,6 +443,36 @@ input:focus {
 .social-btn img {
   width: 20px;
   height: 20px;
+  pointer-events: none;
+}
+
+.google-signin-render-host {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.google-signin-render-host > div,
+.google-signin-render-host iframe {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+}
+
+.social-btn.google {
+  position: relative;
+}
+
+.social-btn.google.google-ready .google-signin-render-host {
+  pointer-events: auto;
+}
+
+.social-btn.is-loading {
+  opacity: 0.65;
+  pointer-events: none;
+  cursor: wait;
 }
 
 .social-btn.google:hover {
@@ -519,7 +551,7 @@ input:focus {
 #forgot-password-popup h2 {
   margin-bottom: 10px;
   font-size: 1.8rem;
-  color: var(--text-primary);
+  color: var(--accent-primary);
 }
 
 #verify-popup p,

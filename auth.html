@@ -137,7 +137,8 @@
           <button>Sign In</button>
           <a>------------- Or continue with -------------</a>
           <div class="social-container">
-            <a href="#" class="social-btn google">
+            <a href="#" class="social-btn google" id="google-login-btn" aria-label="Continue with Google">
+              <span id="google-signin-render-host" class="google-signin-render-host" aria-hidden="true"></span>
               <img
                 src="https://cdn-icons-png.flaticon.com/512/270/270014.png"
                 alt="Google Logo"
@@ -300,6 +301,7 @@
     <script src="js/config/configAPI.js"></script>
     <script src="js/shared/toast.js"></script>
     <script src="js/shared/loading-utils.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="js/auth/auth.js"></script>
   </body>
 </html>
