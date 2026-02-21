@@ -367,6 +367,20 @@
           body: JSON.stringify(data),
           skipAuth: true,
         }),
+      loginWithGoogle: (idToken) =>
+        apiFetch("/Auths/login-with-google", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ idToken }),
+          skipAuth: true,
+        }),
+      loginWithExternal: (provider, credential) =>
+        apiFetch("/Auths/external-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider, credential }),
+          skipAuth: true,
+        }),
       sendEmail: (email) =>
         apiFetch("/Auths/send-email", {
           method: "POST",
@@ -401,6 +415,18 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, code, newPassword, confirmPassword }),
           skipAuth: true,
+        }),
+      setPassword: (newPassword, confirmPassword) =>
+        apiFetch("/Auths/set-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ newPassword, confirmPassword }),
+        }),
+      getExternalLogins: () =>
+        apiFetch("/Auths/external-logins"),
+      unlinkExternalLogin: (provider) =>
+        apiFetch(`/Auths/external-logins/${encodeURIComponent(provider)}`, {
+          method: "DELETE",
         }),
       logout: () => apiFetch("/Auths/logout", { method: "POST" }),
       refresh: () => refreshAccessToken(),

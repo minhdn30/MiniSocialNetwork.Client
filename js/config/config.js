@@ -129,6 +129,7 @@
   REGISTER_USERNAME_MAX_LENGTH: 30, // Số ký tự tối đa cho username khi đăng ký
   REGISTER_FULLNAME_MIN_LENGTH: 2, // Số ký tự tối thiểu cho full name khi đăng ký
   MAX_PROFILE_FULLNAME_LENGTH: 25, // Số ký tự tối đa cho Full Name
+  GOOGLE_CLIENT_ID: "317334006143-4mtqfhphf2160g6egrvph749v8513m52.apps.googleusercontent.com", // Google OAuth client id for Google Identity Services (optional in local dev)
   MAX_PROFILE_BIO_LENGTH: 200, // Số ký tự tối đa cho Bio
   MAX_PROFILE_PHONE_LENGTH: 15, // Số ký tự tối đa cho Phone
   MAX_PROFILE_ADDRESS_LENGTH: 100, // Số ký tự tối đa cho Address
