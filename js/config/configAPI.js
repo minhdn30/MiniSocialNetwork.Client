@@ -381,6 +381,27 @@
           body: JSON.stringify({ email, code }),
           skipAuth: true,
         }),
+      forgotPasswordSendCode: (email) =>
+        apiFetch("/Auths/forgot-password/send-code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+          skipAuth: true,
+        }),
+      forgotPasswordVerifyCode: (email, code) =>
+        apiFetch("/Auths/forgot-password/verify-code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, code }),
+          skipAuth: true,
+        }),
+      forgotPasswordReset: (email, code, newPassword, confirmPassword) =>
+        apiFetch("/Auths/forgot-password/reset", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, code, newPassword, confirmPassword }),
+          skipAuth: true,
+        }),
       logout: () => apiFetch("/Auths/logout", { method: "POST" }),
       refresh: () => refreshAccessToken(),
     },

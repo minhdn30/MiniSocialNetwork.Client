@@ -181,6 +181,18 @@ button:focus {
   outline: none;
 }
 
+button:disabled,
+button.is-loading {
+  opacity: 0.65;
+  cursor: wait;
+  transform: none !important;
+}
+
+button:disabled:hover,
+button.is-loading:hover {
+  transform: none;
+}
+
 button.ghost {
   background-color: transparent;
   border-color: var(--text-white);
@@ -475,7 +487,8 @@ input:focus {
   color: var(--accent-primary);
 }
 /* === Overlay popup verify email === */
-#verify-popup {
+#verify-popup,
+#forgot-password-popup {
   display: none;
   position: fixed;
   top: 0;
@@ -489,7 +502,8 @@ input:focus {
   animation: fadeIn var(--transition-slow);
 }
 
-#verify-popup .verify-popup-content {
+#verify-popup .verify-popup-content,
+#forgot-password-popup .verify-popup-content {
   background: var(--bg-secondary);
   padding: 30px 40px;
   border-radius: 12px;
@@ -501,13 +515,15 @@ input:focus {
   animation: slideUp var(--transition-slow);
 }
 
-#verify-popup h2 {
+#verify-popup h2,
+#forgot-password-popup h2 {
   margin-bottom: 10px;
   font-size: 1.8rem;
   color: var(--text-primary);
 }
 
-#verify-popup p {
+#verify-popup p,
+#forgot-password-popup p {
   margin-bottom: 20px;
   font-size: 1rem;
   color: var(--text-tertiary);
@@ -518,6 +534,14 @@ input:focus {
 }
 
 .verify-step.active {
+  display: block;
+}
+
+.forgot-step {
+  display: none;
+}
+
+.forgot-step.active {
   display: block;
 }
 
@@ -547,7 +571,11 @@ input:focus {
 
 #send-code-btn,
 #verify-btn,
-#resend-btn {
+#resend-btn,
+#forgot-send-code-btn,
+#forgot-verify-code-btn,
+#forgot-resend-code-btn,
+#forgot-reset-password-btn {
   width: 100%;
   padding: 12px 0;
   margin-top: 10px;
@@ -560,24 +588,32 @@ input:focus {
 }
 
 #send-code-btn,
-#verify-btn {
+#verify-btn,
+#forgot-send-code-btn,
+#forgot-verify-code-btn,
+#forgot-reset-password-btn {
   background: var(--accent-primary);
   color: var(--text-white);
   border: 2px solid var(--bg-secondary);
 }
 
 #send-code-btn:hover,
-#verify-btn:hover {
+#verify-btn:hover,
+#forgot-send-code-btn:hover,
+#forgot-verify-code-btn:hover,
+#forgot-reset-password-btn:hover {
   background: var(--accent-hover);
 }
 
-#resend-btn {
+#resend-btn,
+#forgot-resend-code-btn {
   background: transparent;
   color: var(--accent-primary);
   border: 2px solid var(--accent-primary);
 }
 
-#resend-btn:hover {
+#resend-btn:hover,
+#forgot-resend-code-btn:hover {
   background: var(--accent-primary);
   color: var(--text-white);
 }
@@ -594,6 +630,29 @@ input:focus {
 }
 
 .verify-popup-content .close-popup:hover {
+  color: var(--accent-primary);
+}
+
+.forgot-password-content .floating-field {
+  margin: 12px 0;
+}
+
+.forgot-password-content .password-wrapper {
+  margin-top: 4px;
+}
+
+.forgot-password-content .close-forgot-popup {
+  position: absolute;
+  top: 12px;
+  right: 15px;
+  font-size: 24px;
+  font-weight: bold;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: color var(--transition-normal);
+}
+
+.forgot-password-content .close-forgot-popup:hover {
   color: var(--accent-primary);
 }
 
@@ -625,7 +684,8 @@ input:focus {
     left: -100px;
   }
 
-  #verify-popup .verify-popup-content {
+  #verify-popup .verify-popup-content,
+  #forgot-password-popup .verify-popup-content {
     padding: 20px;
   }
 

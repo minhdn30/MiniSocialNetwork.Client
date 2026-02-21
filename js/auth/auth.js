@@ -50,6 +50,7 @@ const REGISTER_FULLNAME_MAX_LENGTH =
     ? Number(appConfig.MAX_PROFILE_FULLNAME_LENGTH)
     : 25;
 const REGISTER_PASSWORD_MIN_LENGTH = 6;
+const PASSWORD_ACCENT_REGEX = /[\u00C0-\u024F\u1E00-\u1EFF]/u;
 
 const signupRuleUsernameLength = document.getElementById("signup-rule-username-length");
 const signupRuleFullnameLength = document.getElementById("signup-rule-fullname-length");
@@ -69,6 +70,8 @@ if (signupRulePasswordMinLength) {
 
 const signupUsernameInput = document.getElementById("signup-username");
 const signupFullnameInput = document.getElementById("signup-fullname");
+const loginEmailInput = document.getElementById("login-email");
+const loginPasswordInput = document.getElementById("login-password");
 
 if (signupUsernameInput) {
   signupUsernameInput.setAttribute("minlength", String(REGISTER_USERNAME_MIN_LENGTH));
@@ -123,6 +126,33 @@ const VERIFY_MODAL_STEP = {
   CODE: "code",
 };
 
+const forgotPasswordLink = document.getElementById("forgot-password-link");
+const forgotPasswordPopup = document.getElementById("forgot-password-popup");
+const forgotPasswordTitle = document.getElementById("forgot-password-title");
+const forgotPasswordDescription = document.getElementById("forgot-password-description");
+const forgotStepEmail = document.getElementById("forgot-step-email");
+const forgotStepCode = document.getElementById("forgot-step-code");
+const forgotStepReset = document.getElementById("forgot-step-reset");
+const forgotEmailInput = document.getElementById("forgot-email");
+const forgotSendCodeBtn = document.getElementById("forgot-send-code-btn");
+const forgotVerifyCodeBtn = document.getElementById("forgot-verify-code-btn");
+const forgotResendCodeBtn = document.getElementById("forgot-resend-code-btn");
+const forgotResetPasswordBtn = document.getElementById("forgot-reset-password-btn");
+const forgotNewPasswordInput = document.getElementById("forgot-new-password");
+const forgotConfirmPasswordInput = document.getElementById("forgot-confirm-password");
+const forgotCodeInputs = forgotPasswordPopup
+  ? forgotPasswordPopup.querySelectorAll(".forgot-code-input")
+  : [];
+
+const FORGOT_MODAL_STEP = {
+  EMAIL: "email",
+  CODE: "code",
+  RESET: "reset",
+};
+
+let forgotVerifiedCode = "";
+let prefilledPasswordClearTimer = null;
+
 let pendingAutoLogin = null;
 
 function setPendingAutoLogin(email, password) {
@@ -142,6 +172,90 @@ function setPendingAutoLogin(email, password) {
 
 function clearPendingAutoLogin() {
   pendingAutoLogin = null;
+}
+
+function getPasswordPolicyError(password) {
+  if (!password) {
+    return "Password is required.";
+  }
+
+  if (password.length < REGISTER_PASSWORD_MIN_LENGTH) {
+    return `Password must be at least ${REGISTER_PASSWORD_MIN_LENGTH} characters long.`;
+  }
+
+  if (password.includes(" ") || PASSWORD_ACCENT_REGEX.test(password)) {
+    return "Password cannot contain Vietnamese accents or spaces.";
+  }
+
+  return null;
+}
+
+function fillLoginCredentials(email, password) {
+  const normalizedEmail = (email || "").trim();
+  const normalizedPassword = password || "";
+
+  if (loginEmailInput) {
+    loginEmailInput.value = normalizedEmail;
+    syncFloatingFieldState(loginEmailInput);
+  }
+
+  if (loginPasswordInput) {
+    loginPasswordInput.value = normalizedPassword;
+    syncFloatingFieldState(loginPasswordInput);
+    loginPasswordInput.dataset.isPrefilled = "true";
+    loginPasswordInput.focus();
+  }
+
+  // Security: keep prefilled password only briefly for quick login, then clear it.
+  if (prefilledPasswordClearTimer) {
+    clearTimeout(prefilledPasswordClearTimer);
+  }
+
+  const prefilledPasswordSnapshot = normalizedPassword;
+  prefilledPasswordClearTimer = setTimeout(() => {
+    if (!loginPasswordInput) {
+      return;
+    }
+
+    if (
+      loginPasswordInput.dataset.isPrefilled === "true" &&
+      loginPasswordInput.value === prefilledPasswordSnapshot
+    ) {
+      loginPasswordInput.value = "";
+      syncFloatingFieldState(loginPasswordInput);
+      loginPasswordInput.dataset.isPrefilled = "false";
+    }
+  }, 120000);
+}
+
+async function runWithPendingButton(button, pendingText, action) {
+  if (typeof action !== "function") {
+    return false;
+  }
+
+  if (!button) {
+    return action();
+  }
+
+  if (button.disabled) {
+    return false;
+  }
+
+  const defaultText = button.dataset.defaultText || button.textContent || "";
+  button.dataset.defaultText = defaultText;
+  button.disabled = true;
+  button.classList.add("is-loading");
+  button.setAttribute("aria-busy", "true");
+  button.textContent = pendingText;
+
+  try {
+    return await action();
+  } finally {
+    button.disabled = false;
+    button.classList.remove("is-loading");
+    button.removeAttribute("aria-busy");
+    button.textContent = button.dataset.defaultText || defaultText;
+  }
 }
 
 function persistSessionFromLoginResponse(data) {
@@ -253,6 +367,250 @@ function closeVerifyModal() {
   clearPendingAutoLogin();
 }
 
+function setForgotPasswordModalStep(step) {
+  if (!forgotPasswordPopup || !forgotStepEmail || !forgotStepCode || !forgotStepReset) {
+    return;
+  }
+
+  forgotStepEmail.classList.toggle("active", step === FORGOT_MODAL_STEP.EMAIL);
+  forgotStepCode.classList.toggle("active", step === FORGOT_MODAL_STEP.CODE);
+  forgotStepReset.classList.toggle("active", step === FORGOT_MODAL_STEP.RESET);
+  forgotPasswordPopup.dataset.step = step;
+
+  if (!forgotPasswordDescription || !forgotPasswordTitle) {
+    return;
+  }
+
+  forgotPasswordTitle.textContent = "Forgot Password";
+
+  if (step === FORGOT_MODAL_STEP.EMAIL) {
+    forgotPasswordDescription.textContent =
+      "Enter your account email to receive a 6-digit reset code.";
+    return;
+  }
+
+  if (step === FORGOT_MODAL_STEP.CODE) {
+    forgotPasswordDescription.textContent =
+      "Enter the 6-digit code sent to your email.";
+    return;
+  }
+
+  forgotPasswordDescription.textContent =
+    "Create a new password for your account.";
+}
+
+function focusFirstForgotCodeInput() {
+  if (!forgotCodeInputs || forgotCodeInputs.length === 0) {
+    return;
+  }
+
+  forgotCodeInputs[0].focus();
+}
+
+function resetForgotCodeInputs(shouldFocus = false) {
+  if (!forgotCodeInputs || forgotCodeInputs.length === 0) {
+    return;
+  }
+
+  forgotCodeInputs.forEach((input) => {
+    input.value = "";
+  });
+
+  if (shouldFocus) {
+    focusFirstForgotCodeInput();
+  }
+}
+
+function getForgotCode() {
+  if (!forgotCodeInputs || forgotCodeInputs.length === 0) {
+    return "";
+  }
+
+  return Array.from(forgotCodeInputs)
+    .map((input) => input.value)
+    .join("");
+}
+
+function openForgotPasswordModal(initialEmail = "") {
+  if (!forgotPasswordPopup) {
+    return;
+  }
+
+  forgotVerifiedCode = "";
+  forgotPasswordPopup.style.display = "flex";
+  forgotPasswordPopup.dataset.email = (initialEmail || "").trim();
+  setForgotPasswordModalStep(FORGOT_MODAL_STEP.EMAIL);
+  resetForgotCodeInputs(false);
+
+  if (forgotEmailInput) {
+    forgotEmailInput.value = (initialEmail || "").trim();
+    syncFloatingFieldState(forgotEmailInput);
+    forgotEmailInput.focus();
+  }
+
+  if (forgotNewPasswordInput) {
+    forgotNewPasswordInput.value = "";
+    syncFloatingFieldState(forgotNewPasswordInput);
+  }
+
+  if (forgotConfirmPasswordInput) {
+    forgotConfirmPasswordInput.value = "";
+    syncFloatingFieldState(forgotConfirmPasswordInput);
+  }
+}
+
+function closeForgotPasswordModal() {
+  if (!forgotPasswordPopup) {
+    return;
+  }
+
+  forgotVerifiedCode = "";
+  forgotPasswordPopup.style.display = "none";
+  forgotPasswordPopup.dataset.email = "";
+  forgotPasswordPopup.dataset.step = "";
+  resetForgotCodeInputs(false);
+
+  if (forgotEmailInput) {
+    forgotEmailInput.value = "";
+    syncFloatingFieldState(forgotEmailInput);
+  }
+
+  if (forgotNewPasswordInput) {
+    forgotNewPasswordInput.value = "";
+    syncFloatingFieldState(forgotNewPasswordInput);
+  }
+
+  if (forgotConfirmPasswordInput) {
+    forgotConfirmPasswordInput.value = "";
+    syncFloatingFieldState(forgotConfirmPasswordInput);
+  }
+}
+
+async function sendForgotPasswordCode({ switchToCode = true } = {}) {
+  const email = (forgotEmailInput?.value || "").trim();
+  if (!email) {
+    showToast("Email is required.", "error");
+    return false;
+  }
+
+  try {
+    const res = await API.Auth.forgotPasswordSendCode(email);
+    const data = await res.json();
+
+    if (!res.ok) {
+      showToast(data.message || data.Message || "Failed to send reset code.", "error");
+      return false;
+    }
+
+    forgotPasswordPopup.dataset.email = email;
+    showToast("If your email exists, a reset code has been sent.", "success");
+
+    if (switchToCode) {
+      setForgotPasswordModalStep(FORGOT_MODAL_STEP.CODE);
+      resetForgotCodeInputs(true);
+    }
+
+    return true;
+  } catch (err) {
+    console.error(err);
+    showToast("Server error. Please try again later.", "error");
+    return false;
+  }
+}
+
+async function verifyForgotPasswordCode() {
+  const email = (forgotPasswordPopup?.dataset.email || forgotEmailInput?.value || "").trim();
+  const code = getForgotCode();
+
+  if (!email) {
+    showToast("Email is required.", "error");
+    return false;
+  }
+
+  if (code.length !== 6) {
+    showToast("Please enter 6-digit code", "error");
+    return false;
+  }
+
+  try {
+    const res = await API.Auth.forgotPasswordVerifyCode(email, code);
+    const data = await res.json();
+
+    if (!res.ok) {
+      showToast(data.message || data.Message || "Verification failed.", "error");
+      resetForgotCodeInputs(true);
+      return false;
+    }
+
+    forgotVerifiedCode = code;
+    setForgotPasswordModalStep(FORGOT_MODAL_STEP.RESET);
+    if (forgotNewPasswordInput) {
+      forgotNewPasswordInput.focus();
+    }
+
+    return true;
+  } catch (err) {
+    console.error(err);
+    showToast("Server error. Please try again later.", "error");
+    return false;
+  }
+}
+
+async function resetForgottenPassword() {
+  const email = (forgotPasswordPopup?.dataset.email || forgotEmailInput?.value || "").trim();
+  const code = forgotVerifiedCode || getForgotCode();
+  const newPassword = forgotNewPasswordInput?.value || "";
+  const confirmPassword = forgotConfirmPasswordInput?.value || "";
+
+  if (!email) {
+    showToast("Email is required.", "error");
+    return false;
+  }
+
+  if (!code || code.length !== 6) {
+    showToast("Please verify your reset code first.", "error");
+    setForgotPasswordModalStep(FORGOT_MODAL_STEP.CODE);
+    resetForgotCodeInputs(true);
+    return false;
+  }
+
+  const passwordPolicyError = getPasswordPolicyError(newPassword);
+  if (passwordPolicyError) {
+    showToast(passwordPolicyError, "error");
+    return false;
+  }
+
+  if (newPassword !== confirmPassword) {
+    showToast("Password and Confirm Password do not match.", "error");
+    return false;
+  }
+
+  try {
+    const res = await API.Auth.forgotPasswordReset(
+      email,
+      code,
+      newPassword,
+      confirmPassword,
+    );
+    const data = await res.json();
+
+    if (!res.ok) {
+      showToast(data.message || data.Message || "Reset password failed.", "error");
+      return false;
+    }
+
+    fillLoginCredentials(email, newPassword);
+    closeForgotPasswordModal();
+    showToast("Password reset successful. Please sign in again.", "success");
+    container.classList.remove("right-panel-active");
+    return true;
+  } catch (err) {
+    console.error(err);
+    showToast("Server error. Please try again later.", "error");
+    return false;
+  }
+}
+
 async function sendVerificationCode(email, { switchToCode = true } = {}) {
   if (!email) {
     showToast("Email not found.", "error");
@@ -337,11 +695,23 @@ async function loginAfterEmailVerification() {
 
 // === LOGIN FORM ===
 const loginForm = document.querySelector(".sign-in-container form");
+
+if (loginPasswordInput) {
+  loginPasswordInput.addEventListener("input", () => {
+    loginPasswordInput.dataset.isPrefilled = "false";
+
+    if (prefilledPasswordClearTimer) {
+      clearTimeout(prefilledPasswordClearTimer);
+      prefilledPasswordClearTimer = null;
+    }
+  });
+}
+
 loginForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  const email = document.getElementById("login-email").value.trim();
-  const password = document.getElementById("login-password").value.trim();
+  const email = (loginEmailInput?.value || "").trim();
+  const password = (loginPasswordInput?.value || "").trim();
 
   if (!email) {
     showToast("Email is required.", "error");
@@ -353,6 +723,11 @@ loginForm.addEventListener("submit", async (e) => {
   }
 
   try {
+    if (prefilledPasswordClearTimer) {
+      clearTimeout(prefilledPasswordClearTimer);
+      prefilledPasswordClearTimer = null;
+    }
+
     const res = await API.Auth.login(email, password);
 
     const data = await res.json();
@@ -456,14 +831,9 @@ signupForm.addEventListener("submit", async (e) => {
     return;
   }
 
-  if (password.length < REGISTER_PASSWORD_MIN_LENGTH) {
-    showToast(`Password must be at least ${REGISTER_PASSWORD_MIN_LENGTH} characters long.`, "error");
-    return;
-  }
-
-  const accentRegex = /[\u00C0-\u024F\u1E00-\u1EFF]/u;
-  if (password.includes(" ") || accentRegex.test(password)) {
-    showToast("Password cannot contain Vietnamese accents or spaces.", "error");
+  const passwordPolicyError = getPasswordPolicyError(password);
+  if (passwordPolicyError) {
+    showToast(passwordPolicyError, "error");
     return;
   }
 
@@ -593,11 +963,109 @@ if (popupContent) {
 
 //=== send/resend code ===
 sendCodeBtn.addEventListener("click", async () => {
-  const email = verifyPopup?.dataset.email;
-  await sendVerificationCode(email, { switchToCode: true });
+  await runWithPendingButton(sendCodeBtn, "Sending...", async () => {
+    const email = verifyPopup?.dataset.email;
+    return sendVerificationCode(email, { switchToCode: true });
+  });
 });
 
 resendBtn.addEventListener("click", async () => {
-  const email = verifyPopup?.dataset.email;
-  await sendVerificationCode(email, { switchToCode: false });
+  await runWithPendingButton(resendBtn, "Resending...", async () => {
+    const email = verifyPopup?.dataset.email;
+    return sendVerificationCode(email, { switchToCode: false });
+  });
+});
+
+if (forgotPasswordLink) {
+  forgotPasswordLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    const loginEmail = (document.getElementById("login-email")?.value || "").trim();
+    openForgotPasswordModal(loginEmail);
+  });
+}
+
+if (forgotSendCodeBtn) {
+  forgotSendCodeBtn.addEventListener("click", async () => {
+    await runWithPendingButton(forgotSendCodeBtn, "Sending...", () =>
+      sendForgotPasswordCode({ switchToCode: true }),
+    );
+  });
+}
+
+if (forgotEmailInput) {
+  forgotEmailInput.addEventListener("keydown", async (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      await runWithPendingButton(forgotSendCodeBtn, "Sending...", () =>
+        sendForgotPasswordCode({ switchToCode: true }),
+      );
+    }
+  });
+}
+
+if (forgotResendCodeBtn) {
+  forgotResendCodeBtn.addEventListener("click", async () => {
+    await runWithPendingButton(forgotResendCodeBtn, "Resending...", () =>
+      sendForgotPasswordCode({ switchToCode: false }),
+    );
+  });
+}
+
+if (forgotVerifyCodeBtn) {
+  forgotVerifyCodeBtn.addEventListener("click", async () => {
+    await verifyForgotPasswordCode();
+  });
+}
+
+if (forgotResetPasswordBtn) {
+  forgotResetPasswordBtn.addEventListener("click", async () => {
+    await resetForgottenPassword();
+  });
+}
+
+if (forgotConfirmPasswordInput) {
+  forgotConfirmPasswordInput.addEventListener("keydown", async (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      await resetForgottenPassword();
+    }
+  });
+}
+
+const closeForgotPasswordButton = document.querySelector(
+  "#forgot-password-popup .close-forgot-popup",
+);
+if (closeForgotPasswordButton) {
+  closeForgotPasswordButton.addEventListener("click", () => {
+    closeForgotPasswordModal();
+  });
+}
+
+if (forgotPasswordPopup) {
+  forgotPasswordPopup.addEventListener("click", (e) => {
+    if (e.target === forgotPasswordPopup) {
+      closeForgotPasswordModal();
+    }
+  });
+}
+
+forgotCodeInputs.forEach((input, idx) => {
+  input.addEventListener("input", (e) => {
+    const value = e.target.value;
+    if (value.length > 0 && idx < forgotCodeInputs.length - 1) {
+      forgotCodeInputs[idx + 1].focus();
+    }
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Backspace" && !input.value && idx > 0) {
+      forgotCodeInputs[idx - 1].focus();
+    }
+  });
+
+  input.addEventListener("keypress", (e) => {
+    if (!/[0-9]/.test(e.key)) {
+      e.preventDefault();
+    }
+  });
 });

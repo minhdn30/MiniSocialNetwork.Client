@@ -361,8 +361,21 @@ function clearSessionAndRedirect() {
   window.location.href = "auth.html";
 }
 
-window.logout = function() {
+let logoutInFlight = false;
+
+window.logout = async function() {
+  if (logoutInFlight) return;
+  logoutInFlight = true;
+
+  try {
+    if (window.API?.Auth?.logout) {
+      await window.API.Auth.logout();
+    }
+  } catch (err) {
+    console.warn("Logout API failed. Clearing local session anyway.", err);
+  } finally {
     clearSessionAndRedirect();
+  }
 };
 
 /* =========================

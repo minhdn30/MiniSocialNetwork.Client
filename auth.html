@@ -156,7 +156,7 @@
               />
             </a>
           </div>
-          <a class="forgot-password" href="#">Forgot your password?</a>
+          <a class="forgot-password" id="forgot-password-link" href="#">Forgot your password?</a>
         </form>
       </div>
       <div class="overlay-container">
@@ -197,6 +197,99 @@
           </div>
           <button id="verify-btn">Verify</button>
           <button id="resend-btn" class="ghost">Resend Code</button>
+        </div>
+      </div>
+    </div>
+    <div id="forgot-password-popup" class="verify-popup forgot-password-popup">
+      <div class="verify-popup-content forgot-password-content">
+        <span class="close-forgot-popup">&times;</span>
+        <h2 id="forgot-password-title">Forgot Password</h2>
+        <p id="forgot-password-description">
+          Enter your account email to receive a 6-digit reset code.
+        </p>
+
+        <div id="forgot-step-email" class="forgot-step active">
+          <div class="floating-field">
+            <input
+              id="forgot-email"
+              type="email"
+              placeholder="Email"
+              autocomplete="email"
+            />
+            <label for="forgot-email">Email</label>
+          </div>
+          <button id="forgot-send-code-btn">Send Code</button>
+        </div>
+
+        <div id="forgot-step-code" class="forgot-step">
+          <div class="code-inputs forgot-code-inputs">
+            <input type="text" maxlength="1" class="forgot-code-input" />
+            <input type="text" maxlength="1" class="forgot-code-input" />
+            <input type="text" maxlength="1" class="forgot-code-input" />
+            <input type="text" maxlength="1" class="forgot-code-input" />
+            <input type="text" maxlength="1" class="forgot-code-input" />
+            <input type="text" maxlength="1" class="forgot-code-input" />
+          </div>
+          <button id="forgot-verify-code-btn">Verify Code</button>
+          <button id="forgot-resend-code-btn" class="ghost">Resend Code</button>
+        </div>
+
+        <div id="forgot-step-reset" class="forgot-step">
+          <div class="password-wrapper floating-field">
+            <input
+              id="forgot-new-password"
+              type="password"
+              placeholder="New Password"
+              autocomplete="new-password"
+            />
+            <label for="forgot-new-password">New Password</label>
+            <span class="toggle-password" data-target="forgot-new-password">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="eye-icon"
+              >
+                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </span>
+          </div>
+
+          <div class="password-wrapper floating-field">
+            <input
+              id="forgot-confirm-password"
+              type="password"
+              placeholder="Confirm Password"
+              autocomplete="new-password"
+            />
+            <label for="forgot-confirm-password">Confirm Password</label>
+            <span class="toggle-password" data-target="forgot-confirm-password">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="eye-icon"
+              >
+                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </span>
+          </div>
+
+          <button id="forgot-reset-password-btn">Reset Password</button>
         </div>
       </div>
     </div>
