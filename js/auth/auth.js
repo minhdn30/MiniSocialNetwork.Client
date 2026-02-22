@@ -253,12 +253,12 @@ async function runWithPendingButton(button, pendingText, action) {
     return false;
   }
 
-  const defaultText = button.dataset.defaultText || button.textContent || "";
-  button.dataset.defaultText = defaultText;
+  const defaultHtml = button.dataset.defaultHtml || button.innerHTML;
+  button.dataset.defaultHtml = defaultHtml;
   button.disabled = true;
   button.classList.add("is-loading");
   button.setAttribute("aria-busy", "true");
-  button.textContent = pendingText;
+  button.innerHTML = `<span class="spinner spinner-tiny auth-btn-spinner" aria-hidden="true"></span><span>${pendingText}</span>`;
 
   try {
     return await action();
@@ -266,7 +266,7 @@ async function runWithPendingButton(button, pendingText, action) {
     button.disabled = false;
     button.classList.remove("is-loading");
     button.removeAttribute("aria-busy");
-    button.textContent = button.dataset.defaultText || defaultText;
+    button.innerHTML = button.dataset.defaultHtml || defaultHtml;
   }
 }
 

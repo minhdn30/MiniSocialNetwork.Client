@@ -255,11 +255,7 @@
         button.disabled = true;
         button.classList.add("is-loading");
         button.setAttribute("aria-busy", "true");
-        button.innerHTML = `<i data-lucide="loader-2" class="acc-spin"></i><span>${pendingText}</span>`;
-
-        if (window.lucide) {
-            lucide.createIcons();
-        }
+        button.innerHTML = `<span class="spinner spinner-tiny" aria-hidden="true"></span><span>${pendingText}</span>`;
 
         try {
             return await action();

@@ -163,6 +163,10 @@
 .acc-settings-save-btn svg {
   color: #ffffff !important;
 }
+
+.acc-settings-save-btn .spinner {
+  --loader-color: currentColor;
+}
 .acc-settings-save-btn:hover {
   filter: brightness(1.1);
   transform: translateY(-2px);
@@ -185,24 +189,6 @@
 
 .acc-settings-save-btn:active {
   transform: translateY(0);
-}
-
-/* Reset spinner for lucide if needed */
-.acc-settings-save-btn .spin {
-  animation: accSpin 1s linear infinite;
-}
-
-.acc-settings-save-btn .acc-spin {
-  animation: accSpin 1s linear infinite;
-}
-
-@keyframes accSpin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 @keyframes accFadeInUp {

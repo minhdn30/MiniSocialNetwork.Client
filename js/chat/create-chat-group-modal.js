@@ -558,7 +558,9 @@ async function cgHandleCreateGroup() {
 
     cgIsCreatingGroup = true;
     createBtn.disabled = true;
-    createBtn.innerHTML = '<div class="spinner-small" style="width:16px;height:16px;border-width:2px;margin:0 auto;"></div>';
+    createBtn.classList.add('is-loading');
+    createBtn.setAttribute('aria-busy', 'true');
+    createBtn.innerHTML = '<span class="spinner spinner-tiny" aria-hidden="true"></span><span>Creating...</span>';
 
     try {
         const res = await window.API.Conversations.createGroup(formData);
@@ -602,6 +604,8 @@ async function cgHandleCreateGroup() {
         if (window.toastError) window.toastError('Could not connect to server');
     } finally {
         cgIsCreatingGroup = false;
+        createBtn.classList.remove('is-loading');
+        createBtn.removeAttribute('aria-busy');
         createBtn.textContent = 'Create Group';
         cgUpdateCreateBtn();
     }

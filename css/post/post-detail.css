@@ -39,7 +39,10 @@
   justify-content: center;
   z-index: 10002;
   opacity: 0.7;
-  transition: opacity 0.2s, transform 0.2s, background 0.2s;
+  transition:
+    opacity 0.2s,
+    transform 0.2s,
+    background 0.2s;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
@@ -53,11 +56,11 @@
 }
 
 .post-nav-btn.prev {
-  left: 20px;
+  left: 80px;
 }
 
 .post-nav-btn.next {
-  right: 20px;
+  right: 80px;
 }
 
 .post-nav-btn i,
@@ -105,28 +108,59 @@
   }
 }
 
-
 /* Realtime update animations (Sliding Counter) */
-.slide-up-out { animation: slide-up-out 0.2s ease-in forwards; }
-.slide-up-in { animation: slide-up-in 0.2s ease-out forwards; }
-.slide-down-out { animation: slide-down-out 0.2s ease-in forwards; }
-.slide-down-in { animation: slide-down-in 0.2s ease-out forwards; }
+.slide-up-out {
+  animation: slide-up-out 0.2s ease-in forwards;
+}
+.slide-up-in {
+  animation: slide-up-in 0.2s ease-out forwards;
+}
+.slide-down-out {
+  animation: slide-down-out 0.2s ease-in forwards;
+}
+.slide-down-in {
+  animation: slide-down-in 0.2s ease-out forwards;
+}
 
 @keyframes slide-up-out {
-  from { transform: translateY(0); opacity: 1; }
-  to { transform: translateY(-100%); opacity: 0; }
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
 }
 @keyframes slide-up-in {
-  from { transform: translateY(100%); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 @keyframes slide-down-out {
-  from { transform: translateY(0); opacity: 1; }
-  to { transform: translateY(100%); opacity: 0; }
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+  }
 }
 @keyframes slide-down-in {
-  from { transform: translateY(-100%); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .post-detail-card {
@@ -149,8 +183,14 @@
 }
 
 @keyframes zoomIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .modal-close-btn {
@@ -200,7 +240,7 @@
   position: relative;
 }
 
-.detail-media-item img, 
+.detail-media-item img,
 .detail-media-item video {
   width: 100%;
   height: 100%;
@@ -209,18 +249,18 @@
 
 /* Aspect Ratio Modifiers (Applied via JS to container) */
 .detail-media-container.ratio-square {
-   aspect-ratio: 1/1;
+  aspect-ratio: 1/1;
 }
 .detail-media-container.ratio-portrait {
-   aspect-ratio: 4/5;
+  aspect-ratio: 4/5;
 }
 .detail-media-container.ratio-landscape {
-   aspect-ratio: 16/9; /* Or square as requested? User said logic same as original/square */
-   /* User: "FeedAspectRatio = 16:9 thì logic y hệt với FeedAspectRatio = 0" -> Square Container, Contain */
+  aspect-ratio: 16/9; /* Or square as requested? User said logic same as original/square */
+  /* User: "FeedAspectRatio = 16:9 thì logic y hệt với FeedAspectRatio = 0" -> Square Container, Contain */
 }
 
 .detail-media-item.cover img {
-    object-fit: cover;
+  object-fit: cover;
 }
 
 /* Slider Nav */
@@ -241,11 +281,17 @@
   transition: opacity 0.2s;
   z-index: 10;
 }
-.detail-media-container:hover .detail-nav { opacity: 1; }
-.detail-nav.prev { left: 10px; }
-.detail-nav.next { right: 10px; }
-.detail-nav svg{
-    color: var(--bg-primary);
+.detail-media-container:hover .detail-nav {
+  opacity: 1;
+}
+.detail-nav.prev {
+  left: 10px;
+}
+.detail-nav.next {
+  right: 10px;
+}
+.detail-nav svg {
+  color: var(--bg-primary);
 }
 /* RIGHT: INFO */
 .detail-info-container {
@@ -266,12 +312,37 @@
   justify-content: space-between;
 }
 /* User info styles mapped to shared/post-common.css */
-.user-info { display: flex; align-items: center; gap: 12px; }
-.user-meta { display: flex; flex-direction: column; gap: 2px; }
-.user-name-row { display: flex; align-items: center; gap: 6px; }
-.location { font-size: 12px; color: var(--text-secondary); display: block; }
-.location { font-size: 12px; color: var(--text-secondary); display: block; }
-.more-options-btn { background: none; border: none; color: var(--text-primary); cursor: pointer; }
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.user-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.user-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.location {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: block;
+}
+.location {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: block;
+}
+.more-options-btn {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+}
 
 /* Custom style for post-detail time - making it smaller since it's on a new line */
 #postDetailModal .post-time {
@@ -285,7 +356,6 @@
   cursor: pointer;
   font-style: italic;
 }
-
 
 /* Caption Section */
 .caption-section {
@@ -339,85 +409,89 @@
   position: relative;
 }
 
-.emoji-trigger { 
-    cursor: pointer; 
-    color: var(--text-primary);
-    transition: transform var(--transition-fast) ease, opacity var(--transition-fast) ease;
+.emoji-trigger {
+  cursor: pointer;
+  color: var(--text-primary);
+  transition:
+    transform var(--transition-fast) ease,
+    opacity var(--transition-fast) ease;
 }
 
 .emoji-trigger:hover {
-    transform: scale(1.1) !important;
+  transform: scale(1.1) !important;
 }
 
 .emoji-trigger:active {
-    transform: scale(0.95) rotate(15deg) !important;
-    opacity: 0.8;
+  transform: scale(0.95) rotate(15deg) !important;
+  opacity: 0.8;
 }
 
-#detailCommentInput { 
-    flex: 1; 
-    background: none; 
-    border: none; 
-    outline: none; 
-    color: var(--text-primary); 
-    font-size: 14px;
-    resize: none;
-    overflow-y: auto;
-    min-height: 20px;
-    max-height: 100px;
-    font-family: inherit;
-    line-height: 1.4;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
+#detailCommentInput {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 14px;
+  resize: none;
+  overflow-y: auto;
+  min-height: 20px;
+  max-height: 100px;
+  font-family: inherit;
+  line-height: 1.4;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 #detailCommentInput::-webkit-scrollbar {
-    width: 4px;
+  width: 4px;
 }
 #detailCommentInput::-webkit-scrollbar-track {
-    background: transparent;
+  background: transparent;
 }
 #detailCommentInput::-webkit-scrollbar-thumb,
 .reply-input::-webkit-scrollbar-thumb {
-    background: var(--text-tertiary);
-    border-radius: 10px;
-    cursor: pointer;
+  background: var(--text-tertiary);
+  border-radius: 10px;
+  cursor: pointer;
 }
 #detailCommentInput::-webkit-scrollbar-thumb:hover {
-    background: var(--accent-primary);
+  background: var(--accent-primary);
 }
-.post-btn { 
-    background: none; 
-    border: none; 
-    color: var(--accent-secondary); 
-    cursor: pointer;
-    padding: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform var(--transition-fast) ease, opacity var(--transition-fast) ease;
+.post-btn {
+  background: none;
+  border: none;
+  color: var(--accent-secondary);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    transform var(--transition-fast) ease,
+    opacity var(--transition-fast) ease;
 }
 
 .post-btn i,
 .post-btn svg {
-    width: 20px;
-    height: 20px;
-    stroke-width: 2px;
+  width: 20px;
+  height: 20px;
+  stroke-width: 2px;
 }
 
 .post-btn:hover:not(:disabled) {
-    color: var(--accent-primary);
-    transform: scale(1.1) !important;
+  color: var(--accent-primary);
+  transform: scale(1.1) !important;
 }
 
 .post-btn:active:not(:disabled) {
-    transform: scale(0.95) rotate(15deg) !important;
-    opacity: 0.8;
+  transform: scale(0.95) rotate(15deg) !important;
+  opacity: 0.8;
 }
 
-.post-btn:disabled { 
-    opacity: 0.4; 
-    cursor: default; 
+.post-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /* Responsive */
@@ -465,7 +539,7 @@
     top: 5px;
     right: 5px;
     padding: 5px;
-    background: rgba(0,0,0,0.5);
+    background: rgba(0, 0, 0, 0.5);
     border-radius: 50%;
   }
 
@@ -484,24 +558,26 @@
 
 /* Edit Mode Responsive for Post Detail */
 @media (max-width: 768px) {
-    #postDetailModal .detail-mode-panel {
-        height: 100%;
-    }
-    
-    #postDetailModal .edit-panel-body {
-        padding-bottom: 80px; /* Space for keyboards or bottom safe area */
-    }
+  #postDetailModal .detail-mode-panel {
+    height: 100%;
+  }
+
+  #postDetailModal .edit-panel-body {
+    padding-bottom: 80px; /* Space for keyboards or bottom safe area */
+  }
 }
 
 .detail-emoji-picker {
-    position: absolute;
-    bottom: 100%;
-    left: 0;
-    z-index: 20;
-    width: 300px;
-    display: none;
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  z-index: 20;
+  width: 300px;
+  display: none;
 }
-.detail-emoji-picker.show { display: block; }
+.detail-emoji-picker.show {
+  display: block;
+}
 
 /* Post Detail Dots Positioning */
 #postDetailModal .media-dots {
@@ -516,14 +592,13 @@
 /* Ensure visibility on dark backgrounds */
 #postDetailModal .media-dots span {
   background: rgba(255, 255, 255, 0.5);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 #postDetailModal .media-dots span.active {
   background: #fff;
   transform: scale(1.2);
 }
-
 
 /* ================= CUSTOM SCROLLBAR (Match Create Post Modal) ================= */
 .custom-scrollbar::-webkit-scrollbar {
@@ -553,136 +628,138 @@
 /* ================= MODE PANELS ================= */
 /* ================= MODE PANELS ================= */
 #postDetailModal .detail-mode-panel {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    width: 100%;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
 }
 
 /* ================= EDIT MODE HEADER ================= */
 #postDetailModal .edit-modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 16px;
-    border-bottom: 1px solid var(--border-tertiary);
-    height: 52px;
-    flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border-tertiary);
+  height: 52px;
+  flex-shrink: 0;
 }
 
 #postDetailModal .edit-modal-header .modal-title {
-    font-size: 16px;
-    font-weight: 600;
-    margin: 0;
-    color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
 }
 
 #postDetailModal .edit-modal-header button {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-primary);
-    padding: 8px;
-    transition: color 0.2s;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 8px;
+  transition: color 0.2s;
 }
 
 #postDetailModal .edit-modal-header .modal-next-btn {
-    background: var(--accent-primary);
-    color: var(--text-white);
-    border: none;
-    padding: 6px 16px;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 14px;
-    cursor: pointer;
-    transition: background var(--transition-fast), transform 0.1s;
+  background: var(--accent-primary);
+  color: var(--text-white);
+  border: none;
+  padding: 6px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    transform 0.1s;
 }
 
 #postDetailModal .edit-modal-header .modal-next-btn:hover {
-    background: var(--accent-hover);
+  background: var(--accent-hover);
 }
 
 #postDetailModal .edit-modal-header .modal-next-btn:disabled {
-    opacity: 0.5;
-    background: var(--bg-tertiary);
-    color: var(--text-disabled);
-    cursor: not-allowed;
+  opacity: 0.5;
+  background: var(--bg-tertiary);
+  color: var(--text-disabled);
+  cursor: not-allowed;
 }
 
 #postDetailModal .edit-modal-header .modal-next-btn:active {
-    transform: scale(0.96);
+  transform: scale(0.96);
 }
 
 #postDetailModal .edit-modal-header .modal-back-btn:hover {
-    opacity: 0.7;
+  opacity: 0.7;
 }
 
 /* ================= POST DETAILS PANEL (EDIT MODE) ================= */
 #postDetailModal .post-details-panel {
-    background: var(--bg-primary);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden; /* Header fixed, body scrolls */
-    flex: 1;
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* Header fixed, body scrolls */
+  flex: 1;
 }
 
 /* Custom Scrollbar Utility */
 .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
+  width: 6px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
+  background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: var(--text-tertiary);
-    border-radius: 3px;
+  background: var(--text-tertiary);
+  border-radius: 3px;
 }
 
 #postDetailModal .edit-panel-body {
-    flex: 1;
-    overflow-y: auto;
-    padding-bottom: 20px;
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 20px;
 }
 
 /* User Info with Privacy Selector */
 #postDetailModal .create-post-user-info {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 20px;
-    border-bottom: 1px solid var(--border-tertiary);
-    position: relative; /* Fixed for absolute positioning of dropdown */
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  border-bottom: 1px solid var(--border-tertiary);
+  position: relative; /* Fixed for absolute positioning of dropdown */
 }
 
 /* Privacy Dropdown Overrides for post-detail context */
 #postDetailModal .privacy-dropdown {
-    position: absolute;
-    top: calc(100% - 10px); /* Position below the header area */
-    left: 20px;
-    z-index: 1005;
-    /* Reset visibility from post-common if needed */
-    margin: 0;
+  position: absolute;
+  top: calc(100% - 10px); /* Position below the header area */
+  left: 20px;
+  z-index: 1005;
+  /* Reset visibility from post-common if needed */
+  margin: 0;
 }
 
 /* Caption Input */
 #postDetailModal .post-caption-container {
-    padding: 20px;
-    border-bottom: 1px solid var(--border-tertiary);
+  padding: 20px;
+  border-bottom: 1px solid var(--border-tertiary);
 }
 
 #postDetailModal .post-caption-input {
-    width: 100%;
-    border: none;
-    background: transparent;
-    color: var(--text-primary);
-    font-size: 15px;
-    resize: none;
-    min-height: 200px; 
-    font-family: inherit;
-    outline: none;
-    line-height: 1.5;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 15px;
+  resize: none;
+  min-height: 200px;
+  font-family: inherit;
+  outline: none;
+  line-height: 1.5;
 }
 
 #postDetailModal .post-caption-input::placeholder {
@@ -705,13 +782,15 @@
   opacity: 0;
   transform: scaleY(0);
   transform-origin: top;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
   background: var(--bg-primary);
 }
 
 #postDetailModal .edit-emoji-picker-container.show {
   display: block; /* Show when active */
-  height: 360px; 
+  height: 360px;
   opacity: 1;
   padding: 6px;
   overflow: visible;
@@ -796,13 +875,22 @@
 }
 
 @keyframes slideDown {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Navigation Slide Transitions */
 .post-detail-layout {
-  transition: transform 0.45s cubic-bezier(0.2, 1, 0.3, 1), opacity 0.4s ease, filter 0.4s ease;
+  transition:
+    transform 0.45s cubic-bezier(0.2, 1, 0.3, 1),
+    opacity 0.4s ease,
+    filter 0.4s ease;
   will-change: transform, opacity, filter;
 }
 
@@ -833,7 +921,3 @@
   filter: blur(12px) !important;
   transition: none !important;
 }
-
-
-
-

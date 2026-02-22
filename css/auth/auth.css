@@ -195,6 +195,17 @@ button.is-loading:hover {
   transform: none;
 }
 
+button.is-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+button.is-loading .spinner {
+  --loader-color: currentColor;
+}
+
 button.ghost {
   background-color: transparent;
   border-color: var(--text-white);

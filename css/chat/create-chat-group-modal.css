@@ -476,6 +476,17 @@
     transform: none;
 }
 
+.cg-btn-create.is-loading {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.cg-btn-create .spinner {
+    --loader-color: currentColor;
+}
+
 /* ===== Skeleton ===== */
 .cg-skeleton-item {
     height: 58px;

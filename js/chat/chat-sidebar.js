@@ -508,8 +508,9 @@ const ChatSidebar = {
             </div>
 
             <div class="chat-list" id="chat-conversation-list">
-                <div class="loading-conversations" style="padding: 20px; text-align: center; color: var(--text-tertiary);">
-                    Loading...
+                <div class="loading-conversations">
+                    <div class="spinner spinner-medium" aria-hidden="true"></div>
+                    <span>Loading...</span>
                 </div>
             </div>
         `;
@@ -611,7 +612,7 @@ const ChatSidebar = {
             </div>
             <div class="chat-settings-popup-body">
                 <div class="chat-settings-loading">
-                    <i data-lucide="loader-2" class="chat-settings-spin"></i>
+                    <div class="spinner spinner-small" aria-hidden="true"></div>
                     <span>Loading settings...</span>
                 </div>
             </div>

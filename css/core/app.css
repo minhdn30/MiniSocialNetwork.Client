@@ -84,20 +84,11 @@ html, body {
   gap: 16px;
 }
 
-/* Instagram-style spinner */
+/* Upload spinner */
 .upload-spinner {
   width: 64px;
-  height: 64px;
-  border: 3px solid var(--text-tertiary);
-  border-top-color: var(--accent-primary);
-  border-radius: 50%;
-  animation: instagram-spin 0.8s linear infinite;
-}
-
-@keyframes instagram-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  --loader-color: var(--accent-primary);
+  animation-duration: 1s;
 }
 
 .upload-text {

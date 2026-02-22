@@ -451,18 +451,23 @@ body.chat-sidebar-open #sidebar.expanded ~ .main-content {
   text-align: center;
 }
 
-.chat-settings-spin {
-  animation: chat-settings-spin 1s linear infinite;
-  color: var(--accent-primary);
+.chat-settings-loading .spinner {
+  --loader-color: var(--accent-primary);
 }
 
-@keyframes chat-settings-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.loading-conversations {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px;
+  color: var(--text-tertiary);
+}
+
+.loading-conversations .spinner {
+  --loader-color: var(--accent-primary);
+  opacity: 0.85;
 }
 
 .chat-tab {

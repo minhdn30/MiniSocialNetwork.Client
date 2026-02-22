@@ -1359,14 +1359,11 @@
 
 /* System-like spinner in chat context, tinted by chat theme */
 .chat-spinner {
-  border-color: var(--chat-theme-border, rgba(128, 128, 128, 0.25));
-  border-top-color: var(--chat-theme-accent, var(--accent-primary, #ff416c));
+  --loader-color: var(--chat-theme-accent, var(--accent-primary, #ff416c));
 }
 
 .chat-search-loading .chat-spinner {
   width: 24px;
-  height: 24px;
-  border-width: 3px;
 }
 
 /* --- Chat Media Panel (Inline in Info Sidebar) --- */
@@ -1557,14 +1554,10 @@
 
 .chat-media-loading-state .chat-spinner {
   width: 28px;
-  height: 28px;
-  border-width: 3px;
 }
 
 .chat-media-inline-loader .chat-spinner {
   width: 16px;
-  height: 16px;
-  border-width: 2px;
 }
 
 .chat-media-empty-state i,
