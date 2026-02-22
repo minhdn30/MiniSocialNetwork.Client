@@ -13,9 +13,177 @@ const ChatSidebar = {
     hasMore: true,
     pageSize: window.APP_CONFIG?.CONVERSATIONS_PAGE_SIZE || 20,
     currentActiveId: null, // ID of the currently active chat (for highlighting)
+    _presenceUnsubscribe: null,
+    settingsPopupCleanup: null,
+    settingsLevelMap: {
+        onlineStatusVisibility: {
+            0: { name: 'No One', icon: 'lock', className: 'neutral' },
+            1: { name: 'Contacts Only', icon: 'users', className: 'neutral' }
+        },
+        groupChatInvitePermission: {
+            0: { name: 'No One', icon: 'lock', className: 'neutral' },
+            1: { name: 'Followers or Following', icon: 'users', className: 'neutral' },
+            2: { name: 'Anyone', icon: 'globe', className: 'neutral' }
+        }
+    },
 
     normalizeId(value) {
         return (value || '').toString().toLowerCase();
+    },
+
+    getPrivateOtherAccountId(conv = {}) {
+        const isGroup = !!(conv.isGroup ?? conv.IsGroup);
+        if (isGroup) return '';
+        return this.normalizeId(
+            conv.otherMember?.accountId ||
+            conv.otherMember?.AccountId ||
+            conv.otherMemberId ||
+            conv.OtherMemberId ||
+            ''
+        );
+    },
+
+    getPresenceStatusForConversation(conv = {}) {
+        const isGroup = !!(conv.isGroup ?? conv.IsGroup);
+        if (isGroup) {
+            return {
+                canShowStatus: false,
+                isOnline: false,
+                showDot: false,
+                text: ''
+            };
+        }
+
+        const accountId = this.getPrivateOtherAccountId(conv);
+        if (window.PresenceStore && typeof window.PresenceStore.resolveStatus === 'function') {
+            return window.PresenceStore.resolveStatus({
+                accountId
+            });
+        }
+
+        return {
+            canShowStatus: legacyIsOnline,
+            isOnline: legacyIsOnline,
+            showDot: legacyIsOnline,
+            text: legacyIsOnline ? 'Online' : ''
+        };
+    },
+
+    initPresenceTracking() {
+        if (this._presenceUnsubscribe) return;
+        if (!window.PresenceStore || typeof window.PresenceStore.subscribe !== 'function') return;
+
+        this._presenceUnsubscribe = window.PresenceStore.subscribe((payload) => {
+            this.refreshPresenceIndicators(payload?.changedAccountIds || []);
+        });
+    },
+
+    syncPresenceSnapshotForConversations(conversations, options = {}) {
+        if (!window.PresenceStore || typeof window.PresenceStore.ensureSnapshotForConversations !== 'function') {
+            return;
+        }
+
+        window.PresenceStore.ensureSnapshotForConversations(conversations, options)
+            .catch((error) => {
+                console.warn('[ChatSidebar] Presence snapshot sync failed:', error);
+            });
+    },
+
+    refreshPresenceIndicators(changedAccountIds = []) {
+        const listContainer = document.getElementById('chat-conversation-list');
+        if (!listContainer) return;
+
+        const changedSet = new Set(
+            (Array.isArray(changedAccountIds) ? changedAccountIds : [])
+                .map((id) => this.normalizeId(id))
+                .filter(Boolean)
+        );
+
+        const conversationMap = new Map(
+            (Array.isArray(this.conversations) ? this.conversations : [])
+                .map((conv) => [this.normalizeId(conv.conversationId || conv.ConversationId), conv])
+        );
+
+        listContainer.querySelectorAll('.chat-item[data-conversation-id]').forEach((item) => {
+            const conversationId = this.normalizeId(item.dataset.conversationId);
+            const conv = conversationMap.get(conversationId);
+            if (!conv) return;
+
+            const accountId = this.getPrivateOtherAccountId(conv);
+            if (changedSet.size > 0 && (!accountId || !changedSet.has(accountId))) {
+                return;
+            }
+
+            const presenceStatus = this.getPresenceStatusForConversation(conv);
+            const isGroupChat = !!(conv.isGroup ?? conv.IsGroup);
+            const shouldShowOnlineDot = !isGroupChat && !!presenceStatus.showDot;
+            const avatarWrapper = item.querySelector('.chat-avatar-wrapper');
+            if (!avatarWrapper) return;
+
+            const existingDot = avatarWrapper.querySelector('.chat-status-dot');
+            if (shouldShowOnlineDot) {
+                if (!existingDot) {
+                    avatarWrapper.insertAdjacentHTML('beforeend', '<div class="chat-status-dot"></div>');
+                }
+            } else if (existingDot) {
+                existingDot.remove();
+            }
+        });
+    },
+
+    normalizeAccountSettings(raw = {}) {
+        const onlineStatusVisibility = Number(
+            raw.onlineStatusVisibility ??
+            raw.OnlineStatusVisibility ??
+            1
+        );
+        const groupChatInvitePermission = Number(
+            raw.groupChatInvitePermission ??
+            raw.GroupChatInvitePermission ??
+            2
+        );
+
+        return {
+            onlineStatusVisibility: Number.isFinite(onlineStatusVisibility) ? onlineStatusVisibility : 1,
+            groupChatInvitePermission: Number.isFinite(groupChatInvitePermission) ? groupChatInvitePermission : 2
+        };
+    },
+
+    getSettingConfig(settingKey, value) {
+        const options = this.settingsLevelMap[settingKey] || {};
+        if (options[value]) return options[value];
+
+        const fallback = Object.keys(options)
+            .map((v) => Number(v))
+            .filter((v) => Number.isFinite(v))
+            .sort((a, b) => a - b)[0];
+        return options[fallback];
+    },
+
+    getNextSettingValue(settingKey, currentValue) {
+        const options = this.settingsLevelMap[settingKey] || {};
+        const values = Object.keys(options)
+            .map((v) => Number(v))
+            .filter((v) => Number.isFinite(v))
+            .sort((a, b) => a - b);
+
+        if (!values.length) return currentValue;
+
+        const currentIndex = values.indexOf(Number(currentValue));
+        if (currentIndex < 0) return values[0];
+
+        return values[(currentIndex + 1) % values.length];
+    },
+
+    applySettingsToggleUI(button, label, settingKey, value) {
+        if (!button || !label) return;
+        const config = this.getSettingConfig(settingKey, value);
+        if (!config) return;
+
+        button.className = `chat-settings-toggle-btn ${config.className}`;
+        button.dataset.value = String(value);
+        button.innerHTML = `<i data-lucide="${config.icon}" size="16"></i>`;
+        label.textContent = config.name;
     },
 
     getGroupSenderName(sender = {}, conv = null) {
@@ -251,6 +419,8 @@ const ChatSidebar = {
             this.initScrollListener();
         }
 
+        this.initPresenceTracking();
+
         // Removed: Auto-close on click outside. 
         // Logic moved to explicit close button for better persistence.
 
@@ -273,11 +443,15 @@ const ChatSidebar = {
     renderLayout() {
         const panel = document.getElementById('chat-panel');
         const username = localStorage.getItem('username') || 'User';
+        this.closeSettingsPopup();
 
         panel.innerHTML = `
             <div class="chat-sidebar-header">
                 <div class="chat-header-title-area">
                     <h2>${username}</h2>
+                    <button class="chat-icon-btn chat-sidebar-settings-btn" id="chat-sidebar-settings-btn" title="Chat settings" aria-label="Chat settings">
+                        <i data-lucide="settings" size="18"></i>
+                    </button>
                 </div>
                 <div class="chat-header-actions">
                     <button class="chat-icon-btn chat-sidebar-close-btn" onclick="window.closeChatSidebar()" title="Close Sidebar">
@@ -313,8 +487,287 @@ const ChatSidebar = {
         
         this.initTabs();
         this.initSearch();
+        this.initHeaderSettings();
         this.initMoreMenu();
         lucide.createIcons();
+    },
+
+    initHeaderSettings() {
+        const settingsBtn = document.getElementById('chat-sidebar-settings-btn');
+        if (!settingsBtn) return;
+
+        settingsBtn.onclick = (e) => {
+            e.stopPropagation();
+            this.toggleSettingsPopup(settingsBtn);
+        };
+    },
+
+    closeSettingsPopup() {
+        const popup = document.getElementById('chat-sidebar-settings-popup');
+        if (popup) popup.remove();
+
+        if (typeof this.settingsPopupCleanup === 'function') {
+            this.settingsPopupCleanup();
+            this.settingsPopupCleanup = null;
+        }
+    },
+
+    toggleSettingsPopup(anchor) {
+        const popup = document.getElementById('chat-sidebar-settings-popup');
+        if (popup) {
+            this.closeSettingsPopup();
+            return;
+        }
+        this.openSettingsPopup(anchor);
+    },
+
+    positionSettingsPopup(popup, anchor) {
+        if (!popup || !anchor) return;
+
+        const margin = 10;
+        const rect = anchor.getBoundingClientRect();
+        const popupRect = popup.getBoundingClientRect();
+
+        // Align popup top-left directly below the settings button.
+        let left = rect.left;
+        if (left + popupRect.width > window.innerWidth - margin) {
+            left = Math.max(margin, window.innerWidth - popupRect.width - margin);
+        }
+        if (left < margin) left = margin;
+
+        let top = rect.bottom + 8;
+        if (top + popupRect.height > window.innerHeight - margin) {
+            top = Math.max(margin, window.innerHeight - popupRect.height - margin);
+        }
+
+        popup.style.left = `${left}px`;
+        popup.style.top = `${top}px`;
+    },
+
+    async fetchSidebarSettings() {
+        if (!window.API?.Accounts?.getSettings) {
+            throw new Error('Settings API is unavailable.');
+        }
+
+        const res = await window.API.Accounts.getSettings();
+        if (!res.ok) {
+            let message = 'Failed to load settings.';
+            try {
+                const data = await res.json();
+                message = data?.title || data?.message || message;
+            } catch (_) {
+                // no-op
+            }
+            throw new Error(message);
+        }
+
+        const data = await res.json();
+        return this.normalizeAccountSettings(data || {});
+    },
+
+    async openSettingsPopup(anchor) {
+        if (!anchor) return;
+
+        this.closeSettingsPopup();
+
+        const popup = document.createElement('div');
+        popup.id = 'chat-sidebar-settings-popup';
+        popup.className = 'chat-settings-popup';
+        popup.innerHTML = `
+            <div class="chat-settings-popup-header">
+                <h3>Chat Settings</h3>
+                <button type="button" class="chat-settings-close-btn" aria-label="Close">
+                    <i data-lucide="x" size="16"></i>
+                </button>
+            </div>
+            <div class="chat-settings-popup-body">
+                <div class="chat-settings-loading">
+                    <i data-lucide="loader-2" class="chat-settings-spin"></i>
+                    <span>Loading settings...</span>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(popup);
+        this.positionSettingsPopup(popup, anchor);
+        lucide.createIcons({ container: popup });
+        popup.addEventListener('click', (event) => event.stopPropagation());
+
+        const onDocClick = (event) => {
+            if (!popup.contains(event.target) && !anchor.contains(event.target)) {
+                this.closeSettingsPopup();
+            }
+        };
+        const onEscape = (event) => {
+            if (event.key === 'Escape') {
+                this.closeSettingsPopup();
+            }
+        };
+        const onResize = () => {
+            const mounted = document.getElementById('chat-sidebar-settings-popup');
+            if (mounted) {
+                this.positionSettingsPopup(mounted, anchor);
+            }
+        };
+
+        setTimeout(() => document.addEventListener('click', onDocClick), 10);
+        document.addEventListener('keydown', onEscape);
+        window.addEventListener('resize', onResize);
+
+        this.settingsPopupCleanup = () => {
+            document.removeEventListener('click', onDocClick);
+            document.removeEventListener('keydown', onEscape);
+            window.removeEventListener('resize', onResize);
+        };
+
+        const closeBtn = popup.querySelector('.chat-settings-close-btn');
+        if (closeBtn) {
+            closeBtn.onclick = () => this.closeSettingsPopup();
+        }
+
+        try {
+            const initialSettings = await this.fetchSidebarSettings();
+            if (!document.getElementById('chat-sidebar-settings-popup')) return;
+            this.renderSettingsPopupBody(popup, initialSettings);
+            this.positionSettingsPopup(popup, anchor);
+        } catch (error) {
+            const body = popup.querySelector('.chat-settings-popup-body');
+            if (body) {
+                body.innerHTML = `
+                    <div class="chat-settings-error">
+                        <i data-lucide="alert-triangle" size="16"></i>
+                        <span>${escapeHtml(error?.message || 'Failed to load settings.')}</span>
+                    </div>
+                `;
+                lucide.createIcons({ container: body });
+                this.positionSettingsPopup(popup, anchor);
+            }
+            if (window.toastError) {
+                toastError(error?.message || 'Failed to load settings.');
+            }
+        }
+    },
+
+    renderSettingsPopupBody(popup, initialSettings) {
+        const body = popup?.querySelector('.chat-settings-popup-body');
+        if (!body) return;
+
+        const draft = {
+            onlineStatusVisibility: initialSettings.onlineStatusVisibility,
+            groupChatInvitePermission: initialSettings.groupChatInvitePermission
+        };
+
+        body.innerHTML = `
+            <div class="chat-settings-item">
+                <div class="chat-settings-item-labels">
+                    <div class="chat-settings-item-title">Online Status Visibility</div>
+                    <div class="chat-settings-item-value" id="chat-setting-online-status-value"></div>
+                </div>
+                <button type="button" class="chat-settings-toggle-btn" id="chat-setting-online-status-btn" aria-label="Toggle online status visibility"></button>
+            </div>
+            <div class="chat-settings-item">
+                <div class="chat-settings-item-labels">
+                    <div class="chat-settings-item-title">Who Can Add Me to Group Chats</div>
+                    <div class="chat-settings-item-value" id="chat-setting-group-invite-value"></div>
+                </div>
+                <button type="button" class="chat-settings-toggle-btn" id="chat-setting-group-invite-btn" aria-label="Toggle who can add you to group chats"></button>
+            </div>
+            <div class="chat-settings-actions">
+                <button type="button" class="chat-settings-action-btn primary" id="chat-settings-save-btn">
+                    <span>Save</span>
+                </button>
+            </div>
+        `;
+
+        const onlineBtn = body.querySelector('#chat-setting-online-status-btn');
+        const onlineLabel = body.querySelector('#chat-setting-online-status-value');
+        const groupBtn = body.querySelector('#chat-setting-group-invite-btn');
+        const groupLabel = body.querySelector('#chat-setting-group-invite-value');
+        const saveBtn = body.querySelector('#chat-settings-save-btn');
+
+        const syncUI = () => {
+            this.applySettingsToggleUI(onlineBtn, onlineLabel, 'onlineStatusVisibility', draft.onlineStatusVisibility);
+            this.applySettingsToggleUI(groupBtn, groupLabel, 'groupChatInvitePermission', draft.groupChatInvitePermission);
+            lucide.createIcons({ container: body });
+        };
+
+        syncUI();
+
+        if (onlineBtn) {
+            onlineBtn.onclick = (event) => {
+                event.stopPropagation();
+                draft.onlineStatusVisibility = this.getNextSettingValue(
+                    'onlineStatusVisibility',
+                    draft.onlineStatusVisibility
+                );
+                syncUI();
+            };
+        }
+
+        if (groupBtn) {
+            groupBtn.onclick = (event) => {
+                event.stopPropagation();
+                draft.groupChatInvitePermission = this.getNextSettingValue(
+                    'groupChatInvitePermission',
+                    draft.groupChatInvitePermission
+                );
+                syncUI();
+            };
+        }
+
+        if (saveBtn) {
+            saveBtn.onclick = (event) => {
+                event.stopPropagation();
+                this.saveSettingsFromPopup(draft, saveBtn);
+            };
+        }
+    },
+
+    async saveSettingsFromPopup(draft, saveBtn) {
+        if (!saveBtn || saveBtn.disabled) return;
+
+        const defaultHTML = saveBtn.dataset.defaultHtml || saveBtn.innerHTML;
+        saveBtn.dataset.defaultHtml = defaultHTML;
+        saveBtn.disabled = true;
+        saveBtn.classList.add('is-loading');
+        saveBtn.innerHTML = `
+            <span>Saving...</span>
+        `;
+
+        try {
+            const payload = {
+                OnlineStatusVisibility: Number(draft.onlineStatusVisibility),
+                GroupChatInvitePermission: Number(draft.groupChatInvitePermission)
+            };
+
+            const res = await window.API.Accounts.updateSettings(payload);
+            if (!res.ok) {
+                let message = 'Failed to update settings.';
+                try {
+                    const data = await res.json();
+                    message = data?.title || data?.message || message;
+                } catch (_) {
+                    // no-op
+                }
+                throw new Error(message);
+            }
+
+            if (window.toastSuccess) {
+                toastSuccess('Chat settings updated.');
+            }
+            this.closeSettingsPopup();
+        } catch (error) {
+            if (window.toastError) {
+                toastError(error?.message || 'Failed to update settings.');
+            }
+
+            if (document.getElementById('chat-sidebar-settings-popup')) {
+                saveBtn.disabled = false;
+                saveBtn.classList.remove('is-loading');
+                saveBtn.innerHTML = saveBtn.dataset.defaultHtml || defaultHTML;
+                lucide.createIcons({ container: saveBtn });
+            }
+        }
     },
 
     initMoreMenu() {
@@ -458,6 +911,7 @@ const ChatSidebar = {
     close() {
         if (window.location.hash.startsWith('#/messages')) return;
 
+        this.closeSettingsPopup();
         const panel = document.getElementById('chat-panel');
         panel.classList.remove('show');
         this.isOpen = false;
@@ -513,6 +967,7 @@ const ChatSidebar = {
                     this.hasMore = false;
                 }
 
+                this.syncPresenceSnapshotForConversations(this.conversations);
                 this.renderConversations(items, isLoadMore);
                 this.page++;
             }
@@ -568,7 +1023,9 @@ const ChatSidebar = {
 
             const time = conv.lastMessageSentAt ? PostUtils.timeAgo(conv.lastMessageSentAt, true) : '';
             const unread = conv.unreadCount > 0;
-            const isOnline = !conv.isGroup && conv.otherMember && conv.otherMember.isActive;
+            const presenceStatus = this.getPresenceStatusForConversation(conv);
+            const isGroupChat = !!(conv.isGroup ?? conv.IsGroup);
+            const showOnlineDot = !isGroupChat && !!presenceStatus.showDot;
             const isMuted = conv.isMuted ?? conv.IsMuted ?? false;
             
             // Only highlight if on the Messages Page
@@ -599,10 +1056,10 @@ const ChatSidebar = {
                      draggable="true"
                      onclick="ChatSidebar.openConversation('${conv.conversationId}')"
                      ondragstart="ChatSidebar.handleDragStart(event, '${conv.conversationId}')"
-                     ondragend="ChatSidebar.handleDragEnd()">
+                    ondragend="ChatSidebar.handleDragEnd()">
                     <div class="chat-avatar-wrapper">
                         ${ChatCommon.renderAvatar(conv, { name, className: 'chat-avatar' })}
-                        ${isOnline ? '<div class="chat-status-dot"></div>' : ''}
+                        ${showOnlineDot ? '<div class="chat-status-dot"></div>' : ''}
                     </div>
                     <div class="chat-info">
                         <div class="chat-name-row">

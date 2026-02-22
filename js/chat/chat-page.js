@@ -48,6 +48,7 @@ const ChatPage = {
     _newerPage: null,
     _permissionRefreshTimers: new Map(),
     _permissionRefreshInFlight: new Map(),
+    _presenceUnsubscribe: null,
 
     async init() {
         this.cleanupEventListeners();
@@ -90,6 +91,7 @@ const ChatPage = {
         this.initScrollListener();
         this.handleUrlNavigation();
         this.registerRealtimeHandlers();
+        this.initPresenceTracking();
     },
 
     cacheElements() {
@@ -120,6 +122,144 @@ const ChatPage = {
         this.runtimeCtx.pendingSeenByConv = this.pendingSeenByConv;
         this.runtimeCtx.blobUrls = this._blobUrls;
         return this.runtimeCtx;
+    },
+
+    normalizePresenceId(value) {
+        return (value || '').toString().toLowerCase();
+    },
+
+    getPrivateOtherAccountId(meta = {}) {
+        const isGroup = !!(meta.isGroup ?? meta.IsGroup);
+        if (isGroup) return '';
+        return this.normalizePresenceId(
+            meta.otherMember?.accountId ||
+            meta.otherMember?.AccountId ||
+            meta.otherMemberId ||
+            meta.OtherMemberId ||
+            ''
+        );
+    },
+
+    getPresenceStatus(meta = {}) {
+        const isGroup = !!(meta.isGroup ?? meta.IsGroup);
+        if (isGroup) {
+            return {
+                canShowStatus: false,
+                isOnline: false,
+                showDot: false,
+                text: 'Group chat'
+            };
+        }
+
+        const accountId = this.getPrivateOtherAccountId(meta);
+        if (window.PresenceStore && typeof window.PresenceStore.resolveStatus === 'function') {
+            return window.PresenceStore.resolveStatus({
+                accountId
+            });
+        }
+
+        return {
+            canShowStatus: legacyIsOnline,
+            isOnline: legacyIsOnline,
+            showDot: legacyIsOnline,
+            text: legacyIsOnline ? 'Online' : ''
+        };
+    },
+
+    syncPresenceSnapshotForConversations(conversations, options = {}) {
+        if (!window.PresenceStore || typeof window.PresenceStore.ensureSnapshotForConversations !== 'function') {
+            return;
+        }
+
+        window.PresenceStore.ensureSnapshotForConversations(conversations, options)
+            .catch((error) => {
+                console.warn('[ChatPage] Presence snapshot sync failed:', error);
+            });
+    },
+
+    initPresenceTracking() {
+        if (this._presenceUnsubscribe) return;
+        if (!window.PresenceStore || typeof window.PresenceStore.subscribe !== 'function') return;
+
+        this._presenceUnsubscribe = window.PresenceStore.subscribe((payload) => {
+            this.refreshPresenceForCurrentConversation(payload?.changedAccountIds || []);
+        });
+    },
+
+    refreshPresenceForCurrentConversation(changedAccountIds = []) {
+        if (!this.currentMetaData) return;
+
+        const accountId = this.getPrivateOtherAccountId(this.currentMetaData);
+        if (!accountId) return;
+
+        const changedSet = new Set(
+            (Array.isArray(changedAccountIds) ? changedAccountIds : [])
+                .map((id) => this.normalizePresenceId(id))
+                .filter(Boolean)
+        );
+        if (changedSet.size > 0 && !changedSet.has(accountId)) return;
+
+        this.updateHeaderPresence(this.currentMetaData);
+        this.updateInfoSidebarPresence(this.currentMetaData);
+    },
+
+    updateHeaderPresence(meta) {
+        const statusText = document.getElementById('chat-view-status-text');
+        const avatarContainer = document.getElementById('chat-view-avatar');
+        if (!statusText || !avatarContainer) return;
+
+        let statusDot = avatarContainer.querySelector('#chat-view-status-dot');
+
+        const isGroup = !!(meta?.isGroup ?? meta?.IsGroup);
+        if (isGroup) {
+            statusText.innerText = 'Group chat';
+            if (statusDot) statusDot.remove();
+            return;
+        }
+
+        const presenceStatus = this.getPresenceStatus(meta);
+        statusText.innerText = presenceStatus.text || '';
+
+        if (presenceStatus.showDot) {
+            if (!statusDot) {
+                statusDot = document.createElement('div');
+                statusDot.id = 'chat-view-status-dot';
+                statusDot.className = 'chat-view-status';
+                avatarContainer.appendChild(statusDot);
+            }
+        } else if (statusDot) {
+            statusDot.remove();
+        }
+    },
+
+    updateInfoSidebarPresence(meta) {
+        if (!this.infoContent) return;
+        const statusEl = this.infoContent.querySelector('.chat-info-status');
+        const avatarEl = this.infoContent.querySelector('.chat-info-avatar');
+        if (!statusEl || !avatarEl) return;
+
+        const isGroup = !!(meta?.isGroup ?? meta?.IsGroup);
+        if (isGroup) {
+            const memberList = Array.isArray(meta.members)
+                ? meta.members
+                : (Array.isArray(meta.Members) ? meta.Members : []);
+            statusEl.textContent = `${memberList.length} Members`;
+            const existingDot = avatarEl.querySelector('.status-dot');
+            if (existingDot) existingDot.remove();
+            return;
+        }
+
+        const presenceStatus = this.getPresenceStatus(meta);
+        statusEl.textContent = presenceStatus.text || '';
+
+        const existingDot = avatarEl.querySelector('.status-dot');
+        if (presenceStatus.showDot) {
+            if (!existingDot) {
+                avatarEl.insertAdjacentHTML('beforeend', '<div class="status-dot"></div>');
+            }
+        } else if (existingDot) {
+            existingDot.remove();
+        }
     },
 
     trackBlobUrl(url, key = 'global') {
@@ -1143,6 +1283,7 @@ const ChatPage = {
                     this.renderHeader(sidebarConv);
                     this.renderInfoSidebar(sidebarConv);
                     this.updateInputState();
+                    this.syncPresenceSnapshotForConversations([sidebarConv]);
                 }
             }
         }
@@ -1165,14 +1306,11 @@ const ChatPage = {
 
         const img = document.getElementById('chat-view-img');
         const nameEl = document.getElementById('chat-view-name');
-        const statusText = document.getElementById('chat-view-status-text');
-        const statusDot = document.getElementById('chat-view-status-dot');
 
         const avatarContainer = document.getElementById('chat-view-avatar');
         if (avatarContainer) {
-            const statusDot = document.getElementById('chat-view-status-dot');
             const avatarHtml = ChatCommon.renderAvatar(meta, { className: 'chat-view-img' });
-            avatarContainer.innerHTML = avatarHtml + (statusDot ? statusDot.outerHTML : '');
+            avatarContainer.innerHTML = avatarHtml;
             if (window.lucide) lucide.createIcons({ container: avatarContainer });
         }
         if (nameEl) nameEl.innerText = ChatCommon.getDisplayName(meta) || 'Chat';
@@ -1194,15 +1332,7 @@ const ChatPage = {
             else headerUser.style.cursor = 'default';
         }
 
-        if (statusText) {
-            if (!meta.isGroup && meta.otherMember) {
-                statusText.innerText = meta.otherMember.isActive ? 'Active now' : 'Offline';
-                if (statusDot) statusDot.classList.toggle('hidden', !meta.otherMember.isActive);
-            } else {
-                statusText.innerText = 'Group chat';
-                if (statusDot) statusDot.classList.add('hidden');
-            }
-        }
+        this.updateHeaderPresence(meta);
     },
 
     minimizeToBubble() {
@@ -1240,13 +1370,14 @@ const ChatPage = {
         const img = document.getElementById('chat-view-img');
         const nameEl = document.getElementById('chat-view-name');
         const statusText = document.getElementById('chat-view-status-text');
-        const statusDot = document.getElementById('chat-view-status-dot');
+        const avatarContainer = document.getElementById('chat-view-avatar');
+        const statusDot = avatarContainer?.querySelector('#chat-view-status-dot') || null;
         const msgContainer = document.getElementById('chat-view-messages');
 
         if (img) img.src = window.APP_CONFIG?.DEFAULT_AVATAR;
         if (nameEl) nameEl.textContent = 'Select a conversation';
         if (statusText) statusText.textContent = '';
-        if (statusDot) statusDot.classList.add('hidden');
+        if (statusDot) statusDot.remove();
         if (msgContainer) {
             msgContainer.innerHTML = '<div style="padding:24px; text-align:center; color:var(--text-tertiary);">Select a conversation from the sidebar</div>';
         }
@@ -4608,10 +4739,11 @@ const ChatPage = {
         const privateTargetId = meta.otherMember?.accountId || meta.otherMemberId || '';
         const privateTargetName = meta.otherMember?.fullName || meta.otherMember?.username || 'User';
         const privateTargetNickname = meta.otherMember?.nickname || '';
+        const presenceStatus = !isGroup ? this.getPresenceStatus(meta) : null;
         
         let statusHtml = '';
         if (!isGroup && meta.otherMember) {
-            statusHtml = meta.otherMember.isActive ? 'Active now' : 'Offline';
+            statusHtml = presenceStatus?.text || '';
         } else if (isGroup) {
             const memberList = Array.isArray(meta.members)
                 ? meta.members
@@ -4623,7 +4755,7 @@ const ChatPage = {
             <div class="chat-info-header">
                 <div class="chat-info-avatar">
                     ${ChatCommon.renderAvatar(meta)}
-                    ${(!isGroup && meta.otherMember?.isActive) ? '<div class="status-dot"></div>' : ''}
+                    ${(!isGroup && presenceStatus?.showDot) ? '<div class="status-dot"></div>' : ''}
                 </div>
                 <div class="chat-info-name">${displayName}</div>
                 <div class="chat-info-status">${statusHtml}</div>
@@ -4859,6 +4991,7 @@ const ChatPage = {
                     this.renderHeader(this.currentMetaData);
                     this.renderInfoSidebar(this.currentMetaData);
                     this.updateInputState();
+                    this.syncPresenceSnapshotForConversations([this.currentMetaData]);
                     
                     // Render where members are currently at
                     setTimeout(() => this.updateMemberSeenStatuses(this.currentMetaData), 100);

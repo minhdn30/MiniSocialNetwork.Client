@@ -20,6 +20,7 @@ const ChatWindow = {
   _themeModeHandler: null,
   _permissionRefreshTimers: new Map(),
   _permissionRefreshInFlight: new Map(),
+  _presenceUnsubscribe: null,
   _initialized: false,
 
   init() {
@@ -107,6 +108,7 @@ const ChatWindow = {
     });
 
     this.registerRealtimeHandlers();
+    this.initPresenceTracking();
 
     // Global Drag & Drop handling for External (Sidebar) items
     document.body.addEventListener("dragover", (e) => {
@@ -149,19 +151,37 @@ const ChatWindow = {
     // Reply event listener – routes to the correct open chat window
     if (!this._replyHandler) {
       this._replyHandler = (e) => {
-        if (document.body.classList.contains('is-chat-page')) return;
-        const { messageId, senderName, contentPreview, senderId, isOwnReplyAuthor } = e.detail || {};
+        if (document.body.classList.contains("is-chat-page")) return;
+        const {
+          messageId,
+          senderName,
+          contentPreview,
+          senderId,
+          isOwnReplyAuthor,
+        } = e.detail || {};
         if (!messageId) return;
         // Find which open chat contains this message
         for (const [convId, chat] of this.openChats) {
-          const msgContainer = document.getElementById(`chat-messages-${convId}`);
-          if (msgContainer && msgContainer.querySelector(`[data-message-id="${messageId}"]`)) {
-            this.showReplyBar(convId, messageId, senderName, contentPreview, senderId, isOwnReplyAuthor);
+          const msgContainer = document.getElementById(
+            `chat-messages-${convId}`,
+          );
+          if (
+            msgContainer &&
+            msgContainer.querySelector(`[data-message-id="${messageId}"]`)
+          ) {
+            this.showReplyBar(
+              convId,
+              messageId,
+              senderName,
+              contentPreview,
+              senderId,
+              isOwnReplyAuthor,
+            );
             return;
           }
         }
       };
-      document.addEventListener('chat:reply', this._replyHandler);
+      document.addEventListener("chat:reply", this._replyHandler);
     }
   },
 
@@ -468,6 +488,160 @@ const ChatWindow = {
       if (ctx) return ctx;
     }
     return null;
+  },
+
+  normalizePresenceId(value) {
+    return (value || "").toString().toLowerCase();
+  },
+
+  getPrivateOtherAccountId(conversation = {}) {
+    const isGroup = !!(conversation?.isGroup ?? conversation?.IsGroup);
+    if (isGroup) return "";
+    return this.normalizePresenceId(
+      conversation?.otherMember?.accountId ||
+        conversation?.otherMember?.AccountId ||
+        conversation?.otherMemberId ||
+        conversation?.OtherMemberId ||
+        "",
+    );
+  },
+
+  getPresenceStatusForConversation(conversation = {}) {
+    const isGroup = !!(conversation?.isGroup ?? conversation?.IsGroup);
+    if (isGroup) {
+      return {
+        canShowStatus: false,
+        isOnline: false,
+        showDot: false,
+        text: "Group Chat",
+      };
+    }
+
+    const accountId = this.getPrivateOtherAccountId(conversation);
+    if (
+      window.PresenceStore &&
+      typeof window.PresenceStore.resolveStatus === "function"
+    ) {
+      return window.PresenceStore.resolveStatus({
+        accountId,
+      });
+    }
+
+    return {
+      canShowStatus: legacyIsOnline,
+      isOnline: legacyIsOnline,
+      showDot: legacyIsOnline,
+      text: legacyIsOnline ? "Online" : "",
+    };
+  },
+
+  syncPresenceSnapshotForConversations(conversations, options = {}) {
+    if (
+      !window.PresenceStore ||
+      typeof window.PresenceStore.ensureSnapshotForConversations !== "function"
+    ) {
+      return;
+    }
+
+    window.PresenceStore.ensureSnapshotForConversations(
+      conversations,
+      options,
+    ).catch((error) => {
+      console.warn("[ChatWindow] Presence snapshot sync failed:", error);
+    });
+  },
+
+  initPresenceTracking() {
+    if (this._presenceUnsubscribe) return;
+    if (
+      !window.PresenceStore ||
+      typeof window.PresenceStore.subscribe !== "function"
+    ) {
+      return;
+    }
+
+    this._presenceUnsubscribe = window.PresenceStore.subscribe((payload) => {
+      this.refreshPresenceIndicators(payload?.changedAccountIds || []);
+    });
+  },
+
+  applyPresenceToChatDom(conversationId, conversationData = null) {
+    const openId = this.getOpenChatId(conversationId) || conversationId;
+    const chat = this.openChats.get(openId);
+    if (!chat) return;
+
+    const data = conversationData || chat.data || null;
+    if (!data) return;
+
+    const isGroup = !!(data?.isGroup ?? data?.IsGroup);
+    const presenceStatus = this.getPresenceStatusForConversation(data);
+    const shouldShowOnlineDot = !isGroup && !!presenceStatus.showDot;
+    const subtext = isGroup ? "Group Chat" : presenceStatus.text || "";
+
+    if (chat.element) {
+      const subtextEl = chat.element.querySelector(".chat-header-subtext");
+      if (subtextEl) {
+        subtextEl.textContent = subtext;
+      }
+
+      const avatarContainer = chat.element.querySelector(".chat-header-avatar");
+      if (avatarContainer) {
+        const existingStatusDot = avatarContainer.querySelector(
+          ".chat-header-status",
+        );
+        if (shouldShowOnlineDot) {
+          if (!existingStatusDot) {
+            avatarContainer.insertAdjacentHTML(
+              "beforeend",
+              '<div class="chat-header-status"></div>',
+            );
+          }
+        } else if (existingStatusDot) {
+          existingStatusDot.remove();
+        }
+      }
+    }
+
+    if (chat.bubbleElement) {
+      const existingBubbleDot = chat.bubbleElement.querySelector(
+        ".chat-bubble-status",
+      );
+      if (shouldShowOnlineDot) {
+        if (!existingBubbleDot) {
+          const closeBtn =
+            chat.bubbleElement.querySelector(".chat-bubble-close");
+          if (closeBtn) {
+            closeBtn.insertAdjacentHTML(
+              "beforebegin",
+              '<div class="chat-bubble-status"></div>',
+            );
+          } else {
+            chat.bubbleElement.insertAdjacentHTML(
+              "beforeend",
+              '<div class="chat-bubble-status"></div>',
+            );
+          }
+        }
+      } else if (existingBubbleDot) {
+        existingBubbleDot.remove();
+      }
+    }
+  },
+
+  refreshPresenceIndicators(changedAccountIds = []) {
+    const changedSet = new Set(
+      (Array.isArray(changedAccountIds) ? changedAccountIds : [])
+        .map((id) => this.normalizePresenceId(id))
+        .filter(Boolean),
+    );
+
+    for (const [conversationId, chat] of this.openChats.entries()) {
+      const accountId = this.getPrivateOtherAccountId(chat?.data || {});
+      if (changedSet.size > 0 && (!accountId || !changedSet.has(accountId))) {
+        continue;
+      }
+      this.applyPresenceToChatDom(conversationId, chat?.data || null);
+    }
   },
 
   clearFocusedChatWindows() {
@@ -1209,19 +1383,24 @@ const ChatWindow = {
       `chat-messages-${conversationId}`,
     );
     if (!msgContainer) return true;
-    return msgContainer.scrollHeight - msgContainer.scrollTop - msgContainer.clientHeight <= threshold;
+    return (
+      msgContainer.scrollHeight -
+        msgContainer.scrollTop -
+        msgContainer.clientHeight <=
+      threshold
+    );
   },
 
-  scrollToBottom(conversationId, behavior = 'auto') {
+  scrollToBottom(conversationId, behavior = "auto") {
     const msgContainer = document.getElementById(
       `chat-messages-${conversationId}`,
     );
     if (!msgContainer) return;
 
-    if (behavior === 'smooth') {
+    if (behavior === "smooth") {
       msgContainer.scrollTo({
         top: msgContainer.scrollHeight,
-        behavior: 'smooth'
+        behavior: "smooth",
       });
       return;
     }
@@ -1252,45 +1431,77 @@ const ChatWindow = {
         _newerPage: chat._newerPage,
         _hasMoreNewer: chat._hasMoreNewer,
       }),
-      setState: (patch) => { Object.assign(chat, patch); },
+      setState: (patch) => {
+        Object.assign(chat, patch);
+      },
       getContainerId: () => `chat-messages-${id}`,
       getPageSize: () => window.APP_CONFIG?.CHATWINDOW_MESSAGES_PAGE_SIZE || 10,
       getConversationId: () => id,
-      getMyId: () => (localStorage.getItem('accountId') || sessionStorage.getItem('accountId') || window.APP_CONFIG?.CURRENT_USER_ID || '').toLowerCase(),
+      getMyId: () =>
+        (
+          localStorage.getItem("accountId") ||
+          sessionStorage.getItem("accountId") ||
+          window.APP_CONFIG?.CURRENT_USER_ID ||
+          ""
+        ).toLowerCase(),
       isGroup: () => chat.data?.isGroup || false,
       renderMessages: (items, container) => {
         const isGroup = chat.data?.isGroup || false;
-        const myId = (localStorage.getItem('accountId') || sessionStorage.getItem('accountId') || window.APP_CONFIG?.CURRENT_USER_ID || '').toLowerCase();
+        const myId = (
+          localStorage.getItem("accountId") ||
+          sessionStorage.getItem("accountId") ||
+          window.APP_CONFIG?.CURRENT_USER_ID ||
+          ""
+        ).toLowerCase();
         let lastTime = null;
         items.forEach((m, idx) => {
           ChatCommon.normalizeMessage(m, myId);
           const currentTime = new Date(m.sentAt);
-          const gap = window.APP_CONFIG?.CHAT_TIME_SEPARATOR_GAP || 15 * 60 * 1000;
-          if (!lastTime || (currentTime - lastTime > gap)) {
-            self.insertHtmlBeforeTypingIndicator(container, ChatCommon.renderChatSeparator(m.sentAt));
+          const gap =
+            window.APP_CONFIG?.CHAT_TIME_SEPARATOR_GAP || 15 * 60 * 1000;
+          if (!lastTime || currentTime - lastTime > gap) {
+            self.insertHtmlBeforeTypingIndicator(
+              container,
+              ChatCommon.renderChatSeparator(m.sentAt),
+            );
           }
           lastTime = currentTime;
           const prevMsg = idx > 0 ? items[idx - 1] : null;
           const nextMsg = idx < items.length - 1 ? items[idx + 1] : null;
           const groupPos = ChatCommon.getGroupPosition(m, prevMsg, nextMsg);
-          const senderAvatar = !m.isOwn ? (m.sender?.avatarUrl || m.sender?.AvatarUrl || '') : '';
-          const authorName = isGroup && !m.isOwn
-            ? ChatCommon.getPreferredSenderName(m.sender, {
-              conversation: chat.data,
-              conversationId: id,
-              fallback: '',
-            })
-            : '';
-          const html = ChatCommon.renderMessageBubble(m, { isGroup, groupPos, senderAvatar, authorName, isWindow: true });
+          const senderAvatar = !m.isOwn
+            ? m.sender?.avatarUrl || m.sender?.AvatarUrl || ""
+            : "";
+          const authorName =
+            isGroup && !m.isOwn
+              ? ChatCommon.getPreferredSenderName(m.sender, {
+                  conversation: chat.data,
+                  conversationId: id,
+                  fallback: "",
+                })
+              : "";
+          const html = ChatCommon.renderMessageBubble(m, {
+            isGroup,
+            groupPos,
+            senderAvatar,
+            authorName,
+            isWindow: true,
+          });
           self.insertHtmlBeforeTypingIndicator(container, html);
         });
       },
-      reloadLatest: () => { self.loadInitialMessages(id); },
-      scrollToBottom: (behavior) => { self.scrollToBottom(id, behavior); },
+      reloadLatest: () => {
+        self.loadInitialMessages(id);
+      },
+      scrollToBottom: (behavior) => {
+        self.scrollToBottom(id, behavior);
+      },
       getBtnParent: () => document.getElementById(`chat-box-${id}`),
       getBtnId: () => `chatJumpBottomBtn-${id}`,
       getMetaData: () => chat.data,
-      setMetaData: (meta) => { chat.data = { ...chat.data, ...meta }; },
+      setMetaData: (meta) => {
+        chat.data = { ...chat.data, ...meta };
+      },
     };
   },
 
@@ -1392,9 +1603,8 @@ const ChatWindow = {
     const other = conversation.otherMember || conversation.OtherMember;
     if (
       other &&
-      (other.accountId || other.AccountId || "")
-        .toString()
-        .toLowerCase() === normAccountId
+      (other.accountId || other.AccountId || "").toString().toLowerCase() ===
+        normAccountId
     ) {
       return {
         avatar: other.avatarUrl || other.AvatarUrl || null,
@@ -1413,7 +1623,8 @@ const ChatWindow = {
 
     if (!(conversation.isGroup ?? conversation.IsGroup)) {
       return {
-        avatar: conversation.displayAvatar || conversation.DisplayAvatar || null,
+        avatar:
+          conversation.displayAvatar || conversation.DisplayAvatar || null,
         name: conversation.displayName || conversation.DisplayName || null,
       };
     }
@@ -1421,7 +1632,12 @@ const ChatWindow = {
     return null;
   },
 
-  upsertMemberSeenStatus(conversationId, accountId, messageId, memberInfo = null) {
+  upsertMemberSeenStatus(
+    conversationId,
+    accountId,
+    messageId,
+    memberInfo = null,
+  ) {
     const normAccountId = accountId ? accountId.toString().toLowerCase() : "";
     const normMessageId = messageId ? messageId.toString().toLowerCase() : "";
     if (!normAccountId || !normMessageId) return;
@@ -1609,7 +1825,12 @@ const ChatWindow = {
         avatar: member.avatarUrl || member.AvatarUrl,
         name: member.displayName || member.DisplayName,
       };
-      this.upsertMemberSeenStatus(conversationId, memberId, lastSeenId, memberInfo);
+      this.upsertMemberSeenStatus(
+        conversationId,
+        memberId,
+        lastSeenId,
+        memberInfo,
+      );
       this.moveSeenAvatar(conversationId, memberId, lastSeenId, memberInfo);
     });
   },
@@ -1634,6 +1855,8 @@ const ChatWindow = {
         this.setThemeStatus(convId, conv.theme ?? conv.Theme ?? null);
       }
       this.getRuntimeCtx(convId, chat);
+      this.syncPresenceSnapshotForConversations([chat?.data || conv]);
+      this.applyPresenceToChatDom(convId, chat?.data || conv);
 
       // Move to last position (leftmost) if requested even if already open
       if (priorityLeft) {
@@ -1651,6 +1874,8 @@ const ChatWindow = {
       this.tryJoinRealtimeConversation(convId, chat);
       return;
     }
+
+    this.syncPresenceSnapshotForConversations([conv]);
 
     // Check Total Limit before opening a NEW one
     if (this.openChats.size >= this.maxTotalWindows) {
@@ -1866,11 +2091,10 @@ const ChatWindow = {
 
     const avatar = ChatCommon.getAvatar(conv);
     const name = escapeHtml(ChatCommon.getDisplayName(conv));
-    const subtext = conv.isGroup
-      ? "Group Chat"
-      : conv.otherMember?.isActive
-        ? "Online"
-        : "Offline";
+    const presenceStatus = this.getPresenceStatusForConversation(conv);
+    const shouldShowOnlineDot =
+      !(conv.isGroup ?? conv.IsGroup) && !!presenceStatus.showDot;
+    const subtext = conv.isGroup ? "Group Chat" : presenceStatus.text || "";
 
     const chatBox = document.createElement("div");
     chatBox.className = "chat-box";
@@ -1979,10 +2203,10 @@ const ChatWindow = {
                      style="cursor: pointer;">
                     <div class="chat-header-avatar">
                         ${ChatCommon.renderAvatar(conv)}
-                        ${!conv.isGroup && conv.otherMember?.isActive ? '<div class="chat-header-status"></div>' : ""}
+                        ${shouldShowOnlineDot ? '<div class="chat-header-status"></div>' : ""}
                     </div>
                     <div class="chat-header-text">
-                        <div class="chat-header-name" title="${name}">${name}</div>
+                        <div class="chat-header-name" >${name}</div>
                         <div class="chat-header-subtext">${subtext}</div>
                     </div>
                 </div>
@@ -2003,7 +2227,7 @@ const ChatWindow = {
                     <div class="typing-message-shell received msg-group-single">
                         <div class="msg-row">
                             <div class="msg-avatar">
-                                ${ChatCommon.renderAvatar({ isGroup: true, displayAvatar: null }, { className: 'typing-avatar' })}
+                                ${ChatCommon.renderAvatar({ isGroup: true, displayAvatar: null }, { className: "typing-avatar" })}
                             </div>
                             <div class="msg-bubble typing-bubble" aria-label="Typing">
                                 <span class="typing-dots">
@@ -2092,18 +2316,24 @@ const ChatWindow = {
       fileInput.onchange = () => {
         const files = fileInput.files;
         if (files && files.length > 0) {
-          this.handleMediaUpload(conv.conversationId, files, { source: "media" });
+          this.handleMediaUpload(conv.conversationId, files, {
+            source: "media",
+          });
           fileInput.value = "";
         }
       };
     }
 
-    const docInput = chatBox.querySelector(`#chat-doc-input-${conv.conversationId}`);
+    const docInput = chatBox.querySelector(
+      `#chat-doc-input-${conv.conversationId}`,
+    );
     if (docInput) {
       docInput.onchange = () => {
         const files = docInput.files;
         if (files && files.length > 0) {
-          this.handleMediaUpload(conv.conversationId, files, { source: "file" });
+          this.handleMediaUpload(conv.conversationId, files, {
+            source: "file",
+          });
           docInput.value = "";
         }
       };
@@ -2135,6 +2365,10 @@ const ChatWindow = {
 
     const avatar = ChatCommon.getAvatar(data);
     const name = ChatCommon.getDisplayName(data);
+    const presenceStatus = this.getPresenceStatusForConversation(data);
+    const isGroup = !!(data?.isGroup ?? data?.IsGroup);
+    const shouldShowOnlineDot = !isGroup && !!presenceStatus.showDot;
+    this.syncPresenceSnapshotForConversations([data]);
 
     const bubble = document.createElement("div");
     bubble.className = "chat-bubble";
@@ -2145,10 +2379,10 @@ const ChatWindow = {
     const escapedName = escapeHtml(name);
 
     bubble.innerHTML = `
-            ${ChatCommon.renderAvatar(data)}
+            ${ChatCommon.renderAvatar(data, { skipTitle: true })}
             <div class="chat-bubble-name">${escapedName}</div>
-            ${!data.isGroup && data.otherMember?.isActive ? '<div class="chat-bubble-status"></div>' : ""}
-            <button class="chat-bubble-close" title="Close" onclick="event.stopPropagation(); ChatWindow.closeChat('${id}')">
+            ${shouldShowOnlineDot ? '<div class="chat-bubble-status"></div>' : ""}
+            <button class="chat-bubble-close" onclick="event.stopPropagation(); ChatWindow.closeChat('${id}')">
                 <i data-lucide="x"></i>
             </button>
         `;
@@ -2554,7 +2788,8 @@ const ChatWindow = {
 
     const msgContainer = document.getElementById(`chat-messages-${openId}`);
     if (msgContainer) {
-      const authorDisplayName = normalizedNickname || fallbackDisplayName || "User";
+      const authorDisplayName =
+        normalizedNickname || fallbackDisplayName || "User";
       if (
         window.ChatCommon &&
         typeof ChatCommon.updateMessageAuthorDisplay === "function"
@@ -2579,7 +2814,9 @@ const ChatWindow = {
         });
 
       msgContainer
-        .querySelectorAll(`.msg-reply-preview[data-reply-sender-id="${accTarget}"]`)
+        .querySelectorAll(
+          `.msg-reply-preview[data-reply-sender-id="${accTarget}"]`,
+        )
         .forEach((previewEl) => {
           const authorEl = previewEl.querySelector(".msg-reply-author");
           if (!authorEl) return;
@@ -2600,16 +2837,23 @@ const ChatWindow = {
         });
     }
 
-    if ((chat._replyToMessageId || '').toString().toLowerCase()
-      && (chat._replySenderId || '').toString().toLowerCase() === accTarget) {
+    if (
+      (chat._replyToMessageId || "").toString().toLowerCase() &&
+      (chat._replySenderId || "").toString().toLowerCase() === accTarget
+    ) {
       const isOwnReplyAuthor = !!chat._replyIsOwn || accTarget === myId;
       const nextReplySenderName = isOwnReplyAuthor
-        ? 'yourself'
-        : (normalizedNickname || fallbackDisplayName || chat._replySenderName || 'User');
+        ? "yourself"
+        : normalizedNickname ||
+          fallbackDisplayName ||
+          chat._replySenderName ||
+          "User";
       chat._replySenderName = nextReplySenderName;
 
       const inputArea = document.getElementById(`chat-input-area-${openId}`);
-      const labelStrong = inputArea?.querySelector('.chat-reply-bar .chat-reply-bar-label strong');
+      const labelStrong = inputArea?.querySelector(
+        ".chat-reply-bar .chat-reply-bar-label strong",
+      );
       if (labelStrong) {
         labelStrong.textContent = nextReplySenderName;
         domChanged = true;
@@ -2844,7 +3088,7 @@ const ChatWindow = {
     );
     const rawOwner = data?.owner ?? data?.Owner;
     const nextOwner = hasOwnerInput
-      ? ((rawOwner || "").toString().trim().toLowerCase() || null)
+      ? (rawOwner || "").toString().trim().toLowerCase() || null
       : null;
 
     this.applyGroupConversationInfoUpdate(conversationId, {
@@ -2883,7 +3127,11 @@ const ChatWindow = {
 
     const openId = this.getOpenChatId(conversationId) || conversationId;
     const openChat = this.openChats.get(openId);
-    if (hasOwnerInput && openChat && (openChat.data?.isGroup ?? openChat.data?.IsGroup)) {
+    if (
+      hasOwnerInput &&
+      openChat &&
+      (openChat.data?.isGroup ?? openChat.data?.IsGroup)
+    ) {
       this.refreshPermissionUiForConversation(openId, {
         closeMessageMenus: true,
         reloadMembers: true,
@@ -2912,7 +3160,10 @@ const ChatWindow = {
 
     const hasAvatarInput = !!(
       payload?.hasConversationAvatarField ||
-      Object.prototype.hasOwnProperty.call(payload || {}, "conversationAvatar") ||
+      Object.prototype.hasOwnProperty.call(
+        payload || {},
+        "conversationAvatar",
+      ) ||
       Object.prototype.hasOwnProperty.call(payload || {}, "ConversationAvatar")
     );
     const nextConversationAvatar = hasAvatarInput
@@ -2927,7 +3178,7 @@ const ChatWindow = {
       Object.prototype.hasOwnProperty.call(payload || {}, "Owner")
     );
     const nextOwner = hasOwnerInput
-      ? ((payload?.owner || "").toString().trim().toLowerCase() || null)
+      ? (payload?.owner || "").toString().trim().toLowerCase() || null
       : null;
 
     let changed = false;
@@ -2996,7 +3247,8 @@ const ChatWindow = {
       }
     }
 
-    const bubble = chat.bubbleElement || document.getElementById(`chat-bubble-${openId}`);
+    const bubble =
+      chat.bubbleElement || document.getElementById(`chat-bubble-${openId}`);
     if (bubble) {
       const nameEl = bubble.querySelector(".chat-bubble-name");
       if (nameEl) {
@@ -3004,7 +3256,9 @@ const ChatWindow = {
       }
       const avatarEl = bubble.querySelector(".chat-avatar");
       if (avatarEl) {
-        avatarEl.outerHTML = ChatCommon.renderAvatar(chat.data);
+        avatarEl.outerHTML = ChatCommon.renderAvatar(chat.data, {
+          skipTitle: true,
+        });
       }
       if (window.lucide) lucide.createIcons({ container: bubble });
     }
@@ -3326,7 +3580,8 @@ const ChatWindow = {
       !window.ChatActions ||
       typeof window.ChatActions.showPinnedMessages !== "function"
     ) {
-      if (window.toastError) window.toastError("Pinned messages are unavailable");
+      if (window.toastError)
+        window.toastError("Pinned messages are unavailable");
       return;
     }
 
@@ -3438,7 +3693,11 @@ const ChatWindow = {
     });
   },
 
-  _ensureEditableGroupConversation(id, actionName = "Group info", options = {}) {
+  _ensureEditableGroupConversation(
+    id,
+    actionName = "Group info",
+    options = {},
+  ) {
     const openId = this.getOpenChatId(id) || id;
     const chat = this.openChats.get(openId);
     if (!chat || !chat.data) return null;
@@ -3454,7 +3713,9 @@ const ChatWindow = {
     const conversationId = (openId || "").toString().toLowerCase();
     if (!this.isGuidConversationId(conversationId)) {
       if (window.toastInfo)
-        window.toastInfo(`${actionName} can be changed after the group is created`);
+        window.toastInfo(
+          `${actionName} can be changed after the group is created`,
+        );
       return null;
     }
 
@@ -3487,7 +3748,10 @@ const ChatWindow = {
       window.ChatSidebar &&
       typeof window.ChatSidebar.applyGroupConversationInfoUpdate === "function"
     ) {
-      window.ChatSidebar.applyGroupConversationInfoUpdate(conversationId, payload);
+      window.ChatSidebar.applyGroupConversationInfoUpdate(
+        conversationId,
+        payload,
+      );
     }
 
     if (
@@ -3498,7 +3762,10 @@ const ChatWindow = {
     }
   },
 
-  async _readConversationApiErrorMessage(res, fallbackMessage = "Request failed") {
+  async _readConversationApiErrorMessage(
+    res,
+    fallbackMessage = "Request failed",
+  ) {
     if (!res) return fallbackMessage;
 
     const jsonSource = typeof res.clone === "function" ? res.clone() : res;
@@ -3522,17 +3789,25 @@ const ChatWindow = {
 
   async promptEditGroupName(id) {
     const openId = this.getOpenChatId(id) || id;
-    const conversationId = this._ensureEditableGroupConversation(openId, "Group name", {
-      requireAdmin: true,
-    });
+    const conversationId = this._ensureEditableGroupConversation(
+      openId,
+      "Group name",
+      {
+        requireAdmin: true,
+      },
+    );
     if (!conversationId) return;
 
     if (!window.API?.Conversations?.updateGroupInfo) {
-      if (window.toastError) window.toastError("Update group API is unavailable");
+      if (window.toastError)
+        window.toastError("Update group API is unavailable");
       return;
     }
 
-    if (!window.ChatCommon || typeof window.ChatCommon.showPrompt !== "function") {
+    if (
+      !window.ChatCommon ||
+      typeof window.ChatCommon.showPrompt !== "function"
+    ) {
       if (window.toastError) window.toastError("Prompt is unavailable");
       return;
     }
@@ -3555,7 +3830,12 @@ const ChatWindow = {
       },
       onConfirm: async (nextNameRaw) => {
         const nextName = String(nextNameRaw || "").trim();
-        if (!nextName || nextName.length < minLength || nextName === currentName) return;
+        if (
+          !nextName ||
+          nextName.length < minLength ||
+          nextName === currentName
+        )
+          return;
 
         this._syncGroupInfoForConversation(conversationId, {
           conversationName: nextName,
@@ -3587,7 +3867,8 @@ const ChatWindow = {
           this._syncGroupInfoForConversation(conversationId, {
             conversationName: currentName,
           });
-          if (window.toastError) window.toastError("Failed to update group name");
+          if (window.toastError)
+            window.toastError("Failed to update group name");
         }
       },
     });
@@ -3595,13 +3876,18 @@ const ChatWindow = {
 
   promptEditGroupAvatar(id) {
     const openId = this.getOpenChatId(id) || id;
-    const conversationId = this._ensureEditableGroupConversation(openId, "Group avatar", {
-      requireAdmin: true,
-    });
+    const conversationId = this._ensureEditableGroupConversation(
+      openId,
+      "Group avatar",
+      {
+        requireAdmin: true,
+      },
+    );
     if (!conversationId) return;
 
     if (!window.API?.Conversations?.updateGroupInfo) {
-      if (window.toastError) window.toastError("Update group API is unavailable");
+      if (window.toastError)
+        window.toastError("Update group API is unavailable");
       return;
     }
 
@@ -3623,7 +3909,8 @@ const ChatWindow = {
       }
       return !value;
     };
-    const hasCurrentCustomAvatar = !!currentAvatar && !isDefaultAvatar(currentAvatar);
+    const hasCurrentCustomAvatar =
+      !!currentAvatar && !isDefaultAvatar(currentAvatar);
 
     const input = document.createElement("input");
     input.type = "file";
@@ -3631,10 +3918,12 @@ const ChatWindow = {
     input.style.display = "none";
 
     const overlay = document.createElement("div");
-    overlay.className = "chat-common-confirm-overlay chat-group-avatar-editor-overlay";
+    overlay.className =
+      "chat-common-confirm-overlay chat-group-avatar-editor-overlay";
 
     const popup = document.createElement("div");
-    popup.className = "chat-common-confirm-popup chat-group-avatar-editor-popup";
+    popup.className =
+      "chat-common-confirm-popup chat-group-avatar-editor-popup";
     popup.innerHTML = `
       <div class="chat-nicknames-header">
         <h3>Edit group avatar</h3>
@@ -3676,7 +3965,9 @@ const ChatWindow = {
     const noteEl = popup.querySelector("#chat-group-avatar-editor-note");
     const removeBtn = popup.querySelector("#chat-group-avatar-remove-btn");
     const saveBtn = popup.querySelector("#chat-group-avatar-editor-save-btn");
-    const cancelBtn = popup.querySelector("#chat-group-avatar-editor-cancel-btn");
+    const cancelBtn = popup.querySelector(
+      "#chat-group-avatar-editor-cancel-btn",
+    );
     const closeBtn = popup.querySelector("#chat-group-avatar-editor-close-btn");
 
     let selectedFile = null;
@@ -3710,9 +4001,11 @@ const ChatWindow = {
     const renderPreview = () => {
       if (!avatarPreviewImg || !avatarIcon) return;
 
-      const showDefault = !selectedPreviewUrl && (removeAvatar || !hasCurrentCustomAvatar);
+      const showDefault =
+        !selectedPreviewUrl && (removeAvatar || !hasCurrentCustomAvatar);
       const showSelected = !!selectedPreviewUrl;
-      const showCurrent = !showSelected && !showDefault && hasCurrentCustomAvatar;
+      const showCurrent =
+        !showSelected && !showDefault && hasCurrentCustomAvatar;
 
       if (showSelected) {
         avatarPreviewImg.src = selectedPreviewUrl;
@@ -3731,7 +4024,8 @@ const ChatWindow = {
         if (noteEl) noteEl.textContent = "Default group avatar";
       }
 
-      const canSave = !!selectedFile || (removeAvatar && hasCurrentCustomAvatar);
+      const canSave =
+        !!selectedFile || (removeAvatar && hasCurrentCustomAvatar);
       if (saveBtn) saveBtn.disabled = isSubmitting || !canSave;
       if (removeBtn) {
         removeBtn.disabled = isSubmitting;
@@ -3740,8 +4034,10 @@ const ChatWindow = {
           !selectedFile && (!hasCurrentCustomAvatar || removeAvatar),
         );
       }
-      if (uploadLabel) uploadLabel.style.pointerEvents = isSubmitting ? "none" : "";
-      if (avatarCircle) avatarCircle.style.pointerEvents = isSubmitting ? "none" : "";
+      if (uploadLabel)
+        uploadLabel.style.pointerEvents = isSubmitting ? "none" : "";
+      if (avatarCircle)
+        avatarCircle.style.pointerEvents = isSubmitting ? "none" : "";
     };
 
     if (avatarCircle) {
@@ -3835,7 +4131,8 @@ const ChatWindow = {
               conversationAvatar: null,
             });
           } else if (hasUpload) {
-            const jsonSource = typeof res.clone === "function" ? res.clone() : res;
+            const jsonSource =
+              typeof res.clone === "function" ? res.clone() : res;
             try {
               const data = await jsonSource.json();
               const avatarValue =
@@ -3862,12 +4159,15 @@ const ChatWindow = {
           }
 
           if (window.toastSuccess) {
-            window.toastSuccess(hasRemove ? "Group avatar removed" : "Group avatar updated");
+            window.toastSuccess(
+              hasRemove ? "Group avatar removed" : "Group avatar updated",
+            );
           }
           closeModal();
         } catch (error) {
           console.error("Failed to update group avatar:", error);
-          if (window.toastError) window.toastError("Failed to update group avatar");
+          if (window.toastError)
+            window.toastError("Failed to update group avatar");
         } finally {
           isSubmitting = false;
           if (!isClosed && saveBtn) {
@@ -3954,7 +4254,10 @@ const ChatWindow = {
   },
 
   _shouldRefreshPermissionsFromSystemMessage(message) {
-    if (!window.ChatCommon || typeof window.ChatCommon.isSystemMessage !== "function") {
+    if (
+      !window.ChatCommon ||
+      typeof window.ChatCommon.isSystemMessage !== "function"
+    ) {
       return false;
     }
     if (!window.ChatCommon.isSystemMessage(message)) {
@@ -3972,7 +4275,10 @@ const ChatWindow = {
         Object.prototype.hasOwnProperty.call(parsed, "nickname") ||
         Object.prototype.hasOwnProperty.call(parsed, "Nickname");
       if (hasNicknameField) return false;
-      if (Number.isFinite(action) && (action === 9 || action === 10 || action === 11)) {
+      if (
+        Number.isFinite(action) &&
+        (action === 9 || action === 10 || action === 11)
+      ) {
         return false;
       }
       return true;
@@ -4011,7 +4317,9 @@ const ChatWindow = {
       return;
     }
 
-    const directRole = Number(chatData?.currentUserRole ?? chatData?.CurrentUserRole);
+    const directRole = Number(
+      chatData?.currentUserRole ?? chatData?.CurrentUserRole,
+    );
     if (preferDirectRole && Number.isFinite(directRole)) {
       const normalizedDirectRole = directRole === 1 ? 1 : 0;
       chatData.currentUserRole = normalizedDirectRole;
@@ -4027,7 +4335,8 @@ const ChatWindow = {
     }
 
     const me = members.find(
-      (m) => (m?.accountId || m?.AccountId || "").toString().toLowerCase() === myId,
+      (m) =>
+        (m?.accountId || m?.AccountId || "").toString().toLowerCase() === myId,
     );
     if (!me) {
       chatData.currentUserRole = 0;
@@ -4055,13 +4364,19 @@ const ChatWindow = {
     if (this._permissionRefreshTimers.has(target)) return;
 
     const delayInput = Number(options?.delayMs);
-    const delayMs = Number.isFinite(delayInput) && delayInput >= 0 ? delayInput : 160;
+    const delayMs =
+      Number.isFinite(delayInput) && delayInput >= 0 ? delayInput : 160;
 
     const timerId = setTimeout(() => {
       this._permissionRefreshTimers.delete(target);
-      this._refreshGroupPermissionMetaFromServer(target, options).catch((error) => {
-        console.warn("Failed to refresh group permission metadata in chat-window:", error);
-      });
+      this._refreshGroupPermissionMetaFromServer(target, options).catch(
+        (error) => {
+          console.warn(
+            "Failed to refresh group permission metadata in chat-window:",
+            error,
+          );
+        },
+      );
     }, delayMs);
 
     this._permissionRefreshTimers.set(target, timerId);
@@ -4108,7 +4423,9 @@ const ChatWindow = {
         if (sidebarConv) {
           Object.assign(sidebarConv, nextMeta);
           if (hasDirectRole) {
-            const roleValue = Number(nextMeta?.currentUserRole ?? nextMeta?.CurrentUserRole);
+            const roleValue = Number(
+              nextMeta?.currentUserRole ?? nextMeta?.CurrentUserRole,
+            );
             if (Number.isFinite(roleValue)) {
               const normalizedRole = roleValue === 1 ? 1 : 0;
               sidebarConv.currentUserRole = normalizedRole;
@@ -4126,7 +4443,10 @@ const ChatWindow = {
       return true;
     })()
       .catch((error) => {
-        console.warn("Failed to refresh group permissions in chat-window:", error);
+        console.warn(
+          "Failed to refresh group permissions in chat-window:",
+          error,
+        );
         return false;
       })
       .finally(() => {
@@ -4147,15 +4467,22 @@ const ChatWindow = {
 
     const closeMessageMenus = options?.closeMessageMenus !== false;
     const reloadMembers = options?.reloadMembers !== false;
-    const hadOpenHeaderMenu = !!document.getElementById(`chat-header-menu-${openId}`);
+    const hadOpenHeaderMenu = !!document.getElementById(
+      `chat-header-menu-${openId}`,
+    );
 
-    if (closeMessageMenus && window.ChatActions && typeof window.ChatActions.closeAllMenus === "function") {
+    if (
+      closeMessageMenus &&
+      window.ChatActions &&
+      typeof window.ChatActions.closeAllMenus === "function"
+    ) {
       window.ChatActions.closeAllMenus();
     }
 
     if (
       this._membersModal &&
-      (this._membersModal.conversationId || "").toLowerCase() === openId.toLowerCase()
+      (this._membersModal.conversationId || "").toLowerCase() ===
+        openId.toLowerCase()
     ) {
       this.closeWindowMembersActionMenus(this._membersModal.popup || null);
       if (reloadMembers) {
@@ -4166,7 +4493,8 @@ const ChatWindow = {
     }
 
     if (hadOpenHeaderMenu) {
-      const triggerEl = chat.element?.querySelector(".chat-header-info") || null;
+      const triggerEl =
+        chat.element?.querySelector(".chat-header-info") || null;
       if (triggerEl) {
         this.toggleHeaderMenu(triggerEl, openId);
       }
@@ -4186,9 +4514,7 @@ const ChatWindow = {
     const accountId = (raw?.accountId || raw?.AccountId || "")
       .toString()
       .toLowerCase();
-    const username = (raw?.username || raw?.Username || "")
-      .toString()
-      .trim();
+    const username = (raw?.username || raw?.Username || "").toString().trim();
     const nicknameRaw = (raw?.nickname || raw?.Nickname || "").toString();
     const nickname = nicknameRaw.trim();
     const displayNameRaw = (raw?.displayName || raw?.DisplayName || "")
@@ -4246,7 +4572,9 @@ const ChatWindow = {
     const myId = (localStorage.getItem("accountId") || "").toLowerCase();
     if (myId && normalizedTargetId === myId) {
       const nextRole = isAdmin ? 1 : 0;
-      if ((chat.data.currentUserRole ?? chat.data.CurrentUserRole) !== nextRole) {
+      if (
+        (chat.data.currentUserRole ?? chat.data.CurrentUserRole) !== nextRole
+      ) {
         chat.data.currentUserRole = nextRole;
         chat.data.CurrentUserRole = nextRole;
         changed = true;
@@ -4377,13 +4705,19 @@ const ChatWindow = {
       const conversationId = this._membersModal?.conversationId || null;
       if (!conversationId) return;
       if (!window.API?.Conversations?.kickMember) {
-        if (window.toastError) window.toastError("Kick member API is unavailable");
+        if (window.toastError)
+          window.toastError("Kick member API is unavailable");
         return;
       }
 
-      const targetLabel = (username || displayName || "member").toString().trim() || "member";
-      if (!window.ChatCommon || typeof window.ChatCommon.showConfirm !== "function") {
-        if (window.toastInfo) window.toastInfo("Confirmation popup is unavailable.");
+      const targetLabel =
+        (username || displayName || "member").toString().trim() || "member";
+      if (
+        !window.ChatCommon ||
+        typeof window.ChatCommon.showConfirm !== "function"
+      ) {
+        if (window.toastInfo)
+          window.toastInfo("Confirmation popup is unavailable.");
         return;
       }
 
@@ -4409,7 +4743,10 @@ const ChatWindow = {
             }
 
             this.removeOpenChatGroupMember(conversationId, targetAccountId);
-            if (this._membersModal && this._membersModal.conversationId === conversationId) {
+            if (
+              this._membersModal &&
+              this._membersModal.conversationId === conversationId
+            ) {
               this._membersModal.page = 1;
               this.loadMembersModal(this._membersModal, { reset: true });
             }
@@ -4439,13 +4776,19 @@ const ChatWindow = {
       const conversationId = this._membersModal?.conversationId || null;
       if (!conversationId) return;
       if (!window.API?.Conversations?.assignAdmin) {
-        if (window.toastError) window.toastError("Assign admin API is unavailable");
+        if (window.toastError)
+          window.toastError("Assign admin API is unavailable");
         return;
       }
 
-      const targetLabel = (username || displayName || "member").toString().trim() || "member";
-      if (!window.ChatCommon || typeof window.ChatCommon.showConfirm !== "function") {
-        if (window.toastInfo) window.toastInfo("Confirmation popup is unavailable.");
+      const targetLabel =
+        (username || displayName || "member").toString().trim() || "member";
+      if (
+        !window.ChatCommon ||
+        typeof window.ChatCommon.showConfirm !== "function"
+      ) {
+        if (window.toastInfo)
+          window.toastInfo("Confirmation popup is unavailable.");
         return;
       }
 
@@ -4469,16 +4812,27 @@ const ChatWindow = {
               return;
             }
 
-            this.updateOpenChatGroupMemberRole(conversationId, targetAccountId, true);
-            if (this._membersModal && this._membersModal.conversationId === conversationId) {
+            this.updateOpenChatGroupMemberRole(
+              conversationId,
+              targetAccountId,
+              true,
+            );
+            if (
+              this._membersModal &&
+              this._membersModal.conversationId === conversationId
+            ) {
               this._membersModal.page = 1;
               this.loadMembersModal(this._membersModal, { reset: true });
             }
             if (
               window.ChatPage &&
-              typeof window.ChatPage._updateCurrentGroupMemberRole === "function"
+              typeof window.ChatPage._updateCurrentGroupMemberRole ===
+                "function"
             ) {
-              window.ChatPage._updateCurrentGroupMemberRole(targetAccountId, true);
+              window.ChatPage._updateCurrentGroupMemberRole(
+                targetAccountId,
+                true,
+              );
             }
             if (
               window.ChatPage &&
@@ -4486,7 +4840,8 @@ const ChatWindow = {
             ) {
               window.ChatPage.loadMembersPanel();
             }
-            if (window.toastSuccess) window.toastSuccess("Member promoted to admin");
+            if (window.toastSuccess)
+              window.toastSuccess("Member promoted to admin");
           } catch (error) {
             console.error("Failed to assign admin in chat-window:", error);
             if (window.toastError) window.toastError("Failed to assign admin");
@@ -4500,13 +4855,19 @@ const ChatWindow = {
       const conversationId = this._membersModal?.conversationId || null;
       if (!conversationId) return;
       if (!window.API?.Conversations?.revokeAdmin) {
-        if (window.toastError) window.toastError("Revoke admin API is unavailable");
+        if (window.toastError)
+          window.toastError("Revoke admin API is unavailable");
         return;
       }
 
-      const targetLabel = (username || displayName || "member").toString().trim() || "member";
-      if (!window.ChatCommon || typeof window.ChatCommon.showConfirm !== "function") {
-        if (window.toastInfo) window.toastInfo("Confirmation popup is unavailable.");
+      const targetLabel =
+        (username || displayName || "member").toString().trim() || "member";
+      if (
+        !window.ChatCommon ||
+        typeof window.ChatCommon.showConfirm !== "function"
+      ) {
+        if (window.toastInfo)
+          window.toastInfo("Confirmation popup is unavailable.");
         return;
       }
 
@@ -4531,16 +4892,27 @@ const ChatWindow = {
               return;
             }
 
-            this.updateOpenChatGroupMemberRole(conversationId, targetAccountId, false);
-            if (this._membersModal && this._membersModal.conversationId === conversationId) {
+            this.updateOpenChatGroupMemberRole(
+              conversationId,
+              targetAccountId,
+              false,
+            );
+            if (
+              this._membersModal &&
+              this._membersModal.conversationId === conversationId
+            ) {
               this._membersModal.page = 1;
               this.loadMembersModal(this._membersModal, { reset: true });
             }
             if (
               window.ChatPage &&
-              typeof window.ChatPage._updateCurrentGroupMemberRole === "function"
+              typeof window.ChatPage._updateCurrentGroupMemberRole ===
+                "function"
             ) {
-              window.ChatPage._updateCurrentGroupMemberRole(targetAccountId, false);
+              window.ChatPage._updateCurrentGroupMemberRole(
+                targetAccountId,
+                false,
+              );
             }
             if (
               window.ChatPage &&
@@ -4562,13 +4934,19 @@ const ChatWindow = {
       const conversationId = this._membersModal?.conversationId || null;
       if (!conversationId) return;
       if (!window.API?.Conversations?.transferOwner) {
-        if (window.toastError) window.toastError("Transfer owner API is unavailable");
+        if (window.toastError)
+          window.toastError("Transfer owner API is unavailable");
         return;
       }
 
-      const targetLabel = (username || displayName || "member").toString().trim() || "member";
-      if (!window.ChatCommon || typeof window.ChatCommon.showConfirm !== "function") {
-        if (window.toastInfo) window.toastInfo("Confirmation popup is unavailable.");
+      const targetLabel =
+        (username || displayName || "member").toString().trim() || "member";
+      if (
+        !window.ChatCommon ||
+        typeof window.ChatCommon.showConfirm !== "function"
+      ) {
+        if (window.toastInfo)
+          window.toastInfo("Confirmation popup is unavailable.");
         return;
       }
 
@@ -4594,13 +4972,20 @@ const ChatWindow = {
             }
 
             this.setOpenChatGroupOwner(conversationId, targetAccountId);
-            this.updateOpenChatGroupMemberRole(conversationId, targetAccountId, true);
+            this.updateOpenChatGroupMemberRole(
+              conversationId,
+              targetAccountId,
+              true,
+            );
             this._scheduleGroupPermissionRefresh(conversationId, {
               delayMs: 0,
               closeMessageMenus: true,
               reloadMembers: false,
             });
-            if (this._membersModal && this._membersModal.conversationId === conversationId) {
+            if (
+              this._membersModal &&
+              this._membersModal.conversationId === conversationId
+            ) {
               this._membersModal.page = 1;
               this.loadMembersModal(this._membersModal, { reset: true });
             }
@@ -4612,9 +4997,13 @@ const ChatWindow = {
             }
             if (
               window.ChatPage &&
-              typeof window.ChatPage._updateCurrentGroupMemberRole === "function"
+              typeof window.ChatPage._updateCurrentGroupMemberRole ===
+                "function"
             ) {
-              window.ChatPage._updateCurrentGroupMemberRole(targetAccountId, true);
+              window.ChatPage._updateCurrentGroupMemberRole(
+                targetAccountId,
+                true,
+              );
             }
             if (
               window.ChatPage &&
@@ -4622,10 +5011,15 @@ const ChatWindow = {
             ) {
               window.ChatPage.loadMembersPanel({ reset: true });
             }
-            if (window.toastSuccess) window.toastSuccess("Group ownership transferred");
+            if (window.toastSuccess)
+              window.toastSuccess("Group ownership transferred");
           } catch (error) {
-            console.error("Failed to transfer ownership in chat-window:", error);
-            if (window.toastError) window.toastError("Failed to transfer ownership");
+            console.error(
+              "Failed to transfer ownership in chat-window:",
+              error,
+            );
+            if (window.toastError)
+              window.toastError("Failed to transfer ownership");
           }
         },
       });
@@ -4640,41 +5034,46 @@ const ChatWindow = {
     const resultsEl = popup.querySelector(".chat-window-members-results");
     if (!resultsEl) return;
 
-    resultsEl.querySelectorAll(".chat-window-members-more-btn").forEach((btn) => {
-      btn.onclick = (event) => {
-        event.stopPropagation();
-        const menuEl =
-          btn.parentElement?.querySelector(".chat-window-members-actions-menu");
-        if (!menuEl) return;
+    resultsEl
+      .querySelectorAll(".chat-window-members-more-btn")
+      .forEach((btn) => {
+        btn.onclick = (event) => {
+          event.stopPropagation();
+          const menuEl = btn.parentElement?.querySelector(
+            ".chat-window-members-actions-menu",
+          );
+          if (!menuEl) return;
 
-        const isOpening = !menuEl.classList.contains("show");
-        this.closeWindowMembersActionMenus(resultsEl);
-        if (isOpening) {
-          menuEl.classList.add("show");
-          requestAnimationFrame(() => {
-            if (!menuEl.classList.contains("show")) return;
-            this.positionWindowMembersActionMenu(menuEl, resultsEl);
-          });
-        }
-      };
-    });
+          const isOpening = !menuEl.classList.contains("show");
+          this.closeWindowMembersActionMenus(resultsEl);
+          if (isOpening) {
+            menuEl.classList.add("show");
+            requestAnimationFrame(() => {
+              if (!menuEl.classList.contains("show")) return;
+              this.positionWindowMembersActionMenu(menuEl, resultsEl);
+            });
+          }
+        };
+      });
 
-    resultsEl.querySelectorAll(".chat-window-members-action-btn").forEach((btn) => {
-      btn.onclick = async (event) => {
-        event.stopPropagation();
-        const action = btn.dataset.action || "";
-        const accountId = btn.dataset.accountId || "";
-        const displayName = btn.dataset.displayName || "";
-        const username = btn.dataset.username || "";
-        this.closeWindowMembersActionMenus(resultsEl);
-        await this.handleWindowMembersAction(
-          action,
-          accountId,
-          displayName,
-          username,
-        );
-      };
-    });
+    resultsEl
+      .querySelectorAll(".chat-window-members-action-btn")
+      .forEach((btn) => {
+        btn.onclick = async (event) => {
+          event.stopPropagation();
+          const action = btn.dataset.action || "";
+          const accountId = btn.dataset.accountId || "";
+          const displayName = btn.dataset.displayName || "";
+          const username = btn.dataset.username || "";
+          this.closeWindowMembersActionMenus(resultsEl);
+          await this.handleWindowMembersAction(
+            action,
+            accountId,
+            displayName,
+            username,
+          );
+        };
+      });
 
     resultsEl.onclick = (event) => {
       if (!event.target.closest(".chat-window-members-actions")) {
@@ -4721,14 +5120,18 @@ const ChatWindow = {
 
     const popup = state.popup;
     const resultsEl = popup.querySelector(".chat-window-members-results");
-    const totalCountEl = popup.querySelector(".chat-window-members-total-count");
+    const totalCountEl = popup.querySelector(
+      ".chat-window-members-total-count",
+    );
     const paginationEl = popup.querySelector(".chat-window-members-pagination");
     const filterBtn = popup.querySelector(".chat-window-members-filter-btn");
     if (!resultsEl || !paginationEl) return;
 
     if (filterBtn) filterBtn.classList.toggle("active", !!state.adminOnly);
 
-    const currentUserId = (localStorage.getItem("accountId") || "").toLowerCase();
+    const currentUserId = (
+      localStorage.getItem("accountId") || ""
+    ).toLowerCase();
     const chat = this.openChats.get(state.conversationId);
     const currentUserIsOwner = this.isCurrentUserGroupOwner(chat?.data || null);
     const currentUserIsAdmin = this.isCurrentUserGroupAdmin(chat?.data || null);
@@ -4770,7 +5173,8 @@ const ChatWindow = {
     }
 
     const nicknameMaxLength =
-      window.ChatCommon && typeof window.ChatCommon.getNicknameMaxLength === "function"
+      window.ChatCommon &&
+      typeof window.ChatCommon.getNicknameMaxLength === "function"
         ? window.ChatCommon.getNicknameMaxLength()
         : 50;
     const maxNameLength = window.APP_CONFIG?.MAX_NAME_DISPLAY_LENGTH || 30;
@@ -4794,7 +5198,10 @@ const ChatWindow = {
         const nicknameLabel =
           window.ChatCommon &&
           typeof window.ChatCommon.truncateDisplayText === "function"
-            ? window.ChatCommon.truncateDisplayText(nicknameRaw, nicknameMaxLength)
+            ? window.ChatCommon.truncateDisplayText(
+                nicknameRaw,
+                nicknameMaxLength,
+              )
             : nicknameRaw;
         const safeNickname = escapeHtml(nicknameLabel);
         const safeNicknameRaw = escapeHtml(nicknameRaw);
@@ -4803,12 +5210,18 @@ const ChatWindow = {
         const isAdmin = this._isGroupMemberAdmin(member);
         const isOwner = !!ownerId && ownerId === memberId;
         const isSelf = memberId === currentUserId;
-        const canAssignAdmin = currentUserIsOwner && !isOwner && !isAdmin && !isSelf;
-        const canRevokeAdmin = currentUserIsOwner && !isOwner && isAdmin && !isSelf;
+        const canAssignAdmin =
+          currentUserIsOwner && !isOwner && !isAdmin && !isSelf;
+        const canRevokeAdmin =
+          currentUserIsOwner && !isOwner && isAdmin && !isSelf;
         const canTransferOwner = currentUserIsOwner && !isOwner && !isSelf;
         const canKick = currentUserIsOwner
           ? !isOwner && !isSelf
-          : currentUserIsAdmin && !currentUserIsOwner && !isOwner && !isAdmin && !isSelf;
+          : currentUserIsAdmin &&
+            !currentUserIsOwner &&
+            !isOwner &&
+            !isAdmin &&
+            !isSelf;
         const actionDisplayName = escapeHtml(
           member.displayName || member.username || "user",
         );
@@ -4816,7 +5229,9 @@ const ChatWindow = {
 
         const roleBadgeHtml = isOwner
           ? '<span class="chat-window-members-role owner">Owner</span>'
-          : (isAdmin ? '<span class="chat-window-members-role">Admin</span>' : "");
+          : isAdmin
+            ? '<span class="chat-window-members-role">Admin</span>'
+            : "";
 
         return `
           <div class="chat-window-members-item" data-account-id="${safeAccountId}">
@@ -4825,6 +5240,7 @@ const ChatWindow = {
               <div class="chat-window-members-primary">
                 <span class="chat-window-members-name" title="${safeUsernameRaw}">${safeUsername}</span>
                 ${roleBadgeHtml}
+                
               </div>
               ${
                 nicknameRaw
@@ -4881,18 +5297,30 @@ const ChatWindow = {
       state.items = [];
       state.totalItems = 0;
       state.totalPages = 0;
-      const resetResultsEl = state.popup?.querySelector(".chat-window-members-results");
+      const resetResultsEl = state.popup?.querySelector(
+        ".chat-window-members-results",
+      );
       if (resetResultsEl) resetResultsEl.scrollTop = 0;
     } else if (!state.hasMore) {
       return;
     }
 
-    const requestPage = Number.isFinite(state.page) && state.page > 0 ? state.page : 1;
-    const resultsElBefore = state.popup?.querySelector(".chat-window-members-results");
+    const requestPage =
+      Number.isFinite(state.page) && state.page > 0 ? state.page : 1;
+    const resultsElBefore = state.popup?.querySelector(
+      ".chat-window-members-results",
+    );
     const shouldRestoreScroll =
-      !reset && !!resultsElBefore && Array.isArray(state.items) && state.items.length > 0;
-    const previousScrollTop = shouldRestoreScroll ? resultsElBefore.scrollTop : 0;
-    const previousScrollHeight = shouldRestoreScroll ? resultsElBefore.scrollHeight : 0;
+      !reset &&
+      !!resultsElBefore &&
+      Array.isArray(state.items) &&
+      state.items.length > 0;
+    const previousScrollTop = shouldRestoreScroll
+      ? resultsElBefore.scrollTop
+      : 0;
+    const previousScrollHeight = shouldRestoreScroll
+      ? resultsElBefore.scrollHeight
+      : 0;
 
     state.isLoading = true;
     this.renderMembersModal(state);
@@ -4943,7 +5371,9 @@ const ChatWindow = {
           ? pageSizeRaw
           : state.pageSize;
       const responseTotalItems =
-        Number.isFinite(totalItemsRaw) && totalItemsRaw >= 0 ? totalItemsRaw : null;
+        Number.isFinite(totalItemsRaw) && totalItemsRaw >= 0
+          ? totalItemsRaw
+          : null;
 
       if (reset) {
         state.items = normalizedItems;
@@ -4994,7 +5424,9 @@ const ChatWindow = {
       this.renderMembersModal(state);
 
       if (this._membersModal === state && shouldRestoreScroll) {
-        const resultsEl = state.popup?.querySelector(".chat-window-members-results");
+        const resultsEl = state.popup?.querySelector(
+          ".chat-window-members-results",
+        );
         if (resultsEl) {
           const delta = resultsEl.scrollHeight - previousScrollHeight;
           resultsEl.scrollTop = previousScrollTop + (delta > 0 ? delta : 0);
@@ -5002,11 +5434,10 @@ const ChatWindow = {
       }
 
       if (this._membersModal === state && state.hasMore && !state.isLoading) {
-        const resultsEl = state.popup?.querySelector(".chat-window-members-results");
-        if (
-          resultsEl &&
-          resultsEl.scrollHeight <= resultsEl.clientHeight + 8
-        ) {
+        const resultsEl = state.popup?.querySelector(
+          ".chat-window-members-results",
+        );
+        if (resultsEl && resultsEl.scrollHeight <= resultsEl.clientHeight + 8) {
           this.loadMembersModal(state);
         }
       }
@@ -5029,7 +5460,8 @@ const ChatWindow = {
     this.closeMembersModal();
 
     const overlay = document.createElement("div");
-    overlay.className = "chat-common-confirm-overlay chat-window-members-overlay";
+    overlay.className =
+      "chat-common-confirm-overlay chat-window-members-overlay";
     overlay.dataset.conversationId = openId;
 
     const popup = document.createElement("div");
@@ -5129,15 +5561,22 @@ const ChatWindow = {
 
   refreshMembersModal(conversationId) {
     if (!this._membersModal) return;
-    const normalizedConversationId = (conversationId || "").toString().toLowerCase();
+    const normalizedConversationId = (conversationId || "")
+      .toString()
+      .toLowerCase();
     if (!normalizedConversationId) return;
-    if ((this._membersModal.conversationId || "").toLowerCase() !== normalizedConversationId)
+    if (
+      (this._membersModal.conversationId || "").toLowerCase() !==
+      normalizedConversationId
+    )
       return;
     this.loadMembersModal(this._membersModal, { reset: true });
   },
 
   collectGroupMemberIdsForConversation(conversationId) {
-    const normalizedConversationId = (conversationId || "").toString().toLowerCase();
+    const normalizedConversationId = (conversationId || "")
+      .toString()
+      .toLowerCase();
     const ids = new Set();
     const pushId = (rawId) => {
       const normalized = (rawId || "").toString().toLowerCase().trim();
@@ -5154,7 +5593,8 @@ const ChatWindow = {
 
     if (
       this._membersModal &&
-      (this._membersModal.conversationId || "").toLowerCase() === normalizedConversationId &&
+      (this._membersModal.conversationId || "").toLowerCase() ===
+        normalizedConversationId &&
       Array.isArray(this._membersModal.items)
     ) {
       this._membersModal.items.forEach((member) => {
@@ -5179,17 +5619,23 @@ const ChatWindow = {
 
     const isGroup = !!(chat.data?.isGroup ?? chat.data?.IsGroup);
     if (!isGroup) {
-      if (window.toastInfo) window.toastInfo("Add member is only available for group chats");
+      if (window.toastInfo)
+        window.toastInfo("Add member is only available for group chats");
       return;
     }
 
     if (!this.isCurrentUserGroupAdmin(chat.data)) {
-      if (window.toastError) window.toastError("Only group admins can add members.");
+      if (window.toastError)
+        window.toastError("Only group admins can add members.");
       return;
     }
 
-    if (!window.ChatCommon || typeof window.ChatCommon.showAddGroupMembersModal !== "function") {
-      if (window.toastError) window.toastError("Add member modal is unavailable");
+    if (
+      !window.ChatCommon ||
+      typeof window.ChatCommon.showAddGroupMembersModal !== "function"
+    ) {
+      if (window.toastError)
+        window.toastError("Add member modal is unavailable");
       return;
     }
 
@@ -5293,12 +5739,17 @@ const ChatWindow = {
     }
 
     if (!window.API?.Conversations?.leaveGroup) {
-      if (window.toastError) window.toastError("Leave group API is unavailable");
+      if (window.toastError)
+        window.toastError("Leave group API is unavailable");
       return;
     }
 
-    if (!window.ChatCommon || typeof window.ChatCommon.showConfirm !== "function") {
-      if (window.toastInfo) window.toastInfo("Confirmation popup is unavailable.");
+    if (
+      !window.ChatCommon ||
+      typeof window.ChatCommon.showConfirm !== "function"
+    ) {
+      if (window.toastInfo)
+        window.toastInfo("Confirmation popup is unavailable.");
       return;
     }
 
@@ -5322,10 +5773,16 @@ const ChatWindow = {
           }
 
           this.removeConversation(openId);
-          if (window.ChatSidebar && typeof window.ChatSidebar.removeConversation === "function") {
+          if (
+            window.ChatSidebar &&
+            typeof window.ChatSidebar.removeConversation === "function"
+          ) {
             window.ChatSidebar.removeConversation(openId);
           }
-          if (window.ChatPage && typeof window.ChatPage.applyConversationRemoved === "function") {
+          if (
+            window.ChatPage &&
+            typeof window.ChatPage.applyConversationRemoved === "function"
+          ) {
             window.ChatPage.applyConversationRemoved(openId, "left");
           }
 
@@ -5416,7 +5873,8 @@ const ChatWindow = {
     if (mime.startsWith("video/")) return 1;
     if (mime.startsWith("image/")) return 0;
 
-    const documentExtRegex = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|zip|rar|7z)$/i;
+    const documentExtRegex =
+      /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|zip|rar|7z)$/i;
     const documentMimeSet = new Set([
       "application/pdf",
       "application/msword",
@@ -5448,7 +5906,8 @@ const ChatWindow = {
       size /= 1024;
       unitIndex += 1;
     }
-    const display = size >= 10 || unitIndex === 0 ? Math.round(size) : size.toFixed(1);
+    const display =
+      size >= 10 || unitIndex === 0 ? Math.round(size) : size.toFixed(1);
     return `${display} ${units[unitIndex]}`;
   },
 
@@ -5466,12 +5925,14 @@ const ChatWindow = {
     const chat = this.openChats.get(id);
     if (!chat || !files || files.length === 0) return;
 
-    const maxFiles = window.APP_CONFIG?.MAX_CHAT_ATTACHMENTS_PER_MESSAGE
-      || window.APP_CONFIG?.MAX_CHAT_MEDIA_FILES
-      || 5;
-    const maxSizeMB = window.APP_CONFIG?.MAX_CHAT_ATTACHMENT_SIZE_MB
-      || window.APP_CONFIG?.MAX_CHAT_FILE_SIZE_MB
-      || 10;
+    const maxFiles =
+      window.APP_CONFIG?.MAX_CHAT_ATTACHMENTS_PER_MESSAGE ||
+      window.APP_CONFIG?.MAX_CHAT_MEDIA_FILES ||
+      5;
+    const maxSizeMB =
+      window.APP_CONFIG?.MAX_CHAT_ATTACHMENT_SIZE_MB ||
+      window.APP_CONFIG?.MAX_CHAT_FILE_SIZE_MB ||
+      10;
     const currentCount = chat.pendingFiles.length;
     const source = (options?.source || "media").toString().toLowerCase();
     const documentOnly = source === "file";
@@ -5567,9 +6028,10 @@ const ChatWindow = {
     });
 
     // Add the "+" button like Facebook Messenger if under limit
-    const maxFiles = window.APP_CONFIG?.MAX_CHAT_ATTACHMENTS_PER_MESSAGE
-      || window.APP_CONFIG?.MAX_CHAT_MEDIA_FILES
-      || 5;
+    const maxFiles =
+      window.APP_CONFIG?.MAX_CHAT_ATTACHMENTS_PER_MESSAGE ||
+      window.APP_CONFIG?.MAX_CHAT_MEDIA_FILES ||
+      5;
     if (chat.pendingFiles.length > 0 && chat.pendingFiles.length < maxFiles) {
       const hasOnlyDocuments = chat.pendingFiles.every(
         (file) => this.getPendingMediaType(file) === 3,
@@ -5618,14 +6080,24 @@ const ChatWindow = {
     ).toLowerCase();
 
     try {
-      const res = await window.API.Conversations.getMessages(id, null, pageSize);
+      const res = await window.API.Conversations.getMessages(
+        id,
+        null,
+        pageSize,
+      );
       if (res.ok) {
         const data = await res.json();
         const messageInfo = data.messages || data.Messages || {};
-        const olderCursor = messageInfo.olderCursor ?? messageInfo.OlderCursor ?? null;
-        const hasMoreOlder = messageInfo.hasMoreOlder ?? messageInfo.HasMoreOlder ?? false;
+        const olderCursor =
+          messageInfo.olderCursor ?? messageInfo.OlderCursor ?? null;
+        const hasMoreOlder =
+          messageInfo.hasMoreOlder ?? messageInfo.HasMoreOlder ?? false;
         msgContainer.innerHTML = "";
-        const messages = (messageInfo.items || messageInfo.Items || []).reverse();
+        const messages = (
+          messageInfo.items ||
+          messageInfo.Items ||
+          []
+        ).reverse();
 
         let lastTime = null;
 
@@ -5664,10 +6136,10 @@ const ChatWindow = {
           const authorName =
             isGroup && !m.isOwn
               ? ChatCommon.getPreferredSenderName(m.sender, {
-                conversation: chat?.data,
-                conversationId: id,
-                fallback: "",
-              })
+                  conversation: chat?.data,
+                  conversationId: id,
+                  fallback: "",
+                })
               : "";
 
           const html = ChatCommon.renderMessageBubble(m, {
@@ -5710,44 +6182,36 @@ const ChatWindow = {
 
         // Update header and metadata with fresh data from server (fix for "stale header" issue)
         const metaData =
-          data.metaData || data.MetaData || data.metadata || data.Metadata || null;
+          data.metaData ||
+          data.MetaData ||
+          data.metadata ||
+          data.Metadata ||
+          null;
         if (metaData) {
           const chat = this.openChats.get(id);
           if (chat) {
             chat.data = metaData;
-            this.setThemeStatus(
-              id,
-              metaData.theme ?? metaData.Theme ?? null,
-            );
+            this.setThemeStatus(id, metaData.theme ?? metaData.Theme ?? null);
             this.getRuntimeCtx(id, chat);
             // If window is open (not bubble), refresh its header UI
             if (chat.element) {
               const nameEl = chat.element.querySelector(".chat-header-name");
-              const subtextEl = chat.element.querySelector(
-                ".chat-header-subtext",
+              const avatarContainer = chat.element.querySelector(
+                ".chat-header-avatar",
               );
-              const avatarContainer = chat.element.querySelector(".chat-header-avatar");
 
               if (nameEl)
                 nameEl.textContent = ChatCommon.getDisplayName(metaData);
-              if (subtextEl)
-                subtextEl.textContent = (metaData.isGroup ?? metaData.IsGroup)
-                  ? "Group Chat"
-                  : (metaData.otherMember?.isActive ??
-                    metaData.OtherMember?.isActive)
-                    ? "Online"
-                    : "Offline";
               if (avatarContainer) {
-                const statusDot = avatarContainer.querySelector('.chat-header-status');
-                avatarContainer.innerHTML = ChatCommon.renderAvatar(metaData) + (statusDot ? statusDot.outerHTML : '');
-                if (window.lucide) lucide.createIcons({ container: avatarContainer });
+                avatarContainer.innerHTML = ChatCommon.renderAvatar(metaData);
+                if (window.lucide)
+                  lucide.createIcons({ container: avatarContainer });
               }
             }
+            this.syncPresenceSnapshotForConversations([metaData]);
+            this.applyPresenceToChatDom(id, metaData);
           }
-          setTimeout(
-            () => this.updateMemberSeenStatuses(id, metaData),
-            50,
-          );
+          setTimeout(() => this.updateMemberSeenStatuses(id, metaData), 50);
         }
       }
     } catch (error) {
@@ -5805,9 +6269,15 @@ const ChatWindow = {
       if (res.ok) {
         const data = await res.json();
         const messageInfo = data.messages || data.Messages || {};
-        const olderCursor = messageInfo.olderCursor ?? messageInfo.OlderCursor ?? null;
-        const hasMoreOlder = messageInfo.hasMoreOlder ?? messageInfo.HasMoreOlder ?? false;
-        const messages = (messageInfo.items || messageInfo.Items || []).reverse();
+        const olderCursor =
+          messageInfo.olderCursor ?? messageInfo.OlderCursor ?? null;
+        const hasMoreOlder =
+          messageInfo.hasMoreOlder ?? messageInfo.HasMoreOlder ?? false;
+        const messages = (
+          messageInfo.items ||
+          messageInfo.Items ||
+          []
+        ).reverse();
 
         chat.page = olderCursor;
         chat.hasMore = !!hasMoreOlder;
@@ -5837,10 +6307,10 @@ const ChatWindow = {
           const authorName =
             isGroup && !m.isOwn
               ? ChatCommon.getPreferredSenderName(m.sender, {
-                conversation: chat?.data,
-                conversationId: id,
-                fallback: "",
-              })
+                  conversation: chat?.data,
+                  conversationId: id,
+                  fallback: "",
+                })
               : "";
 
           html += ChatCommon.renderMessageBubble(m, {
@@ -5881,7 +6351,6 @@ const ChatWindow = {
         requestAnimationFrame(() => {
           msgContainer.scrollTop = msgContainer.scrollHeight - oldScrollHeight;
         });
-
       }
     } catch (error) {
       console.error("Failed to load more messages:", error);
@@ -5955,10 +6424,10 @@ const ChatWindow = {
     const authorName =
       isGroup && !msg.isOwn
         ? ChatCommon.getPreferredSenderName(msg.sender, {
-          conversation: chat?.data,
-          conversationId: id,
-          fallback: "",
-        })
+            conversation: chat?.data,
+            conversationId: id,
+            fallback: "",
+          })
         : "";
 
     const tempDiv = document.createElement("div");
@@ -5996,38 +6465,46 @@ const ChatWindow = {
     if (autoScroll) msgContainer.scrollTop = msgContainer.scrollHeight;
   },
 
-  showReplyBar(id, messageId, senderName, contentPreview, senderId = '', isOwnReplyAuthor = false) {
+  showReplyBar(
+    id,
+    messageId,
+    senderName,
+    contentPreview,
+    senderId = "",
+    isOwnReplyAuthor = false,
+  ) {
     const chat = this.openChats.get(id);
     if (!chat) return;
     chat._replyToMessageId = messageId;
-    chat._replySenderName = senderName || 'User';
-    chat._replyContentPreview = contentPreview || '';
-    chat._replySenderId = (senderId || '').toString().toLowerCase() || null;
+    chat._replySenderName = senderName || "User";
+    chat._replyContentPreview = contentPreview || "";
+    chat._replySenderId = (senderId || "").toString().toLowerCase() || null;
     chat._replyIsOwn = !!isOwnReplyAuthor;
 
     const inputArea = document.getElementById(`chat-input-area-${id}`);
     if (!inputArea) return;
 
     // Remove existing reply bar if any
-    inputArea.querySelector('.chat-reply-bar')?.remove();
+    inputArea.querySelector(".chat-reply-bar")?.remove();
 
-    const bar = document.createElement('div');
-    bar.className = 'chat-reply-bar';
+    const bar = document.createElement("div");
+    bar.className = "chat-reply-bar";
     bar.innerHTML = `
       <div class="chat-reply-bar-content">
-        <div class="chat-reply-bar-label">Replying to <strong>${escapeHtml(senderName || 'User')}</strong></div>
-        <div class="chat-reply-bar-preview">${escapeHtml(contentPreview || '')}</div>
+        <div class="chat-reply-bar-label">Replying to <strong>${escapeHtml(senderName || "User")}</strong></div>
+        <div class="chat-reply-bar-preview">${escapeHtml(contentPreview || "")}</div>
       </div>
       <button class="chat-reply-bar-close" title="Cancel reply">
         <i data-lucide="x"></i>
       </button>
     `;
-    bar.querySelector('.chat-reply-bar-close').onclick = () => this.clearReplyBar(id);
+    bar.querySelector(".chat-reply-bar-close").onclick = () =>
+      this.clearReplyBar(id);
     inputArea.insertBefore(bar, inputArea.firstChild);
     if (window.lucide) lucide.createIcons();
 
     // Focus input
-    const inputField = chat.element?.querySelector('.chat-input-field');
+    const inputField = chat.element?.querySelector(".chat-input-field");
     if (inputField) inputField.focus();
   },
 
@@ -6041,7 +6518,7 @@ const ChatWindow = {
       chat._replyIsOwn = false;
     }
     const inputArea = document.getElementById(`chat-input-area-${id}`);
-    inputArea?.querySelector('.chat-reply-bar')?.remove();
+    inputArea?.querySelector(".chat-reply-bar")?.remove();
   },
 
   async sendMessage(id) {
@@ -6085,18 +6562,20 @@ const ChatWindow = {
 
     // Capture reply info BEFORE appending optimistic message
     const replyToMessageId = chat._replyToMessageId;
-    const replyTo = replyToMessageId ? {
-        messageId: replyToMessageId,
-        content: chat._replyContentPreview || null,
-        isRecalled: false,
-        isHidden: false,
-        replySenderId: chat._replySenderId || '',
-        sender: {
-          accountId: chat._replySenderId || '',
-          displayName: chat._replySenderName || 'User',
-          username: ''
+    const replyTo = replyToMessageId
+      ? {
+          messageId: replyToMessageId,
+          content: chat._replyContentPreview || null,
+          isRecalled: false,
+          isHidden: false,
+          replySenderId: chat._replySenderId || "",
+          sender: {
+            accountId: chat._replySenderId || "",
+            displayName: chat._replySenderName || "User",
+            username: "",
+          },
         }
-    } : null;
+      : null;
     this.clearReplyBar(id);
 
     // optimistic ui - show message immediately with pending state
@@ -6107,16 +6586,19 @@ const ChatWindow = {
       sentAt: new Date(),
       isOwn: true,
       status: "pending",
-      replyTo
+      replyTo,
     });
 
     // Update Sidebar immediately (preview text, time, move to top)
-    if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
+    if (
+      window.ChatSidebar &&
+      typeof window.ChatSidebar.incrementUnread === "function"
+    ) {
       window.ChatSidebar.incrementUnread(id, {
         content: hasText ? content : "",
         medias: medias.length > 0 ? medias : null,
-        sender: { accountId: (localStorage.getItem('accountId') || '') },
-        sentAt: new Date()
+        sender: { accountId: localStorage.getItem("accountId") || "" },
+        sentAt: new Date(),
       });
     }
 
@@ -6146,7 +6628,7 @@ const ChatWindow = {
         formData.append("MediaFiles", file);
       });
     }
-    if (replyToMessageId) formData.append('ReplyToMessageId', replyToMessageId);
+    if (replyToMessageId) formData.append("ReplyToMessageId", replyToMessageId);
 
     try {
       let res;
@@ -6186,7 +6668,11 @@ const ChatWindow = {
             .toString()
             .toLowerCase();
           if (sidebarConversationId) {
-            window.ChatSidebar.incrementUnread(sidebarConversationId, msg, true);
+            window.ChatSidebar.incrementUnread(
+              sidebarConversationId,
+              msg,
+              true,
+            );
           }
         }
         const realMessageId = msg?.messageId || msg?.MessageId;
@@ -6393,7 +6879,11 @@ const ChatWindow = {
             .toString()
             .toLowerCase();
           if (sidebarConversationId) {
-            window.ChatSidebar.incrementUnread(sidebarConversationId, msg, true);
+            window.ChatSidebar.incrementUnread(
+              sidebarConversationId,
+              msg,
+              true,
+            );
           }
         }
         const realMessageId = msg?.messageId || msg?.MessageId;

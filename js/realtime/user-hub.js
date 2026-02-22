@@ -4,7 +4,34 @@
  */
 (function(global) {
     let connection = null;
+    let heartbeatTimer = null;
+    const HEARTBEAT_INTERVAL_MS = Number(window.APP_CONFIG?.PRESENCE_HEARTBEAT_INTERVAL_MS) || 25000;
     const pendingAutoOpenConversations = new Set();
+
+    function stopHeartbeatLoop() {
+        if (heartbeatTimer) {
+            clearInterval(heartbeatTimer);
+            heartbeatTimer = null;
+        }
+    }
+
+    async function sendHeartbeat() {
+        if (!connection || connection.state !== "Connected") return;
+        try {
+            await connection.invoke("Heartbeat");
+        } catch (_) {
+            // ignore transient heartbeat errors
+        }
+    }
+
+    function startHeartbeatLoop() {
+        stopHeartbeatLoop();
+        if (!connection || connection.state !== "Connected") return;
+        sendHeartbeat();
+        heartbeatTimer = setInterval(() => {
+            sendHeartbeat();
+        }, HEARTBEAT_INTERVAL_MS);
+    }
 
     function isConversationOpenInWindow(conversationId) {
         if (!conversationId || !window.ChatWindow || typeof window.ChatWindow.getOpenChatId !== 'function') {
@@ -114,6 +141,23 @@
         pendingJoins: new Set(), // Store groups to join once connected
         joinedGroups: new Set(), // Track groups already joined to avoid duplicates
 
+        rejoinTrackedGroups: async function() {
+            if (!connection || connection.state !== "Connected") return;
+
+            const idsToRejoin = Array.from(this.joinedGroups);
+            if (!idsToRejoin.length) return;
+
+            this.joinedGroups.clear();
+            for (const accountId of idsToRejoin) {
+                try {
+                    await connection.invoke("JoinAccountGroup", accountId);
+                    this.joinedGroups.add(accountId);
+                } catch (err) {
+                    console.error(`❌ [UserHub] Failed to rejoin group Account-${accountId}:`, err);
+                }
+            }
+        },
+
         /**
          * Initialize connection
          */
@@ -140,6 +184,19 @@
                 })
                 .withAutomaticReconnect()
                 .build();
+
+            connection.onreconnecting(() => {
+                stopHeartbeatLoop();
+            });
+
+            connection.onreconnected(async () => {
+                await UserHub.rejoinTrackedGroups();
+                startHeartbeatLoop();
+            });
+
+            connection.onclose(() => {
+                stopHeartbeatLoop();
+            });
 
             // 2. Register event listeners
             connection.on("ReceiveFollowNotification", (data) => {
@@ -300,6 +357,24 @@
                 }
             });
 
+            connection.on("UserOnline", (data) => {
+                if (window.PresenceStore && typeof window.PresenceStore.applyOnlineEvent === 'function') {
+                    window.PresenceStore.applyOnlineEvent(data);
+                }
+            });
+
+            connection.on("UserOffline", (data) => {
+                if (window.PresenceStore && typeof window.PresenceStore.applyOfflineEvent === 'function') {
+                    window.PresenceStore.applyOfflineEvent(data);
+                }
+            });
+
+            connection.on("UserPresenceHidden", (data) => {
+                if (window.PresenceStore && typeof window.PresenceStore.applyHiddenEvent === 'function') {
+                    window.PresenceStore.applyHiddenEvent(data);
+                }
+            });
+
             connection.on("ReceiveMessageNotification", (data) => {
                 handleIncomingMessageNotification(data);
             });
@@ -389,6 +464,8 @@
                     }
                     UserHub.pendingJoins.clear();
                 }
+
+                startHeartbeatLoop();
 
             } catch (err) {
                 console.error("❌ [UserHub] Connection failed: ", err);
@@ -494,6 +571,8 @@
     window.addEventListener(window.AuthStore?.EVENT || "auth:token-changed", (evt) => {
         if (evt?.detail?.hasToken) {
             UserHub.init();
+        } else {
+            stopHeartbeatLoop();
         }
     });
 

@@ -557,6 +557,19 @@
       reactivate: () => apiFetch(`/Accounts/reactivate`, { method: "POST" }),
     },
 
+    Presence: {
+      snapshot: (accountIds = []) =>
+        apiFetch("/Presence/snapshot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            accountIds: (Array.isArray(accountIds) ? accountIds : [])
+              .map((id) => (id === null || id === undefined ? "" : String(id).trim()))
+              .filter((id) => id.length > 0),
+          }),
+        }),
+    },
+
     Follows: {
       follow: (targetId) =>
         apiFetch(`/Follows/${targetId}`, { method: "POST" }),

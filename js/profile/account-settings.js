@@ -20,12 +20,18 @@
         2: { name: 'Anyone', icon: 'globe', class: 'public' }
     };
 
+    const ONLINE_STATUS_VISIBILITY_LEVELS = {
+        0: { name: 'No One', icon: 'lock', class: 'private' },
+        1: { name: 'Contacts Only', icon: 'users', class: 'follow' }
+    };
+
     const SETTING_KEYS = {
         phone: 'phonePrivacy',
         address: 'addressPrivacy',
         post: 'defaultPostPrivacy',
         followers: 'followerPrivacy',
         following: 'followingPrivacy',
+        'online-status': 'onlineStatusVisibility',
         'group-chat-invite': 'groupChatInvitePermission'
     };
 
@@ -35,6 +41,7 @@
         post: PRIVACY_LEVELS,
         followers: PRIVACY_LEVELS,
         following: PRIVACY_LEVELS,
+        'online-status': ONLINE_STATUS_VISIBILITY_LEVELS,
         'group-chat-invite': GROUP_CHAT_INVITE_LEVELS
     };
 
@@ -72,6 +79,7 @@
                     defaultPostPrivacy: 0, // Public
                     followerPrivacy: 0, // Public
                     followingPrivacy: 0, // Public
+                    onlineStatusVisibility: 1, // Contacts Only
                     groupChatInvitePermission: 2 // Anyone
                 };
             }
@@ -83,6 +91,7 @@
                 defaultPostPrivacy: currentSettings.defaultPostPrivacy ?? currentSettings.DefaultPostPrivacy,
                 followerPrivacy: currentSettings.followerPrivacy ?? currentSettings.FollowerPrivacy,
                 followingPrivacy: currentSettings.followingPrivacy ?? currentSettings.FollowingPrivacy,
+                onlineStatusVisibility: currentSettings.onlineStatusVisibility ?? currentSettings.OnlineStatusVisibility ?? 1,
                 groupChatInvitePermission: currentSettings.groupChatInvitePermission ?? currentSettings.GroupChatInvitePermission
             };
 
@@ -101,6 +110,7 @@
         updatePrivacyButton('post', settings.defaultPostPrivacy ?? settings.DefaultPostPrivacy ?? 0);
         updatePrivacyButton('followers', settings.followerPrivacy ?? settings.FollowerPrivacy ?? 0);
         updatePrivacyButton('following', settings.followingPrivacy ?? settings.FollowingPrivacy ?? 0);
+        updatePrivacyButton('online-status', settings.onlineStatusVisibility ?? settings.OnlineStatusVisibility ?? 1);
         updatePrivacyButton('group-chat-invite', settings.groupChatInvitePermission ?? settings.GroupChatInvitePermission ?? 2);
         
         hasUnsavedChanges = false;
@@ -126,6 +136,21 @@
         if (window.lucide) lucide.createIcons();
     }
 
+    function getNextSettingValue(settingKey, currentValue) {
+        const settingLevelMap = SETTING_LEVEL_MAP[settingKey] || PRIVACY_LEVELS;
+        const values = Object.keys(settingLevelMap)
+            .map(Number)
+            .filter((v) => Number.isFinite(v))
+            .sort((a, b) => a - b);
+
+        if (!values.length) return currentValue;
+
+        const currentIndex = values.indexOf(currentValue);
+        if (currentIndex < 0) return values[0];
+
+        return values[(currentIndex + 1) % values.length];
+    }
+
     function setupToggleButtons() {
         Object.keys(SETTING_KEYS).forEach(key => {
             const btn = document.getElementById(`btn-${key}-privacy`);
@@ -137,7 +162,7 @@
 
             newBtn.addEventListener('click', () => {
                 const currentValue = parseInt(newBtn.dataset.value || 0);
-                const nextValue = (currentValue + 1) % 3;
+                const nextValue = getNextSettingValue(key, currentValue);
                 
                 updatePrivacyButton(key, nextValue);
                 hasUnsavedChanges = hasAccountSettingsChanges();
@@ -212,6 +237,43 @@
         overlay.onclick = (e) => { if (e.target === overlay) closePopup(); };
     };
 
+    async function runWithPendingButton(button, pendingText, action) {
+        if (typeof action !== "function") {
+            return false;
+        }
+
+        if (!button) {
+            return action();
+        }
+
+        if (button.disabled) {
+            return false;
+        }
+
+        const defaultHTML = button.dataset.defaultHtml || button.innerHTML;
+        button.dataset.defaultHtml = defaultHTML;
+        button.disabled = true;
+        button.classList.add("is-loading");
+        button.setAttribute("aria-busy", "true");
+        button.innerHTML = `<i data-lucide="loader-2" class="acc-spin"></i><span>${pendingText}</span>`;
+
+        if (window.lucide) {
+            lucide.createIcons();
+        }
+
+        try {
+            return await action();
+        } finally {
+            button.disabled = false;
+            button.classList.remove("is-loading");
+            button.removeAttribute("aria-busy");
+            button.innerHTML = button.dataset.defaultHtml || defaultHTML;
+            if (window.lucide) {
+                lucide.createIcons();
+            }
+        }
+    }
+
     window.saveAccountSettings = async function() {
         const btn = document.getElementById("save-settings-btn");
         if (!btn) return;
@@ -225,13 +287,7 @@
             return;
         }
 
-        const originalHTML = btn.innerHTML;
-        btn.innerHTML = '<i data-lucide="loader-2" class="acc-spin"></i><span>Saving...</span>';
-        btn.disabled = true;
-        
-        if (window.lucide) lucide.createIcons();
-
-        try {
+        await runWithPendingButton(btn, "Saving...", async () => {
             const data = getUICurrentValues();
             // API expects PascalCase keys
             const apiData = {};
@@ -255,6 +311,7 @@
                     defaultPostPrivacy: newSettings.defaultPostPrivacy ?? newSettings.DefaultPostPrivacy,
                     followerPrivacy: newSettings.followerPrivacy ?? newSettings.FollowerPrivacy,
                     followingPrivacy: newSettings.followingPrivacy ?? newSettings.FollowingPrivacy,
+                    onlineStatusVisibility: newSettings.onlineStatusVisibility ?? newSettings.OnlineStatusVisibility ?? 1,
                     groupChatInvitePermission: newSettings.groupChatInvitePermission ?? newSettings.GroupChatInvitePermission
                 };
                 
@@ -269,14 +326,10 @@
                 const errorData = await res.json();
                 if (window.toastError) toastError(errorData.title || "Failed to save settings.");
             }
-        } catch (err) {
+        }).catch((err) => {
             console.error(err);
             if (window.toastError) toastError("An error occurred while saving.");
-        } finally {
-            btn.innerHTML = originalHTML;
-            btn.disabled = false;
-            if (window.lucide) lucide.createIcons();
-        }
+        });
     };
 
     window.initAccountSettings = initAccountSettings;

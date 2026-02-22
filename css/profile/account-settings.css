@@ -3,184 +3,225 @@
    ============================================= */
 
 .acc-settings-container {
-    max-width: 800px;
-    margin: 40px auto;
-    padding: 0 20px;
-    animation: accFadeInUp 0.4s ease-out;
+  max-width: 800px;
+  margin: 40px auto;
+  padding: 0 20px;
+  animation: accFadeInUp 0.4s ease-out;
 }
 
 .acc-settings-content {
-    background: var(--bg-secondary);
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-    border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-color);
 }
 
 /* Header */
 .acc-settings-header {
-    padding: 30px 20px;
-    text-align: center;
-    border-bottom: 1px solid var(--border-color);
-    background: var(--bg-secondary);
+  padding: 30px 20px;
+  text-align: center;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
 }
 
 .acc-settings-header h1 {
-    font-size: 1.8rem;
-    font-weight: 700;
-    margin: 0 0 10px;
-    color: var(--text-primary);
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin: 0 0 10px;
+  color: var(--text-primary);
 }
 
 .acc-settings-subtitle {
-    font-size: 0.95rem;
-    color: var(--text-secondary);
-    margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  margin: 0;
 }
 
 /* List container */
 .acc-settings-list {
-    padding: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 /* Card item */
 .acc-setting-item {
-    background: var(--bg-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    padding: 16px 20px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px 20px;
 }
 
 /* Top Row: [Title] [Button] [Label] */
 .acc-setting-top-row {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 10px;
 }
 
 .acc-setting-title {
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    min-width: 220px; /* Bố cục cố định để không bị xô lệch */
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 220px; /* Bố cục cố định để không bị xô lệch */
 }
 
 /* Toggle Button (Không có background mặc định, chỉ có border) */
 .acc-privacy-toggle-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    border: 2px solid var(--border-color);
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-    padding: 0;
-    flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 2px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  padding: 0;
+  flex-shrink: 0;
 }
 
 .acc-privacy-toggle-btn:hover {
-    border-color: var(--accent-primary);
-    background: var(--bg-hover);
+  border-color: var(--accent-primary);
+  background: var(--bg-hover);
 }
 
 /* Icon colors based on privacy */
-.acc-privacy-toggle-btn.public { color: var(--accent-primary); border-color: var(--accent-primary); }
-.acc-privacy-toggle-btn.follow { color: #f39c12; border-color: #f39c12; }
-.acc-privacy-toggle-btn.private { color: var(--text-tertiary); }
+.acc-privacy-toggle-btn.public {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+.acc-privacy-toggle-btn.follow {
+  color: #f39c12;
+  border-color: #f39c12;
+}
+.acc-privacy-toggle-btn.private {
+  color: var(--text-tertiary);
+}
 
 .acc-privacy-toggle-btn i,
 .acc-privacy-toggle-btn svg {
-    width: 20px;
-    height: 20px;
+  width: 20px;
+  height: 20px;
 }
 
 /* Label next to button */
 .acc-privacy-label {
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-left: auto; /* Đẩy cụm này về cuối hàng */
-    min-width: 120px;
-    text-align: right; /* Căn phải để chữ sát vào icon */
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-left: auto; /* Đẩy cụm này về cuối hàng */
+  min-width: 120px;
+  text-align: right; /* Căn phải để chữ sát vào icon */
 }
 
 #label-group-chat-invite-privacy {
-    min-width: 180px;
+  min-width: 180px;
+}
+
+#label-online-status-privacy {
+  min-width: 140px;
 }
 
 /* Description below */
 .acc-setting-description {
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-    line-height: 1.5;
-    margin-top: 5px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-top: 5px;
 }
 
 /* Footer & Save Button */
 .acc-settings-footer {
-    padding: 20px 24px;
-    display: flex;
-    justify-content: flex-end;
-    border-top: 1px solid var(--border-color);
-    background: var(--bg-secondary);
+  padding: 20px 24px;
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
 }
 
 .acc-settings-save-btn {
-    padding: 10px 30px;
-    background: var(--accent-primary) !important;
-    color: #ffffff !important;
-    border: none;
-    border-radius: 8px;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    transition: all 0.2s ease;
+  padding: 10px 30px;
+  background: var(--accent-primary) !important;
+  color: #ffffff !important;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.2s ease;
 }
-.acc-settings-save-btn i, .acc-settings-save-btn svg{
-        color: #ffffff !important;
+.acc-settings-save-btn i,
+.acc-settings-save-btn svg {
+  color: #ffffff !important;
 }
 .acc-settings-save-btn:hover {
-    filter: brightness(1.1);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(0, 149, 246, 0.3);
+  filter: brightness(1.1);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 149, 246, 0.3);
+}
+
+.acc-settings-save-btn:disabled,
+.acc-settings-save-btn.is-loading {
+  opacity: 0.65;
+  cursor: wait;
+  transform: none !important;
+  box-shadow: none;
+}
+
+.acc-settings-save-btn:disabled:hover,
+.acc-settings-save-btn.is-loading:hover {
+  filter: none;
+  transform: none;
 }
 
 .acc-settings-save-btn:active {
-    transform: translateY(0);
+  transform: translateY(0);
 }
 
 /* Reset spinner for lucide if needed */
 .acc-settings-save-btn .spin {
-    animation: accSpin 1s linear infinite;
+  animation: accSpin 1s linear infinite;
+}
+
+.acc-settings-save-btn .acc-spin {
+  animation: accSpin 1s linear infinite;
 }
 
 @keyframes accSpin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes accFadeInUp {
-    from { opacity: 0; transform: translateY(15px); }
-    to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Responsive */
 @media (max-width: 650px) {
-    .acc-setting-top-row {
-        flex-wrap: wrap;
-    }
-    .acc-setting-title {
-        width: 100%;
-    }
+  .acc-setting-top-row {
+    flex-wrap: wrap;
+  }
+  .acc-setting-title {
+    width: 100%;
+  }
 }

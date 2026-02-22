@@ -30,6 +30,8 @@ const ChatCommon = {
     const name = options.name || this.getDisplayName(conv);
     const className = options.className || "chat-avatar";
     const onError = options.onError || `this.src='${APP_CONFIG.DEFAULT_AVATAR}'`;
+    const skipTitle = !!options.skipTitle;
+    const titleAttr = skipTitle ? "" : ` title="${escapeHtml(name)}"`;
 
     if (avatar === "ICON:users") {
       // Handle array of avatars fallback (from GroupAvatars)
@@ -43,7 +45,7 @@ const ChatCommon = {
       
       if (membersToShow.length > 0) {
         // Build composite avatar UI for members
-        let compositeHtml = `<div class="${className} composite-group-avatar count-${membersToShow.length}" title="${escapeHtml(name)}">`;
+        let compositeHtml = `<div class="${className} composite-group-avatar count-${membersToShow.length}"${titleAttr}>`;
         
         membersToShow.forEach((url, i) => {
             const fallbackAvatar = APP_CONFIG.DEFAULT_AVATAR;
@@ -55,10 +57,10 @@ const ChatCommon = {
         return compositeHtml;
       }
 
-      return `<div class="${className} default-group-avatar" title="${escapeHtml(name)}"><i data-lucide="users"></i></div>`;
+      return `<div class="${className} default-group-avatar"${titleAttr}><i data-lucide="users"></i></div>`;
     }
 
-    return `<img src="${avatar}" alt="${escapeHtml(name)}" title="${escapeHtml(name)}" class="${className}" onerror="${onError}">`;
+    return `<img src="${avatar}" alt="${escapeHtml(name)}"${titleAttr} class="${className}" onerror="${onError}">`;
   },
 
   isDefaultGroupAvatar(value) {
