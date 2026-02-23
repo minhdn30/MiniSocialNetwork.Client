@@ -26,13 +26,14 @@
   border-radius: 50%;
   padding: 3px;
 
-  background: linear-gradient(
-    45deg,
-    #feda75,
-    #fa7e1e,
-    #d62976,
-    #962fbf,
-    #4f5bd5
+  /* Same gradient as .post-avatar-ring.story-ring-unseen for visual consistency */
+  background: conic-gradient(
+    from 210deg,
+    var(--story-ring-ig-2) 0deg,
+    var(--story-ring-ig-3) 110deg,
+    var(--story-ring-ig-4) 210deg,
+    var(--story-ring-ig-5) 300deg,
+    var(--story-ring-ig-1) 360deg
   );
 
   display: flex;
@@ -45,8 +46,9 @@
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  border: 2.5px solid var(--bg-secondary);
+  border: 2px solid var(--story-ring-gap-color);
   object-fit: cover;
+  box-sizing: border-box;
 }
 
 /* Story name */
@@ -86,3 +88,86 @@
 
   border: 2px solid var(--bg-secondary);
 }
+
+/* Shared story ring utilities (reusable across feed/profile/story surfaces) */
+/*
+ * Structure (concentric circles, all same shape, only different size):
+ *   Outer ring:  44x44  border-radius:50%  → gradient background
+ *   Image+gap:   40x40  border-radius:50%  → img with 2px solid border (gap color)
+ *   Visible img: 36x36                     → actual photo
+ *
+ * No padding involved. Grid centering guarantees same center point.
+ * Both shapes are border-radius:50% → identical shape, different scale → uniform ring.
+ */
+.post-avatar-ring {
+  --_avatar: 36px;
+  --_ring: 2px;
+  --_gap: 2px;
+  --_outer: calc(var(--_avatar) + (var(--_ring) + var(--_gap)) * 2);
+
+  text-decoration: none;
+  line-height: 0;
+  display: inline-grid;
+  place-items: center;
+  width: var(--_avatar);
+  height: var(--_avatar);
+  border-radius: 50%;
+  overflow: visible;
+  box-sizing: border-box;
+  vertical-align: top;
+  flex-shrink: 0;
+  background: transparent;
+  padding: 0;
+}
+
+/* When ring is active: expand wrapper to outer size, NO padding */
+.post-avatar-ring.story-ring-unseen,
+.post-avatar-ring.story-ring-seen {
+  width: var(--_outer);
+  height: var(--_outer);
+}
+
+/* Image always stays at avatar size; gap border adds 2px outward via content-box */
+.post-avatar-ring .post-avatar {
+  width: var(--_avatar);
+  height: var(--_avatar);
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  border: 0;
+  box-sizing: content-box;
+}
+
+.post-avatar-ring.story-ring-unseen .post-avatar,
+.post-avatar-ring.story-ring-seen .post-avatar {
+  border: var(--_gap) solid var(--story-ring-gap-color);
+}
+
+.post-avatar-ring.story-ring-unseen {
+  background: conic-gradient(
+    from 210deg,
+    var(--story-ring-ig-2) 0deg,
+    var(--story-ring-ig-3) 110deg,
+    var(--story-ring-ig-4) 210deg,
+    var(--story-ring-ig-5) 300deg,
+    var(--story-ring-ig-1) 360deg
+  );
+}
+
+.post-avatar-ring.story-ring-seen {
+  background: var(--story-ring-seen-color);
+}
+
+@media (max-width: 768px) {
+  .post-avatar-ring {
+    --_avatar: 32px;
+  }
+}
+
+@media (max-width: 480px) {
+  .post-avatar-ring {
+    --_avatar: 28px;
+  }
+}
+
