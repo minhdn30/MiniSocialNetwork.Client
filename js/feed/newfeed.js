@@ -97,15 +97,15 @@
       postEl.className = "post";
       postEl.setAttribute("data-post-id", post.postId);
       const storyRingClass = getStoryRingClass(post.author?.storyRingState);
+      const avatarUrl = post.author?.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
+      const avatarMarkup = renderPostAvatarMarkup(avatarUrl);
       const commentCount = Number.isFinite(Number(post.commentCount)) ? Number(post.commentCount) : 0;
 
       postEl.innerHTML = `
           <div class="post-header">
             <div class="post-user" data-account-id="${post.author.accountId}">
-              <a href="#/profile/${post.author.username}" style="text-decoration: none; display: block;">
-                  <img class="post-avatar ${storyRingClass}"
-                       src="${post.author?.avatarUrl || APP_CONFIG.DEFAULT_AVATAR}"
-                       alt="">
+              <a href="#/profile/${post.author.username}" class="post-avatar-ring ${storyRingClass}">
+                  ${avatarMarkup}
               </a>
               <div class="user-meta">
                 <a href="#/profile/${post.author.username}" style="text-decoration: none; color: inherit;">
@@ -188,15 +188,41 @@
   }
 
   function getStoryRingClass(storyRingState) {
-    if (storyRingState === 2 || storyRingState === "2" || storyRingState === "Unseen") {
+    const normalizedState = (storyRingState ?? "").toString().trim().toLowerCase();
+
+    if (
+      storyRingState === 2 ||
+      normalizedState === "2" ||
+      normalizedState === "unseen" ||
+      normalizedState === "story-ring-unseen"
+    ) {
       return "story-ring-unseen";
     }
 
-    if (storyRingState === 1 || storyRingState === "1" || storyRingState === "Seen") {
+    if (
+      storyRingState === 1 ||
+      normalizedState === "1" ||
+      normalizedState === "seen" ||
+      normalizedState === "story-ring-seen"
+    ) {
       return "story-ring-seen";
     }
 
     return "";
+  }
+
+  function escapeAttr(value) {
+    return (value || "")
+      .toString()
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function renderPostAvatarMarkup(avatarUrl) {
+    const safeAvatarUrl = escapeAttr(avatarUrl || APP_CONFIG.DEFAULT_AVATAR);
+    return `<img class="post-avatar" src="${safeAvatarUrl}" alt="">`;
   }
 
   function prependPostToFeed(post) {

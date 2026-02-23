@@ -4,9 +4,13 @@
  */
 (function(global) {
     let connection = null;
+    let isInitializing = false;
     let heartbeatTimer = null;
     const HEARTBEAT_INTERVAL_MS = Number(window.APP_CONFIG?.PRESENCE_HEARTBEAT_INTERVAL_MS) || 25000;
     const pendingAutoOpenConversations = new Set();
+    const MESSAGE_NOTIFICATION_DEDUPE_WINDOW_MS =
+        Number(window.APP_CONFIG?.CHAT_NOTIFICATION_DEDUPE_WINDOW_MS) || 10000;
+    const processedMessageNotificationKeys = new Map();
 
     function stopHeartbeatLoop() {
         if (heartbeatTimer) {
@@ -84,6 +88,64 @@
         }
     }
 
+    function cleanupProcessedNotificationKeys(nowMs) {
+        if (processedMessageNotificationKeys.size === 0) return;
+        for (const [key, ts] of processedMessageNotificationKeys.entries()) {
+            if (nowMs - ts > MESSAGE_NOTIFICATION_DEDUPE_WINDOW_MS) {
+                processedMessageNotificationKeys.delete(key);
+            }
+        }
+    }
+
+    function buildMessageNotificationKey(conversationId, message) {
+        const convId = (conversationId || '').toString().toLowerCase();
+        if (!convId) return '';
+
+        const messageId = (
+            message?.messageId ||
+            message?.MessageId ||
+            message?.id ||
+            message?.Id ||
+            ''
+        ).toString().toLowerCase();
+        if (messageId) {
+            return `${convId}:${messageId}`;
+        }
+
+        const senderId = (
+            message?.sender?.accountId ||
+            message?.Sender?.AccountId ||
+            message?.senderId ||
+            message?.SenderId ||
+            ''
+        ).toString().toLowerCase();
+        const sentAt = (message?.sentAt || message?.SentAt || '').toString().toLowerCase();
+        const content = (message?.content || message?.Content || '').toString().trim().toLowerCase();
+        const mediaCount = Array.isArray(message?.medias)
+            ? message.medias.length
+            : Array.isArray(message?.Medias)
+                ? message.Medias.length
+                : 0;
+
+        return `${convId}:${senderId}:${sentAt}:${content}:${mediaCount}`;
+    }
+
+    function isDuplicateMessageNotification(conversationId, message) {
+        const key = buildMessageNotificationKey(conversationId, message);
+        if (!key) return false;
+
+        const nowMs = Date.now();
+        cleanupProcessedNotificationKeys(nowMs);
+
+        const previousTs = processedMessageNotificationKeys.get(key);
+        if (typeof previousTs === 'number' && nowMs - previousTs < MESSAGE_NOTIFICATION_DEDUPE_WINDOW_MS) {
+            return true;
+        }
+
+        processedMessageNotificationKeys.set(key, nowMs);
+        return false;
+    }
+
     function handleIncomingMessageNotification(data) {
         const convId = (data.ConversationId || data.conversationId || '').toLowerCase();
         const message = data.Message || data.message;
@@ -95,6 +157,7 @@
         // Safety guard: ignore notifications not explicitly targeted to this account.
         if (targetAccountId && myId && targetAccountId !== myId) return;
         if (!convId || senderId === myId) return;
+        if (isDuplicateMessageNotification(convId, message)) return;
 
         const isChatPage = document.body.classList.contains('is-chat-page');
         const isActiveInPage = isChatPage && window.ChatPage && window.ChatPage.currentChatId?.toLowerCase() === convId;
@@ -162,44 +225,46 @@
          * Initialize connection
          */
         init: async function() {
-            if (connection) return;
+            if (connection || isInitializing) return;
+            isInitializing = true;
 
-            const token = window.AuthStore?.getAccessToken?.() || (window.AuthStore?.ensureAccessToken ? await window.AuthStore.ensureAccessToken() : null);
-            if (!token) return;
+            try {
+                const token = window.AuthStore?.getAccessToken?.() || (window.AuthStore?.ensureAccessToken ? await window.AuthStore.ensureAccessToken() : null);
+                if (!token) return;
 
-            const getTokenForHub = async () => {
-                const current = window.AuthStore?.getAccessToken?.();
-                if (current) return current;
-                if (window.AuthStore?.ensureAccessToken) {
-                    return (await window.AuthStore.ensureAccessToken()) || "";
-                }
-                return "";
-            };
+                const getTokenForHub = async () => {
+                    const current = window.AuthStore?.getAccessToken?.();
+                    if (current) return current;
+                    if (window.AuthStore?.ensureAccessToken) {
+                        return (await window.AuthStore.ensureAccessToken()) || "";
+                    }
+                    return "";
+                };
 
-            // 1. Create connection
-            const hubBase = window.APP_CONFIG?.HUB_BASE || "http://localhost:5000";
-            connection = new signalR.HubConnectionBuilder()
-                .withUrl(`${hubBase}/userHub`, {
-                    accessTokenFactory: () => getTokenForHub()
-                })
-                .withAutomaticReconnect()
-                .build();
+                // 1. Create connection
+                const hubBase = window.APP_CONFIG?.HUB_BASE || "http://localhost:5000";
+                connection = new signalR.HubConnectionBuilder()
+                    .withUrl(`${hubBase}/userHub`, {
+                        accessTokenFactory: () => getTokenForHub()
+                    })
+                    .withAutomaticReconnect()
+                    .build();
 
-            connection.onreconnecting(() => {
-                stopHeartbeatLoop();
-            });
+                connection.onreconnecting(() => {
+                    stopHeartbeatLoop();
+                });
 
-            connection.onreconnected(async () => {
-                await UserHub.rejoinTrackedGroups();
-                startHeartbeatLoop();
-            });
+                connection.onreconnected(async () => {
+                    await UserHub.rejoinTrackedGroups();
+                    startHeartbeatLoop();
+                });
 
-            connection.onclose(() => {
-                stopHeartbeatLoop();
-            });
+                connection.onclose(() => {
+                    stopHeartbeatLoop();
+                });
 
-            // 2. Register event listeners
-            connection.on("ReceiveFollowNotification", (data) => {
+                // 2. Register event listeners
+                connection.on("ReceiveFollowNotification", (data) => {
                 console.log("🔔 [UserHub] Received follow notification:", data);
                 
                 const myId = localStorage.getItem("accountId");
@@ -469,6 +534,10 @@
 
             } catch (err) {
                 console.error("❌ [UserHub] Connection failed: ", err);
+                connection = null;
+            }
+            } finally {
+                isInitializing = false;
             }
         },
 

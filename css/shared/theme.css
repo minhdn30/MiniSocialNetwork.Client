@@ -49,6 +49,15 @@
   --badge-bg: #ff0000;
   --logo-bg: #1f1f1f;
 
+  /* ===== Story Ring ===== */
+  --story-ring-gap-color: var(--bg-secondary);
+  --story-ring-seen-color: var(--text-tertiary);
+  --story-ring-ig-1: var(--accent-secondary);
+  --story-ring-ig-2: var(--info-gradient-start);
+  --story-ring-ig-3: var(--accent-primary);
+  --story-ring-ig-4: var(--danger-gradient-start);
+  --story-ring-ig-5: var(--danger-gradient-end);
+
   /* ===== Overlays & Shadows ===== */
   --overlay-bg: rgba(0, 0, 0, 0.5);
   --overlay-blur: rgba(0, 0, 0, 0.95);
@@ -63,7 +72,6 @@
   /* ===== Image Gradients ===== */
   --img-gradient-base: #1a1a1a;
 }
-
 
 /* ================= LIGHT MODE ================= */
 body.light-mode {
@@ -112,6 +120,15 @@ body.light-mode {
   --badge-bg: #ff0000;
   --logo-bg: #f0f0f0;
 
+  /* ===== Story Ring ===== */
+  --story-ring-gap-color: var(--bg-secondary);
+  --story-ring-seen-color: var(--text-tertiary);
+  --story-ring-ig-1: var(--accent-secondary);
+  --story-ring-ig-2: var(--info-gradient-start);
+  --story-ring-ig-3: var(--accent-primary);
+  --story-ring-ig-4: var(--danger-gradient-start);
+  --story-ring-ig-5: var(--danger-gradient-end);
+
   /* ===== Overlays & Shadows ===== */
   --overlay-bg: rgba(255, 255, 255, 0.5);
   --overlay-blur: rgba(255, 255, 255, 0.95);
@@ -125,4 +142,3 @@ body.light-mode {
   /* ===== Image Gradients ===== */
   --img-gradient-base: #d1d1d1d7;
 }
-
