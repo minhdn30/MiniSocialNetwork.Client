@@ -286,20 +286,24 @@
             placeholder="Write a caption..."
             oninput="updateCharCount()"
           ></textarea>
-          <div class="char-count"><span id="charCount">0</span>/<span id="maxCharCount"></span></div>
-        </div>
-
-        <!-- Emoji Section -->
-        <div class="post-section">
-          <div class="section-header" onclick="toggleEmojiPicker(event)">
-            <div class="section-left">
-              <i data-lucide="smile" class="section-icon"></i>
-              <span class="section-title">Add emoji</span>
+          <div class="post-caption-tools">
+            <div class="char-count">
+              <span id="charCount">0</span>/<span id="maxCharCount"></span>
             </div>
-            <i data-lucide="chevron-right" class="chevron-icon" id="emojiChevron"></i>
+            <button
+              type="button"
+              class="post-caption-emoji-btn"
+              onclick="toggleEmojiPicker(event)"
+              aria-label="Add emoji"
+            >
+              <i data-lucide="smile-plus"></i>
+            </button>
+            <!-- Emoji Picker Container -->
+            <div
+              id="emojiPickerContainer"
+              class="post-emoji-picker-container"
+            ></div>
           </div>
-          <!-- Emoji Picker Container -->
-          <div id="emojiPickerContainer"></div>
         </div>
 
         <!-- Location Section -->

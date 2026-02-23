@@ -96,12 +96,14 @@
       const postEl = document.createElement("div");
       postEl.className = "post";
       postEl.setAttribute("data-post-id", post.postId);
+      const storyRingClass = getStoryRingClass(post.author?.storyRingState);
+      const commentCount = Number.isFinite(Number(post.commentCount)) ? Number(post.commentCount) : 0;
 
       postEl.innerHTML = `
           <div class="post-header">
             <div class="post-user" data-account-id="${post.author.accountId}">
               <a href="#/profile/${post.author.username}" style="text-decoration: none; display: block;">
-                  <img class="post-avatar"
+                  <img class="post-avatar ${storyRingClass}"
                        src="${post.author?.avatarUrl || APP_CONFIG.DEFAULT_AVATAR}"
                        alt="">
               </a>
@@ -153,7 +155,7 @@
 
               <div class="action-item" onclick="openPostDetail('${post.postId}', '${post.postCode}')" style="cursor: pointer;">
                 <i data-lucide="message-circle" class="hover-scale-sm"></i>
-                <span class="count hover-scale-text">${post.commentCount}</span>
+                <span class="count hover-scale-text">${commentCount}</span>
               </div>
               <div class="action-item">
                 <i data-lucide="send" class="hover-scale-sm"></i>
@@ -183,6 +185,18 @@
       PostUtils.setupCaption(captionEl, post.content || "");
       
       return postEl;
+  }
+
+  function getStoryRingClass(storyRingState) {
+    if (storyRingState === 2 || storyRingState === "2" || storyRingState === "Unseen") {
+      return "story-ring-unseen";
+    }
+
+    if (storyRingState === 1 || storyRingState === "1" || storyRingState === "Seen") {
+      return "story-ring-seen";
+    }
+
+    return "";
   }
 
   function prependPostToFeed(post) {

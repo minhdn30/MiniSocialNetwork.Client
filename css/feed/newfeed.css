@@ -240,6 +240,18 @@
   opacity: 0.8;
 }
 
+.post-avatar.story-ring-unseen {
+  box-shadow:
+    0 0 0 2px var(--bg-primary),
+    0 0 0 4px #26a65b;
+}
+
+.post-avatar.story-ring-seen {
+  box-shadow:
+    0 0 0 2px var(--bg-primary),
+    0 0 0 4px var(--text-tertiary);
+}
+
 /* ===============================
    📱 Responsive – Mobile First
 ================================ */

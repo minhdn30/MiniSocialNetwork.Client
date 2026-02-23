@@ -1,7 +1,18 @@
 <div class="modal-overlay" id="createStoryModal">
   <div class="modal-container create-story-modal-container">
     <div class="create-story-modal-header">
+      <button
+        type="button"
+        class="create-story-back-btn create-story-hidden"
+        id="createStoryBackBtn"
+        onclick="backCreateStoryMode()"
+        aria-label="Back to story mode selection"
+      >
+        <i data-lucide="chevron-left"></i>
+      </button>
+
       <h2 class="create-story-modal-title">Create Story</h2>
+
       <button
         type="button"
         class="create-story-close-btn"
@@ -13,123 +24,430 @@
     </div>
 
     <div class="create-story-modal-body">
-      <div class="create-story-preview-panel">
-        <div class="create-story-preview-shell" id="createStoryPreviewShell">
-          <div class="create-story-preview-empty" id="createStoryPreviewEmpty">
+      <div class="create-story-mode-step" id="createStoryModeStep">
+        <p class="create-story-step-kicker">Create Story</p>
+        <h3 class="create-story-step-title">Choose what you want to share</h3>
+        <div class="create-story-mode-grid">
+          <button
+            type="button"
+            class="create-story-mode-choice-btn"
+            data-story-mode-choice="text"
+            onclick="setCreateStoryMode('text')"
+          >
+            <i data-lucide="type"></i>
+            <span>Text Story</span>
+            <small>Write on a styled background</small>
+          </button>
+
+          <button
+            type="button"
+            class="create-story-mode-choice-btn"
+            data-story-mode-choice="media"
+            onclick="setCreateStoryMode('media')"
+          >
             <i data-lucide="image-plus"></i>
-            <p>Select media or type text to preview your story</p>
-          </div>
-
-          <img
-            id="createStoryImagePreview"
-            class="create-story-image-preview"
-            alt="Story image preview"
-          />
-
-          <video
-            id="createStoryVideoPreview"
-            class="create-story-video-preview"
-            controls
-            preload="metadata"
-          ></video>
-
-          <div id="createStoryTextPreview" class="create-story-text-preview"></div>
+            <span>Media Story</span>
+            <small>Upload image or video</small>
+          </button>
         </div>
       </div>
 
-      <div class="create-story-form-panel">
-        <div class="create-story-section">
-          <label class="create-story-label">Story Type</label>
-          <div class="create-story-type-row">
-            <button
-              type="button"
-              class="create-story-type-btn active"
-              data-story-type="0"
-              onclick="setCreateStoryContentType(0)"
+      <div
+        class="create-story-editor-step create-story-hidden"
+        id="createStoryEditorStep"
+      >
+        <div class="create-story-preview-panel">
+          <div class="create-story-preview-shell" id="createStoryPreviewShell">
+            <div
+              class="create-story-preview-empty"
+              id="createStoryPreviewEmpty"
             >
-              <i data-lucide="image"></i>
-              <span>Image</span>
-            </button>
-            <button
-              type="button"
-              class="create-story-type-btn"
-              data-story-type="1"
-              onclick="setCreateStoryContentType(1)"
-            >
-              <i data-lucide="video"></i>
-              <span>Video</span>
-            </button>
-            <button
-              type="button"
-              class="create-story-type-btn"
-              data-story-type="2"
-              onclick="setCreateStoryContentType(2)"
-            >
-              <i data-lucide="type"></i>
-              <span>Text</span>
-            </button>
+              <i data-lucide="sparkles"></i>
+              <p id="createStoryPreviewHint">
+                Upload image or video to preview your story
+              </p>
+            </div>
+
+            <img
+              id="createStoryImagePreview"
+              class="create-story-image-preview"
+              alt="Story image preview"
+            />
+
+            <video
+              id="createStoryVideoPreview"
+              class="create-story-video-preview"
+              controls
+              preload="metadata"
+            ></video>
+
+            <div id="createStoryTextPreview" class="create-story-text-preview">
+              <div
+                id="createStoryTextEditor"
+                class="create-story-text-editor"
+                contenteditable="true"
+                spellcheck="false"
+                data-placeholder="Type your story..."
+              ></div>
+              <div class="create-story-text-editor-tools">
+                <div class="create-story-text-counter">
+                  <span id="createStoryTextCount">0</span>/<span
+                    id="createStoryTextMaxCount"
+                    >1000</span
+                  >
+                </div>
+                <button
+                  type="button"
+                  class="create-story-emoji-btn"
+                  id="createStoryEmojiBtn"
+                  onclick="toggleCreateStoryEmojiPicker(event)"
+                  aria-label="Add emoji to story text"
+                >
+                  <i data-lucide="smile-plus"></i>
+                  <span>Add emoji</span>
+                </button>
+              </div>
+              <div
+                class="create-story-emoji-picker-container"
+                id="createStoryEmojiPickerContainer"
+              ></div>
+            </div>
           </div>
         </div>
 
-        <div class="create-story-section" id="createStoryMediaSection">
-          <label class="create-story-label">Media File</label>
-          <div class="create-story-media-row">
-            <button
-              type="button"
-              class="create-story-select-file-btn"
-              id="createStorySelectFileBtn"
-            >
-              Select File
-            </button>
-            <span class="create-story-file-name" id="createStoryFileName">No file selected</span>
+        <div class="create-story-form-panel">
+          <div
+            class="create-story-section create-story-hidden"
+            id="createStoryMediaSection"
+          >
+            <label class="create-story-label">Upload Image/Video</label>
+            <div class="create-story-media-row">
+              <button
+                type="button"
+                class="create-story-select-file-btn"
+                id="createStorySelectFileBtn"
+              >
+                Select File
+              </button>
+              <span class="create-story-file-name" id="createStoryFileName"
+                >No file selected</span
+              >
+            </div>
+            <input
+              type="file"
+              id="createStoryMediaInput"
+              hidden
+              accept="image/*,video/*"
+            />
           </div>
-          <input
-            type="file"
-            id="createStoryMediaInput"
-            hidden
-            accept="image/*"
-          />
-        </div>
 
-        <div class="create-story-section create-story-hidden" id="createStoryTextSection">
-          <label class="create-story-label" for="createStoryTextInput">Text Content</label>
-          <textarea
-            id="createStoryTextInput"
-            class="create-story-text-input"
-            maxlength="1000"
-            placeholder="Type your story text..."
-          ></textarea>
-          <div class="create-story-text-counter">
-            <span id="createStoryTextCount">0</span>/1000
+          <div
+            class="create-story-section create-story-hidden"
+            id="createStoryTextSection"
+          >
+            <p class="create-story-text-mode-hint">
+              Type directly in the preview panel.
+            </p>
+
+            <div class="create-story-style-group">
+              <label class="create-story-label">Background</label>
+              <div
+                class="create-story-bg-row"
+                id="createStoryBackgroundPalette"
+              ></div>
+            </div>
+
+            <div class="create-story-style-group">
+              <label class="create-story-label">Text Color</label>
+              <div
+                class="create-story-color-row"
+                id="createStoryTextColorPalette"
+              ></div>
+            </div>
+
+            <div class="create-story-style-group">
+              <label class="create-story-label">Font</label>
+              <div class="create-story-pill-row">
+                <button
+                  type="button"
+                  class="create-story-pill-btn"
+                  data-font-key="modern"
+                  onclick="selectCreateStoryFont('modern')"
+                >
+                  Modern
+                </button>
+                <button
+                  type="button"
+                  class="create-story-pill-btn"
+                  data-font-key="classic"
+                  onclick="selectCreateStoryFont('classic')"
+                >
+                  Classic
+                </button>
+                <button
+                  type="button"
+                  class="create-story-pill-btn"
+                  data-font-key="rounded"
+                  onclick="selectCreateStoryFont('rounded')"
+                >
+                  Rounded
+                </button>
+                <button
+                  type="button"
+                  class="create-story-pill-btn"
+                  data-font-key="mono"
+                  onclick="selectCreateStoryFont('mono')"
+                >
+                  Mono
+                </button>
+                <button
+                  type="button"
+                  class="create-story-pill-btn"
+                  data-font-key="elegant"
+                  onclick="selectCreateStoryFont('elegant')"
+                >
+                  Elegant
+                </button>
+                <button
+                  type="button"
+                  class="create-story-pill-btn"
+                  data-font-key="display"
+                  onclick="selectCreateStoryFont('display')"
+                >
+                  Display
+                </button>
+                <button
+                  type="button"
+                  class="create-story-pill-btn"
+                  data-font-key="script"
+                  onclick="selectCreateStoryFont('script')"
+                >
+                  Script
+                </button>
+                <button
+                  type="button"
+                  class="create-story-pill-btn"
+                  data-font-key="handwriting"
+                  onclick="selectCreateStoryFont('handwriting')"
+                >
+                  Handwriting
+                </button>
+                <button
+                  type="button"
+                  class="create-story-pill-btn"
+                  data-font-key="slab"
+                  onclick="selectCreateStoryFont('slab')"
+                >
+                  Slab
+                </button>
+                <button
+                  type="button"
+                  class="create-story-pill-btn"
+                  data-font-key="condensed"
+                  onclick="selectCreateStoryFont('condensed')"
+                >
+                  Condensed
+                </button>
+                <button
+                  type="button"
+                  class="create-story-pill-btn"
+                  data-font-key="geometric"
+                  onclick="selectCreateStoryFont('geometric')"
+                >
+                  Geometric
+                </button>
+                <button
+                  type="button"
+                  class="create-story-pill-btn"
+                  data-font-key="humanist"
+                  onclick="selectCreateStoryFont('humanist')"
+                >
+                  Humanist
+                </button>
+                <button
+                  type="button"
+                  class="create-story-pill-btn"
+                  data-font-key="clean"
+                  onclick="selectCreateStoryFont('clean')"
+                >
+                  Clean
+                </button>
+                <button
+                  type="button"
+                  class="create-story-pill-btn"
+                  data-font-key="serifmodern"
+                  onclick="selectCreateStoryFont('serifmodern')"
+                >
+                  Serif Modern
+                </button>
+              </div>
+            </div>
+
+            <div class="create-story-style-group">
+              <label class="create-story-label">Font Size</label>
+              <div class="create-story-font-size-row">
+                <input
+                  type="range"
+                  id="createStoryFontSizeRange"
+                  min="8"
+                  max="72"
+                  step="1"
+                  value="32"
+                />
+                <div class="create-story-font-size-input-wrap">
+                  <input
+                    type="number"
+                    id="createStoryFontSizeNumber"
+                    min="8"
+                    max="72"
+                    step="1"
+                    value="32"
+                  />
+                  <span>px</span>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div class="create-story-section">
-          <label class="create-story-label" for="createStoryPrivacy">Privacy</label>
-          <select id="createStoryPrivacy" class="create-story-select">
-            <option value="0">Public</option>
-            <option value="1">Followers Only</option>
-            <option value="2">Private</option>
-          </select>
-        </div>
+          <div class="create-story-meta-grid">
+            <div class="create-story-meta-card">
+              <label class="create-story-label">Privacy</label>
+              <div
+                class="privacy-selector"
+                id="csPrivacySelector"
+                onclick="csToggleDropdown('privacy', event)"
+              >
+                <i
+                  data-lucide="globe"
+                  class="privacy-icon"
+                  id="csPrivacyIcon"
+                ></i>
+                <span class="privacy-text" id="csPrivacyText">Public</span>
+                <i data-lucide="chevron-right" class="privacy-chevron"></i>
+              </div>
 
-        <div class="create-story-section">
-          <label class="create-story-label" for="createStoryExpires">Expire Time</label>
-          <select id="createStoryExpires" class="create-story-select">
-            <option value="6">6 hours</option>
-            <option value="12">12 hours</option>
-            <option value="24" selected>24 hours</option>
-          </select>
-        </div>
+              <!-- Custom Dropdown for Privacy -->
+              <div class="privacy-dropdown" id="csPrivacyDropdown">
+                <div
+                  class="privacy-option active"
+                  data-privacy="0"
+                  onclick="csSelectPrivacy(0)"
+                >
+                  <div class="privacy-option-left">
+                    <i data-lucide="globe"></i>
+                    <div>
+                      <span class="privacy-option-title">Public</span>
+                      <span class="privacy-option-desc"
+                        >Anyone can see this story</span
+                      >
+                    </div>
+                  </div>
+                  <i data-lucide="check" class="privacy-check"></i>
+                </div>
+                <div
+                  class="privacy-option"
+                  data-privacy="1"
+                  onclick="csSelectPrivacy(1)"
+                >
+                  <div class="privacy-option-left">
+                    <i data-lucide="users"></i>
+                    <div>
+                      <span class="privacy-option-title">Followers Only</span>
+                      <span class="privacy-option-desc"
+                        >Only your followers can see</span
+                      >
+                    </div>
+                  </div>
+                  <i data-lucide="check" class="privacy-check"></i>
+                </div>
+                <div
+                  class="privacy-option"
+                  data-privacy="2"
+                  onclick="csSelectPrivacy(2)"
+                >
+                  <div class="privacy-option-left">
+                    <i data-lucide="lock"></i>
+                    <div>
+                      <span class="privacy-option-title">Private</span>
+                      <span class="privacy-option-desc"
+                        >Only you can see this story</span
+                      >
+                    </div>
+                  </div>
+                  <i data-lucide="check" class="privacy-check"></i>
+                </div>
+              </div>
+            </div>
 
-        <div class="create-story-section" id="createStoryThumbnailSection">
-          <label class="create-story-label" for="createStoryThumbnailUrl">Thumbnail URL (optional)</label>
-          <input
-            id="createStoryThumbnailUrl"
-            class="create-story-input"
-            type="url"
-            placeholder="https://example.com/story-thumb.jpg"
-          />
+            <div class="create-story-meta-card">
+              <label class="create-story-label">Expire Time</label>
+              <div
+                class="privacy-selector"
+                id="csExpiresSelector"
+                onclick="csToggleDropdown('expires', event)"
+              >
+                <i
+                  data-lucide="clock-3"
+                  class="privacy-icon"
+                  id="csExpiresIcon"
+                ></i>
+                <span class="privacy-text" id="csExpiresText">24 hours</span>
+                <i data-lucide="chevron-right" class="privacy-chevron"></i>
+              </div>
+
+              <!-- Custom Dropdown for Expires -->
+              <div class="privacy-dropdown" id="csExpiresDropdown">
+                <div
+                  class="privacy-option"
+                  data-expires="6"
+                  onclick="csSelectExpires(6)"
+                >
+                  <div class="privacy-option-left">
+                    <i data-lucide="clock-1"></i>
+                    <div>
+                      <span class="privacy-option-title">6 hours</span>
+                      <span class="privacy-option-desc"
+                        >Disappears in 6 hours</span
+                      >
+                    </div>
+                  </div>
+                  <i data-lucide="check" class="privacy-check"></i>
+                </div>
+                <div
+                  class="privacy-option"
+                  data-expires="12"
+                  onclick="csSelectExpires(12)"
+                >
+                  <div class="privacy-option-left">
+                    <i data-lucide="clock-2"></i>
+                    <div>
+                      <span class="privacy-option-title">12 hours</span>
+                      <span class="privacy-option-desc"
+                        >Disappears in 12 hours</span
+                      >
+                    </div>
+                  </div>
+                  <i data-lucide="check" class="privacy-check"></i>
+                </div>
+                <div
+                  class="privacy-option active"
+                  data-expires="24"
+                  onclick="csSelectExpires(24)"
+                >
+                  <div class="privacy-option-left">
+                    <i data-lucide="clock-3"></i>
+                    <div>
+                      <span class="privacy-option-title">24 hours</span>
+                      <span class="privacy-option-desc"
+                        >Standard story duration</span
+                      >
+                    </div>
+                  </div>
+                  <i data-lucide="check" class="privacy-check"></i>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -144,7 +462,7 @@
       </button>
       <button
         type="button"
-        class="create-story-submit-btn"
+        class="create-story-submit-btn create-story-hidden"
         id="createStorySubmitBtn"
         onclick="submitCreateStory()"
       >

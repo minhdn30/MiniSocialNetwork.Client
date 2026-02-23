@@ -1,37 +1,402 @@
+const STORY_TEXT_CONFIG_FALLBACK = {
+  options: {
+    backgrounds: {
+      accent: {
+        label: "Accent",
+        css: "linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-hover) 55%, var(--accent-active) 100%)",
+      },
+    },
+    textColors: {
+      light: { label: "Light", css: "#ffffff" },
+      ink: { label: "Ink", css: "#0f172a" },
+    },
+    fonts: {
+      modern: { css: "'Segoe UI', 'Inter', system-ui, sans-serif" },
+    },
+  },
+  fontSize: {
+    min: 8,
+    max: 72,
+    default: 32,
+  },
+  defaults: {
+    backgroundColorKey: "accent",
+    textColorKey: "light",
+    fontTextKey: "modern",
+    fontSizePx: 32,
+  },
+};
+
+function csIsPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function csGetObjectByKeys(source, keys) {
+  if (!csIsPlainObject(source) || !Array.isArray(keys)) return null;
+  for (const rawKey of keys) {
+    const key = typeof rawKey === "string" ? rawKey.trim() : "";
+    if (!key) continue;
+    const value = source[key];
+    if (csIsPlainObject(value)) return value;
+  }
+  return null;
+}
+
+function csResolveConfigKey(collection, rawKey, fallbackKey) {
+  const map = csIsPlainObject(collection) ? collection : {};
+  const normalizeKey = (value) =>
+    typeof value === "string" ? value.trim().toLowerCase() : "";
+
+  const directKey = normalizeKey(rawKey);
+  if (directKey && Object.prototype.hasOwnProperty.call(map, directKey)) {
+    return directKey;
+  }
+
+  const normalizedFallback = normalizeKey(fallbackKey);
+  if (
+    normalizedFallback &&
+    Object.prototype.hasOwnProperty.call(map, normalizedFallback)
+  ) {
+    return normalizedFallback;
+  }
+
+  const firstKey = Object.keys(map)[0];
+  return typeof firstKey === "string" ? firstKey : "";
+}
+
+function csToInt(value, fallback) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function csNormalizeStoryTextConfig(rawConfig) {
+  const sourceConfig = csIsPlainObject(rawConfig) ? rawConfig : {};
+  const fallback = STORY_TEXT_CONFIG_FALLBACK;
+
+  const rawOptions =
+    csGetObjectByKeys(sourceConfig, ["options", "styleOptions"]) ||
+    fallback.options;
+  const rawBackgrounds = csGetObjectByKeys(rawOptions, [
+    "backgrounds",
+    "bgColors",
+    "backgroundOptions",
+  ]);
+  const rawTextColors = csGetObjectByKeys(rawOptions, [
+    "textColors",
+    "colors",
+    "textColorOptions",
+  ]);
+  const rawFonts = csGetObjectByKeys(rawOptions, [
+    "fonts",
+    "fontOptions",
+    "fontFamilies",
+  ]);
+
+  const backgrounds =
+    csIsPlainObject(rawBackgrounds) && Object.keys(rawBackgrounds).length > 0
+      ? rawBackgrounds
+      : fallback.options.backgrounds;
+  const textColors =
+    csIsPlainObject(rawTextColors) && Object.keys(rawTextColors).length > 0
+      ? rawTextColors
+      : fallback.options.textColors;
+  const fonts =
+    csIsPlainObject(rawFonts) && Object.keys(rawFonts).length > 0
+      ? rawFonts
+      : fallback.options.fonts;
+
+  const rawFontSize =
+    csGetObjectByKeys(sourceConfig, ["fontSize", "fontSizeConfig"]) ||
+    fallback.fontSize;
+  let minSize = csToInt(rawFontSize.min, fallback.fontSize.min);
+  let maxSize = csToInt(rawFontSize.max, fallback.fontSize.max);
+  if (minSize < 1) minSize = fallback.fontSize.min;
+  if (maxSize < minSize) maxSize = minSize;
+
+  let defaultFontSize = csToInt(rawFontSize.default, fallback.fontSize.default);
+  if (defaultFontSize < minSize) defaultFontSize = minSize;
+  if (defaultFontSize > maxSize) defaultFontSize = maxSize;
+
+  const rawDefaults =
+    csGetObjectByKeys(sourceConfig, ["defaults", "defaultStyle", "defaultStyles"]) ||
+    fallback.defaults;
+  const defaultBackgroundKey = csResolveConfigKey(
+    backgrounds,
+    rawDefaults.backgroundColorKey ?? rawDefaults.backgroundKey ?? rawDefaults.bgKey,
+    fallback.defaults.backgroundColorKey,
+  );
+  const defaultTextColorKey = csResolveConfigKey(
+    textColors,
+    rawDefaults.textColorKey ?? rawDefaults.colorKey,
+    fallback.defaults.textColorKey,
+  );
+  const defaultFontKey = csResolveConfigKey(
+    fonts,
+    rawDefaults.fontTextKey ?? rawDefaults.fontKey,
+    fallback.defaults.fontTextKey,
+  );
+
+  let defaultFontSizePx = csToInt(
+    rawDefaults.fontSizePx ?? rawDefaults.fontSize,
+    defaultFontSize,
+  );
+  if (defaultFontSizePx < minSize) defaultFontSizePx = minSize;
+  if (defaultFontSizePx > maxSize) defaultFontSizePx = maxSize;
+
+  return {
+    options: {
+      backgrounds,
+      textColors,
+      fonts,
+    },
+    fontSize: {
+      min: minSize,
+      max: maxSize,
+      default: defaultFontSize,
+    },
+    defaults: {
+      backgroundColorKey: defaultBackgroundKey,
+      textColorKey: defaultTextColorKey,
+      fontTextKey: defaultFontKey,
+      fontSizePx: defaultFontSizePx,
+    },
+  };
+}
+
+const STORY_TEXT_EDITOR_CONFIG = csNormalizeStoryTextConfig(
+  window.STORY_TEXT_EDITOR_CONFIG,
+);
+const STORY_TEXT_STYLE_OPTIONS = STORY_TEXT_EDITOR_CONFIG.options;
+const STORY_TEXT_FONT_SIZE = STORY_TEXT_EDITOR_CONFIG.fontSize;
+const STORY_TEXT_STYLE_DEFAULTS = STORY_TEXT_EDITOR_CONFIG.defaults;
+
+const STORY_TEXT_MAX_LENGTH_FALLBACK = 1000;
+const STORY_TEXT_MAX_LENGTH =
+  Number(window.APP_CONFIG?.MAX_STORY_TEXT_LENGTH) > 0
+    ? Math.floor(Number(window.APP_CONFIG.MAX_STORY_TEXT_LENGTH))
+    : STORY_TEXT_MAX_LENGTH_FALLBACK;
+
 const createStoryModalState = {
   isInitialized: false,
   isSubmitting: false,
-  contentType: 0, // 0=image, 1=video, 2=text
+  currentStep: "mode", // "mode" | "editor"
+  storyMode: null, // "text" | "media"
   selectedFile: null,
+  mediaContentType: null, // 0=image, 1=video
   previewObjectUrl: null,
   documentEventsBound: false,
+  isPaletteRendered: false,
+
+  backgroundColorKey: STORY_TEXT_STYLE_DEFAULTS.backgroundColorKey,
+  textColorKey: STORY_TEXT_STYLE_DEFAULTS.textColorKey,
+  fontTextKey: STORY_TEXT_STYLE_DEFAULTS.fontTextKey,
+  fontSizePx: STORY_TEXT_STYLE_DEFAULTS.fontSizePx,
+
+  privacy: 0,
+  expires: 24,
+  activeDropdown: null,
+  lastTextSelectionRange: null,
 };
 
 function csGetElements() {
   return {
     modal: document.getElementById("createStoryModal"),
+    modeStep: document.getElementById("createStoryModeStep"),
+    editorStep: document.getElementById("createStoryEditorStep"),
+    modeChoiceButtons: Array.from(
+      document.querySelectorAll("#createStoryModal .create-story-mode-choice-btn"),
+    ),
     submitBtn: document.getElementById("createStorySubmitBtn"),
+    backBtn: document.getElementById("createStoryBackBtn"),
     closeBtn: document.querySelector("#createStoryModal .create-story-close-btn"),
     cancelBtn: document.querySelector("#createStoryModal .create-story-cancel-btn"),
-    typeButtons: Array.from(
-      document.querySelectorAll("#createStoryModal .create-story-type-btn"),
-    ),
+
     mediaSection: document.getElementById("createStoryMediaSection"),
     textSection: document.getElementById("createStoryTextSection"),
-    thumbnailSection: document.getElementById("createStoryThumbnailSection"),
     mediaInput: document.getElementById("createStoryMediaInput"),
     selectFileBtn: document.getElementById("createStorySelectFileBtn"),
     fileName: document.getElementById("createStoryFileName"),
-    textInput: document.getElementById("createStoryTextInput"),
     textCount: document.getElementById("createStoryTextCount"),
-    privacySelect: document.getElementById("createStoryPrivacy"),
-    expiresSelect: document.getElementById("createStoryExpires"),
-    thumbnailInput: document.getElementById("createStoryThumbnailUrl"),
+    textMaxCount: document.getElementById("createStoryTextMaxCount"),
+
+    previewHint: document.getElementById("createStoryPreviewHint"),
     previewEmpty: document.getElementById("createStoryPreviewEmpty"),
     imagePreview: document.getElementById("createStoryImagePreview"),
     videoPreview: document.getElementById("createStoryVideoPreview"),
     textPreview: document.getElementById("createStoryTextPreview"),
+    textEditor: document.getElementById("createStoryTextEditor"),
+
+    backgroundPalette: document.getElementById("createStoryBackgroundPalette"),
+    textColorPalette: document.getElementById("createStoryTextColorPalette"),
+    backgroundButtons: Array.from(
+      document.querySelectorAll("#createStoryModal .create-story-bg-btn"),
+    ),
+    textColorButtons: Array.from(
+      document.querySelectorAll("#createStoryModal .create-story-color-btn"),
+    ),
+    fontButtons: Array.from(
+      document.querySelectorAll("#createStoryModal .create-story-pill-btn[data-font-key]"),
+    ),
+
+    fontSizeRange: document.getElementById("createStoryFontSizeRange"),
+    fontSizeNumber: document.getElementById("createStoryFontSizeNumber"),
+
+    emojiBtn: document.getElementById("createStoryEmojiBtn"),
+    emojiPickerContainer: document.getElementById("createStoryEmojiPickerContainer"),
+
+    privacySelector: document.getElementById("csPrivacySelector"),
+    expiresSelector: document.getElementById("csExpiresSelector"),
+    privacyDropdown: document.getElementById("csPrivacyDropdown"),
+    expiresDropdown: document.getElementById("csExpiresDropdown"),
   };
+}
+
+function csResolveStyleKey(collection, rawKey, fallbackKey) {
+  return csResolveConfigKey(collection, rawKey, fallbackKey);
+}
+
+function csClampFontSize(rawValue) {
+  const parsed = Number.parseInt(String(rawValue ?? ""), 10);
+  if (Number.isNaN(parsed)) return STORY_TEXT_FONT_SIZE.default;
+  return Math.min(STORY_TEXT_FONT_SIZE.max, Math.max(STORY_TEXT_FONT_SIZE.min, parsed));
+}
+
+function csGetResolvedTextStyle() {
+  return {
+    backgroundColorKey: csResolveStyleKey(
+      STORY_TEXT_STYLE_OPTIONS.backgrounds,
+      createStoryModalState.backgroundColorKey,
+      STORY_TEXT_STYLE_DEFAULTS.backgroundColorKey,
+    ),
+    textColorKey: csResolveStyleKey(
+      STORY_TEXT_STYLE_OPTIONS.textColors,
+      createStoryModalState.textColorKey,
+      STORY_TEXT_STYLE_DEFAULTS.textColorKey,
+    ),
+    fontTextKey: csResolveStyleKey(
+      STORY_TEXT_STYLE_OPTIONS.fonts,
+      createStoryModalState.fontTextKey,
+      STORY_TEXT_STYLE_DEFAULTS.fontTextKey,
+    ),
+    fontSizePx: csClampFontSize(createStoryModalState.fontSizePx),
+  };
+}
+
+function csGetRawTextContent() {
+  const { textEditor } = csGetElements();
+  if (!textEditor) return "";
+  return (textEditor.textContent || "").replace(/\r/g, "");
+}
+
+function csGetTrimmedTextContent() {
+  return csGetRawTextContent().trim();
+}
+
+function csMoveCaretToEnd(element) {
+  if (!element) return;
+  const selection = window.getSelection?.();
+  if (!selection) return;
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  createStoryModalState.lastTextSelectionRange = range.cloneRange();
+}
+
+function csIsNodeInsideEditor(node, editor) {
+  if (!node || !editor) return false;
+  return node === editor || editor.contains(node);
+}
+
+function csSaveTextSelection() {
+  const { textEditor } = csGetElements();
+  if (!textEditor) return;
+  const selection = window.getSelection?.();
+  if (!selection || selection.rangeCount === 0) return;
+  const range = selection.getRangeAt(0);
+  if (
+    csIsNodeInsideEditor(range.startContainer, textEditor) &&
+    csIsNodeInsideEditor(range.endContainer, textEditor)
+  ) {
+    createStoryModalState.lastTextSelectionRange = range.cloneRange();
+  }
+}
+
+function csInsertTextAtCursor(insertText) {
+  const text = typeof insertText === "string" ? insertText : "";
+  if (!text) return false;
+
+  const { textEditor } = csGetElements();
+  if (!textEditor) return false;
+  textEditor.focus();
+
+  const selection = window.getSelection?.();
+  let range = null;
+
+  if (
+    selection &&
+    selection.rangeCount > 0 &&
+    csIsNodeInsideEditor(selection.getRangeAt(0).startContainer, textEditor)
+  ) {
+    range = selection.getRangeAt(0);
+  } else if (
+    createStoryModalState.lastTextSelectionRange &&
+    csIsNodeInsideEditor(
+      createStoryModalState.lastTextSelectionRange.startContainer,
+      textEditor,
+    )
+  ) {
+    range = createStoryModalState.lastTextSelectionRange.cloneRange();
+  } else {
+    range = document.createRange();
+    range.selectNodeContents(textEditor);
+    range.collapse(false);
+  }
+
+  range.deleteContents();
+  const textNode = document.createTextNode(text);
+  range.insertNode(textNode);
+  range.setStartAfter(textNode);
+  range.collapse(true);
+
+  if (selection) {
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
+  createStoryModalState.lastTextSelectionRange = range.cloneRange();
+  return true;
+}
+
+function csNormalizeTextLength() {
+  const { textEditor } = csGetElements();
+  if (!textEditor) return;
+
+  const currentText = csGetRawTextContent();
+  if (currentText.length === 0 && textEditor.innerHTML !== "") {
+    textEditor.innerHTML = "";
+  }
+  
+  if (currentText.length <= STORY_TEXT_MAX_LENGTH) return;
+  textEditor.textContent = currentText.slice(0, STORY_TEXT_MAX_LENGTH);
+  csMoveCaretToEnd(textEditor);
+}
+
+function csSetTextCount() {
+  const { textCount } = csGetElements();
+  if (!textCount) return;
+  textCount.textContent = String(csGetRawTextContent().length);
+}
+
+function csApplyTextLengthLimitUI() {
+  const { textEditor, textMaxCount } = csGetElements();
+  if (textEditor) {
+    textEditor.setAttribute("data-maxlength", String(STORY_TEXT_MAX_LENGTH));
+  }
+  if (textMaxCount) {
+    textMaxCount.textContent = String(STORY_TEXT_MAX_LENGTH);
+  }
 }
 
 function csReleasePreviewObjectUrl() {
@@ -48,63 +413,228 @@ function csReadSelectedFileName(file) {
   return `${file.name.slice(0, maxLength - 3)}...`;
 }
 
-function csApplyContentTypeUI() {
+function csGetPreviewHintByMode() {
+  if (createStoryModalState.storyMode === "text") {
+    return "Type directly on preview to compose your story.";
+  }
+  return "Upload image or video to preview your story.";
+}
+
+function csCloseAllDropdowns() {
+  const { privacyDropdown, expiresDropdown } = csGetElements();
+  privacyDropdown?.classList.remove("show");
+  expiresDropdown?.classList.remove("show");
+  createStoryModalState.activeDropdown = null;
+}
+
+function csCloseEmojiPicker() {
+  const { emojiPickerContainer } = csGetElements();
+  if (!emojiPickerContainer || !emojiPickerContainer.classList.contains("show")) {
+    return;
+  }
+
+  if (window.EmojiUtils?.closePicker) {
+    window.EmojiUtils.closePicker(emojiPickerContainer);
+  } else {
+    emojiPickerContainer.classList.remove("show");
+    setTimeout(() => {
+      emojiPickerContainer.innerHTML = "";
+    }, 200);
+  }
+}
+
+function csApplyStepUI() {
+  const { modeStep, editorStep, submitBtn, backBtn } = csGetElements();
+  const isModeStep = createStoryModalState.currentStep === "mode";
+
+  if (modeStep) {
+    modeStep.classList.toggle("create-story-hidden", !isModeStep);
+  }
+  if (editorStep) {
+    editorStep.classList.toggle("create-story-hidden", isModeStep);
+  }
+  if (submitBtn) {
+    submitBtn.classList.toggle("create-story-hidden", isModeStep);
+  }
+  if (backBtn) {
+    backBtn.classList.toggle("create-story-hidden", isModeStep);
+  }
+
+  if (isModeStep) {
+    csCloseAllDropdowns();
+    csCloseEmojiPicker();
+  }
+}
+
+function csCreatePaletteButton({
+  className,
+  key,
+  title,
+  cssValue,
+  dataKeyName,
+  onClick,
+}) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = className;
+  button.dataset[dataKeyName] = key;
+  button.title = title;
+  button.setAttribute("aria-label", title);
+  button.style.background = cssValue;
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+function csEnsurePalettesRendered() {
+  if (createStoryModalState.isPaletteRendered) return;
+  const { backgroundPalette, textColorPalette } = csGetElements();
+  if (!backgroundPalette || !textColorPalette) return;
+
+  const bgFragment = document.createDocumentFragment();
+  Object.entries(STORY_TEXT_STYLE_OPTIONS.backgrounds).forEach(([key, option]) => {
+    bgFragment.appendChild(
+      csCreatePaletteButton({
+        className: "create-story-bg-btn",
+        key,
+        title: `${option.label || key} background`,
+        cssValue: option.css,
+        dataKeyName: "bgKey",
+        onClick: () => window.selectCreateStoryBackground(key),
+      }),
+    );
+  });
+  backgroundPalette.innerHTML = "";
+  backgroundPalette.appendChild(bgFragment);
+
+  const textFragment = document.createDocumentFragment();
+  Object.entries(STORY_TEXT_STYLE_OPTIONS.textColors).forEach(([key, option]) => {
+    textFragment.appendChild(
+      csCreatePaletteButton({
+        className: "create-story-color-btn",
+        key,
+        title: `${option.label || key} text`,
+        cssValue: option.css,
+        dataKeyName: "textColorKey",
+        onClick: () => window.selectCreateStoryTextColor(key),
+      }),
+    );
+  });
+  textColorPalette.innerHTML = "";
+  textColorPalette.appendChild(textFragment);
+
+  createStoryModalState.isPaletteRendered = true;
+}
+
+function csApplyTextStyleUI() {
   const {
-    typeButtons,
-    mediaSection,
-    textSection,
-    thumbnailSection,
-    mediaInput,
-    fileName,
+    backgroundButtons,
+    textColorButtons,
+    fontButtons,
+    fontSizeRange,
+    fontSizeNumber,
   } = csGetElements();
 
-  typeButtons.forEach((button) => {
-    const value = Number(button.dataset.storyType);
-    button.classList.toggle("active", value === createStoryModalState.contentType);
+  const resolved = csGetResolvedTextStyle();
+
+  createStoryModalState.backgroundColorKey = resolved.backgroundColorKey;
+  createStoryModalState.textColorKey = resolved.textColorKey;
+  createStoryModalState.fontTextKey = resolved.fontTextKey;
+  createStoryModalState.fontSizePx = resolved.fontSizePx;
+
+  backgroundButtons.forEach((button) => {
+    const key = button.dataset.bgKey || "";
+    const option = STORY_TEXT_STYLE_OPTIONS.backgrounds[key];
+    if (option?.css) {
+      button.style.background = option.css;
+    }
+    button.classList.toggle("active", key === resolved.backgroundColorKey);
   });
 
-  const isTextStory = createStoryModalState.contentType === 2;
-  if (mediaSection) {
-    mediaSection.classList.toggle("create-story-hidden", isTextStory);
+  textColorButtons.forEach((button) => {
+    const key = button.dataset.textColorKey || "";
+    const option = STORY_TEXT_STYLE_OPTIONS.textColors[key];
+    if (option?.css) {
+      button.style.background = option.css;
+    }
+    button.classList.toggle("active", key === resolved.textColorKey);
+  });
+
+  fontButtons.forEach((button) => {
+    const key = button.dataset.fontKey || "";
+    const option = STORY_TEXT_STYLE_OPTIONS.fonts[key];
+    if (option?.css) {
+      button.style.fontFamily = option.css;
+    }
+    button.classList.toggle("active", key === resolved.fontTextKey);
+  });
+
+  if (fontSizeRange) {
+    fontSizeRange.value = String(resolved.fontSizePx);
   }
-  if (thumbnailSection) {
-    thumbnailSection.classList.toggle("create-story-hidden", isTextStory);
+  if (fontSizeNumber) {
+    fontSizeNumber.value = String(resolved.fontSizePx);
   }
-  if (textSection) {
-    textSection.classList.toggle("create-story-hidden", !isTextStory);
-  }
+}
+
+function csClearMediaSelection() {
+  const { mediaInput, fileName, imagePreview, videoPreview } = csGetElements();
+
+  createStoryModalState.selectedFile = null;
+  createStoryModalState.mediaContentType = null;
+  csReleasePreviewObjectUrl();
 
   if (mediaInput) {
-    mediaInput.accept =
-      createStoryModalState.contentType === 1 ? "video/*" : "image/*";
+    mediaInput.value = "";
+  }
+  if (fileName) {
+    fileName.textContent = "No file selected";
+  }
+  if (imagePreview) {
+    imagePreview.src = "";
+  }
+  if (videoPreview) {
+    videoPreview.pause();
+    videoPreview.removeAttribute("src");
+    videoPreview.load();
+  }
+}
+
+function csClearTextContent() {
+  const { textEditor } = csGetElements();
+  if (textEditor) {
+    textEditor.textContent = "";
+  }
+  createStoryModalState.lastTextSelectionRange = null;
+  csSetTextCount();
+}
+
+function csApplyStoryModeUI() {
+  const { mediaSection, textSection, previewHint, modeChoiceButtons } = csGetElements();
+
+  modeChoiceButtons.forEach((button) => {
+    const mode = button.dataset.storyModeChoice;
+    button.classList.toggle("active", mode === createStoryModalState.storyMode);
+  });
+
+  if (mediaSection) {
+    mediaSection.classList.toggle(
+      "create-story-hidden",
+      createStoryModalState.storyMode !== "media",
+    );
+  }
+  if (textSection) {
+    textSection.classList.toggle(
+      "create-story-hidden",
+      createStoryModalState.storyMode !== "text",
+    );
   }
 
-  if (isTextStory) {
-    createStoryModalState.selectedFile = null;
-    csReleasePreviewObjectUrl();
-    if (mediaInput) {
-      mediaInput.value = "";
-    }
-    if (fileName) {
-      fileName.textContent = "No file selected";
-    }
-  } else if (createStoryModalState.selectedFile) {
-    const shouldClearSelectedFile =
-      (createStoryModalState.contentType === 0 &&
-        !createStoryModalState.selectedFile.type.startsWith("image/")) ||
-      (createStoryModalState.contentType === 1 &&
-        !createStoryModalState.selectedFile.type.startsWith("video/"));
+  if (createStoryModalState.storyMode !== "text") {
+    csCloseEmojiPicker();
+  }
 
-    if (shouldClearSelectedFile) {
-      createStoryModalState.selectedFile = null;
-      csReleasePreviewObjectUrl();
-      if (mediaInput) {
-        mediaInput.value = "";
-      }
-      if (fileName) {
-        fileName.textContent = "No file selected";
-      }
-    }
+  if (previewHint) {
+    previewHint.textContent = csGetPreviewHintByMode();
   }
 
   csRenderPreview();
@@ -112,34 +642,90 @@ function csApplyContentTypeUI() {
 }
 
 function csRenderPreview() {
-  const { previewEmpty, imagePreview, videoPreview, textPreview, textInput } =
+  const { previewEmpty, imagePreview, videoPreview, textPreview, textEditor } =
     csGetElements();
-
-  if (!previewEmpty || !imagePreview || !videoPreview || !textPreview) return;
-
-  previewEmpty.style.display = "none";
-  imagePreview.style.display = "none";
-  videoPreview.style.display = "none";
-  textPreview.style.display = "none";
-
-  if (createStoryModalState.contentType === 2) {
-    const text = (textInput?.value || "").trim();
-    if (!text) {
-      previewEmpty.style.display = "flex";
-      return;
-    }
-
-    textPreview.textContent = text;
-    textPreview.style.display = "flex";
+  if (!previewEmpty || !imagePreview || !videoPreview || !textPreview || !textEditor) {
     return;
   }
 
-  if (!createStoryModalState.selectedFile || !createStoryModalState.previewObjectUrl) {
+  if (createStoryModalState.currentStep !== "editor") {
+    previewEmpty.style.display = "none";
+    imagePreview.style.display = "none";
+    videoPreview.style.display = "none";
+    textPreview.style.display = "none";
+    textEditor.setAttribute("contenteditable", "false");
+    videoPreview.pause();
+    return;
+  }
+
+  if (createStoryModalState.storyMode === "text") {
+    previewEmpty.style.display = "none";
+    imagePreview.style.display = "none";
+    videoPreview.style.display = "none";
+    videoPreview.pause();
+
+    const style = csGetResolvedTextStyle();
+    const bgStyle = STORY_TEXT_STYLE_OPTIONS.backgrounds[style.backgroundColorKey];
+    const textColorStyle = STORY_TEXT_STYLE_OPTIONS.textColors[style.textColorKey];
+    const fontStyle = STORY_TEXT_STYLE_OPTIONS.fonts[style.fontTextKey];
+    const fallbackBackgroundKey = csResolveStyleKey(
+      STORY_TEXT_STYLE_OPTIONS.backgrounds,
+      STORY_TEXT_STYLE_DEFAULTS.backgroundColorKey,
+      "",
+    );
+    const fallbackTextColorKey = csResolveStyleKey(
+      STORY_TEXT_STYLE_OPTIONS.textColors,
+      STORY_TEXT_STYLE_DEFAULTS.textColorKey,
+      "",
+    );
+    const fallbackFontKey = csResolveStyleKey(
+      STORY_TEXT_STYLE_OPTIONS.fonts,
+      STORY_TEXT_STYLE_DEFAULTS.fontTextKey,
+      "",
+    );
+
+    textPreview.style.background =
+      bgStyle?.css ||
+      STORY_TEXT_STYLE_OPTIONS.backgrounds[fallbackBackgroundKey]?.css ||
+      STORY_TEXT_CONFIG_FALLBACK.options.backgrounds.accent.css;
+    textEditor.style.color =
+      textColorStyle?.css ||
+      STORY_TEXT_STYLE_OPTIONS.textColors[fallbackTextColorKey]?.css ||
+      STORY_TEXT_CONFIG_FALLBACK.options.textColors.light.css;
+    textEditor.style.fontFamily =
+      fontStyle?.css ||
+      STORY_TEXT_STYLE_OPTIONS.fonts[fallbackFontKey]?.css ||
+      STORY_TEXT_CONFIG_FALLBACK.options.fonts.modern.css;
+    textEditor.style.fontSize = `${style.fontSizePx}px`;
+
+    if (textPreview.style.display !== "flex") {
+      textPreview.style.display = "flex";
+    }
+    textEditor.setAttribute(
+      "contenteditable",
+      createStoryModalState.isSubmitting ? "false" : "true",
+    );
+    return;
+  }
+
+  textPreview.style.display = "none";
+  textEditor.setAttribute("contenteditable", "false");
+  imagePreview.style.display = "none";
+  videoPreview.style.display = "none";
+  videoPreview.pause();
+
+  if (
+    !createStoryModalState.selectedFile ||
+    !createStoryModalState.previewObjectUrl ||
+    createStoryModalState.mediaContentType === null
+  ) {
     previewEmpty.style.display = "flex";
     return;
   }
 
-  if (createStoryModalState.contentType === 1) {
+  previewEmpty.style.display = "none";
+
+  if (createStoryModalState.mediaContentType === 1) {
     videoPreview.src = createStoryModalState.previewObjectUrl;
     videoPreview.style.display = "block";
     return;
@@ -149,16 +735,23 @@ function csRenderPreview() {
   imagePreview.style.display = "block";
 }
 
-function csSetTextCount() {
-  const { textInput, textCount } = csGetElements();
-  if (!textInput || !textCount) return;
-  textCount.textContent = String((textInput.value || "").length);
-}
-
 function csValidateBeforeSubmit(showToast = false) {
-  const { textInput } = csGetElements();
-  if (createStoryModalState.contentType === 2) {
-    const text = (textInput?.value || "").trim();
+  if (createStoryModalState.currentStep !== "editor") {
+    if (showToast && window.toastError) {
+      toastError("Please choose Text or Media first.");
+    }
+    return false;
+  }
+
+  if (!createStoryModalState.storyMode) {
+    if (showToast && window.toastError) {
+      toastError("Please choose Text or Media for your story.");
+    }
+    return false;
+  }
+
+  if (createStoryModalState.storyMode === "text") {
+    const text = csGetTrimmedTextContent();
     if (!text) {
       if (showToast && window.toastError) {
         toastError("Text content is required for text story.");
@@ -168,9 +761,9 @@ function csValidateBeforeSubmit(showToast = false) {
     return true;
   }
 
-  if (!createStoryModalState.selectedFile) {
+  if (!createStoryModalState.selectedFile || createStoryModalState.mediaContentType === null) {
     if (showToast && window.toastError) {
-      toastError("Please select a media file first.");
+      toastError("Please upload an image or video first.");
     }
     return false;
   }
@@ -193,29 +786,39 @@ function csUpdateSubmitState() {
 function csSetSubmitting(isSubmitting) {
   const {
     submitBtn,
-    typeButtons,
+    backBtn,
+    modeChoiceButtons,
     selectFileBtn,
     mediaInput,
-    textInput,
-    privacySelect,
-    expiresSelect,
-    thumbnailInput,
     closeBtn,
     cancelBtn,
+    backgroundButtons,
+    textColorButtons,
+    fontButtons,
+    fontSizeRange,
+    fontSizeNumber,
+    emojiBtn,
+    textEditor,
+    privacySelector,
+    expiresSelector,
   } = csGetElements();
 
   createStoryModalState.isSubmitting = isSubmitting;
 
   const controlsToToggle = [
-    ...typeButtons,
+    submitBtn,
+    backBtn,
+    ...modeChoiceButtons,
     selectFileBtn,
     mediaInput,
-    textInput,
-    privacySelect,
-    expiresSelect,
-    thumbnailInput,
     closeBtn,
     cancelBtn,
+    ...backgroundButtons,
+    ...textColorButtons,
+    ...fontButtons,
+    fontSizeRange,
+    fontSizeNumber,
+    emojiBtn,
   ];
 
   controlsToToggle.forEach((control) => {
@@ -223,8 +826,16 @@ function csSetSubmitting(isSubmitting) {
     control.disabled = isSubmitting;
   });
 
+  privacySelector?.classList.toggle("is-disabled", isSubmitting);
+  expiresSelector?.classList.toggle("is-disabled", isSubmitting);
+
+  if (textEditor && createStoryModalState.storyMode === "text") {
+    textEditor.setAttribute("contenteditable", isSubmitting ? "false" : "true");
+  }
+
   if (submitBtn) {
-    const defaultText = submitBtn.dataset.defaultText || submitBtn.textContent || "Share Story";
+    const defaultText =
+      submitBtn.dataset.defaultText || submitBtn.textContent || "Share Story";
     submitBtn.dataset.defaultText = defaultText;
     submitBtn.textContent = isSubmitting ? "Sharing..." : defaultText;
 
@@ -241,59 +852,38 @@ function csSetSubmitting(isSubmitting) {
 }
 
 function csResetForm() {
-  const {
-    mediaInput,
-    fileName,
-    textInput,
-    textCount,
-    privacySelect,
-    expiresSelect,
-    thumbnailInput,
-    imagePreview,
-    videoPreview,
-    textPreview,
-  } = csGetElements();
+  const { textPreview, textEditor } = csGetElements();
 
-  createStoryModalState.contentType = 0;
-  createStoryModalState.selectedFile = null;
   createStoryModalState.isSubmitting = false;
-  csReleasePreviewObjectUrl();
+  createStoryModalState.currentStep = "mode";
+  createStoryModalState.storyMode = null;
+  createStoryModalState.backgroundColorKey = STORY_TEXT_STYLE_DEFAULTS.backgroundColorKey;
+  createStoryModalState.textColorKey = STORY_TEXT_STYLE_DEFAULTS.textColorKey;
+  createStoryModalState.fontTextKey = STORY_TEXT_STYLE_DEFAULTS.fontTextKey;
+  createStoryModalState.fontSizePx = STORY_TEXT_STYLE_DEFAULTS.fontSizePx;
+  createStoryModalState.lastTextSelectionRange = null;
 
-  if (mediaInput) {
-    mediaInput.value = "";
-    mediaInput.accept = "image/*";
-  }
-  if (fileName) {
-    fileName.textContent = "No file selected";
-  }
-  if (textInput) {
-    textInput.value = "";
-  }
-  if (textCount) {
-    textCount.textContent = "0";
-  }
-  if (privacySelect) {
-    privacySelect.value = "0";
-  }
-  if (expiresSelect) {
-    expiresSelect.value = "24";
-  }
-  if (thumbnailInput) {
-    thumbnailInput.value = "";
-  }
-  if (imagePreview) {
-    imagePreview.src = "";
-  }
-  if (videoPreview) {
-    videoPreview.pause();
-    videoPreview.removeAttribute("src");
-    videoPreview.load();
-  }
+  csCloseAllDropdowns();
+  csCloseEmojiPicker();
+  csSelectPrivacy(0);
+  csSelectExpires(24);
+
+  csClearMediaSelection();
+  csClearTextContent();
+  csApplyTextLengthLimitUI();
+
   if (textPreview) {
-    textPreview.textContent = "";
+    textPreview.removeAttribute("style");
+  }
+  if (textEditor) {
+    textEditor.removeAttribute("style");
+    textEditor.setAttribute("contenteditable", "true");
   }
 
-  csApplyContentTypeUI();
+  csEnsurePalettesRendered();
+  csApplyTextStyleUI();
+  csApplyStepUI();
+  csApplyStoryModeUI();
 }
 
 async function csReadErrorMessage(res, fallback = "Failed to create story.") {
@@ -307,7 +897,6 @@ async function csReadErrorMessage(res, fallback = "Failed to create story.") {
     if (typeof data?.title === "string" && data.title.trim()) {
       return data.title.trim();
     }
-
     if (data?.errors && typeof data.errors === "object") {
       const firstKey = Object.keys(data.errors)[0];
       const firstValue = firstKey ? data.errors[firstKey] : null;
@@ -327,16 +916,19 @@ async function csReadErrorMessage(res, fallback = "Failed to create story.") {
   return message;
 }
 
+function csDetectMediaContentType(file) {
+  if (!file || typeof file.type !== "string") return null;
+  if (file.type.startsWith("image/")) return 0;
+  if (file.type.startsWith("video/")) return 1;
+  return null;
+}
+
 function csHandleMediaChange(event) {
   const { mediaInput, fileName } = csGetElements();
   const file = event?.target?.files?.[0] || null;
 
   if (!file) {
-    createStoryModalState.selectedFile = null;
-    csReleasePreviewObjectUrl();
-    if (fileName) {
-      fileName.textContent = "No file selected";
-    }
+    csClearMediaSelection();
     csRenderPreview();
     csUpdateSubmitState();
     return;
@@ -354,20 +946,10 @@ function csHandleMediaChange(event) {
     return;
   }
 
-  const isImageStory = createStoryModalState.contentType === 0;
-  const isVideoStory = createStoryModalState.contentType === 1;
-  if (isImageStory && !file.type.startsWith("image/")) {
+  const contentType = csDetectMediaContentType(file);
+  if (contentType === null) {
     if (window.toastError) {
-      toastError("Please select an image file for image story.");
-    }
-    if (mediaInput) {
-      mediaInput.value = "";
-    }
-    return;
-  }
-  if (isVideoStory && !file.type.startsWith("video/")) {
-    if (window.toastError) {
-      toastError("Please select a video file for video story.");
+      toastError("Only image or video files are supported.");
     }
     if (mediaInput) {
       mediaInput.value = "";
@@ -376,8 +958,10 @@ function csHandleMediaChange(event) {
   }
 
   createStoryModalState.selectedFile = file;
+  createStoryModalState.mediaContentType = contentType;
   csReleasePreviewObjectUrl();
   createStoryModalState.previewObjectUrl = URL.createObjectURL(file);
+
   if (fileName) {
     fileName.textContent = csReadSelectedFileName(file);
   }
@@ -386,11 +970,64 @@ function csHandleMediaChange(event) {
   csUpdateSubmitState();
 }
 
+function csHandleFontSizeInput(rawValue) {
+  createStoryModalState.fontSizePx = csClampFontSize(rawValue);
+  csApplyTextStyleUI();
+  csRenderPreview();
+}
+
+function csHandleTextPaste(event) {
+  event.preventDefault();
+
+  const clipboardText = event.clipboardData?.getData("text/plain") || "";
+  if (!clipboardText) return;
+
+  const currentText = csGetRawTextContent();
+  const remaining = STORY_TEXT_MAX_LENGTH - currentText.length;
+  if (remaining <= 0) return;
+
+  const insertedText = clipboardText.slice(0, remaining);
+  const inserted = csInsertTextAtCursor(insertedText);
+  if (!inserted) return;
+
+  csNormalizeTextLength();
+  csSetTextCount();
+  csUpdateSubmitState();
+}
+
+function csInsertEmojiIntoEditor(emojiText) {
+  const emoji = typeof emojiText === "string" ? emojiText : "";
+  if (!emoji) return;
+
+  const currentLength = csGetRawTextContent().length;
+  if (currentLength >= STORY_TEXT_MAX_LENGTH) return;
+  const remaining = STORY_TEXT_MAX_LENGTH - currentLength;
+  const safeEmoji = emoji.slice(0, remaining);
+  if (!safeEmoji) return;
+
+  const inserted = csInsertTextAtCursor(safeEmoji);
+  if (!inserted) return;
+
+  csNormalizeTextLength();
+  csSetTextCount();
+  csUpdateSubmitState();
+}
+
 function csBindEvents() {
   if (createStoryModalState.isInitialized) return;
 
-  const { selectFileBtn, mediaInput, textInput } = csGetElements();
-  if (!selectFileBtn || !mediaInput || !textInput) return;
+  csEnsurePalettesRendered();
+  csApplyTextLengthLimitUI();
+
+  const {
+    selectFileBtn,
+    mediaInput,
+    textEditor,
+    fontSizeRange,
+    fontSizeNumber,
+  } = csGetElements();
+
+  if (!selectFileBtn || !mediaInput || !textEditor) return;
 
   selectFileBtn.addEventListener("click", () => {
     if (createStoryModalState.isSubmitting) return;
@@ -399,10 +1036,33 @@ function csBindEvents() {
 
   mediaInput.addEventListener("change", csHandleMediaChange);
 
-  textInput.addEventListener("input", () => {
+  textEditor.addEventListener("input", () => {
+    csNormalizeTextLength();
     csSetTextCount();
-    csRenderPreview();
+    csSaveTextSelection();
     csUpdateSubmitState();
+  });
+
+  textEditor.addEventListener("paste", csHandleTextPaste);
+  textEditor.addEventListener("keyup", csSaveTextSelection);
+  textEditor.addEventListener("mouseup", csSaveTextSelection);
+  textEditor.addEventListener("focus", csSaveTextSelection);
+
+  fontSizeRange?.addEventListener("input", (event) => {
+    csHandleFontSizeInput(event.target.value);
+  });
+
+  fontSizeNumber?.addEventListener("change", (event) => {
+    csHandleFontSizeInput(event.target.value);
+  });
+
+  fontSizeNumber?.addEventListener("blur", (event) => {
+    const value = event.target.value;
+    if (value === "") {
+      csHandleFontSizeInput(STORY_TEXT_FONT_SIZE.default);
+      return;
+    }
+    csHandleFontSizeInput(value);
   });
 
   createStoryModalState.isInitialized = true;
@@ -412,8 +1072,37 @@ function csBindDocumentEvents() {
   if (createStoryModalState.documentEventsBound) return;
 
   document.addEventListener("click", (event) => {
-    const { modal } = csGetElements();
+    const { modal, emojiPickerContainer, emojiBtn } = csGetElements();
     if (!modal || !modal.classList.contains("show")) return;
+
+    if (createStoryModalState.activeDropdown) {
+      const dropName = createStoryModalState.activeDropdown;
+      const dropdown = document.getElementById(
+        `cs${dropName.charAt(0).toUpperCase() + dropName.slice(1)}Dropdown`,
+      );
+      const selector = document.getElementById(
+        `cs${dropName.charAt(0).toUpperCase() + dropName.slice(1)}Selector`,
+      );
+      if (
+        dropdown &&
+        selector &&
+        !dropdown.contains(event.target) &&
+        !selector.contains(event.target)
+      ) {
+        dropdown.classList.remove("show");
+        createStoryModalState.activeDropdown = null;
+      }
+    }
+
+    if (
+      emojiPickerContainer &&
+      emojiPickerContainer.classList.contains("show") &&
+      !emojiPickerContainer.contains(event.target) &&
+      !emojiBtn?.contains(event.target)
+    ) {
+      csCloseEmojiPicker();
+    }
+
     if (event.target === modal) {
       closeCreateStoryModal();
     }
@@ -421,24 +1110,133 @@ function csBindDocumentEvents() {
 
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
-    const { modal } = csGetElements();
+    const { modal, emojiPickerContainer } = csGetElements();
     if (!modal || !modal.classList.contains("show")) return;
+
+    if (createStoryModalState.activeDropdown) {
+      csCloseAllDropdowns();
+      return;
+    }
+
+    if (emojiPickerContainer?.classList.contains("show")) {
+      csCloseEmojiPicker();
+      return;
+    }
+
     closeCreateStoryModal();
   });
 
   createStoryModalState.documentEventsBound = true;
 }
 
-window.setCreateStoryContentType = function (nextType) {
-  const parsed = Number(nextType);
-  if (![0, 1, 2].includes(parsed)) return;
+window.setCreateStoryMode = function (nextMode) {
   if (createStoryModalState.isSubmitting) return;
 
-  createStoryModalState.contentType = parsed;
-  csApplyContentTypeUI();
+  const normalizedMode =
+    typeof nextMode === "string" ? nextMode.trim().toLowerCase() : "";
+  if (!["text", "media"].includes(normalizedMode)) return;
+
+  createStoryModalState.storyMode = normalizedMode;
+  createStoryModalState.currentStep = "editor";
+  csCloseAllDropdowns();
+
+  if (normalizedMode === "text") {
+    csClearMediaSelection();
+  } else {
+    csCloseEmojiPicker();
+    csClearTextContent();
+  }
+
+  csApplyStepUI();
+  csApplyStoryModeUI();
+
+  if (normalizedMode === "text") {
+    const { textEditor } = csGetElements();
+    if (textEditor && !createStoryModalState.isSubmitting) {
+      textEditor.focus();
+      csMoveCaretToEnd(textEditor);
+    }
+  }
+
   if (window.lucide) {
     lucide.createIcons();
   }
+};
+
+window.backCreateStoryMode = function () {
+  if (createStoryModalState.isSubmitting) return;
+
+  createStoryModalState.currentStep = "mode";
+  createStoryModalState.storyMode = null;
+  csCloseAllDropdowns();
+  csCloseEmojiPicker();
+  csClearMediaSelection();
+  csClearTextContent();
+  csApplyStepUI();
+  csApplyStoryModeUI();
+};
+
+window.selectCreateStoryBackground = function (nextKey) {
+  if (createStoryModalState.isSubmitting) return;
+  createStoryModalState.backgroundColorKey = csResolveStyleKey(
+    STORY_TEXT_STYLE_OPTIONS.backgrounds,
+    nextKey,
+    STORY_TEXT_STYLE_DEFAULTS.backgroundColorKey,
+  );
+  csApplyTextStyleUI();
+  csRenderPreview();
+};
+
+window.selectCreateStoryTextColor = function (nextKey) {
+  if (createStoryModalState.isSubmitting) return;
+  createStoryModalState.textColorKey = csResolveStyleKey(
+    STORY_TEXT_STYLE_OPTIONS.textColors,
+    nextKey,
+    STORY_TEXT_STYLE_DEFAULTS.textColorKey,
+  );
+  csApplyTextStyleUI();
+  csRenderPreview();
+};
+
+window.selectCreateStoryFont = function (nextKey) {
+  if (createStoryModalState.isSubmitting) return;
+  createStoryModalState.fontTextKey = csResolveStyleKey(
+    STORY_TEXT_STYLE_OPTIONS.fonts,
+    nextKey,
+    STORY_TEXT_STYLE_DEFAULTS.fontTextKey,
+  );
+  csApplyTextStyleUI();
+  csRenderPreview();
+};
+
+window.selectCreateStoryFontSize = function (nextValue) {
+  if (createStoryModalState.isSubmitting) return;
+  csHandleFontSizeInput(nextValue);
+};
+
+window.toggleCreateStoryEmojiPicker = async function (event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  if (createStoryModalState.isSubmitting) return;
+  if (createStoryModalState.storyMode !== "text") return;
+
+  const { emojiPickerContainer, textEditor } = csGetElements();
+  if (!emojiPickerContainer || !textEditor) return;
+
+  csSaveTextSelection();
+
+  if (!window.EmojiUtils?.togglePicker) {
+    if (window.toastError) {
+      toastError("Emoji picker is unavailable.");
+    }
+    return;
+  }
+
+  await window.EmojiUtils.togglePicker(emojiPickerContainer, (emoji) => {
+    csInsertEmojiIntoEditor(emoji?.native || "");
+  });
 };
 
 window.openCreateStoryModal = function () {
@@ -465,12 +1263,194 @@ window.closeCreateStoryModal = function (forceClose = false) {
   const { modal } = csGetElements();
   if (!modal) return;
 
+  if (!forceClose && window.csHasUnsavedChanges()) {
+    window.csShowDiscardConfirmation();
+    return;
+  }
+
   modal.classList.remove("show");
   if (window.unlockScroll) {
     window.unlockScroll();
   }
 
   csResetForm();
+};
+
+window.csHasUnsavedChanges = function() {
+  if (createStoryModalState.storyMode === "text") {
+    return csGetTrimmedTextContent().length > 0;
+  }
+  if (createStoryModalState.storyMode === "media") {
+    return createStoryModalState.selectedFile !== null;
+  }
+  return false;
+};
+
+window.csShowDiscardConfirmation = function() {
+  const overlay = document.createElement("div");
+  overlay.className = "post-options-overlay";
+  overlay.id = "csDiscardOverlay";
+
+  const popup = document.createElement("div");
+  popup.className = "post-options-popup";
+
+  popup.innerHTML = `
+      <div class="post-options-header">
+          <h3>Discard story?</h3>
+          <p>If you leave, your edits won't be saved.</p>
+      </div>
+      <button class="post-option post-option-danger" onclick="csConfirmDiscard()">
+          Discard
+      </button>
+      <button class="post-option post-option-cancel" onclick="csCancelDiscard()">
+          Cancel
+      </button>
+  `;
+
+  overlay.appendChild(popup);
+  document.body.appendChild(overlay);
+
+  if (window.lucide) {
+    lucide.createIcons();
+  }
+
+  requestAnimationFrame(() => overlay.classList.add("show"));
+
+  overlay.onclick = (e) => {
+    if (e.target === overlay) {
+      window.csCancelDiscard();
+    }
+  };
+};
+
+window.csConfirmDiscard = function() {
+  const overlay = document.getElementById("csDiscardOverlay");
+  if (overlay) overlay.remove();
+  
+  window.closeCreateStoryModal(true);
+};
+
+window.csCancelDiscard = function() {
+  const overlay = document.getElementById("csDiscardOverlay");
+  if (overlay) {
+    overlay.classList.remove("show");
+    setTimeout(() => overlay.remove(), 200);
+  }
+};
+
+window.csToggleDropdown = function (dropdownName, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  if (createStoryModalState.isSubmitting) return;
+
+  const normalizedName =
+    typeof dropdownName === "string" ? dropdownName.trim().toLowerCase() : "";
+  if (!["privacy", "expires"].includes(normalizedName)) return;
+
+  const dropId = `cs${normalizedName.charAt(0).toUpperCase() + normalizedName.slice(1)}Dropdown`;
+  const btnId = `cs${normalizedName.charAt(0).toUpperCase() + normalizedName.slice(1)}Selector`;
+  const dropdown = document.getElementById(dropId);
+  const selector = document.getElementById(btnId);
+  if (!dropdown || !selector) return;
+
+  const isSameDropdown = createStoryModalState.activeDropdown === normalizedName;
+  csCloseAllDropdowns();
+  if (isSameDropdown) return;
+
+  const rect = selector.getBoundingClientRect();
+  dropdown.style.left = `${rect.left}px`;
+
+  // Measure dropdown height
+  dropdown.style.visibility = "hidden";
+  dropdown.style.display = "block";
+  dropdown.classList.add("show");
+  const dropdownHeight = dropdown.offsetHeight;
+  dropdown.classList.remove("show");
+  dropdown.style.display = "";
+  dropdown.style.visibility = "";
+
+  const spaceBelow = window.innerHeight - rect.bottom;
+
+  if (spaceBelow >= dropdownHeight + 10) {
+    dropdown.style.top = `${rect.bottom + 8}px`;
+    dropdown.style.bottom = "auto";
+    dropdown.classList.remove("dropup");
+  } else {
+    dropdown.style.top = "auto";
+    dropdown.style.bottom = `${window.innerHeight - rect.top + 8}px`;
+    dropdown.classList.add("dropup");
+  }
+
+  dropdown.classList.add("show");
+  createStoryModalState.activeDropdown = normalizedName;
+};
+
+window.csSelectPrivacy = function (rawValue) {
+  const parsed = Number.parseInt(String(rawValue), 10);
+  const value = [0, 1, 2].includes(parsed) ? parsed : 0;
+  createStoryModalState.privacy = value;
+
+  const iconMap = {
+    0: { icon: "globe", text: "Public" },
+    1: { icon: "users", text: "Followers Only" },
+    2: { icon: "lock", text: "Private" },
+  };
+  const selected = iconMap[value];
+
+  const icon = document.getElementById("csPrivacyIcon");
+  const text = document.getElementById("csPrivacyText");
+  if (icon && text) {
+    icon.setAttribute("data-lucide", selected.icon);
+    text.textContent = selected.text;
+  }
+
+  const options = document.querySelectorAll("#csPrivacyDropdown .privacy-option");
+  options.forEach((opt) => {
+    const optionValue = Number.parseInt(opt.getAttribute("data-privacy") || "0", 10);
+    opt.classList.toggle("active", optionValue === value);
+  });
+
+  document.getElementById("csPrivacyDropdown")?.classList.remove("show");
+  createStoryModalState.activeDropdown = null;
+
+  if (window.lucide) {
+    lucide.createIcons();
+  }
+};
+
+window.csSelectExpires = function (rawValue) {
+  const parsed = Number.parseInt(String(rawValue), 10);
+  const value = [6, 12, 24].includes(parsed) ? parsed : 24;
+  createStoryModalState.expires = value;
+
+  const iconMap = {
+    6: { icon: "clock-1", text: "6 hours" },
+    12: { icon: "clock-2", text: "12 hours" },
+    24: { icon: "clock-3", text: "24 hours" },
+  };
+  const selected = iconMap[value];
+
+  const icon = document.getElementById("csExpiresIcon");
+  const text = document.getElementById("csExpiresText");
+  if (icon && text) {
+    icon.setAttribute("data-lucide", selected.icon);
+    text.textContent = selected.text;
+  }
+
+  const options = document.querySelectorAll("#csExpiresDropdown .privacy-option");
+  options.forEach((opt) => {
+    const optionValue = Number.parseInt(opt.getAttribute("data-expires") || "24", 10);
+    opt.classList.toggle("active", optionValue === value);
+  });
+
+  document.getElementById("csExpiresDropdown")?.classList.remove("show");
+  createStoryModalState.activeDropdown = null;
+
+  if (window.lucide) {
+    lucide.createIcons();
+  }
 };
 
 window.submitCreateStory = async function () {
@@ -485,32 +1465,31 @@ window.submitCreateStory = async function () {
 
   if (!csValidateBeforeSubmit(true)) return;
 
-  const { textInput, privacySelect, expiresSelect, thumbnailInput } = csGetElements();
-
   const formData = new FormData();
-  formData.append("ContentType", String(createStoryModalState.contentType));
 
-  const privacy = Number.parseInt(privacySelect?.value || "0", 10);
-  formData.append("Privacy", String(Number.isNaN(privacy) ? 0 : privacy));
-
-  const expiresRaw = Number.parseInt(expiresSelect?.value || "24", 10);
-  const expires = [6, 12, 24].includes(expiresRaw) ? expiresRaw : 24;
-  formData.append("ExpiresEnum", String(expires));
-
-  if (createStoryModalState.contentType === 2) {
-    formData.append("TextContent", (textInput?.value || "").trim());
-  } else if (createStoryModalState.selectedFile) {
-    formData.append(
-      "MediaFile",
-      createStoryModalState.selectedFile,
-      createStoryModalState.selectedFile.name,
-    );
-
-    const thumbnail = (thumbnailInput?.value || "").trim();
-    if (thumbnail) {
-      formData.append("ThumbnailUrl", thumbnail);
+  if (createStoryModalState.storyMode === "text") {
+    const style = csGetResolvedTextStyle();
+    formData.append("ContentType", "2");
+    formData.append("TextContent", csGetTrimmedTextContent());
+    formData.append("BackgroundColorKey", style.backgroundColorKey);
+    formData.append("TextColorKey", style.textColorKey);
+    formData.append("FontTextKey", style.fontTextKey);
+    formData.append("FontSizeKey", String(style.fontSizePx));
+  } else {
+    const mediaFile = createStoryModalState.selectedFile;
+    const mediaContentType = createStoryModalState.mediaContentType;
+    if (!mediaFile || mediaContentType === null) {
+      if (window.toastError) {
+        toastError("Please upload an image or video first.");
+      }
+      return;
     }
+    formData.append("ContentType", String(mediaContentType));
+    formData.append("MediaFile", mediaFile, mediaFile.name);
   }
+
+  formData.append("Privacy", String(createStoryModalState.privacy));
+  formData.append("ExpiresEnum", String(createStoryModalState.expires));
 
   csSetSubmitting(true);
   if (typeof window.showGlobalLoader === "function") {

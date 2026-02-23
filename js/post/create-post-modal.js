@@ -823,7 +823,7 @@ function resetPostForm() {
     const header = document.querySelector(
       `[onclick*="toggleSection('${section}')"]`,
     );
-    if (header) header.classList.remove("expanded");
+    
   });
 }
 
@@ -942,21 +942,23 @@ function toggleSection(sectionName) {
 
   if (content.style.display === "none" || content.style.display === "") {
     content.style.display = "block";
-    if (header) header.classList.add("expanded");
+    
   } else {
     content.style.display = "none";
-    if (header) header.classList.remove("expanded");
+    
   }
 }
 
 // Toggle emoji picker
 async function toggleEmojiPicker(event) {
-  event.stopPropagation();
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
 
   const container = document.getElementById("emojiPickerContainer");
   if (!container) return;
 
-  const header = event.currentTarget;
   const captionInput = document.getElementById("postCaption");
 
   // Check if closing
@@ -968,7 +970,7 @@ async function toggleEmojiPicker(event) {
       container.classList.remove("show");
       container.innerHTML = "";
     }
-    if (header) header.classList.remove("expanded");
+    
   } else {
     // Opening
     if (window.EmojiUtils) {
@@ -976,7 +978,7 @@ async function toggleEmojiPicker(event) {
         EmojiUtils.insertAtCursor(captionInput, emoji.native);
         updateCharCount(); // App specific logic
       });
-      if (header) header.classList.add("expanded");
+      
     } else {
       console.error("EmojiUtils not found");
     }
@@ -1022,7 +1024,7 @@ function togglePrivacyDropdown(event) {
     const chevron = document.getElementById("emojiChevron");
     if (chevron) {
       const header = chevron.closest(".section-header");
-      if (header) header.classList.remove("expanded");
+      
     }
   }
 
@@ -1979,7 +1981,7 @@ document.addEventListener("click", (e) => {
     const chevron = document.getElementById("emojiChevron");
     if (chevron) {
       const header = chevron.closest(".section-header");
-      if (header) header.classList.remove("expanded");
+      
     }
   }
 });
@@ -2016,7 +2018,7 @@ document.addEventListener("keydown", (e) => {
         const chevron = document.getElementById("emojiChevron");
         if (chevron) {
           const header = chevron.closest(".section-header");
-          if (header) header.classList.remove("expanded");
+          
         }
         return;
       }
@@ -2050,3 +2052,5 @@ document.addEventListener("click", (e) => {
     toggleSwitch.classList.toggle("active");
   }
 });
+
+
