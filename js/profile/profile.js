@@ -47,6 +47,60 @@
     });
   }
 
+  function resolveStoryRingClass(storyRingState) {
+    const normalizedState = (storyRingState ?? "").toString().trim().toLowerCase();
+
+    if (
+      storyRingState === 2 ||
+      normalizedState === "2" ||
+      normalizedState === "unseen" ||
+      normalizedState === "story-ring-unseen"
+    ) {
+      return "story-ring-unseen";
+    }
+
+    if (
+      storyRingState === 1 ||
+      normalizedState === "1" ||
+      normalizedState === "seen" ||
+      normalizedState === "story-ring-seen"
+    ) {
+      return "story-ring-seen";
+    }
+
+    return "";
+  }
+
+  function escapeAttr(value) {
+    return (value || "")
+      .toString()
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function renderProfileAvatar(avatarWrapper, avatarUrl, storyRingState) {
+    if (!avatarWrapper) return;
+
+    const ringClass = resolveStoryRingClass(storyRingState);
+    const safeAvatarUrl = escapeAttr(avatarUrl || APP_CONFIG.DEFAULT_AVATAR);
+
+    avatarWrapper.classList.remove("profile-avatar-wrapper--story-ring");
+
+    if (!ringClass) {
+      avatarWrapper.innerHTML = `<img id="profile-avatar" src="${safeAvatarUrl}" alt="Profile Picture">`;
+      return;
+    }
+
+    avatarWrapper.classList.add("profile-avatar-wrapper--story-ring");
+    avatarWrapper.innerHTML = `
+      <span class="post-avatar-ring ${ringClass} profile-story-ring">
+        <img id="profile-avatar" class="post-avatar" src="${safeAvatarUrl}" alt="Profile Picture">
+      </span>
+    `;
+  }
+
   function applyProfilePresenceDot(accountId) {
     const avatarWrapper = document.querySelector(".profile-avatar-wrapper");
     if (!avatarWrapper) return;
@@ -279,12 +333,13 @@
     if (grid) grid.innerHTML = "";
 
     // Reset Header UI placeholders to prevent confusing user with old data while loading
-    const avatarImg = document.getElementById("profile-avatar");
+    const avatarWrapper = document.querySelector(".profile-avatar-wrapper");
     const fullNameLabel = document.getElementById("profile-fullname");
     const bioText = document.getElementById("profile-bio-text");
     const coverImg = document.getElementById("profile-cover-img");
 
-    if (avatarImg) avatarImg.src = APP_CONFIG.DEFAULT_AVATAR;
+    if (avatarWrapper)
+      renderProfileAvatar(avatarWrapper, APP_CONFIG.DEFAULT_AVATAR, null);
     if (fullNameLabel) fullNameLabel.textContent = "Loading...";
     if (bioText) bioText.textContent = "";
     const bioSection = document.querySelector(".profile-bio-section");
@@ -526,7 +581,7 @@
   function renderProfileHeader(data) {
     // Find elements
     const coverImg = document.getElementById("profile-cover-img");
-    const avatarImg = document.getElementById("profile-avatar");
+    const avatarWrapper = document.querySelector(".profile-avatar-wrapper");
     const usernameHeader = document.getElementById("profile-username-header");
     const fullNameLabel = document.getElementById("profile-fullname");
     const bioText = document.getElementById("profile-bio-text");
@@ -545,9 +600,12 @@
 
     // Cover & Avatar
     const avatarUrl = info.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
+    const storyRingState = info.storyRingState ?? data.storyRingState ?? null;
     const profileCover = document.querySelector(".profile-cover");
 
-    if (avatarImg) avatarImg.src = avatarUrl;
+    if (avatarWrapper) {
+      renderProfileAvatar(avatarWrapper, avatarUrl, storyRingState);
+    }
 
     if (coverImg) {
       if (info.coverUrl) {

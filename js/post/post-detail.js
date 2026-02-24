@@ -10,6 +10,56 @@ let viewedPostsState = new Map(); // postId -> { reactCount, isReacted, commentC
 
 
 
+function resolveStoryRingClass(storyRingState) {
+    const normalizedState = (storyRingState ?? "").toString().trim().toLowerCase();
+
+    if (
+        storyRingState === 2 ||
+        normalizedState === "2" ||
+        normalizedState === "unseen" ||
+        normalizedState === "story-ring-unseen"
+    ) {
+        return "story-ring-unseen";
+    }
+
+    if (
+        storyRingState === 1 ||
+        normalizedState === "1" ||
+        normalizedState === "seen" ||
+        normalizedState === "story-ring-seen"
+    ) {
+        return "story-ring-seen";
+    }
+
+    return "";
+}
+
+function escapeHtmlAttr(value) {
+    return (value || "")
+        .toString()
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
+
+function renderDetailAvatar(avatarLink, avatarUrl, storyRingState) {
+    if (!avatarLink) return;
+
+    const ringClass = resolveStoryRingClass(storyRingState);
+    avatarLink.classList.remove("post-avatar-ring", "story-ring-unseen", "story-ring-seen", "post-detail-avatar-ring");
+    avatarLink.style.removeProperty("--_avatar");
+    avatarLink.style.removeProperty("--_ring");
+    avatarLink.style.removeProperty("--_gap");
+
+    if (ringClass) {
+        avatarLink.classList.add("post-avatar-ring", ringClass, "post-detail-avatar-ring");
+    }
+
+    const safeAvatarUrl = escapeHtmlAttr(avatarUrl || APP_CONFIG.DEFAULT_AVATAR);
+    avatarLink.innerHTML = `<img id="detailAvatar" src="${safeAvatarUrl}" alt="" class="user-avatar post-avatar">`;
+}
+
 /* formatFullDateTime moved to shared/post-utils.js */
 
 // Load PostEdit module dynamically
@@ -618,7 +668,11 @@ function resetPostDetailView() {
     if (prevBtn) prevBtn.style.display = 'none';
     if (nextBtn) nextBtn.style.display = 'none';
     
-    document.getElementById("detailAvatar").src = APP_CONFIG.DEFAULT_AVATAR;
+    const detailAvatarLink = document.getElementById("detailAvatarLink");
+    if (detailAvatarLink) {
+        detailAvatarLink.href = "#";
+        renderDetailAvatar(detailAvatarLink, APP_CONFIG.DEFAULT_AVATAR, null);
+    }
     document.getElementById("detailUsername").textContent = "";
     document.getElementById("detailSliderWrapper").innerHTML = "";
     
@@ -673,28 +727,30 @@ function renderPostDetail(post, navigateDirection = null) {
     }
 
     // 1. Header Info
-    const avatar = document.getElementById("detailAvatar");
     const username = document.getElementById("detailUsername");
     const location = document.getElementById("detailLocation"); // Not in API, placeholder
+    const avatarLink = document.getElementById("detailAvatarLink");
+    const usernameLink = document.getElementById("detailUsernameLink");
+    const avatarUrl = post.owner.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
+
+    if (avatarLink) {
+        avatarLink.href = `#/profile/${post.owner.username}`;
+        renderDetailAvatar(avatarLink, avatarUrl, post.owner?.storyRingState);
+    }
+    if (usernameLink) usernameLink.href = `#/profile/${post.owner.username}`;
 
     // Enable Profile Preview
-    avatar.classList.add("post-avatar");
+    const avatar = document.getElementById("detailAvatar");
+    if (avatar) avatar.classList.add("post-avatar");
     username.classList.add("post-username");
     
-    const userInfo = avatar.closest(".user-info");
+    const userInfo = document.querySelector("#postDetailModal .detail-header .user-info");
     if (userInfo) {
         userInfo.classList.add("post-user");
         userInfo.dataset.accountId = post.owner.accountId;
     }
 
-    avatar.src = post.owner.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
     username.textContent = PostUtils.truncateName(post.owner.username || post.owner.fullName);
-    
-    // Update Hrefs for navigation
-    const avatarLink = document.getElementById("detailAvatarLink");
-    const usernameLink = document.getElementById("detailUsernameLink");
-    if (avatarLink) avatarLink.href = `#/profile/${post.owner.username}`;
-    if (usernameLink) usernameLink.href = `#/profile/${post.owner.username}`;
     
     // Header Options Button
     const moreBtn = document.querySelector("#postDetailModal .more-options-btn");

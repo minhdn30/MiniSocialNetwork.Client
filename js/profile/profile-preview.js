@@ -76,6 +76,52 @@ function applyPreviewPresenceDot(accountId) {
   }
 }
 
+function getStoryRingClass(storyRingState) {
+  const normalizedState = (storyRingState ?? "").toString().trim().toLowerCase();
+
+  if (
+    storyRingState === 2 ||
+    normalizedState === "2" ||
+    normalizedState === "unseen" ||
+    normalizedState === "story-ring-unseen"
+  ) {
+    return "story-ring-unseen";
+  }
+
+  if (
+    storyRingState === 1 ||
+    normalizedState === "1" ||
+    normalizedState === "seen" ||
+    normalizedState === "story-ring-seen"
+  ) {
+    return "story-ring-seen";
+  }
+
+  return "";
+}
+
+function escapeAttr(value) {
+  return (value || "")
+    .toString()
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function renderProfilePreviewAvatar(avatarUrl, storyRingClass) {
+  const safeAvatarUrl = escapeAttr(avatarUrl || APP_CONFIG.DEFAULT_AVATAR);
+  if (!storyRingClass) {
+    return `<img class="profile-preview-avatar-image" src="${safeAvatarUrl}" alt="avatar">`;
+  }
+
+  return `
+    <span class="post-avatar-ring profile-preview-avatar-ring ${storyRingClass}">
+      <img class="post-avatar" src="${safeAvatarUrl}" alt="avatar">
+    </span>
+  `;
+}
+
 /* ===== Create preview element ===== */
 function createProfilePreview() {
   previewEl = document.createElement("div");
@@ -113,6 +159,11 @@ function renderProfilePreview(data) {
   isFollowing = data.isFollowedByCurrentUser ?? false;
 
   const avatarUrl = data.account.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
+  const storyRingClass = getStoryRingClass(data.account?.storyRingState);
+  const avatarWrapperClass = storyRingClass
+    ? "profile-preview-avatar-wrapper with-story-ring"
+    : "profile-preview-avatar-wrapper";
+  const avatarMarkup = renderProfilePreviewAvatar(avatarUrl, storyRingClass);
 
   // Actions buttons
   let actionsHTML = "";
@@ -163,8 +214,8 @@ function renderProfilePreview(data) {
     </div>
     <div class="profile-preview-content">
         <div class="profile-preview-header" onclick="viewProfile('${data.account.username}')">
-            <div class="profile-preview-avatar-wrapper">
-                <img src="${avatarUrl}" alt="avatar">
+            <div class="${avatarWrapperClass}">
+                ${avatarMarkup}
             </div>
             <div class="profile-preview-info">
                 <div class="profile-preview-name" id="pp-username">${data.account.username}</div>
@@ -335,6 +386,15 @@ function hidePreview() {
 }
 window.hidePreview = hidePreview;
 
+function isProfilePreviewTrigger(target) {
+  if (!target) return false;
+  return !!(
+    target.closest(".post-avatar") ||
+    target.closest(".post-avatar-ring") ||
+    target.closest(".post-username")
+  );
+}
+
 /* ===== Init hover ===== */
 function initProfilePreview() {
   if (previewEl) return;
@@ -389,10 +449,7 @@ function initProfilePreview() {
   if (isTouchDevice) {
     // Mobile: Click to show preview
     document.addEventListener("click", async (e) => {
-      const avatar = e.target.closest(".post-avatar");
-      const username = e.target.closest(".post-username");
-
-      if (!avatar && !username) {
+      if (!isProfilePreviewTrigger(e.target)) {
         // Click outside - hide preview
         if (!e.target.closest("#profile-preview")) {
           hidePreview();
@@ -425,10 +482,7 @@ function initProfilePreview() {
   } else {
     // Desktop: Hover to show preview
     document.addEventListener("mouseover", async (e) => {
-      const avatar = e.target.closest(".post-avatar");
-      const username = e.target.closest(".post-username");
-
-      if (!avatar && !username) return;
+      if (!isProfilePreviewTrigger(e.target)) return;
 
       const userEl = e.target.closest(".post-user");
       if (!userEl) return;
@@ -463,10 +517,22 @@ function initProfilePreview() {
     });
 
     document.addEventListener("mouseout", (e) => {
-      const avatar = e.target.closest(".post-avatar");
-      const username = e.target.closest(".post-username");
+      if (!isProfilePreviewTrigger(e.target)) return;
 
-      if (!avatar && !username) return;
+      const nextTarget = e.relatedTarget;
+      if (nextTarget && nextTarget.closest("#profile-preview")) {
+        clearTimeout(hideTimer);
+        return;
+      }
+
+      const currentUserEl = e.target.closest(".post-user");
+      const nextUserEl = nextTarget && nextTarget.closest
+        ? nextTarget.closest(".post-user")
+        : null;
+      if (currentUserEl && nextUserEl && currentUserEl === nextUserEl) {
+        clearTimeout(hideTimer);
+        return;
+      }
 
       clearTimeout(hoverTimer);
       hideTimer = setTimeout(hidePreview, 300);
@@ -474,9 +540,7 @@ function initProfilePreview() {
 
     // Global click listener to kill preview when navigating
     document.addEventListener("click", (e) => {
-      const avatar = e.target.closest(".post-avatar");
-      const username = e.target.closest(".post-username");
-      if (avatar || username) {
+      if (isProfilePreviewTrigger(e.target)) {
         hidePreview();
       }
     });

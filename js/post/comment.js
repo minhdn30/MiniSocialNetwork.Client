@@ -13,6 +13,67 @@ const CommentModule = (function () {
   // Race condition prevention: Request ID validation
   let currentLoadRequestId = 0;
 
+  function resolveStoryRingClass(storyRingState) {
+    const normalizedState = (storyRingState ?? "").toString().trim().toLowerCase();
+
+    if (
+      storyRingState === 2 ||
+      normalizedState === "2" ||
+      normalizedState === "unseen" ||
+      normalizedState === "story-ring-unseen"
+    ) {
+      return "story-ring-unseen";
+    }
+
+    if (
+      storyRingState === 1 ||
+      normalizedState === "1" ||
+      normalizedState === "seen" ||
+      normalizedState === "story-ring-seen"
+    ) {
+      return "story-ring-seen";
+    }
+
+    return "";
+  }
+
+  function escapeAttr(value) {
+    return (value || "")
+      .toString()
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function buildCommentAvatarHtml(owner, ringSizeClass = "") {
+    const avatarUrl = owner?.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
+    const ringClass = resolveStoryRingClass(owner?.storyRingState);
+    const safeAvatarUrl = escapeAttr(avatarUrl);
+    const profileHref = `#/profile/${owner?.username || ""}`;
+
+    if (!ringClass) {
+      return {
+        hasRing: false,
+        html: `
+                    <a href="${profileHref}" style="text-decoration: none;" onclick="event.stopPropagation()">
+                        <img class="comment-avatar post-avatar" src="${safeAvatarUrl}" alt="avatar" />
+                    </a>
+        `,
+      };
+    }
+
+    const ringClassSuffix = ringSizeClass ? ` ${ringSizeClass}` : "";
+    return {
+      hasRing: true,
+      html: `
+                    <a href="${profileHref}" class="post-avatar-ring ${ringClass}${ringClassSuffix}" style="text-decoration: none;" onclick="event.stopPropagation()">
+                        <img class="comment-avatar post-avatar" src="${safeAvatarUrl}" alt="avatar" />
+                    </a>
+      `,
+    };
+  }
+
   /**
    * Initialize or reset comment state for a new post
    */
@@ -181,7 +242,7 @@ const CommentModule = (function () {
     item.className = "comment-item";
     item.dataset.commentId = comment.commentId;
 
-    const avatarUrl = comment.owner.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
+    const avatarView = buildCommentAvatarHtml(comment.owner, "comment-avatar-ring");
     const timeDisplay = PostUtils.timeAgo(comment.createdAt, true);
     const myAccountId = localStorage.getItem("accountId");
     const canEdit = comment.owner.accountId === myAccountId;
@@ -189,14 +250,11 @@ const CommentModule = (function () {
     const canDelete = canEdit || (currentPostOwnerId === myAccountId);
 
     const isReacted = comment.isCommentReactedByCurrentUser;
-
     item.innerHTML = `
         <div class="comment-content-wrapper">
             <div class="comment-header">
                 <div class="post-user" data-account-id="${comment.owner.accountId}">
-                    <a href="#/profile/${comment.owner.username}" style="text-decoration: none; display: block;" onclick="event.stopPropagation()">
-                        <img class="comment-avatar post-avatar" src="${avatarUrl}" alt="avatar" />
-                    </a>
+                    ${avatarView.html}
                     <a href="#/profile/${comment.owner.username}" style="text-decoration: none; color: inherit; display: flex; align-items: center;" onclick="event.stopPropagation()">
                         <span class="comment-username post-username" style="line-height: 1;">${PostUtils.truncateName(comment.owner.username || comment.owner.fullName)}</span>
                     </a>
@@ -639,7 +697,7 @@ const CommentModule = (function () {
     item.dataset.replyId = reply.commentId;
     item.dataset.createdAt = reply.createdAt; // Store for sorting logic
 
-    const avatarUrl = reply.owner.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
+    const avatarView = buildCommentAvatarHtml(reply.owner, "reply-avatar-ring");
     const timeDisplay = PostUtils.timeAgo(reply.createdAt, true);
     const isReacted = reply.isCommentReactedByCurrentUser;
 
@@ -647,14 +705,11 @@ const CommentModule = (function () {
     const canEdit = reply.owner.accountId === myAccountId;
     // canDelete: Owner of reply OR Owner of the post
     const canDelete = canEdit || (currentPostOwnerId === myAccountId);
-
     item.innerHTML = `
         <div class="comment-content-wrapper">
             <div class="comment-header">
                 <div class="post-user" data-account-id="${reply.owner.accountId}">
-                    <a href="#/profile/${reply.owner.username}" style="text-decoration: none; display: block;" onclick="event.stopPropagation()">
-                        <img class="comment-avatar post-avatar" src="${avatarUrl}" alt="avatar" />
-                    </a>
+                    ${avatarView.html}
                     <a href="#/profile/${reply.owner.username}" style="text-decoration: none; color: inherit; display: flex; align-items: center;" onclick="event.stopPropagation()">
                         <span class="comment-username post-username" style="line-height: 1;">${PostUtils.truncateName(reply.owner.username || reply.owner.fullName)}</span>
                     </a>

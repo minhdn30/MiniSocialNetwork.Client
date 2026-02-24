@@ -560,6 +560,12 @@ body.chat-sidebar-open #sidebar.expanded ~ .main-content {
   object-fit: cover;
 }
 
+/* Story ring in chat sidebar uses fixed outer slot (56px desktop, 48px mobile). */
+.chat-avatar-wrapper .chat-sidebar-avatar-ring.story-ring-unseen,
+.chat-avatar-wrapper .chat-sidebar-avatar-ring.story-ring-seen {
+  --_avatar: 48px;
+}
+
 .chat-status-dot {
   position: absolute;
   right: calc(
@@ -769,6 +775,11 @@ body.chat-sidebar-open #sidebar.expanded ~ .main-content {
     --presence-avatar-size: 48px;
     width: 48px;
     height: 48px;
+  }
+
+  .chat-avatar-wrapper .chat-sidebar-avatar-ring.story-ring-unseen,
+  .chat-avatar-wrapper .chat-sidebar-avatar-ring.story-ring-seen {
+    --_avatar: 40px;
   }
 }
 

@@ -1338,7 +1338,11 @@ const ChatPage = {
 
         const avatarContainer = document.getElementById('chat-view-avatar');
         if (avatarContainer) {
-            const avatarHtml = ChatCommon.renderAvatar(meta, { className: 'chat-view-img' });
+            const avatarHtml = ChatCommon.renderAvatar(meta, {
+                className: 'chat-view-img',
+                enableStoryRing: true,
+                storyRingStyle: '--_avatar: 36px;'
+            });
             avatarContainer.innerHTML = avatarHtml;
             if (window.lucide) lucide.createIcons({ container: avatarContainer });
         }

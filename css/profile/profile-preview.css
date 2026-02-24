@@ -74,11 +74,21 @@
   z-index: 3; /* Ensure avatar is on top of the merged name badge */
 }
 
-.profile-preview-avatar-wrapper img {
+.profile-preview-avatar-wrapper > .profile-preview-avatar-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
   border-radius: 50%;
+  display: block;
+}
+
+.profile-preview-avatar-wrapper.with-story-ring {
+  border: 0;
+  background: transparent;
+}
+
+.profile-preview-avatar-ring {
+  --_avatar: 60px;
 }
 
 .profile-preview-online-dot {
@@ -333,6 +343,10 @@
     margin-top: -30px;
   }
 
+  .profile-preview-avatar-ring {
+    --_avatar: 52px;
+  }
+
   .profile-preview-info {
     margin-top: -15px;
   }
@@ -357,6 +371,10 @@
     height: 56px;
     margin-top: -28px;
     border-width: 2px;
+  }
+
+  .profile-preview-avatar-ring {
+    --_avatar: 48px;
   }
 
   .profile-preview-info {
@@ -411,7 +429,7 @@
     margin-bottom: 12px;
   }
 
-  .profile-preview-header img {
+  .profile-preview-avatar-wrapper > .profile-preview-avatar-image {
     width: 44px;
     height: 44px;
   }
