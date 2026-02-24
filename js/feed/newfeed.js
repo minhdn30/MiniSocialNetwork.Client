@@ -92,11 +92,30 @@
     if (window.lucide) lucide.createIcons();
   }
 
+  function normalizeAccountId(value) {
+    return (value || "").toString().trim().toLowerCase();
+  }
+
+  function isCurrentViewerAccount(accountId) {
+    const targetId = normalizeAccountId(accountId);
+    if (!targetId) return false;
+    const currentId =
+      normalizeAccountId(APP_CONFIG.CURRENT_USER_ID) ||
+      normalizeAccountId(localStorage.getItem("accountId"));
+    return !!currentId && targetId === currentId;
+  }
+
   function createPostElement(post) {
       const postEl = document.createElement("div");
       postEl.className = "post";
       postEl.setAttribute("data-post-id", post.postId);
-      const storyRingClass = getStoryRingClass(post.author?.storyRingState);
+      const isCurrentUserAuthor = isCurrentViewerAccount(post.author?.accountId);
+      const storyRingClass = isCurrentUserAuthor
+        ? ""
+        : getStoryRingClass(post.author?.storyRingState);
+      const storyAuthorDataAttr = storyRingClass
+        ? ` data-story-author-id="${post.author.accountId}"`
+        : "";
       const avatarUrl = post.author?.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
       const avatarMarkup = renderPostAvatarMarkup(avatarUrl);
       const commentCount = Number.isFinite(Number(post.commentCount)) ? Number(post.commentCount) : 0;
@@ -104,7 +123,7 @@
       postEl.innerHTML = `
           <div class="post-header">
             <div class="post-user" data-account-id="${post.author.accountId}">
-              <a href="#/profile/${post.author.username}" class="post-avatar-ring ${storyRingClass}">
+              <a href="#/profile/${post.author.username}" class="post-avatar-ring ${storyRingClass}"${storyAuthorDataAttr}>
                   ${avatarMarkup}
               </a>
               <div class="user-meta">

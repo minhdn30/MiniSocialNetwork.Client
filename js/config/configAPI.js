@@ -508,6 +508,20 @@
     Stories: {
       create: (formData, onProgress) =>
         uploadFormDataWithProgress("/Stories", formData, onProgress),
+      getViewableAuthors: (page = 1, pageSize = 20) =>
+        apiFetch(
+          `/Stories/viewable-authors?page=${encodeURIComponent(page)}&pageSize=${encodeURIComponent(pageSize)}`,
+        ),
+      getActiveByAuthor: (authorId) =>
+        apiFetch(`/Stories/authors/${encodeURIComponent(authorId)}/active`),
+      markViewed: (storyIds = []) =>
+        apiFetch("/Stories/views", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            storyIds: Array.isArray(storyIds) ? storyIds : [],
+          }),
+        }),
       updatePrivacy: (storyId, privacy) =>
         apiFetch(`/Stories/${storyId}/privacy`, {
           method: "PATCH",

@@ -43,17 +43,34 @@ function escapeHtmlAttr(value) {
         .replace(/>/g, "&gt;");
 }
 
-function renderDetailAvatar(avatarLink, avatarUrl, storyRingState) {
+function normalizeAccountId(value) {
+    return (value || "").toString().trim().toLowerCase();
+}
+
+function isCurrentViewerAccount(accountId) {
+    const targetId = normalizeAccountId(accountId);
+    if (!targetId) return false;
+    const currentId =
+        normalizeAccountId(APP_CONFIG.CURRENT_USER_ID) ||
+        normalizeAccountId(localStorage.getItem("accountId"));
+    return !!currentId && targetId === currentId;
+}
+
+function renderDetailAvatar(avatarLink, avatarUrl, storyRingState, isCurrentUserAvatar = false, accountId = "") {
     if (!avatarLink) return;
 
-    const ringClass = resolveStoryRingClass(storyRingState);
+    const ringClass = isCurrentUserAvatar ? "" : resolveStoryRingClass(storyRingState);
     avatarLink.classList.remove("post-avatar-ring", "story-ring-unseen", "story-ring-seen", "post-detail-avatar-ring");
     avatarLink.style.removeProperty("--_avatar");
     avatarLink.style.removeProperty("--_ring");
     avatarLink.style.removeProperty("--_gap");
+    avatarLink.removeAttribute("data-story-author-id");
 
     if (ringClass) {
         avatarLink.classList.add("post-avatar-ring", ringClass, "post-detail-avatar-ring");
+        if (accountId) {
+            avatarLink.setAttribute("data-story-author-id", accountId);
+        }
     }
 
     const safeAvatarUrl = escapeHtmlAttr(avatarUrl || APP_CONFIG.DEFAULT_AVATAR);
@@ -732,10 +749,11 @@ function renderPostDetail(post, navigateDirection = null) {
     const avatarLink = document.getElementById("detailAvatarLink");
     const usernameLink = document.getElementById("detailUsernameLink");
     const avatarUrl = post.owner.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
+    const isCurrentUserAvatar = isCurrentViewerAccount(post.owner?.accountId);
 
     if (avatarLink) {
         avatarLink.href = `#/profile/${post.owner.username}`;
-        renderDetailAvatar(avatarLink, avatarUrl, post.owner?.storyRingState);
+        renderDetailAvatar(avatarLink, avatarUrl, post.owner?.storyRingState, isCurrentUserAvatar, post.owner?.accountId);
     }
     if (usernameLink) usernameLink.href = `#/profile/${post.owner.username}`;
 

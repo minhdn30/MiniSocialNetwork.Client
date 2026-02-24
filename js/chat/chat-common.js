@@ -113,7 +113,10 @@ const ChatCommon = {
       : "";
 
     if (storyRingClass) {
-      return `<span class="post-avatar-ring ${storyRingClass}${storyRingExtraClass}"${storyRingStyleAttr}><img src="${avatar}" alt="${escapeHtml(name)}"${titleAttr} class="${className} post-avatar" onerror="${onError}"></span>`;
+      const otherMember = conv?.otherMember || conv?.OtherMember || null;
+      const storyAuthorId = otherMember?.accountId || otherMember?.AccountId || "";
+      const storyAuthorAttr = storyAuthorId ? ` data-story-author-id="${escapeHtml(storyAuthorId)}"` : "";
+      return `<span class="post-avatar-ring ${storyRingClass}${storyRingExtraClass}"${storyRingStyleAttr}${storyAuthorAttr}><img src="${avatar}" alt="${escapeHtml(name)}"${titleAttr} class="${className} post-avatar" onerror="${onError}"></span>`;
     }
 
     return `<img src="${avatar}" alt="${escapeHtml(name)}"${titleAttr} class="${className}" onerror="${onError}">`;

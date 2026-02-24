@@ -66,6 +66,13 @@ function closeAllOverlayModals() {
       else createStoryModal.classList.remove("show");
   }
 
+  // Story Viewer
+  const storyViewerModal = document.getElementById("storyViewerModal");
+  if (storyViewerModal && !storyViewerModal.classList.contains("sn-story-viewer-hidden")) {
+      if (window.closeStoryViewer) window.closeStoryViewer();
+      else storyViewerModal.classList.add("sn-story-viewer-hidden");
+  }
+
   // React List
   if (window.InteractionModule && typeof window.InteractionModule.closeReactList === 'function') {
       const interactModal = document.getElementById("interactionModal");

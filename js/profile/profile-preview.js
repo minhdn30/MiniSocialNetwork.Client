@@ -100,6 +100,19 @@ function getStoryRingClass(storyRingState) {
   return "";
 }
 
+function normalizeAccountId(value) {
+  return (value || "").toString().trim().toLowerCase();
+}
+
+function isCurrentViewerAccount(accountId) {
+  const targetId = normalizeAccountId(accountId);
+  if (!targetId) return false;
+  const currentId =
+    normalizeAccountId(APP_CONFIG.CURRENT_USER_ID) ||
+    normalizeAccountId(localStorage.getItem("accountId"));
+  return !!currentId && targetId === currentId;
+}
+
 function escapeAttr(value) {
   return (value || "")
     .toString()
@@ -159,7 +172,9 @@ function renderProfilePreview(data) {
   isFollowing = data.isFollowedByCurrentUser ?? false;
 
   const avatarUrl = data.account.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
-  const storyRingClass = getStoryRingClass(data.account?.storyRingState);
+  const storyRingClass = isCurrentViewerAccount(data.account?.accountId)
+    ? ""
+    : getStoryRingClass(data.account?.storyRingState);
   const avatarWrapperClass = storyRingClass
     ? "profile-preview-avatar-wrapper with-story-ring"
     : "profile-preview-avatar-wrapper";
