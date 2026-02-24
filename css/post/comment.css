@@ -45,6 +45,19 @@
   cursor: pointer;
 }
 
+.comment-avatar-ring.story-ring-unseen,
+.comment-avatar-ring.story-ring-seen {
+  --_avatar: 23px;
+  --_ring: 1.25px;
+  --_gap: 1.25px;
+}
+
+.comment-avatar-ring.story-ring-unseen .comment-avatar,
+.comment-avatar-ring.story-ring-seen .comment-avatar {
+  width: var(--_avatar);
+  height: var(--_avatar);
+}
+
 .comment-username {
   font-size: 13px; /* Reduced from 14px */
   font-weight: 700;
@@ -250,6 +263,19 @@
 .reply-item .comment-avatar {
     width: 22px;
     height: 22px;
+}
+
+.reply-avatar-ring.story-ring-unseen,
+.reply-avatar-ring.story-ring-seen {
+    --_avatar: 18px;
+    --_ring: 1px;
+    --_gap: 1px;
+}
+
+.reply-avatar-ring.story-ring-unseen .comment-avatar,
+.reply-avatar-ring.story-ring-seen .comment-avatar {
+    width: var(--_avatar);
+    height: var(--_avatar);
 }
 
 .reply-item .comment-header {

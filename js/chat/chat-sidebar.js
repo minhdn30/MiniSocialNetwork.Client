@@ -1085,10 +1085,15 @@ const ChatSidebar = {
                      data-conversation-id="${conv.conversationId}"
                      draggable="true"
                      onclick="ChatSidebar.openConversation('${conv.conversationId}')"
-                     ondragstart="ChatSidebar.handleDragStart(event, '${conv.conversationId}')"
+                    ondragstart="ChatSidebar.handleDragStart(event, '${conv.conversationId}')"
                     ondragend="ChatSidebar.handleDragEnd()">
                     <div class="chat-avatar-wrapper">
-                        ${ChatCommon.renderAvatar(conv, { name, className: 'chat-avatar' })}
+                        ${ChatCommon.renderAvatar(conv, {
+                            name,
+                            className: 'chat-avatar',
+                            enableStoryRing: true,
+                            storyRingClass: 'chat-sidebar-avatar-ring'
+                        })}
                         ${showOnlineDot ? '<div class="chat-status-dot"></div>' : ''}
                     </div>
                     <div class="chat-info">

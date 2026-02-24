@@ -311,6 +311,20 @@
   align-items: center;
   justify-content: space-between;
 }
+
+/* Keep post-detail avatar slot size stable: shrink inner photo, draw ring inside same slot */
+.post-detail-avatar-ring.story-ring-unseen,
+.post-detail-avatar-ring.story-ring-seen {
+  --_avatar: 30px;
+  --_ring: 1.5px;
+  --_gap: 1.5px;
+}
+
+.post-detail-avatar-ring.story-ring-unseen .user-avatar,
+.post-detail-avatar-ring.story-ring-seen .user-avatar {
+  width: var(--_avatar);
+  height: var(--_avatar);
+}
 /* User info styles mapped to shared/post-common.css */
 .user-info {
   display: flex;

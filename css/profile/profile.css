@@ -96,6 +96,19 @@
   border-radius: 50%;
 }
 
+.profile-avatar-wrapper.profile-avatar-wrapper--story-ring {
+  padding: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-avatar-wrapper .profile-story-ring.story-ring-unseen,
+.profile-avatar-wrapper .profile-story-ring.story-ring-seen {
+  --_avatar: 160px;
+}
+
 .profile-online-dot {
   position: absolute;
   right: calc(
@@ -1253,6 +1266,11 @@
     --presence-avatar-size: 120px;
     width: 120px;
     height: 120px;
+  }
+
+  .profile-avatar-wrapper .profile-story-ring.story-ring-unseen,
+  .profile-avatar-wrapper .profile-story-ring.story-ring-seen {
+    --_avatar: 112px;
   }
 
   .profile-online-dot {

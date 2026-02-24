@@ -22,6 +22,45 @@ const ChatCommon = {
     return "ICON:users";
   },
 
+  resolveStoryRingClass(storyRingState) {
+    const normalizedState = (storyRingState ?? "").toString().trim().toLowerCase();
+
+    if (
+      storyRingState === 2 ||
+      normalizedState === "2" ||
+      normalizedState === "unseen" ||
+      normalizedState === "story-ring-unseen"
+    ) {
+      return "story-ring-unseen";
+    }
+
+    if (
+      storyRingState === 1 ||
+      normalizedState === "1" ||
+      normalizedState === "seen" ||
+      normalizedState === "story-ring-seen"
+    ) {
+      return "story-ring-seen";
+    }
+
+    return "";
+  },
+
+  getConversationStoryRingState(conv = {}) {
+    if (!conv || typeof conv !== "object") return null;
+
+    const otherMember = conv.otherMember || conv.OtherMember || null;
+    if (otherMember && typeof otherMember === "object") {
+      const memberState =
+        otherMember.storyRingState ??
+        otherMember.StoryRingState ??
+        null;
+      if (memberState !== null && memberState !== undefined) return memberState;
+    }
+
+    return conv.storyRingState ?? conv.StoryRingState ?? null;
+  },
+
   /**
    * Helper to render avatar HTML (supports both img and Lucide icons)
    */
@@ -58,6 +97,23 @@ const ChatCommon = {
       }
 
       return `<div class="${className} default-group-avatar"${titleAttr}><i data-lucide="users"></i></div>`;
+    }
+
+    const shouldEnableStoryRing = !!options.enableStoryRing;
+    const storyRingClass = shouldEnableStoryRing
+      ? this.resolveStoryRingClass(
+          options.storyRingState ?? this.getConversationStoryRingState(conv),
+        )
+      : "";
+    const storyRingExtraClass = options.storyRingClass
+      ? ` ${options.storyRingClass}`
+      : "";
+    const storyRingStyleAttr = options.storyRingStyle
+      ? ` style="${options.storyRingStyle}"`
+      : "";
+
+    if (storyRingClass) {
+      return `<span class="post-avatar-ring ${storyRingClass}${storyRingExtraClass}"${storyRingStyleAttr}><img src="${avatar}" alt="${escapeHtml(name)}"${titleAttr} class="${className} post-avatar" onerror="${onError}"></span>`;
     }
 
     return `<img src="${avatar}" alt="${escapeHtml(name)}"${titleAttr} class="${className}" onerror="${onError}">`;
@@ -1932,6 +1988,10 @@ const ChatCommon = {
       displayName,
       username,
       avatarUrl,
+      storyRingState:
+        normalized.storyRingState ??
+        normalized.StoryRingState ??
+        null,
       nickname,
     };
   },

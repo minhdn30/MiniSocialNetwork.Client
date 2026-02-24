@@ -2251,7 +2251,10 @@ const ChatWindow = {
                      onclick="event.stopPropagation(); ChatWindow.toggleHeaderMenu(this, '${conv.conversationId}')" 
                      style="cursor: pointer;">
                     <div class="chat-header-avatar">
-                        ${ChatCommon.renderAvatar(conv)}
+                        ${ChatCommon.renderAvatar(conv, {
+                          enableStoryRing: true,
+                          storyRingStyle: "--_avatar: 24px;",
+                        })}
                         ${shouldShowOnlineDot ? '<div class="chat-header-status"></div>' : ""}
                     </div>
                     <div class="chat-header-text">
@@ -3291,7 +3294,10 @@ const ChatWindow = {
 
       const avatarContainer = chat.element.querySelector(".chat-header-avatar");
       if (avatarContainer) {
-        avatarContainer.innerHTML = ChatCommon.renderAvatar(chat.data);
+        avatarContainer.innerHTML = ChatCommon.renderAvatar(chat.data, {
+          enableStoryRing: true,
+          storyRingStyle: "--_avatar: 24px;",
+        });
         if (window.lucide) lucide.createIcons({ container: avatarContainer });
       }
     }
@@ -6252,7 +6258,10 @@ const ChatWindow = {
               if (nameEl)
                 nameEl.textContent = ChatCommon.getDisplayName(metaData);
               if (avatarContainer) {
-                avatarContainer.innerHTML = ChatCommon.renderAvatar(metaData);
+                avatarContainer.innerHTML = ChatCommon.renderAvatar(metaData, {
+                  enableStoryRing: true,
+                  storyRingStyle: "--_avatar: 24px;",
+                });
                 if (window.lucide)
                   lucide.createIcons({ container: avatarContainer });
               }
