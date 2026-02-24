@@ -80,7 +80,7 @@
       .replace(/>/g, "&gt;");
   }
 
-  function renderProfileAvatar(avatarWrapper, avatarUrl, storyRingState) {
+  function renderProfileAvatar(avatarWrapper, avatarUrl, storyRingState, accountId) {
     if (!avatarWrapper) return;
 
     const ringClass = resolveStoryRingClass(storyRingState);
@@ -93,9 +93,12 @@
       return;
     }
 
+    const storyAuthorAttr = accountId
+      ? ` data-story-author-id="${escapeAttr(accountId)}"`
+      : "";
     avatarWrapper.classList.add("profile-avatar-wrapper--story-ring");
     avatarWrapper.innerHTML = `
-      <span class="post-avatar-ring ${ringClass} profile-story-ring">
+      <span class="post-avatar-ring ${ringClass} profile-story-ring"${storyAuthorAttr}>
         <img id="profile-avatar" class="post-avatar" src="${safeAvatarUrl}" alt="Profile Picture">
       </span>
     `;
@@ -604,7 +607,8 @@
     const profileCover = document.querySelector(".profile-cover");
 
     if (avatarWrapper) {
-      renderProfileAvatar(avatarWrapper, avatarUrl, storyRingState);
+      const profileAccountId = info.accountId || info.id || currentProfileId;
+      renderProfileAvatar(avatarWrapper, avatarUrl, storyRingState, profileAccountId);
     }
 
     if (coverImg) {

@@ -8,14 +8,20 @@ let currentAccountId = null;
 let profilePreviewPresenceUnsubscribe = null;
 
 function normalizePresenceId(value) {
-  if (window.PresenceUI && typeof window.PresenceUI.normalizeAccountId === "function") {
+  if (
+    window.PresenceUI &&
+    typeof window.PresenceUI.normalizeAccountId === "function"
+  ) {
     return window.PresenceUI.normalizeAccountId(value);
   }
   return (value || "").toString().trim().toLowerCase();
 }
 
 function resolvePresenceStatus(accountId) {
-  if (window.PresenceUI && typeof window.PresenceUI.resolveStatusByAccountId === "function") {
+  if (
+    window.PresenceUI &&
+    typeof window.PresenceUI.resolveStatusByAccountId === "function"
+  ) {
     return window.PresenceUI.resolveStatusByAccountId(accountId, false);
   }
   const normalizedAccountId = normalizePresenceId(accountId);
@@ -33,7 +39,10 @@ function resolvePresenceStatus(accountId) {
 }
 
 function ensurePresenceSnapshot(accountId) {
-  if (window.PresenceUI && typeof window.PresenceUI.ensureSnapshotForAccountIds === "function") {
+  if (
+    window.PresenceUI &&
+    typeof window.PresenceUI.ensureSnapshotForAccountIds === "function"
+  ) {
     window.PresenceUI.ensureSnapshotForAccountIds([accountId]).catch(
       (error) => {
         console.warn("[ProfilePreview] Presence snapshot sync failed:", error);
@@ -59,10 +68,14 @@ function ensurePresenceSnapshot(accountId) {
 }
 
 function applyPreviewPresenceDot(accountId) {
-  const avatarWrapper = previewEl?.querySelector(".profile-preview-avatar-wrapper");
+  const avatarWrapper = previewEl?.querySelector(
+    ".profile-preview-avatar-wrapper",
+  );
   if (!avatarWrapper) return;
 
-  const existingDot = avatarWrapper.querySelector(".profile-preview-online-dot");
+  const existingDot = avatarWrapper.querySelector(
+    ".profile-preview-online-dot",
+  );
   const presenceStatus = resolvePresenceStatus(accountId);
   if (presenceStatus?.showDot) {
     if (!existingDot) {
@@ -77,7 +90,10 @@ function applyPreviewPresenceDot(accountId) {
 }
 
 function getStoryRingClass(storyRingState) {
-  const normalizedState = (storyRingState ?? "").toString().trim().toLowerCase();
+  const normalizedState = (storyRingState ?? "")
+    .toString()
+    .trim()
+    .toLowerCase();
 
   if (
     storyRingState === 2 ||
@@ -122,14 +138,17 @@ function escapeAttr(value) {
     .replace(/>/g, "&gt;");
 }
 
-function renderProfilePreviewAvatar(avatarUrl, storyRingClass) {
+function renderProfilePreviewAvatar(avatarUrl, storyRingClass, accountId) {
   const safeAvatarUrl = escapeAttr(avatarUrl || APP_CONFIG.DEFAULT_AVATAR);
   if (!storyRingClass) {
     return `<img class="profile-preview-avatar-image" src="${safeAvatarUrl}" alt="avatar">`;
   }
 
+  const storyAuthorAttr = accountId
+    ? ` data-story-author-id="${escapeAttr(accountId)}"`
+    : "";
   return `
-    <span class="post-avatar-ring profile-preview-avatar-ring ${storyRingClass}">
+    <span class="post-avatar-ring profile-preview-avatar-ring ${storyRingClass}"${storyAuthorAttr}>
       <img class="post-avatar" src="${safeAvatarUrl}" alt="avatar">
     </span>
   `;
@@ -172,13 +191,11 @@ function renderProfilePreview(data) {
   isFollowing = data.isFollowedByCurrentUser ?? false;
 
   const avatarUrl = data.account.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
-  const storyRingClass = isCurrentViewerAccount(data.account?.accountId)
-    ? ""
-    : getStoryRingClass(data.account?.storyRingState);
+  const storyRingClass = getStoryRingClass(data.account?.storyRingState);
   const avatarWrapperClass = storyRingClass
     ? "profile-preview-avatar-wrapper with-story-ring"
     : "profile-preview-avatar-wrapper";
-  const avatarMarkup = renderProfilePreviewAvatar(avatarUrl, storyRingClass);
+  const avatarMarkup = renderProfilePreviewAvatar(avatarUrl, storyRingClass, data.account?.accountId);
 
   // Actions buttons
   let actionsHTML = "";
@@ -213,17 +230,17 @@ function renderProfilePreview(data) {
         <i data-lucide="send"></i>
         <span>Message</span>
       </button>
-      ${followBtnHTML.replace('class="profile-preview-btn', `class="profile-preview-btn ${statusClass}`).replace('onclick=', isTargetActive ? 'onclick=' : 'data-onclick=')}
+      ${followBtnHTML.replace('class="profile-preview-btn', `class="profile-preview-btn ${statusClass}`).replace("onclick=", isTargetActive ? "onclick=" : "data-onclick=")}
     `;
   }
 
   // Cover & Dynamic Background
   const coverAreaId = `pp-cover-${currentUserId}`;
-  const coverImgHtml = data.account.coverUrl 
-    ? `<img src="${data.account.coverUrl}" alt="cover" onerror="this.style.display='none'">` 
+  const coverImgHtml = data.account.coverUrl
+    ? `<img src="${data.account.coverUrl}" alt="cover" onerror="this.style.display='none'">`
     : "";
 
-    previewEl.innerHTML = `
+  previewEl.innerHTML = `
     <div class="profile-preview-cover" id="${coverAreaId}">
         ${coverImgHtml}
     </div>
@@ -258,11 +275,13 @@ function renderProfilePreview(data) {
             ? `
             <div class="profile-preview-medias">
                 ${data.recentPosts
-                  .map((p) => `
-                    <div class="profile-preview-media-item" onclick="if(window.InteractionModule) window.InteractionModule.closeReactList(); if(window.openPostDetail) window.openPostDetail('${p.postId}', '${p.postCode || ''}'); hidePreview();">
+                  .map(
+                    (p) => `
+                    <div class="profile-preview-media-item" onclick="if(window.InteractionModule) window.InteractionModule.closeReactList(); if(window.openPostDetail) window.openPostDetail('${p.postId}', '${p.postCode || ""}'); hidePreview();">
                       <img src="${p.mediaUrl}" alt="post">
                     </div>
-                  `)
+                  `,
+                  )
                   .join("")}
             </div>
             `
@@ -278,15 +297,19 @@ function renderProfilePreview(data) {
   // Apply dynamic gradient to cover
   const coverArea = document.getElementById(coverAreaId);
   if (coverArea) {
-      if (avatarUrl && typeof extractDominantColor === 'function') {
-          extractDominantColor(avatarUrl).then(color => {
-              coverArea.style.background = `linear-gradient(135deg, var(--bg-primary) 0%, ${color} 100%)`;
-          }).catch(() => {
-              coverArea.style.background = "linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%)";
-          });
-      } else {
-          coverArea.style.background = "linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%)";
-      }
+    if (avatarUrl && typeof extractDominantColor === "function") {
+      extractDominantColor(avatarUrl)
+        .then((color) => {
+          coverArea.style.background = `linear-gradient(135deg, var(--bg-primary) 0%, ${color} 100%)`;
+        })
+        .catch(() => {
+          coverArea.style.background =
+            "linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%)";
+        });
+    } else {
+      coverArea.style.background =
+        "linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%)";
+    }
   }
 
   if (window.lucide) {
@@ -299,18 +322,18 @@ function renderProfilePreview(data) {
   // Auto-shrink font for long names (Max 2 lines)
   const nameEl = document.getElementById("pp-username");
   if (nameEl) {
-      nameEl.style.fontSize = "16px"; // Reset to base
-      
-      // Use requestAnimationFrame to ensure layout width is calculated
-      requestAnimationFrame(() => {
-          let fontSize = 16;
-          // Threshold for 2 lines with 1.2 line-height: 16 * 1.2 * 2 = 38.4px. 
-          // We use 42px as a safe limit to account for padding/sub-pixel rendering.
-          while (nameEl.scrollHeight > 42 && fontSize > 12) {
-              fontSize -= 0.5;
-              nameEl.style.fontSize = fontSize + "px";
-          }
-      });
+    nameEl.style.fontSize = "16px"; // Reset to base
+
+    // Use requestAnimationFrame to ensure layout width is calculated
+    requestAnimationFrame(() => {
+      let fontSize = 16;
+      // Threshold for 2 lines with 1.2 line-height: 16 * 1.2 * 2 = 38.4px.
+      // We use 42px as a safe limit to account for padding/sub-pixel rendering.
+      while (nameEl.scrollHeight > 42 && fontSize > 12) {
+        fontSize -= 0.5;
+        nameEl.style.fontSize = fontSize + "px";
+      }
+    });
   }
 }
 
@@ -423,7 +446,11 @@ function initProfilePreview() {
     profilePreviewPresenceUnsubscribe = window.PresenceUI.subscribe(
       (payload) => {
         const targetAccountId = normalizePresenceId(currentUserId);
-        if (!targetAccountId || !previewEl || previewEl.classList.contains("hidden")) {
+        if (
+          !targetAccountId ||
+          !previewEl ||
+          previewEl.classList.contains("hidden")
+        ) {
           return;
         }
         const changedIds = Array.isArray(payload?.changedAccountIds)
@@ -443,7 +470,11 @@ function initProfilePreview() {
     profilePreviewPresenceUnsubscribe = window.PresenceStore.subscribe(
       (payload) => {
         const targetAccountId = normalizePresenceId(currentUserId);
-        if (!targetAccountId || !previewEl || previewEl.classList.contains("hidden")) {
+        if (
+          !targetAccountId ||
+          !previewEl ||
+          previewEl.classList.contains("hidden")
+        ) {
           return;
         }
         const changedIds = Array.isArray(payload?.changedAccountIds)
@@ -496,6 +527,8 @@ function initProfilePreview() {
     });
   } else {
     // Desktop: Hover to show preview
+    let pendingAccountId = null; // Track which accountId the timer is for
+
     document.addEventListener("mouseover", async (e) => {
       if (!isProfilePreviewTrigger(e.target)) return;
 
@@ -507,7 +540,8 @@ function initProfilePreview() {
 
       if (
         currentAccountId === accountId &&
-        previewEl && !previewEl.classList.contains("hidden")
+        previewEl &&
+        !previewEl.classList.contains("hidden")
       ) {
         clearTimeout(hideTimer);
         return;
@@ -516,13 +550,17 @@ function initProfilePreview() {
       lastMouseEvent = e;
       clearTimeout(hideTimer);
       clearTimeout(hoverTimer);
-      
+
+      pendingAccountId = accountId;
       currentAccountId = accountId; // Mark as pending
 
       hoverTimer = setTimeout(async () => {
+        // Guard: still the same pending account?
+        if (pendingAccountId !== accountId) return;
+
         const data = await loadProfilePreview(accountId);
-        
-        // CRITICAL: Check if we still want this specific preview 
+
+        // CRITICAL: Check if we still want this specific preview
         // (navigation or another hover might have cleared it)
         if (currentAccountId !== accountId) return;
 
@@ -532,26 +570,93 @@ function initProfilePreview() {
     });
 
     document.addEventListener("mouseout", (e) => {
-      if (!isProfilePreviewTrigger(e.target)) return;
+      const trigger =
+        e.target.closest(".post-user") ||
+        (isProfilePreviewTrigger(e.target) ? e.target : null);
+      if (!trigger && !e.target.closest("#profile-preview")) return;
 
       const nextTarget = e.relatedTarget;
-      if (nextTarget && nextTarget.closest("#profile-preview")) {
+
+      // Mouse moved into preview popup -> stay open
+      if (
+        nextTarget &&
+        nextTarget.closest &&
+        nextTarget.closest("#profile-preview")
+      ) {
         clearTimeout(hideTimer);
         return;
       }
 
-      const currentUserEl = e.target.closest(".post-user");
-      const nextUserEl = nextTarget && nextTarget.closest
-        ? nextTarget.closest(".post-user")
-        : null;
-      if (currentUserEl && nextUserEl && currentUserEl === nextUserEl) {
-        clearTimeout(hideTimer);
-        return;
+      // Mouse moved to another element inside the same .post-user -> stay open
+      if (trigger && trigger.closest) {
+        const currentUserEl = trigger.closest(".post-user");
+        const nextUserEl =
+          nextTarget && nextTarget.closest
+            ? nextTarget.closest(".post-user")
+            : null;
+        if (currentUserEl && nextUserEl && currentUserEl === nextUserEl) {
+          clearTimeout(hideTimer);
+          return;
+        }
       }
 
+      // Cancel any pending hover timer
       clearTimeout(hoverTimer);
+      pendingAccountId = null;
       hideTimer = setTimeout(hidePreview, 300);
     });
+
+    // Safety net: periodically check if mouse is still over trigger/preview
+    // This catches edge cases where mouseout fires on wrong target during fast movement
+    let safetyInterval = null;
+
+    function startSafetyCheck() {
+      stopSafetyCheck();
+      safetyInterval = setInterval(() => {
+        if (!previewEl || previewEl.classList.contains("hidden")) {
+          stopSafetyCheck();
+          return;
+        }
+        const hoveredEls = document.querySelectorAll(":hover");
+        let isOverPreview = false;
+        let isOverTrigger = false;
+        hoveredEls.forEach((el) => {
+          if (el.closest("#profile-preview")) isOverPreview = true;
+          if (
+            isProfilePreviewTrigger(el) ||
+            el.closest(".post-user[data-account-id]")
+          )
+            isOverTrigger = true;
+        });
+        if (!isOverPreview && !isOverTrigger) {
+          clearTimeout(hoverTimer);
+          pendingAccountId = null;
+          hidePreview();
+          stopSafetyCheck();
+        }
+      }, 500);
+    }
+
+    function stopSafetyCheck() {
+      if (safetyInterval) {
+        clearInterval(safetyInterval);
+        safetyInterval = null;
+      }
+    }
+
+    // Hook safety check into show/hide cycle
+    const originalShowPreview = showPreview;
+    showPreview = function (mouseEvent) {
+      originalShowPreview(mouseEvent);
+      startSafetyCheck();
+    };
+
+    const originalHidePreview = hidePreview;
+    hidePreview = function () {
+      originalHidePreview();
+      stopSafetyCheck();
+    };
+    window.hidePreview = hidePreview;
 
     // Global click listener to kill preview when navigating
     document.addEventListener("click", (e) => {
@@ -567,7 +672,12 @@ function initProfilePreview() {
       clearTimeout(hideTimer);
     });
 
-    previewEl.addEventListener("mouseleave", () => {
+    previewEl.addEventListener("mouseleave", (e) => {
+      const nextTarget = e.relatedTarget;
+      // If mouse goes back to a trigger element, don't start hide timer
+      if (nextTarget && isProfilePreviewTrigger(nextTarget)) {
+        return;
+      }
       hideTimer = setTimeout(hidePreview, 200);
     });
   }
@@ -615,9 +725,9 @@ async function toggleFollow(userId) {
   // Call FollowModule to handle API and sync other UI
   // Note: We already updated local button optimistically, but FollowModule also syncs feed
   if (isFollowing) {
-     if (window.FollowModule) await FollowModule.followUser(userId);
+    if (window.FollowModule) await FollowModule.followUser(userId);
   } else {
-     if (window.FollowModule) await FollowModule.unfollowUser(userId);
+    if (window.FollowModule) await FollowModule.unfollowUser(userId);
   }
 }
 
@@ -625,7 +735,7 @@ async function toggleFollow(userId) {
 function toggleFollowMenu(event, userId) {
   event.stopPropagation();
   if (window.FollowModule) {
-      FollowModule.showUnfollowConfirm(userId, event.currentTarget);
+    FollowModule.showUnfollowConfirm(userId, event.currentTarget);
   }
 }
 
@@ -633,12 +743,12 @@ function toggleFollowMenu(event, userId) {
 function viewProfile(username) {
   // Close all possible overlays (Follow list, React list, Create Post, etc.)
   if (window.closeAllOverlayModals) {
-      window.closeAllOverlayModals();
+    window.closeAllOverlayModals();
   } else {
-      // Fallback if app.js not ready/available correctly
-      hidePreview();
+    // Fallback if app.js not ready/available correctly
+    hidePreview();
   }
-  
+
   // Navigate to profile page using hash
   window.location.hash = `#/profile/${username}`;
 }

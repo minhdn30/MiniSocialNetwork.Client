@@ -279,7 +279,18 @@
               <div class="sn-story-viewer-author-meta">
                 <div class="sn-story-viewer-username" id="storyViewerUsername"></div>
                 <div class="sn-story-viewer-time" id="storyViewerTime"></div>
+                <span class="sn-story-viewer-privacy" id="storyViewerPrivacy"></span>
               </div>
+            </div>
+            <div class="sn-story-viewer-header-actions">
+              <button type="button" class="sn-story-viewer-more-btn" id="storyViewerMoreBtn" aria-label="More options">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="1"></circle>
+                  <circle cx="19" cy="12" r="1"></circle>
+                  <circle cx="5" cy="12" r="1"></circle>
+                </svg>
+              </button>
+              <div class="sn-story-viewer-more-menu sn-story-viewer-hidden" id="storyViewerMoreMenu"></div>
             </div>
           </div>
           <div class="sn-story-viewer-body">
@@ -336,6 +347,9 @@
       reactFrame: modal.querySelector("#storyViewerReactFrame"),
       prevBtn: modal.querySelector("#storyViewerPrevBtn"),
       nextBtn: modal.querySelector("#storyViewerNextBtn"),
+      moreBtn: modal.querySelector("#storyViewerMoreBtn"),
+      moreMenu: modal.querySelector("#storyViewerMoreMenu"),
+      privacy: modal.querySelector("#storyViewerPrivacy"),
     };
 
     modal.addEventListener("click", (event) => {
@@ -391,6 +405,21 @@
         stToggleTextStoryPause();
       });
     }
+
+    // More button handler
+    if (viewerState.dom.moreBtn) {
+      viewerState.dom.moreBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        stToggleMoreMenu();
+      });
+    }
+
+    // Close more menu when clicking outside
+    modal.addEventListener("click", (event) => {
+      if (!event.target.closest(".sn-story-viewer-header-actions")) {
+        stCloseMoreMenu();
+      }
+    });
 
     return modal;
   }
@@ -623,6 +652,257 @@
     }
   }
 
+  // ===== More Menu =====
+
+  function stToggleMoreMenu() {
+    const menu = viewerState.dom.moreMenu;
+    if (!menu) return;
+
+    if (menu.classList.contains("sn-story-viewer-hidden")) {
+      stOpenMoreMenu();
+    } else {
+      stCloseMoreMenu();
+    }
+  }
+
+  function stOpenMoreMenu() {
+    const menu = viewerState.dom.moreMenu;
+    if (!menu) return;
+
+    stPauseProgressTimer();
+
+    const story = stCurrentStory();
+    const isOwn = stIsOwnStory();
+
+    let menuHtml = "";
+
+    if (isOwn) {
+      // Privacy label
+      const privacyLabels = { 0: "Public", 1: "Friends Only", 2: "Only Me" };
+      const currentPrivacy = story?.privacy ?? 0;
+      const currentLabel = privacyLabels[currentPrivacy] || "Public";
+
+      menuHtml += `
+        <button class="sn-story-viewer-menu-item" data-action="edit-privacy">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle><path d="M2 12h20"></path><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"></path>
+          </svg>
+          <span>Edit Privacy</span>
+        </button>
+        <button class="sn-story-viewer-menu-item sn-story-viewer-menu-danger" data-action="delete-story">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
+          </svg>
+          <span>Delete Story</span>
+        </button>
+      `;
+    } else {
+      menuHtml += `
+        <button class="sn-story-viewer-menu-item" data-action="report-story">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line>
+          </svg>
+          <span>Report</span>
+        </button>
+      `;
+    }
+
+    menu.innerHTML = menuHtml;
+    menu.classList.remove("sn-story-viewer-hidden");
+
+    // Attach click handlers
+    menu.querySelectorAll(".sn-story-viewer-menu-item").forEach((item) => {
+      item.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const action = item.getAttribute("data-action");
+        stCloseMoreMenu();
+        stHandleMenuAction(action);
+      });
+    });
+  }
+
+  function stCloseMoreMenu() {
+    const menu = viewerState.dom.moreMenu;
+    if (!menu) return;
+    if (!menu.classList.contains("sn-story-viewer-hidden")) {
+      menu.classList.add("sn-story-viewer-hidden");
+      menu.innerHTML = "";
+      stResumeProgressTimer();
+    }
+  }
+
+  function stHandleMenuAction(action) {
+    switch (action) {
+      case "edit-privacy":
+        stShowPrivacyEditor();
+        break;
+      case "delete-story":
+        stConfirmDeleteStory();
+        break;
+      case "report-story":
+        stReportStory();
+        break;
+    }
+  }
+
+  function stShowPrivacyEditor() {
+    const story = stCurrentStory();
+    if (!story) return;
+
+    stPauseProgressTimer();
+
+    const currentPrivacy = story.privacy ?? 0;
+    const options = [
+      { value: 0, label: "Public", icon: "globe" },
+      { value: 1, label: "Friends Only", icon: "users" },
+      { value: 2, label: "Only Me", icon: "lock" },
+    ];
+
+    // Create overlay
+    const overlay = document.createElement("div");
+    overlay.className = "sn-story-viewer-privacy-overlay";
+
+    const popup = document.createElement("div");
+    popup.className = "sn-story-viewer-privacy-popup";
+    popup.innerHTML = `
+      <h3>Edit Story Privacy</h3>
+      <div class="sn-story-viewer-privacy-options">
+        ${options.map((opt) => `
+          <label class="sn-story-viewer-privacy-option ${opt.value === currentPrivacy ? "selected" : ""}">
+            <input type="radio" name="storyPrivacy" value="${opt.value}" ${opt.value === currentPrivacy ? "checked" : ""}>
+            <i data-lucide="${opt.icon}"></i>
+            <span>${opt.label}</span>
+          </label>
+        `).join("")}
+      </div>
+      <div class="sn-story-viewer-privacy-actions">
+        <button class="sn-story-viewer-privacy-cancel" id="stPrivacyCancelBtn">Cancel</button>
+        <button class="sn-story-viewer-privacy-save" id="stPrivacySaveBtn">Save</button>
+      </div>
+    `;
+
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add("show"));
+
+    if (global.lucide) global.lucide.createIcons();
+
+    // Highlight selected on change
+    popup.querySelectorAll("input[name='storyPrivacy']").forEach((radio) => {
+      radio.addEventListener("change", () => {
+        popup.querySelectorAll(".sn-story-viewer-privacy-option").forEach((el) => el.classList.remove("selected"));
+        radio.closest(".sn-story-viewer-privacy-option").classList.add("selected");
+      });
+    });
+
+    const closeOverlay = () => {
+      overlay.classList.remove("show");
+      setTimeout(() => overlay.remove(), 200);
+      stResumeProgressTimer();
+    };
+
+    popup.querySelector("#stPrivacyCancelBtn").addEventListener("click", closeOverlay);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) closeOverlay();
+    });
+
+    popup.querySelector("#stPrivacySaveBtn").addEventListener("click", async () => {
+      const selected = popup.querySelector("input[name='storyPrivacy']:checked");
+      if (!selected) return;
+      const newPrivacy = Number(selected.value);
+      if (newPrivacy === currentPrivacy) {
+        closeOverlay();
+        return;
+      }
+
+      try {
+        const res = await global.API.Stories.updatePrivacy(story.storyId, newPrivacy);
+        if (res?.ok) {
+          story.privacy = newPrivacy;
+          if (global.toastSuccess) global.toastSuccess("Story privacy updated.");
+        } else {
+          if (global.toastError) global.toastError("Failed to update privacy.");
+        }
+      } catch (_) {
+        if (global.toastError) global.toastError("Failed to update privacy.");
+      }
+      closeOverlay();
+    });
+  }
+
+  function stConfirmDeleteStory() {
+    const story = stCurrentStory();
+    if (!story) return;
+
+    stPauseProgressTimer();
+
+    if (global.ChatCommon && typeof global.ChatCommon.showConfirm === "function") {
+      global.ChatCommon.showConfirm({
+        title: "Delete Story",
+        message: "Are you sure you want to delete this story? This action cannot be undone.",
+        confirmText: "Delete",
+        cancelText: "Cancel",
+        isDanger: true,
+        onConfirm: () => stDeleteStory(story),
+        onCancel: () => stResumeProgressTimer(),
+      });
+    } else {
+      // Fallback if ChatCommon not available
+      if (confirm("Are you sure you want to delete this story?")) {
+        stDeleteStory(story);
+      } else {
+        stResumeProgressTimer();
+      }
+    }
+  }
+
+  async function stDeleteStory(story) {
+    if (!story?.storyId) return;
+
+    try {
+      const res = await global.API.Stories.delete(story.storyId);
+      if (res?.ok) {
+        if (global.toastSuccess) global.toastSuccess("Story deleted.");
+
+        // Remove from viewer list
+        viewerState.stories = viewerState.stories.filter(
+          (s) => stNormalizeId(s.storyId) !== stNormalizeId(story.storyId),
+        );
+
+        if (!viewerState.stories.length) {
+          // No more stories, close viewer and remove ring
+          const authorId = viewerState.author?.accountId;
+          stCloseViewer();
+          if (authorId) stSyncRingGlobally(authorId, "none");
+          return;
+        }
+
+        // Adjust index
+        if (viewerState.currentIndex >= viewerState.stories.length) {
+          viewerState.currentIndex = viewerState.stories.length - 1;
+        }
+
+        stRenderProgressBars(viewerState.stories.length);
+        stRenderCurrentStory();
+      } else {
+        if (global.toastError) global.toastError("Failed to delete story.");
+        stResumeProgressTimer();
+      }
+    } catch (_) {
+      if (global.toastError) global.toastError("Failed to delete story.");
+      stResumeProgressTimer();
+    }
+  }
+
+  function stReportStory() {
+    const story = stCurrentStory();
+    if (!story) return;
+    if (global.toastInfo) {
+      global.toastInfo("Report feature will be available soon.");
+    }
+  }
+
+
   function stPauseAnyVideo() {
     if (!viewerState.dom.content) return;
     const videos = viewerState.dom.content.querySelectorAll("video");
@@ -633,6 +913,43 @@
         // Ignore
       }
     });
+  }
+
+  /**
+   * Globally sync story ring state for a given author across ALL surfaces.
+   * @param {string} authorId
+   * @param {"unseen"|"seen"|"none"} newState
+   */
+  function stSyncRingGlobally(authorId, newState) {
+    const id = (authorId || "").toString().trim();
+    if (!id) return;
+
+    const selector = `.post-avatar-ring[data-story-author-id="${CSS.escape(id)}"]`;
+    const rings = document.querySelectorAll(selector);
+
+    rings.forEach((ring) => {
+      ring.classList.remove("story-ring-unseen", "story-ring-seen");
+
+      if (newState === "unseen") {
+        ring.classList.add("story-ring-unseen");
+      } else if (newState === "seen") {
+        ring.classList.add("story-ring-seen");
+      } else {
+        // "none" → remove ring entirely
+        ring.classList.remove("post-avatar-ring");
+        ring.removeAttribute("data-story-author-id");
+      }
+    });
+  }
+
+  /**
+   * Check whether ALL stories in the viewer have been viewed.
+   */
+  function stAllStoriesViewed() {
+    if (!Array.isArray(viewerState.stories) || !viewerState.stories.length) {
+      return false;
+    }
+    return viewerState.stories.every((s) => !!s.isViewedByCurrentUser);
   }
 
   async function stMarkViewedIfNeeded(story) {
@@ -648,10 +965,27 @@
       const response = await global.API.Stories.markViewed([story.storyId]);
       if (response?.ok) {
         story.isViewedByCurrentUser = true;
+
+        // Sync ring globally: if all stories are now viewed → seen, otherwise unseen
+        const authorId = viewerState.author?.accountId;
+        if (authorId) {
+          stSyncRingGlobally(authorId, stAllStoriesViewed() ? "seen" : "unseen");
+        }
       }
     } catch (_) {
       // Ignore mark-view failures to avoid blocking viewer UX.
     }
+  }
+
+  function stRenderUnavailableContent(parentShell, reason) {
+    const unavailableEl = document.createElement("div");
+    unavailableEl.className = "sn-story-viewer-unavailable";
+    unavailableEl.innerHTML = `
+      <i data-lucide="eye-off" style="width:48px;height:48px;opacity:0.5;"></i>
+      <p style="margin-top:12px;font-size:15px;opacity:0.7;">${reason || "This story is no longer available."}</p>
+    `;
+    parentShell.appendChild(unavailableEl);
+    if (global.lucide) global.lucide.createIcons();
   }
 
   function stRenderStoryContent(story) {
@@ -711,21 +1045,36 @@
       });
 
       video.addEventListener("error", () => {
+        previewShell.innerHTML = "";
+        stRenderUnavailableContent(previewShell, "This story could not be loaded.");
         stStartProgressTimer(DEFAULT_STORY_DURATION_MS);
       });
 
       previewShell.appendChild(video);
       viewerState.dom.content.appendChild(previewShell);
       video.play().catch(() => {
+        previewShell.innerHTML = "";
+        stRenderUnavailableContent(previewShell, "This story could not be loaded.");
         stStartProgressTimer(DEFAULT_STORY_DURATION_MS);
       });
       return;
     }
 
+    if (!story.mediaUrl) {
+      stRenderUnavailableContent(previewShell, "This story is no longer available.");
+      viewerState.dom.content.appendChild(previewShell);
+      stStartProgressTimer(DEFAULT_STORY_DURATION_MS);
+      return;
+    }
+
     const image = document.createElement("img");
     image.className = "sn-story-viewer-image-preview";
-    image.src = story.mediaUrl || "";
+    image.src = story.mediaUrl;
     image.alt = "";
+    image.addEventListener("error", () => {
+      previewShell.innerHTML = "";
+      stRenderUnavailableContent(previewShell, "This story could not be loaded.");
+    });
     previewShell.appendChild(image);
     viewerState.dom.content.appendChild(previewShell);
     stStartProgressTimer(DEFAULT_STORY_DURATION_MS);
@@ -761,6 +1110,17 @@
       }
     }
 
+    // Privacy icon
+    if (viewerState.dom.privacy) {
+      const privacy = story.privacy ?? 0;
+      const iconName = global.PostUtils?.getPrivacyIconName
+        ? global.PostUtils.getPrivacyIconName(privacy)
+        : (privacy === 2 ? "lock" : privacy === 1 ? "users" : "globe");
+      viewerState.dom.privacy.innerHTML =
+        `<i data-lucide="${stEscapeAttr(iconName)}"></i>`;
+      if (global.lucide) global.lucide.createIcons();
+    }
+
     stUpdateProgressFill(0);
     stRenderStoryContent(story);
     stSyncUrlStory(story.storyId);
@@ -768,6 +1128,7 @@
 
   function stGoNext() {
     if (!viewerState.isOpen) return;
+    stCloseMoreMenu();
     if (viewerState.currentIndex >= viewerState.stories.length - 1) {
       stCloseViewer();
       return;
@@ -778,6 +1139,7 @@
 
   function stGoPrev() {
     if (!viewerState.isOpen) return;
+    stCloseMoreMenu();
     if (viewerState.currentIndex <= 0) {
       return;
     }
@@ -992,8 +1354,11 @@
       }
 
       if (!response.ok) {
-        if (response.status === 404 && global.toastInfo) {
-          global.toastInfo("No active story found.");
+        if (response.status === 404 || response.status === 403) {
+          if (global.toastInfo) {
+            global.toastInfo("This story is no longer available.");
+          }
+          stSyncRingGlobally(normalizedAuthorId, "none");
         } else if (global.toastError) {
           global.toastError("Failed to load story.");
         }
@@ -1011,8 +1376,9 @@
         .filter((story) => !!story.storyId);
       if (!stories.length) {
         if (global.toastInfo) {
-          global.toastInfo("No active story found.");
+          global.toastInfo("This story is no longer available.");
         }
+        stSyncRingGlobally(normalizedAuthorId, "none");
         stCloseViewer();
         return;
       }
@@ -1071,6 +1437,16 @@
   function stCloseViewer() {
     stStopProgressTimer();
     stPauseAnyVideo();
+    stCloseMoreMenu();
+    // Sync ring state before clearing viewer state
+    const authorId = viewerState.author?.accountId;
+    if (authorId && !stIsOwnStory()) {
+      if (stAllStoriesViewed()) {
+        stSyncRingGlobally(authorId, "seen");
+      }
+      // If not all viewed, keep current ring state (don't change)
+    }
+
     viewerState.requestId += 1;
     viewerState.isOpen = false;
     viewerState.author = null;
@@ -1117,6 +1493,12 @@
 
     event.preventDefault();
     event.stopPropagation();
+
+    // Close profile-preview popup if it's open
+    if (typeof global.hidePreview === "function") {
+      global.hidePreview();
+    }
+
     stOpenViewerByAuthorId(authorId, { syncUrl: true, startAtUnviewed: true });
   }
 
@@ -1139,4 +1521,5 @@
   global.openStoryViewerByAuthorId = stOpenViewerByAuthorId;
   global.openStoryViewerByStoryId = stOpenViewerByStoryId;
   global.closeStoryViewer = stCloseViewer;
+  global.syncStoryRingState = stSyncRingGlobally;
 })(window);

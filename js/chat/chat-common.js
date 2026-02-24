@@ -3705,8 +3705,8 @@ const ChatCommon = {
                 <p>${message}</p>
             </div>
             <div class="chat-common-confirm-actions">
-                <button class="chat-common-confirm-btn chat-common-confirm-confirm ${isDanger ? "danger" : ""}" id="genericConfirmBtn">${confirmText}</button>
                 <button class="chat-common-confirm-btn chat-common-confirm-cancel" id="genericCancelBtn">${cancelText}</button>
+                <button class="chat-common-confirm-btn chat-common-confirm-confirm ${isDanger ? "danger" : ""}" id="genericConfirmBtn">${confirmText}</button>
             </div>
         `;
 
