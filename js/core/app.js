@@ -131,7 +131,7 @@ function router() {
   const hash = window.location.hash || "#/";
   const path = hash.slice(1).split("?")[0];
   
-  if (!path.startsWith("/p/")) {
+  if (!path.startsWith("/p/") && !path.startsWith("/story")) {
       window._lastSafeHash = hash;
   }
   
@@ -237,6 +237,14 @@ function router() {
           });
           return;
       }
+  }
+
+  // Story deep-link route (e.g. #/story/{storyId}) should render home surface,
+  // then story viewer module will open from URL.
+  if (path === "/story" || path.startsWith("/story/")) {
+      loadHome();
+      setActiveSidebar("/home");
+      return;
   }
 
   switch (path) {

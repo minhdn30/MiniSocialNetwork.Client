@@ -5018,6 +5018,13 @@ const ChatPage = {
                 return false;
             }
 
+            if (!res.ok) {
+                const handledUnavailable = await this._handleConversationLoadUnavailable(id, res);
+                if (handledUnavailable) {
+                    return false;
+                }
+            }
+
             if (res.ok) {
                 const data = await res.json();
                 
@@ -5107,6 +5114,27 @@ const ChatPage = {
             this.isLoading = false;
         }
         return isSuccess;
+    },
+
+    async _handleConversationLoadUnavailable(conversationId, res) {
+        const status = Number(res?.status);
+        if (status !== 400 && status !== 403 && status !== 404) {
+            return false;
+        }
+
+        const fallbackMessage = "This conversation is no longer available or you don't have permission to view it.";
+        const message = await this._readConversationApiErrorMessage(res, fallbackMessage);
+
+        if (window.toastInfo) window.toastInfo(message);
+        else if (window.toastError) window.toastError(message);
+
+        this.applyConversationRemoved(conversationId, 'unavailable');
+
+        if (window.ChatSidebar && typeof window.ChatSidebar.loadConversations === 'function') {
+            window.ChatSidebar.loadConversations(false).catch(() => { });
+        }
+
+        return true;
     },
 
     renderMessageList(messages, isPrepend = false) {
