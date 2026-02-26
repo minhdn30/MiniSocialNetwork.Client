@@ -170,3 +170,120 @@
     --_avatar: 28px;
   }
 }
+
+/* ─── Story Feed: Scroll enhancements ─── */
+.stories {
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none; /* Firefox */
+}
+
+.story {
+  scroll-snap-align: start;
+  flex-shrink: 0;
+}
+
+/* ─── Story Feed: Avatar wrapper (holds ring + add btn) ─── */
+.story-avatar-wrapper {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.story-avatar-wrapper .post-avatar-ring {
+  --_avatar: 60px;
+  cursor: pointer;
+}
+
+.story-avatar-wrapper .post-avatar-ring .post-avatar {
+  width: var(--_avatar);
+  height: var(--_avatar);
+}
+
+/* ─── Story Feed: Add button Overlay (Centered, no-story state) ─── */
+.story-own {
+  cursor: pointer;
+}
+
+.story-own[data-has-stories="false"] .post-avatar {
+  filter: brightness(0.7); /* Làm avatar tối đi một chút để tôn lên nút + */
+  transition: filter var(--transition-normal);
+}
+
+.story-add-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.story-add-center-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  /* Glassmorphism Effect */
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  transition: all var(--transition-normal);
+}
+
+.story-own:hover .story-add-center-btn {
+  background: rgba(255, 255, 255, 0.35);
+  transform: scale(1.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.story-own:hover .post-avatar {
+  filter: brightness(0.85);
+}
+
+.story-add-center-btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+  color: white;
+}
+
+/* ─── Story Feed: Ring None state (no active stories) ─── */
+.post-avatar-ring.story-ring-none {
+  width: var(--_outer);
+  height: var(--_outer);
+  background: var(--story-ring-seen-color);
+}
+
+.post-avatar-ring.story-ring-none .post-avatar {
+  border: var(--_gap) solid var(--story-ring-gap-color);
+  opacity: 0.7;
+}
+
+/* ─── Story Feed: Skeleton loading ─── */
+.story-skeleton {
+  pointer-events: none;
+}
+
+.story-avatar-skeleton {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+}
+
+.story-name-skeleton {
+  width: 52px;
+  height: 10px;
+  border-radius: 4px;
+  margin-top: 8px;
+}

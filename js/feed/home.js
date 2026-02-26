@@ -7,6 +7,9 @@ async function loadPartial(id, page, featureFolder = "feed") {
 async function loadHome() {
   await loadPage("feed/home");
   await loadPartial("story-section", "story", "story");
+  if (window.initStoryFeed) {
+    initStoryFeed();
+  }
   await loadPartial("feed-section", "newfeed", "feed");
 
   if (window.initFeed) {

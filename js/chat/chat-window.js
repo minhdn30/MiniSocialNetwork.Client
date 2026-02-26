@@ -3456,6 +3456,8 @@ const ChatWindow = {
     this.closeHeaderMenu();
 
     const otherMember = chat.data.otherMember;
+    const otherUsername = (otherMember?.username || otherMember?.Username || "")
+      .toString();
     const otherAccountId = (otherMember?.accountId || "")
       .toString()
       .toLowerCase();
@@ -3472,6 +3474,7 @@ const ChatWindow = {
     menu.id = `chat-header-menu-${id}`;
     menu.className = "chat-window-header-menu";
 
+    const profileTarget = otherUsername || otherAccountId;
     const headerPrimaryAction = isGroup
       ? `
                 <button class="chat-menu-item" onclick="ChatWindow.closeHeaderMenu(); ChatWindow.openMembersModal('${id}')">
@@ -3480,7 +3483,7 @@ const ChatWindow = {
                 </button>
             `
       : `
-                <button class="chat-menu-item" onclick="ChatWindow.closeHeaderMenu(); window.location.hash = '#/profile/${otherAccountId}';">
+                <button class="chat-menu-item" onclick="ChatWindow.closeHeaderMenu(); window.location.hash = '#/profile/${profileTarget}';">
                     <i data-lucide="user"></i>
                     <span>View profile</span>
                 </button>
@@ -4738,7 +4741,8 @@ const ChatWindow = {
     if (normalizedAction === "profile") {
       this.closeMembersModal();
       this.minimizeAll();
-      window.location.hash = `#/profile/${targetAccountId}`;
+      const profileTarget = username || targetAccountId;
+      window.location.hash = `#/profile/${profileTarget}`;
       return;
     }
 

@@ -1355,9 +1355,11 @@ const ChatPage = {
                 // When moving to ANY profile from chat-page, minimize the current chat
                 this.minimizeToBubble();
                 
+                const targetUsername = meta.otherMember?.username || meta.otherMember?.Username || '';
                 const targetId = meta.otherMember?.accountId || meta.otherMemberId;
-                if (!meta.isGroup && targetId) {
-                    window.location.hash = `#/profile/${targetId}`;
+                const profileTarget = targetUsername || targetId;
+                if (!meta.isGroup && profileTarget) {
+                    window.location.hash = `#/profile/${profileTarget}`;
                 }
             };
             // Style hint
@@ -3197,7 +3199,8 @@ const ChatPage = {
 
         if (normalizedAction === 'profile') {
             this.minimizeToBubble();
-            window.location.hash = `#/profile/${targetAccountId}`;
+            const profileTarget = username || targetAccountId;
+            window.location.hash = `#/profile/${profileTarget}`;
             return;
         }
 
@@ -4770,6 +4773,7 @@ const ChatPage = {
             ? window.ChatCommon.getConversationThemeLabel(meta.theme ?? meta.Theme, { fallbackToDefault: true })
             : 'Default';
         const privateTargetId = meta.otherMember?.accountId || meta.otherMemberId || '';
+        const privateTargetUsername = meta.otherMember?.username || meta.otherMember?.Username || '';
         const privateTargetName = meta.otherMember?.fullName || meta.otherMember?.username || 'User';
         const privateTargetNickname = meta.otherMember?.nickname || '';
         const presenceStatus = !isGroup ? this.getPresenceStatus(meta) : null;
@@ -4784,6 +4788,7 @@ const ChatPage = {
             statusHtml = `${memberList.length} Members`;
         }
 
+        const profileTarget = privateTargetUsername || privateTargetId;
         const html = `
             <div class="chat-info-header">
                 <div class="chat-info-avatar">
@@ -4801,7 +4806,7 @@ const ChatPage = {
                     <span>Members</span>
                 </button>
                 ` : `
-                <button class="chat-info-quick-btn" onclick="${privateTargetId ? `ChatPage.minimizeToBubble(); window.location.hash = '#/profile/${privateTargetId}'` : "window.toastInfo('Profile is unavailable')" }">
+                <button class="chat-info-quick-btn" onclick="${profileTarget ? `ChatPage.minimizeToBubble(); window.location.hash = '#/profile/${profileTarget}'` : "window.toastInfo('Profile is unavailable')" }">
                     <div class="chat-info-quick-icon"><i data-lucide="user"></i></div>
                     <span>Profile</span>
                 </button>

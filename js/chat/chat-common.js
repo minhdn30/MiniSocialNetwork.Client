@@ -3040,6 +3040,7 @@ const ChatCommon = {
 
     // --- Author name (Group chat only, received only, first or single in group) ---
     const senderId = msg.sender?.accountId || msg.senderId || "";
+    const senderUsername = msg.sender?.username || msg.sender?.Username || "";
     const showAuthor =
       isGroup && isReceived && (groupPos === "first" || groupPos === "single");
     const authorHtml =
@@ -3059,7 +3060,7 @@ const ChatCommon = {
       APP_CONFIG.DEFAULT_AVATAR;
     const avatarHtml = isReceived
       ? `<div class="msg-avatar ${showAvatar ? "" : "msg-avatar-spacer"}">
-                ${showAvatar ? `<img src="${avatarSrc}" alt="" onclick="window.ChatCommon.goToProfile('${senderId}')" style="cursor: pointer;" onerror="this.src='${APP_CONFIG.DEFAULT_AVATAR}'">` : ""}
+                ${showAvatar ? `<img src="${avatarSrc}" alt="" onclick="window.ChatCommon.goToProfile('${senderId}', '${senderUsername}')" style="cursor: pointer;" onerror="this.src='${APP_CONFIG.DEFAULT_AVATAR}'">` : ""}
                </div>`
       : "";
 
@@ -3655,8 +3656,8 @@ const ChatCommon = {
     this.syncAllReactionBadgeOverflows(container);
   },
 
-  goToProfile(accountId) {
-    if (!accountId) return;
+  goToProfile(accountId, username) {
+    if (!accountId && !username) return;
     // If we are leaving chat-page, ensure we minimize the current chat session
     if (
       window.ChatPage &&
@@ -3664,7 +3665,9 @@ const ChatCommon = {
     ) {
       window.ChatPage.minimizeToBubble();
     }
-    window.location.hash = `#/profile/${accountId}`;
+    // Prefer username for profile URL (clean/SEO-friendly); fallback to accountId
+    const profileParam = username || accountId;
+    window.location.hash = `#/profile/${profileParam}`;
   },
 
   /**

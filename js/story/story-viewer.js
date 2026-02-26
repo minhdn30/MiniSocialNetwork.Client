@@ -410,6 +410,7 @@
       moreBtn: modal.querySelector("#storyViewerMoreBtn"),
       moreMenu: modal.querySelector("#storyViewerMoreMenu"),
       privacy: modal.querySelector("#storyViewerPrivacy"),
+      author: modal.querySelector(".sn-story-viewer-author"),
       viewersPanel: modal.querySelector("#storyViewersPanel"),
       viewersList: modal.querySelector("#storyViewersList"),
       viewersCloseBtn: modal.querySelector("#storyViewersCloseBtn"),
@@ -442,6 +443,13 @@
         }
       }
     });
+
+    if (viewerState.dom.author) {
+      viewerState.dom.author.addEventListener("click", (event) => {
+        event.stopPropagation();
+        stHandleAuthorClick();
+      });
+    }
 
     if (viewerState.dom.prevBtn) {
       viewerState.dom.prevBtn.addEventListener("click", (event) => {
@@ -1322,9 +1330,18 @@
           (s) => stNormalizeId(s.storyId) !== stNormalizeId(story.storyId),
         );
 
-        if (!viewerState.stories.length) {
+        const authorId = viewerState.author?.accountId;
+        const remaining = viewerState.stories.length;
+
+        // Dispatch event for story-feed sync
+        global.dispatchEvent(
+          new CustomEvent("story:deleted", {
+            detail: { authorId, remainingCount: remaining },
+          }),
+        );
+
+        if (!remaining) {
           // No more stories, close viewer and remove ring
-          const authorId = viewerState.author?.accountId;
           stCloseViewer();
           if (authorId) stSyncRingGlobally(authorId, "none");
           return;
@@ -1658,6 +1675,22 @@
     stRenderCurrentStory("prev");
   }
 
+  function stHandleAuthorClick() {
+    if (!viewerState.author) return;
+
+    const profileTarget =
+      viewerState.author.username || viewerState.author.accountId;
+    if (!profileTarget) return;
+
+    // Navigate to profile
+    global.location.hash = `#/profile/${profileTarget}`;
+
+    // Note: router() will be triggered by hashchange, which calls closeAllOverlayModals(),
+    // which in turn calls stCloseViewer().
+    // So we don't strictly need to call stCloseViewer() here, but it doesn't hurt.
+    stCloseViewer();
+  }
+
   /**
    * Parse the hash fragment into path + query params.
    * e.g. "#/messages?id=abc" → { hashPath: "#/messages", hashParams: URLSearchParams("id=abc") }
@@ -1702,6 +1735,16 @@
 
   function stSyncUrlClose() {
     if (!viewerState.baseUrl) return;
+    // Compare current URL (without story params) to baseUrl.
+    // If they match → normal close → restore baseUrl (remove ?storyId).
+    // If they differ → user navigated to a new page → don't overwrite the new URL.
+    const currentClean = stGetBaseUrlWithoutStoryParam();
+    const baseClean = viewerState.baseUrl;
+    if (currentClean !== baseClean) {
+      // Hash path changed (user navigated away), don't overwrite
+      viewerState.baseUrl = null;
+      return;
+    }
     history.replaceState(history.state, "", viewerState.baseUrl);
     viewerState.baseUrl = null;
   }
@@ -1887,6 +1930,11 @@
             global.toastInfo("This story is no longer available.");
           }
           stSyncRingGlobally(normalizedAuthorId, "none");
+          global.dispatchEvent(
+            new CustomEvent("story:unavailable", {
+              detail: { authorId: normalizedAuthorId },
+            }),
+          );
         } else if (global.toastError) {
           global.toastError("Failed to load story.");
         }
@@ -1907,6 +1955,11 @@
           global.toastInfo("This story is no longer available.");
         }
         stSyncRingGlobally(normalizedAuthorId, "none");
+        global.dispatchEvent(
+          new CustomEvent("story:unavailable", {
+            detail: { authorId: normalizedAuthorId },
+          }),
+        );
         stCloseViewer();
         return;
       }
