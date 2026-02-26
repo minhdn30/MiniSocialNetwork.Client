@@ -512,6 +512,8 @@
         apiFetch(
           `/Stories/viewable-authors?page=${encodeURIComponent(page)}&pageSize=${encodeURIComponent(pageSize)}`,
         ),
+      resolveByStoryId: (storyId) =>
+        apiFetch(`/Stories/${encodeURIComponent(storyId)}/resolve`),
       getActiveByAuthor: (authorId) =>
         apiFetch(`/Stories/authors/${encodeURIComponent(authorId)}/active`),
       markViewed: (storyIds = []) =>

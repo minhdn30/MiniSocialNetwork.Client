@@ -563,42 +563,38 @@ body.light-mode .sn-story-viewer-mute-btn:hover {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 6;
+  z-index: 6; /* Back to normal layer */
   border: 1px solid var(--snsv-nav-border);
   background: var(--snsv-nav-bg);
   color: var(--snsv-nav-fg);
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border-radius: 50%;
   cursor: pointer;
-  font-size: 0;
-  line-height: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   box-shadow: var(--snsv-nav-shadow);
-  transition:
-    transform var(--transition-fast),
-    filter var(--transition-fast),
-    background var(--transition-fast);
+  transition: all 0.2s ease;
 }
 
 .sn-story-viewer-nav:hover {
   background: var(--snsv-nav-hover-bg);
-  filter: none;
-}
-
-.sn-story-viewer-nav:active {
-  transform: translateY(-50%) scale(0.96);
+  transform: translateY(-50%) scale(1.1);
 }
 
 .sn-story-viewer-nav-prev {
-  left: -52px;
+  left: -65px;
 }
 
 .sn-story-viewer-nav-next {
-  right: -52px;
+  right: -65px;
+}
+.sn-story-viewer-nav-disabled {
+  opacity: 0.25;
+  cursor: default;
+  filter: grayscale(1);
 }
 
 .sn-story-viewer-nav-icon {
@@ -1423,4 +1419,309 @@ body.light-mode .sn-story-viewer-viewers-item-avatar {
 /* Ensure Toasts stay on top of all modals (Story Viewer is 11500) */
 #toast-container {
   z-index: 20000 !important;
+}
+
+/* ─── Story List Strip (Vertical Sidebar on Left) ─── */
+.sn-story-viewer-strip-wrapper {
+  position: absolute;
+  left: -200px; /* Adjusted based on new width to keep gap consistent */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 100px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  gap: 15px;
+  animation: snsvStripFadeIn 0.5s cubic-bezier(0.19, 1, 0.22, 1) backwards;
+}
+
+@keyframes snsvStripFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+}
+
+.sn-story-viewer-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 24px 10px;
+  width: 100px;
+  max-height: min(85vh, 680px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  pointer-events: auto;
+
+  /* Premium Sidebar Styling */
+  background: rgba(10, 12, 16, 0.96);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border-radius: 46px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 25px 80px rgba(0, 0, 0, 0.75),
+    inset 0 1px 1px rgba(255, 255, 255, 0.12);
+
+  /* Clean UI: No Scrollbar */
+  scrollbar-width: none;
+}
+.sn-story-viewer-strip::-webkit-scrollbar {
+  display: none;
+}
+
+/* ─── Strip Item ─── */
+.sn-story-viewer-strip-item {
+  flex-shrink: 0;
+  width: 66px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  opacity: 0.55;
+}
+
+.sn-story-viewer-strip-item:hover {
+  opacity: 1;
+  transform: scale(1.08);
+}
+
+.sn-story-viewer-strip-item.active {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
+.sn-story-viewer-strip-item.strip-seen:not(.active) {
+  opacity: 0.3;
+}
+
+/* ─── Story Ring (High-End Gradient) ─── */
+.sn-story-viewer-strip-ring {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.4s ease;
+  background: transparent;
+  position: relative;
+}
+
+.sn-story-viewer-strip-ring.ring-unseen {
+  background: conic-gradient(
+    #6366f1 0deg,
+    #8b5cf6 110deg,
+    #ec4899 210deg,
+    #f43f5e 300deg,
+    #6366f1 360deg
+  );
+  box-shadow: 0 0 15px rgba(236, 72, 153, 0.5);
+}
+
+.sn-story-viewer-strip-ring.ring-seen {
+  background: var(--story-ring-seen-color);
+}
+
+/* Glow on Active Author */
+.sn-story-viewer-strip-item.active .sn-story-viewer-strip-ring {
+  box-shadow: 0 0 30px
+    color-mix(in srgb, var(--accent-primary) 70%, transparent);
+}
+
+/* ─── Avatar Image ─── */
+.sn-story-viewer-strip-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #000; /* Define a sharp gap */
+  background: #111;
+  display: block;
+}
+
+/* ─── Name Tag ─── */
+.sn-story-viewer-strip-name {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  max-width: 60px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.sn-story-viewer-strip-item.active .sn-story-viewer-strip-name {
+  color: #ffffff;
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* ─── Author Nav Buttons (▲ ▼) ─── */
+.sn-story-viewer-author-nav {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(15, 18, 22, 0.98);
+  color: #ffffff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  opacity: 0.8;
+  pointer-events: auto;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+.sn-story-viewer-author-nav:hover {
+  opacity: 1;
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  transform: scale(1.12);
+  box-shadow: 0 0 20px
+    color-mix(in srgb, var(--accent-primary) 50%, transparent);
+}
+
+.sn-story-viewer-author-nav-icon {
+  width: 22px;
+  height: 22px;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ─── Sentinel ─── */
+.sn-story-viewer-strip-sentinel {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: snsvStripSpin 0.7s linear infinite;
+  margin-top: 10px;
+}
+
+@keyframes snsvStripSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ─── Light Mode Premium Refinement ─── */
+body.light-mode .sn-story-viewer-strip {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+body.light-mode .sn-story-viewer-strip-avatar {
+  border-color: #ffffff;
+}
+
+body.light-mode .sn-story-viewer-strip-name {
+  color: #555;
+  font-weight: 600;
+  text-shadow: none;
+}
+
+body.light-mode .sn-story-viewer-strip-item.active .sn-story-viewer-strip-name {
+  color: var(--accent-primary);
+  font-weight: 700;
+  text-shadow: none;
+}
+
+body.light-mode .sn-story-viewer-strip-sentinel {
+  border-color: rgba(0, 0, 0, 0.1);
+  border-top-color: var(--accent-primary);
+}
+
+/* ─── Responsive: Horizontal layout on tablets/mobiles ─── */
+@media (max-width: 1024px) {
+  .sn-story-viewer-strip-wrapper {
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: -90px;
+    width: auto;
+    height: auto;
+    flex-direction: row;
+    transform: none;
+    justify-content: center;
+    gap: 10px;
+    animation: snsvStripFadeInMob 0.5s ease backwards;
+  }
+
+  @keyframes snsvStripFadeInMob {
+    from {
+      opacity: 0;
+      transform: translateY(25px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .sn-story-viewer-strip {
+    flex-direction: row;
+    width: auto;
+    max-width: 88vw;
+    padding: 12px 20px;
+    border-radius: 36px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 14px;
+  }
+
+  .sn-story-viewer-strip-ring {
+    width: 48px;
+    height: 48px;
+  }
+  .sn-story-viewer-strip-item {
+    width: 52px;
+  }
+  .sn-story-viewer-strip-name {
+    font-size: 10px;
+    max-width: 52px;
+  }
+  .sn-story-viewer-author-nav {
+    width: 40px;
+    height: 40px;
+  }
+  .sn-story-viewer-author-nav-icon {
+    width: 18px;
+    height: 18px;
+    transform: rotate(-90deg); /* Switch ▲ to ◀ / ▶ for horizontal */
+  }
+}
+
+@media (max-width: 640px) {
+  .sn-story-viewer-strip-wrapper {
+    display: none; /* Hide strip on very small mobile for focus */
+  }
 }

@@ -1,6 +1,92 @@
 (function () {
   "use strict";
 
+  /* ─── author queue for story-list viewer ─── */
+  const FEED_PAGE_SIZE = 30;
+  let feedAuthorItems = [];
+  let feedPage = 1;
+  let feedHasMore = true;
+  let feedIsLoadingMore = false;
+
+  function normalizeAuthorId(value) {
+    return (value || "").toString().trim().toLowerCase();
+  }
+
+  function parseCount(value, fallbackValue = 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallbackValue;
+  }
+
+  function resolveHasMoreFromPayload(payload, page, pageSize, fallbackCount) {
+    const totalPages = Number(payload?.totalPages ?? payload?.TotalPages);
+    if (Number.isFinite(totalPages) && totalPages > 0) {
+      return page < totalPages;
+    }
+
+    const totalItems = Number(payload?.totalItems ?? payload?.TotalItems);
+    if (Number.isFinite(totalItems) && totalItems >= 0) {
+      return page * pageSize < totalItems;
+    }
+
+    return fallbackCount >= pageSize;
+  }
+
+  /**
+   * Build queue from raw items array.
+   * Excludes "Your Story" placeholder (no stories).
+   */
+  function buildAuthorQueue(items) {
+    const defaultAvatar =
+      window.APP_CONFIG?.DEFAULT_AVATAR || "assets/images/default-avatar.jpg";
+    return (Array.isArray(items) ? items : [])
+      .map((it) => {
+        const activeStoryCount = parseCount(
+          it.activeStoryCount ?? it.ActiveStoryCount,
+          0,
+        );
+        return {
+          accountId: normalizeAuthorId(it.accountId || it.AccountId || ""),
+          avatarUrl: it.avatarUrl || it.AvatarUrl || defaultAvatar,
+          username:
+            it.username || it.Username || it.fullName || it.FullName || "User",
+          isCurrentUser: !!(it.isCurrentUser || it.IsCurrentUser),
+          storyRingState: it.storyRingState ?? it.StoryRingState ?? 0,
+          activeStoryCount,
+        };
+      })
+      .filter((it) => {
+        const hasStories = it.activeStoryCount > 0;
+        // Skip "Your Story" placeholder that has no stories
+        if (it.isCurrentUser && !hasStories) return false;
+        return hasStories && !!it.accountId;
+      })
+      .map((it) => ({
+        accountId: it.accountId,
+        avatarUrl: it.avatarUrl,
+        username: it.username,
+        isCurrentUser: it.isCurrentUser,
+        storyRingState: it.storyRingState,
+      }));
+  }
+
+  function upsertStoryFeedAuthor(rawAuthor, options = {}) {
+    const queueItems = buildAuthorQueue([rawAuthor]);
+    const normalizedId = normalizeAuthorId(
+      rawAuthor?.accountId || rawAuthor?.AccountId || "",
+    );
+    if (!normalizedId) return;
+
+    feedAuthorItems = feedAuthorItems.filter((a) => a.accountId !== normalizedId);
+    if (!queueItems.length) return;
+
+    const author = queueItems[0];
+    if (options.prepend) {
+      feedAuthorItems.unshift(author);
+      return;
+    }
+    feedAuthorItems.push(author);
+  }
+
   /* ─── helpers ─── */
   function resolveStoryRingClass(storyRingState) {
     const s = (storyRingState ?? "").toString().trim().toLowerCase();
@@ -190,31 +276,81 @@
   }
 
   /* ─── event listeners for real-time sync ─── */
-  window.addEventListener("story:created", () => {
+  window.addEventListener("story:created", (event) => {
+    const detail = event?.detail || {};
     syncOwnStoryUI(true);
+
+    const myId = normalizeAuthorId(localStorage.getItem("accountId"));
+    if (!myId) return;
+
+    upsertStoryFeedAuthor(
+      {
+        accountId: detail.accountId || detail.AccountId || myId,
+        avatarUrl:
+          detail.avatarUrl || detail.AvatarUrl || localStorage.getItem("avatarUrl") || "",
+        username:
+          detail.username ||
+          detail.Username ||
+          localStorage.getItem("username") ||
+          "You",
+        isCurrentUser: true,
+        activeStoryCount: Math.max(
+          1,
+          parseCount(detail.activeStoryCount ?? detail.ActiveStoryCount, 1),
+        ),
+        storyRingState: detail.storyRingState ?? detail.StoryRingState ?? 2,
+      },
+      { prepend: true },
+    );
   });
 
   window.addEventListener("story:deleted", (e) => {
     const detail = e.detail || {};
-    const myId = (localStorage.getItem("accountId") || "").toLowerCase();
-    const authorId = (detail.authorId || "").toLowerCase();
+    const myId = normalizeAuthorId(localStorage.getItem("accountId"));
+    const authorId = normalizeAuthorId(detail.authorId || detail.AuthorId);
+    const remainingRaw = detail.remainingCount ?? detail.RemainingCount;
+    const hasRemainingInfo = remainingRaw !== undefined && remainingRaw !== null;
+    const remaining = parseCount(remainingRaw, 0);
 
-    // Only sync if the deleted story belongs to the current user
-    if (authorId && authorId !== myId) return;
+    if (authorId && authorId !== myId) {
+      if (hasRemainingInfo && remaining <= 0) {
+        removeStoryFeedAuthor(authorId);
+      }
+      return;
+    }
 
-    const remaining = detail.remainingCount ?? 0;
     syncOwnStoryUI(remaining > 0);
+
+    if (remaining > 0) {
+      upsertStoryFeedAuthor(
+        {
+          accountId: myId,
+          avatarUrl: localStorage.getItem("avatarUrl") || "",
+          username: localStorage.getItem("username") || "You",
+          isCurrentUser: true,
+          activeStoryCount: remaining,
+          storyRingState: 2,
+        },
+        { prepend: true },
+      );
+      return;
+    }
+
+    if (hasRemainingInfo || authorId === myId) {
+      removeStoryFeedAuthor(authorId || myId);
+    }
   });
 
   window.addEventListener("story:unavailable", (e) => {
     const detail = e.detail || {};
-    const authorId = (detail.authorId || "").toLowerCase();
+    const authorId = normalizeAuthorId(detail.authorId || detail.AuthorId);
     if (!authorId) return;
 
     const container = document.getElementById("story-feed");
     if (!container) return;
 
-    const myId = (localStorage.getItem("accountId") || "").toLowerCase();
+    const myId = normalizeAuthorId(localStorage.getItem("accountId"));
+    removeStoryFeedAuthor(authorId);
 
     if (authorId === myId) {
       // Own story became unavailable → sync to "no stories" state
@@ -253,16 +389,17 @@
     renderSkeletons(container, 7);
 
     try {
-      const res = await API.Stories.getViewableAuthors(1, 30);
+      const res = await API.Stories.getViewableAuthors(1, FEED_PAGE_SIZE);
       if (!res.ok) throw new Error("Failed to load story feed");
 
       const data = await res.json();
-      let items = data.items || data.Items || [];
+      const rawItems = data.items || data.Items || [];
+      let items = Array.isArray(rawItems) ? rawItems.slice() : [];
 
       // Luôn đảm bảo "Your Story" ở đầu danh sách
-      const myId = (localStorage.getItem("accountId") || "").toLowerCase();
+      const myId = normalizeAuthorId(localStorage.getItem("accountId"));
       const hasCurrentUser = items.some(
-        (it) => (it.accountId || it.AccountId || "").toLowerCase() === myId,
+        (it) => normalizeAuthorId(it.accountId || it.AccountId) === myId,
       );
 
       if (!hasCurrentUser && myId) {
@@ -284,12 +421,85 @@
       }
 
       renderStoryItems(container, items);
+
+      // Build author queue for story-list viewer
+      feedAuthorItems = buildAuthorQueue(rawItems);
+      feedPage = 1;
+      feedHasMore = resolveHasMoreFromPayload(
+        data,
+        1,
+        FEED_PAGE_SIZE,
+        Array.isArray(rawItems) ? rawItems.length : 0,
+      );
     } catch (err) {
       console.error("Story feed load failed:", err);
       container.innerHTML = "";
     }
   }
 
+  /* ─── queue API for story-viewer ─── */
+
+  /** Get current author queue + pagination state */
+  function getStoryFeedQueue() {
+    return {
+      authors: feedAuthorItems.slice(), // shallow copy
+      hasMore: feedHasMore,
+    };
+  }
+
+  /** Fetch next page of authors and append to queue. Returns new items. */
+  async function loadMoreStoryFeedAuthors() {
+    if (feedIsLoadingMore || !feedHasMore) return [];
+    feedIsLoadingMore = true;
+    try {
+      const nextPage = feedPage + 1;
+      const res = await API.Stories.getViewableAuthors(
+        nextPage,
+        FEED_PAGE_SIZE,
+      );
+      if (!res.ok) {
+        feedHasMore = false;
+        return [];
+      }
+      const data = await res.json();
+      const rawItems = data.items || data.Items || [];
+      feedHasMore = resolveHasMoreFromPayload(
+        data,
+        nextPage,
+        FEED_PAGE_SIZE,
+        Array.isArray(rawItems) ? rawItems.length : 0,
+      );
+
+      const newAuthors = buildAuthorQueue(rawItems);
+      const existingIds = new Set(feedAuthorItems.map((a) => a.accountId));
+      const uniqueAuthors = newAuthors.filter((author) => {
+        if (!author?.accountId || existingIds.has(author.accountId)) {
+          return false;
+        }
+        existingIds.add(author.accountId);
+        return true;
+      });
+      feedAuthorItems = feedAuthorItems.concat(uniqueAuthors);
+      feedPage = nextPage;
+      return uniqueAuthors;
+    } catch (_) {
+      feedHasMore = false;
+      return [];
+    } finally {
+      feedIsLoadingMore = false;
+    }
+  }
+
+  /** Remove an author from the queue (e.g. stories became unavailable) */
+  function removeStoryFeedAuthor(authorId) {
+    const id = normalizeAuthorId(authorId);
+    if (!id) return;
+    feedAuthorItems = feedAuthorItems.filter((a) => a.accountId !== id);
+  }
+
   /* ─── expose ─── */
   window.initStoryFeed = initStoryFeed;
+  window.getStoryFeedQueue = getStoryFeedQueue;
+  window.loadMoreStoryFeedAuthors = loadMoreStoryFeedAuthors;
+  window.removeStoryFeedAuthor = removeStoryFeedAuthor;
 })();
