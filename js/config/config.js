@@ -177,5 +177,7 @@
     GROUP_NAME_MIN_LENGTH: 3, // Minimum characters for group name
     GROUP_NAME_MAX_LENGTH: 50, // Maximum characters for group name
     GROUP_CHAT_AVATAR_MAX_SIZE_MB: 5, // Max allowed group avatar upload size (MB)
+    STORY_VIDEO_MAX_DURATION_SEC: 20, // Thời lượng tối đa của story video (giây)
+    STORY_VIDEO_MAX_SIZE_MB: 10, // Dung lượng tối đa của story video (MB)
   };
 })(window);

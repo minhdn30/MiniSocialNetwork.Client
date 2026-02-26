@@ -676,6 +676,7 @@
       y: y,
       width: w,
       height: h,
+      rotation: 0,
     };
     editorState.objects.push(obj);
     smeRenderObject(obj);
@@ -766,6 +767,7 @@
       color: curColor,
       fontSize: curSize,
       fontFamily: curFont,
+      rotation: 0,
     };
     editorState.objects.push(obj);
     smeRenderObject(obj);
@@ -786,6 +788,7 @@
       width: size,
       height: size,
       emoji: emoji,
+      rotation: 0,
     };
     editorState.objects.push(obj);
     smeRenderObject(obj);
@@ -823,14 +826,20 @@
         h.setAttribute("data-sme-handle", dir);
         handlesContainer.appendChild(h);
       }
+      // Rotation handle
+      const rotH = document.createElement("div");
+      rotH.className = "sme-handle sme-handle-rotate";
+      rotH.setAttribute("data-sme-handle", "rotate");
+      handlesContainer.appendChild(rotH);
       el.appendChild(handlesContainer);
     }
 
-    // Position and size
+    // Position, size, rotation
     el.style.left = `${obj.x}px`;
     el.style.top = `${obj.y}px`;
     el.style.width = `${obj.width}px`;
     el.style.height = `${obj.height}px`;
+    el.style.transform = `rotate(${obj.rotation || 0}deg)`;
 
     // Type-specific content
     if (obj.type === "image") {
@@ -1154,6 +1163,22 @@
         } else if (h === "n") {
           newH = Math.max(MIN_OBJ_SIZE, s.height - dy);
           newY = s.y + s.height - newH;
+        } else if (h === "rotate") {
+          const containerRect = smeGetContainerRect();
+          const centerX = obj.x + obj.width / 2;
+          const centerY = obj.y + obj.height / 2;
+          const mouseX = e.clientX - containerRect.left;
+          const mouseY = e.clientY - containerRect.top;
+
+          const dxMouse = mouseX - centerX;
+          const dyMouse = mouseY - centerY;
+
+          // atan2 returns angle in radians. convert to degrees.
+          // Adjust by 90deg because the rotate handle is at the top
+          let angle = Math.atan2(dyMouse, dxMouse) * (180 / Math.PI) + 90;
+          obj.rotation = angle;
+          smeRenderObject(obj);
+          return;
         }
 
         obj.x = newX;
