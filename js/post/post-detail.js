@@ -225,17 +225,15 @@ async function openPostDetailByCode(postCode) {
         const res = await API.Posts.getByPostCode(postCode);
         if (!res.ok) {
             if (mainLoader) mainLoader.style.display = "none";
-            // Handle permission/not found errors gracefully
             if (res.status === 403 || res.status === 404 || res.status === 400) {
-                if (window.location.hash.startsWith("#/p/")) {
-                    window.showErrorPage("Post not found", "The post you are looking for doesn't exist or you don't have permission to view it.");
-                } else {
-                    if (window.toastInfo) toastInfo("This post is no longer available or you don't have permission to view it.");
-                    closePostDetailModal();
-                }
+                if (window.toastInfo) toastInfo("This post is no longer available or you don't have permission to view it.");
+                if (typeof window.forceClosePostDetail === "function") forceClosePostDetail();
+                else closePostDetailModal();
                 return;
             }
-            closePostDetailModal();
+            if (window.toastError) toastError("Failed to open this post.");
+            if (typeof window.forceClosePostDetail === "function") forceClosePostDetail();
+            else closePostDetailModal();
             return;
         }
         
@@ -254,13 +252,10 @@ async function openPostDetailByCode(postCode) {
     } catch (err) {
         if (mainLoader) mainLoader.style.display = "none";
         console.error(err);
-        
-        // If it's a direct link to a post, show error page
-        if (window.location.hash.startsWith("#/p/")) {
-             window.showErrorPage("Post not found", "The post you are looking for doesn't exist or you don't have permission to view it.");
-        }
-        
-        closePostDetailModal();
+
+        if (window.toastError) toastError("Failed to open this post.");
+        if (typeof window.forceClosePostDetail === "function") forceClosePostDetail();
+        else closePostDetailModal();
     }
 }
 // Dynamic HTML Loader

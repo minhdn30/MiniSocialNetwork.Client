@@ -1,8 +1,11 @@
 (function (global) {
   const STORY_URL_PARAM = "storyId";
+  const STORY_HASH_ROUTE_PREFIX = "/story/";
   const DEFAULT_STORY_DURATION_MS =
     global.APP_CONFIG?.STORY_DEFAULT_DURATION_MS || 5000;
   const PROGRESS_TICK_MS = 50;
+  const STORY_TO_AUTHOR_CACHE_MAX = 1000;
+  const AUTHOR_RESUME_CACHE_MAX = 300;
   const STORY_OPEN_STATUS = {
     SUCCESS: "success",
     UNAVAILABLE: "unavailable",
@@ -54,6 +57,7 @@
     requestId: 0,
     markedStoryIds: new Set(),
     storyToAuthorCache: new Map(),
+    authorResumeMap: new Map(), // normalized authorId -> normalized storyId
     baseUrl: null,
     shouldSyncUrl: true,
     modal: null,
@@ -91,6 +95,68 @@
 
   function stCurrentAccountId() {
     return stNormalizeId(localStorage.getItem("accountId"));
+  }
+
+  function stSetBoundedMapValue(map, key, value, maxSize) {
+    if (!key) return;
+    if (map.has(key)) {
+      map.delete(key);
+    }
+    map.set(key, value);
+
+    while (map.size > maxSize) {
+      const oldestKey = map.keys().next().value;
+      if (oldestKey === undefined) break;
+      map.delete(oldestKey);
+    }
+  }
+
+  function stCacheStoryAuthor(storyId, authorId) {
+    const normalizedStoryId = stNormalizeId(storyId);
+    const normalizedAuthorId = (authorId || "").toString().trim();
+    if (!normalizedStoryId || !normalizedAuthorId) return;
+
+    stSetBoundedMapValue(
+      viewerState.storyToAuthorCache,
+      normalizedStoryId,
+      normalizedAuthorId,
+      STORY_TO_AUTHOR_CACHE_MAX,
+    );
+  }
+
+  function stRememberCurrentStoryPosition(authorId, storyId) {
+    const normalizedAuthorId = stNormalizeId(authorId);
+    const normalizedStoryId = stNormalizeId(storyId);
+    if (!normalizedAuthorId || !normalizedStoryId) return;
+
+    stSetBoundedMapValue(
+      viewerState.authorResumeMap,
+      normalizedAuthorId,
+      normalizedStoryId,
+      AUTHOR_RESUME_CACHE_MAX,
+    );
+  }
+
+  function stGetAuthorResumeStoryId(authorId) {
+    const normalizedAuthorId = stNormalizeId(authorId);
+    if (!normalizedAuthorId) return "";
+    return viewerState.authorResumeMap.get(normalizedAuthorId) || "";
+  }
+
+  function stPruneAuthorResumeMap(queue) {
+    if (!Array.isArray(queue) || queue.length === 0) {
+      viewerState.authorResumeMap.clear();
+      return;
+    }
+
+    const allowedAuthorIds = new Set(
+      queue.map((author) => stNormalizeId(author?.accountId)).filter(Boolean),
+    );
+    Array.from(viewerState.authorResumeMap.keys()).forEach((authorId) => {
+      if (!allowedAuthorIds.has(authorId)) {
+        viewerState.authorResumeMap.delete(authorId);
+      }
+    });
   }
 
   function stParseInt(value, fallbackValue) {
@@ -413,6 +479,7 @@
     viewerState.modal = modal;
     viewerState.dom = {
       progress: modal.querySelector("#storyViewerProgress"),
+      header: modal.querySelector(".sn-story-viewer-header"),
       avatar: modal.querySelector("#storyViewerAvatar"),
       username: modal.querySelector("#storyViewerUsername"),
       time: modal.querySelector("#storyViewerTime"),
@@ -1634,7 +1701,27 @@
       return;
     }
 
+    stRememberCurrentStoryPosition(viewerState.author?.accountId, story.storyId);
+
     stRenderNavButtons();
+    
+    // Animate UI elements if direction is provided
+    const animatingEls = [
+        viewerState.dom.progress, 
+        viewerState.dom.header,
+        viewerState.dom.insight,
+        viewerState.dom.actions
+    ].filter(Boolean);
+
+    animatingEls.forEach(el => {
+      el.classList.remove(
+        "snsv-animate-next",
+        "snsv-animate-prev",
+        "snsv-animate-fade",
+      );
+      void el.offsetWidth; // Force reflow
+      el.classList.add(`snsv-animate-${direction}`);
+    });
 
     if (viewerState.dom.avatar) {
       const avatarUrl =
@@ -1781,6 +1868,7 @@
 
     const stripEl = wrapper.querySelector(".sn-story-viewer-strip");
     if (stripEl) {
+      // 1. Infinity Scroll Logic
       stripEl.addEventListener("scroll", async () => {
         if (!viewerState.queueHasMore || viewerState.isLoadingMore) return;
         const nearEnd = stripEl.scrollHeight - stripEl.scrollTop - stripEl.clientHeight < 100;
@@ -1800,6 +1888,49 @@
           }
         }
       });
+
+      // 2. Drag to Scroll Logic (Mobile-like)
+      let isDown = false;
+      let startY;
+      let scrollTop;
+      let dragged = false;
+
+      stripEl.addEventListener("mousedown", (e) => {
+        isDown = true;
+        stripEl.classList.add("active");
+        startY = e.pageY - stripEl.offsetTop;
+        scrollTop = stripEl.scrollTop;
+        dragged = false;
+        // Temporarily disable smooth scroll for better drag response
+        stripEl.style.scrollBehavior = "auto";
+      });
+
+      stripEl.addEventListener("mouseleave", () => {
+        isDown = false;
+        stripEl.style.scrollBehavior = "smooth";
+      });
+
+      stripEl.addEventListener("mouseup", () => {
+        isDown = false;
+        stripEl.style.scrollBehavior = "smooth";
+      });
+
+      stripEl.addEventListener("mousemove", (e) => {
+        if (!isDown) return;
+        e.preventDefault();
+        const y = e.pageY - stripEl.offsetTop;
+        const walk = (y - startY) * 1.5; // multiplier for faster scroll
+        if (Math.abs(walk) > 5) dragged = true;
+        stripEl.scrollTop = scrollTop - walk;
+      });
+
+      // Prevent click if dragged
+      stripEl.addEventListener("click", (e) => {
+        if (dragged) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }, true);
     }
 
     stScrollStripToActive();
@@ -1855,6 +1986,7 @@
 
       item.classList.toggle("active", isActive);
       item.classList.toggle("strip-seen", isSeen);
+      item.classList.toggle("strip-unseen", isUnseen);
       
       const ring = item.querySelector(".sn-story-viewer-strip-ring");
       if (ring) {
@@ -1893,14 +2025,17 @@
     const savedQueue = viewerState.authorQueue;
     const savedQueueHasMore = viewerState.queueHasMore;
     const savedViewedAuthors = viewerState.viewedAuthors;
+    const resumeStoryId = stGetAuthorResumeStoryId(author.accountId);
 
     viewerState.authorQueueIndex = targetIndex;
 
     // Open the new author (this resets some state, but we restore queue)
     const openStatus = await stOpenViewerByAuthorId(author.accountId, {
       syncUrl: true,
-      startAtUnviewed: !options.startAtLastStory,
+      startAtUnviewed: options.startAtUnviewed !== false,
       startAtLastStory: options.startAtLastStory || false,
+      resumeStoryId,
+      direction: options.direction || "fade",
       _keepQueue: true, // internal flag to prevent queue reset
     });
 
@@ -1909,6 +2044,7 @@
     viewerState.authorQueueIndex = targetIndex;
     viewerState.queueHasMore = savedQueueHasMore;
     viewerState.viewedAuthors = savedViewedAuthors;
+    stPruneAuthorResumeMap(savedQueue);
 
     if (openStatus !== STORY_OPEN_STATUS.SUCCESS) {
       // Author unavailable -> remove from queue and continue to next author.
@@ -1948,7 +2084,7 @@
 
     // Try next authors, skip unavailable ones
     while (nextIndex < viewerState.authorQueue.length) {
-      const success = await stSwitchToAuthor(nextIndex);
+      const success = await stSwitchToAuthor(nextIndex, { direction: "next" });
       if (success && viewerState.isOpen) return true;
       // Author was unavailable, try next
       nextIndex++;
@@ -1965,6 +2101,7 @@
     if (!stHasQueue() || viewerState.authorQueueIndex <= 0) return false;
     return stSwitchToAuthor(viewerState.authorQueueIndex - 1, {
       startAtLastStory: true,
+      direction: "prev",
     });
   }
 
@@ -1972,7 +2109,8 @@
   async function stJumpToAuthor(index) {
     if (!stHasQueue()) return false;
     if (index === viewerState.authorQueueIndex) return true;
-    return stSwitchToAuthor(index);
+    const direction = index > viewerState.authorQueueIndex ? "next" : "prev";
+    return stSwitchToAuthor(index, { direction });
   }
 
   /** Sync all viewed authors' ring states on viewer close */
@@ -2053,12 +2191,61 @@
     return qs ? `${hashPath}?${qs}` : hashPath;
   }
 
+  function stIsStoryHashRoute(hashPath) {
+    const normalizedHashPath = (hashPath || "").toString().trim();
+    return (
+      normalizedHashPath === "#/story" ||
+      normalizedHashPath.startsWith(`#${STORY_HASH_ROUTE_PREFIX}`)
+    );
+  }
+
+  function stExtractStoryIdFromHashPath(hashPath) {
+    if (!stIsStoryHashRoute(hashPath)) return "";
+    const normalizedHashPath = (hashPath || "").toString().trim();
+    const rawPath = normalizedHashPath.startsWith("#")
+      ? normalizedHashPath.slice(1)
+      : normalizedHashPath;
+    const normalizedPath = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
+    const rawStoryId = normalizedPath.slice(STORY_HASH_ROUTE_PREFIX.length);
+    if (!rawStoryId) return "";
+
+    const firstSlash = rawStoryId.indexOf("/");
+    const rawId = (firstSlash >= 0
+      ? rawStoryId.slice(0, firstSlash)
+      : rawStoryId
+    ).trim();
+    if (!rawId) return "";
+
+    try {
+      return decodeURIComponent(rawId);
+    } catch (_) {
+      return rawId;
+    }
+  }
+
+  function stBuildStoryHashPath(storyId) {
+    const normalizedStoryId = (storyId || "").toString().trim();
+    if (!normalizedStoryId) return "#/home";
+    return `#${STORY_HASH_ROUTE_PREFIX}${encodeURIComponent(normalizedStoryId)}`;
+  }
+
+  function stGetFallbackHashPath() {
+    const lastSafeHashRaw = (global._lastSafeHash || "").toString().trim();
+    const fallbackHash = lastSafeHashRaw || "#/home";
+    const qIndex = fallbackHash.indexOf("?");
+    const fallbackHashPath = qIndex >= 0 ? fallbackHash.slice(0, qIndex) : fallbackHash;
+    return stIsStoryHashRoute(fallbackHashPath) ? "#/home" : fallbackHashPath;
+  }
+
   function stGetBaseUrlWithoutStoryParam() {
     const { hashPath, hashParams } = stParseHash();
     hashParams.delete(STORY_URL_PARAM);
     hashParams.delete("storyAuthorId");
+    const effectiveHashPath = stIsStoryHashRoute(hashPath)
+      ? stGetFallbackHashPath()
+      : hashPath;
     const base = global.location.pathname + global.location.search;
-    return base + stBuildHashString(hashPath, hashParams);
+    return base + stBuildHashString(effectiveHashPath, hashParams);
   }
 
   function stSyncUrlStory(storyId) {
@@ -2067,15 +2254,22 @@
     if (!viewerState.baseUrl) {
       viewerState.baseUrl = stGetBaseUrlWithoutStoryParam();
     }
-    const { hashPath, hashParams } = stParseHash();
-    hashParams.set(STORY_URL_PARAM, normalizedStoryId);
     const base = global.location.pathname + global.location.search;
-    const nextUrl = base + stBuildHashString(hashPath, hashParams);
+    const nextUrl = base + stBuildStoryHashPath(normalizedStoryId);
     history.replaceState(history.state, "", nextUrl);
   }
 
   function stSyncUrlClose() {
     if (!viewerState.baseUrl) return;
+    const { hashPath } = stParseHash();
+
+    // If URL is currently in story route form, always restore pre-open URL.
+    if (stIsStoryHashRoute(hashPath)) {
+      history.replaceState(history.state, "", viewerState.baseUrl);
+      viewerState.baseUrl = null;
+      return;
+    }
+
     // Compare current URL (without story params) to baseUrl.
     // If they match → normal close → restore baseUrl (remove ?storyId).
     // If they differ → user navigated to a new page → don't overwrite the new URL.
@@ -2111,7 +2305,7 @@
       const authorId = stReadString(payload, "authorId", "AuthorId", "").trim();
       if (!authorId) return null;
 
-      viewerState.storyToAuthorCache.set(normalizedStoryId, authorId);
+      stCacheStoryAuthor(normalizedStoryId, authorId);
       return authorId;
     } catch (_) {
       return null;
@@ -2212,6 +2406,7 @@
       viewerState.authorQueue = options.authorQueue;
       viewerState.queueHasMore = options.queueHasMore || false;
       viewerState.viewedAuthors = new Map();
+      stPruneAuthorResumeMap(options.authorQueue);
       // Find index of this author in queue
       const qIdx = options.authorQueue.findIndex(
         (a) => a.accountId === normalizedAuthorId.toLowerCase(),
@@ -2292,18 +2487,19 @@
       };
       viewerState.stories = stories;
       stories.forEach((story) => {
-        const normalizedStoryId = stNormalizeId(story.storyId);
-        if (!normalizedStoryId) return;
-        viewerState.storyToAuthorCache.set(
-          normalizedStoryId,
-          normalizedAuthorId,
-        );
+        stCacheStoryAuthor(story.storyId, normalizedAuthorId);
       });
 
       const targetStoryId = stNormalizeId(options.targetStoryId);
       const targetStoryIndex = targetStoryId
         ? stories.findIndex(
             (story) => stNormalizeId(story.storyId) === targetStoryId,
+          )
+        : -1;
+      const resumeStoryId = stNormalizeId(options.resumeStoryId);
+      const resumeStoryIndex = resumeStoryId
+        ? stories.findIndex(
+            (story) => stNormalizeId(story.storyId) === resumeStoryId,
           )
         : -1;
 
@@ -2335,22 +2531,27 @@
         return STORY_OPEN_STATUS.UNAVAILABLE;
       }
 
+      const firstUnviewedIndex = stories.findIndex(
+        (story) => !story.isViewedByCurrentUser,
+      );
+      const preferUnviewed = options.startAtUnviewed !== false;
+
       if (targetStoryIndex >= 0) {
         viewerState.currentIndex = targetStoryIndex;
+      } else if (preferUnviewed && firstUnviewedIndex >= 0) {
+        viewerState.currentIndex =
+          resumeStoryIndex >= 0 && resumeStoryIndex <= firstUnviewedIndex
+            ? resumeStoryIndex
+            : firstUnviewedIndex;
       } else if (options.startAtLastStory) {
-        // Start at last story (for prev-author navigation)
+        // Keep legacy behavior only when author has no unseen story.
         viewerState.currentIndex = stories.length - 1;
       } else {
-        const firstUnviewedIndex = stories.findIndex(
-          (story) => !story.isViewedByCurrentUser,
-        );
-        const preferUnviewed = options.startAtUnviewed !== false;
-        viewerState.currentIndex =
-          preferUnviewed && firstUnviewedIndex >= 0 ? firstUnviewedIndex : 0;
+        viewerState.currentIndex = 0;
       }
 
       stRenderProgressBars(stories.length);
-      stRenderCurrentStory();
+      stRenderCurrentStory(options.direction || "fade");
 
       // Render strip if in queue mode
       if (stHasQueue() && !options._keepQueue) {
@@ -2410,6 +2611,7 @@
     viewerState.progressPausedElapsedMs = 0;
     viewerState.isProgressPaused = false;
     viewerState.markedStoryIds.clear();
+    viewerState.authorResumeMap.clear();
 
     // Reset queue state
     viewerState.authorQueue = [];
@@ -2483,8 +2685,14 @@
   }
 
   function stTryOpenFromUrl() {
-    const { hashParams } = stParseHash();
-    const storyId = hashParams.get(STORY_URL_PARAM);
+    const { hashPath, hashParams } = stParseHash();
+    const storyIdFromPath = stExtractStoryIdFromHashPath(hashPath);
+    const storyIdFromHashQuery = (hashParams.get(STORY_URL_PARAM) || "").trim();
+    const storyIdFromSearch = (
+      new URLSearchParams(global.location.search || "").get(STORY_URL_PARAM) ||
+      ""
+    ).trim();
+    const storyId = storyIdFromPath || storyIdFromHashQuery || storyIdFromSearch;
     if (!storyId) return;
     stOpenViewerByStoryId(storyId, { syncUrl: true });
   }

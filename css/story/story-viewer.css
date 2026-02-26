@@ -152,48 +152,73 @@ body.light-mode .sn-story-viewer-modal {
   animation: snsvCardScale 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
-/* Story navigation animations */
+/* 
+   Soft Glide Transition (Silk Slide)
+   Focusing on eye comfort and extreme smoothness
+*/
+
+.snsv-animate-next,
+.snsv-animate-prev,
+.snsv-animate-fade {
+  animation-duration: 0.45s;
+  animation-timing-function: cubic-bezier(0.25, 1, 0.5, 1); /* Soft Out */
+  animation-fill-mode: forwards;
+}
+
 @keyframes snsvNextIn {
-  from {
-    transform: translateX(20px);
+  0% {
+    transform: translateX(30px);
     opacity: 0;
   }
-  to {
+  100% {
     transform: translateX(0);
     opacity: 1;
   }
 }
 
 @keyframes snsvPrevIn {
-  from {
-    transform: translateX(-20px);
+  0% {
+    transform: translateX(-30px);
     opacity: 0;
   }
-  to {
+  100% {
     transform: translateX(0);
     opacity: 1;
   }
 }
 
 @keyframes snsvFadeIn {
-  from {
+  0% {
     opacity: 0;
+    transform: translateY(8px);
   }
-  to {
+  100% {
     opacity: 1;
+    transform: translateY(0);
   }
 }
 
-.snsv-animate-next {
-  animation: snsvNextIn 0.3s ease-out forwards;
+/* Apply specific animations */
+.sn-story-viewer-preview-shell.snsv-animate-next {
+  animation-name: snsvNextIn;
 }
-
-.snsv-animate-prev {
-  animation: snsvPrevIn 0.3s ease-out forwards;
+.sn-story-viewer-preview-shell.snsv-animate-prev {
+  animation-name: snsvPrevIn;
 }
-
 .snsv-animate-fade {
-  animation: snsvFadeIn 0.3s ease-out forwards;
+  animation-name: snsvFadeIn;
+}
+
+/* Keep Chrome (UI Frame) very subtle fade to avoid strobe effect */
+.sn-story-viewer-header.snsv-animate-next,
+.sn-story-viewer-header.snsv-animate-prev,
+.sn-story-viewer-progress.snsv-animate-next,
+.sn-story-viewer-progress.snsv-animate-prev,
+.sn-story-viewer-actions.snsv-animate-next,
+.sn-story-viewer-actions.snsv-animate-prev,
+.sn-story-viewer-self-insight.snsv-animate-next,
+.sn-story-viewer-self-insight.snsv-animate-prev {
+  animation: snsvFadeIn 0.25s ease-out forwards;
 }
 
 .sn-story-viewer-backdrop {
@@ -585,7 +610,7 @@ body.light-mode .sn-story-viewer-mute-btn:hover {
 }
 
 .sn-story-viewer-nav-prev {
-  left: -65px;
+  left: -72px;
 }
 
 .sn-story-viewer-nav-next {
@@ -1424,10 +1449,10 @@ body.light-mode .sn-story-viewer-viewers-item-avatar {
 /* ─── Story List Strip (Vertical Sidebar on Left) ─── */
 .sn-story-viewer-strip-wrapper {
   position: absolute;
-  left: -200px; /* Adjusted based on new width to keep gap consistent */
-  top: 50%;
-  transform: translateY(-50%);
-  width: 100px;
+  left: -230px;
+  top: 0;
+  height: 100%;
+  width: 130px;
   z-index: 10;
   display: flex;
   flex-direction: column;
@@ -1441,11 +1466,11 @@ body.light-mode .sn-story-viewer-viewers-item-avatar {
 @keyframes snsvStripFadeIn {
   from {
     opacity: 0;
-    transform: translateY(-50%) translateX(-30px);
+    transform: translateX(-30px);
   }
   to {
     opacity: 1;
-    transform: translateY(-50%) translateX(0);
+    transform: translateX(0);
   }
 }
 
@@ -1455,13 +1480,16 @@ body.light-mode .sn-story-viewer-viewers-item-avatar {
   align-items: center;
   gap: 18px;
   padding: 24px 10px;
-  width: 100px;
-  max-height: min(85vh, 680px);
+  width: 130px;
+  height: 100%;
+  max-height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
   pointer-events: auto;
+  cursor: grab;
+  user-select: none;
 
   /* Premium Sidebar Styling */
   background: rgba(10, 12, 16, 0.96);
@@ -1475,7 +1503,13 @@ body.light-mode .sn-story-viewer-viewers-item-avatar {
 
   /* Clean UI: No Scrollbar */
   scrollbar-width: none;
+  -ms-overflow-style: none;
 }
+
+.sn-story-viewer-strip:active {
+  cursor: grabbing;
+}
+
 .sn-story-viewer-strip::-webkit-scrollbar {
   display: none;
 }
@@ -1483,7 +1517,7 @@ body.light-mode .sn-story-viewer-viewers-item-avatar {
 /* ─── Strip Item ─── */
 .sn-story-viewer-strip-item {
   flex-shrink: 0;
-  width: 66px;
+  width: 110px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1557,7 +1591,7 @@ body.light-mode .sn-story-viewer-viewers-item-avatar {
 .sn-story-viewer-strip-name {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.7);
-  max-width: 60px;
+  max-width: 100px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
