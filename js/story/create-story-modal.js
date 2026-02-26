@@ -656,7 +656,13 @@ function csClearMediaSelection() {
     videoPreview.pause();
     videoPreview.removeAttribute("src");
     videoPreview.load();
+    // Clear video container background
+    if (videoPreview.parentElement) {
+      videoPreview.parentElement.style.background = "";
+    }
   }
+
+  createStoryModalState.mediaBgKey = null;
 }
 
 function csClearTextContent() {
@@ -802,6 +808,15 @@ function csRenderPreview() {
     // Video: show standard player, no editor
     videoPreview.src = createStoryModalState.previewObjectUrl;
     videoPreview.style.display = "block";
+
+    // Apply bgColor to video container
+    const bgKey = createStoryModalState.mediaBgKey;
+    const bgOption = bgKey ? STORY_TEXT_STYLE_OPTIONS.backgrounds[bgKey] : null;
+    const previewContainer = videoPreview.parentElement;
+    if (previewContainer) {
+      previewContainer.style.background = bgOption?.css || "";
+    }
+
     csToggleMediaToolsGroup(false);
     return;
   }
@@ -1038,7 +1053,7 @@ function csDetectMediaContentType(file) {
   return null;
 }
 
-function csHandleMediaChange(event) {
+async function csHandleMediaChange(event) {
   const { mediaInput, fileName } = csGetElements();
   const file = event?.target?.files?.[0] || null;
 
@@ -1049,7 +1064,12 @@ function csHandleMediaChange(event) {
     return;
   }
 
-  const maxSizeMb = window.APP_CONFIG?.MAX_UPLOAD_SIZE_MB || 5;
+  const contentType = csDetectMediaContentType(file);
+  const isVideo = contentType === 1;
+
+  const maxSizeMb = isVideo
+    ? window.APP_CONFIG?.STORY_VIDEO_MAX_SIZE_MB || 10
+    : window.APP_CONFIG?.MAX_UPLOAD_SIZE_MB || 5;
   const maxBytes = maxSizeMb * 1024 * 1024;
   if (file.size > maxBytes) {
     if (window.toastError) {
@@ -1061,7 +1081,7 @@ function csHandleMediaChange(event) {
     return;
   }
 
-  const contentType = csDetectMediaContentType(file);
+  // contentType already detected above
   if (contentType === null) {
     if (window.toastError) {
       toastError("Only image or video files are supported.");
@@ -1076,6 +1096,41 @@ function csHandleMediaChange(event) {
   createStoryModalState.mediaContentType = contentType;
   csReleasePreviewObjectUrl();
   createStoryModalState.previewObjectUrl = URL.createObjectURL(file);
+
+  // Set default bgColor for video
+  if (isVideo && !createStoryModalState.mediaBgKey) {
+    const firstBgKey = Object.keys(STORY_TEXT_STYLE_OPTIONS.backgrounds)[0];
+    createStoryModalState.mediaBgKey = firstBgKey || null;
+    csApplyMediaBgUI();
+  }
+
+  // For video: check duration limit before proceeding
+  if (contentType === 1) {
+    const maxDuration = window.APP_CONFIG?.STORY_VIDEO_MAX_DURATION_SEC || 20;
+    try {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      const duration = await new Promise((resolve, reject) => {
+        video.onloadedmetadata = () => resolve(video.duration);
+        video.onerror = () => reject("Cannot read video metadata");
+        video.src = createStoryModalState.previewObjectUrl;
+      });
+
+      if (Number.isFinite(duration) && duration > maxDuration) {
+        if (window.toastError) {
+          toastError(
+            `Video is too long (${Math.round(duration)}s). Maximum is ${maxDuration}s.`,
+          );
+        }
+        csClearMediaSelection();
+        csRenderPreview();
+        csUpdateSubmitState();
+        return;
+      }
+    } catch (err) {
+      console.warn("Video duration check failed, allowing upload:", err);
+    }
+  }
 
   csRenderPreview();
   csUpdateSubmitState();
@@ -1318,10 +1373,20 @@ window.selectCreateStoryMediaBg = function (nextKey) {
   );
   createStoryModalState.mediaBgKey = resolvedKey;
 
-  // Apply the gradient/color to the SME container as background
   const bgOption = STORY_TEXT_STYLE_OPTIONS.backgrounds[resolvedKey];
+
+  // Apply to SME container for images
   if (bgOption?.css && window.StoryMediaEditor?.setBgColor) {
     window.StoryMediaEditor.setBgColor(bgOption.css);
+  }
+
+  // Apply to video preview container for videos
+  if (createStoryModalState.mediaContentType === 1) {
+    const videoPreview = document.getElementById("createStoryVideoPreview");
+    const previewContainer = videoPreview?.parentElement;
+    if (previewContainer) {
+      previewContainer.style.background = bgOption?.css || "";
+    }
   }
 
   csApplyMediaBgUI();
@@ -1672,6 +1737,11 @@ window.submitCreateStory = async function () {
 
     formData.append("ContentType", String(mediaContentType));
     formData.append("MediaFile", fileToUpload, fileToUpload.name);
+
+    // Send bgColor for video stories
+    if (mediaContentType === 1 && createStoryModalState.mediaBgKey) {
+      formData.append("BackgroundColorKey", createStoryModalState.mediaBgKey);
+    }
   }
 
   formData.append("Privacy", String(createStoryModalState.privacy));

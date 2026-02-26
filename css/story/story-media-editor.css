@@ -57,6 +57,10 @@
   cursor: grabbing;
 }
 
+.sme-text-object.sme-selected {
+  cursor: text;
+}
+
 /* Image content */
 .sme-image-content {
   width: 100%;
@@ -200,6 +204,51 @@
   left: 0;
   transform: translate(-50%, -50%);
   cursor: w-resize;
+}
+/* Rotate handle — Premium Polish */
+.sme-handle-rotate {
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 14px;
+  height: 14px;
+  background: #ffffff;
+  border: 1.5px solid var(--accent-primary, #ff416c);
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
+}
+
+.sme-handle-rotate::before {
+  content: "⟳";
+  font-size: 10px;
+  color: var(--accent-primary, #ff416c);
+  font-weight: bold;
+  line-height: 1;
+}
+
+.sme-handle-rotate::after {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1px;
+  height: 14px;
+  background: var(--accent-primary, #ff416c);
+  opacity: 0.6;
+  z-index: -1;
+}
+
+.sme-handle-rotate:hover {
+  background: var(--accent-primary, #ff416c);
+  transform: translateX(-50%) scale(1.1);
+}
+
+.sme-handle-rotate:hover::before {
+  color: #ffffff;
 }
 
 /* Delete handle */
