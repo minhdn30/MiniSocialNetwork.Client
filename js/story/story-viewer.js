@@ -167,6 +167,8 @@
       expiresAt: raw.expiresAt ?? raw.ExpiresAt ?? null,
       isViewedByCurrentUser:
         raw.isViewedByCurrentUser ?? raw.IsViewedByCurrentUser ?? false,
+      currentUserReactType:
+        raw.currentUserReactType ?? raw.CurrentUserReactType ?? null,
       viewSummary: raw.viewSummary ?? raw.ViewSummary ?? null,
     };
   }
@@ -278,8 +280,11 @@
               <img class="sn-story-viewer-author-avatar" id="storyViewerAvatar" src="${stEscapeAttr(global.APP_CONFIG?.DEFAULT_AVATAR || "")}" alt="">
               <div class="sn-story-viewer-author-meta">
                 <div class="sn-story-viewer-username" id="storyViewerUsername"></div>
-                <div class="sn-story-viewer-time" id="storyViewerTime"></div>
-                <span class="sn-story-viewer-privacy" id="storyViewerPrivacy"></span>
+                <div class="sn-story-viewer-author-meta-secondary">
+                  <div class="sn-story-viewer-time" id="storyViewerTime"></div>
+                  <span class="sn-story-viewer-author-meta-divider">&nbsp;•&nbsp;</span>
+                  <span class="sn-story-viewer-privacy" id="storyViewerPrivacy"></span>
+                </div>
               </div>
             </div>
             <div class="sn-story-viewer-header-actions">
@@ -307,12 +312,16 @@
                 placeholder="Reply to story..."
               />
               <button type="button" id="storyViewerReplySendBtn" class="sn-story-viewer-reply-send-btn" aria-label="Send reply">
-                Send
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13"></line>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
               </button>
             </div>
             <div class="sn-story-viewer-react-frame" id="storyViewerReactFrame">
-              <button type="button" class="sn-story-viewer-react-btn" data-story-react="❤" aria-label="Heart">❤</button>
-              <button type="button" class="sn-story-viewer-react-btn" data-story-react="😂" aria-label="Laugh">😂</button>
+              <button type="button" class="sn-story-viewer-react-btn" data-story-react="👍" aria-label="Like">👍</button>
+              <button type="button" class="sn-story-viewer-react-btn" data-story-react="❤️" aria-label="Love">❤️</button>
+              <button type="button" class="sn-story-viewer-react-btn" data-story-react="😆" aria-label="Haha">😆</button>
               <button type="button" class="sn-story-viewer-react-btn" data-story-react="😮" aria-label="Wow">😮</button>
               <button type="button" class="sn-story-viewer-react-btn" data-story-react="😢" aria-label="Sad">😢</button>
               <button type="button" class="sn-story-viewer-react-btn" data-story-react="😡" aria-label="Angry">😡</button>
@@ -624,25 +633,65 @@
       ? (summary.topViewers ?? summary.TopViewers)
       : [];
 
-    const topViewersHtml = topViewers
+    const stGetReactionEmoji = (reactType) => {
+      const type = Number(reactType);
+      switch (type) {
+        case 0:
+          return "👍";
+        case 1:
+          return "❤️";
+        case 2:
+          return "😆";
+        case 3:
+          return "😮";
+        case 4:
+          return "😢";
+        case 5:
+          return "😡";
+        default:
+          return "";
+      }
+    };
+
+    let topViewersHtml = topViewers
       .slice(0, 3)
-      .map((viewer) => {
+      .map((viewer, index) => {
         const username = viewer.username ?? viewer.Username ?? "user";
         const avatarUrl =
           viewer.avatarUrl ??
           viewer.AvatarUrl ??
           global.APP_CONFIG.DEFAULT_AVATAR;
+        const reactType = viewer.reactType ?? viewer.ReactType;
+        const emoji = stGetReactionEmoji(reactType);
+        const zIndex = 10 - index;
+
         return `
-          <div class="sn-story-viewer-top-viewer" title="${stEscapeAttr(username)}">
+          <div class="sn-story-viewer-top-viewer" title="${stEscapeAttr(username)}" style="z-index: ${zIndex}">
             <img class="sn-story-viewer-top-viewer-image" src="${stEscapeAttr(avatarUrl)}" alt="${stEscapeAttr(username)}">
+            ${emoji ? `<span class="sn-story-viewer-top-viewer-react">${emoji}</span>` : ""}
           </div>
         `;
       })
       .join("");
 
+    const remainingCount = totalViews - topViewers.length;
+    if (remainingCount > 0) {
+      topViewersHtml += `
+        <div class="sn-story-viewer-top-viewer sn-story-viewer-top-viewer-badge">
+          +${remainingCount}
+        </div>
+      `;
+    }
+
     viewerState.dom.insight.classList.remove("sn-story-viewer-hidden");
     viewerState.dom.insight.innerHTML = `
-      <div class="sn-story-viewer-self-total">${totalViews} views</div>
+      <div class="sn-story-viewer-self-total">
+        <svg class="sn-story-viewer-view-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+          <circle cx="12" cy="12" r="2.5"></circle>
+        </svg>
+        <span class="sn-story-viewer-self-count">${totalViews}</span>
+      </div>
       <div class="sn-story-viewer-top-viewers">${topViewersHtml}</div>
     `;
   }
@@ -661,13 +710,75 @@
     }
   }
 
-  function stHandleQuickReact(emoji) {
+  async function stHandleQuickReact(emoji) {
     if (stIsOwnStory()) return;
-    if (!emoji) return;
-    if (typeof global.toastInfo === "function") {
-      global.toastInfo(
-        `Reacted ${emoji}. Story react will be connected in the next step.`,
-      );
+    const story = stCurrentStory();
+    if (!story) return;
+
+    const emojiToType = {
+      "👍": 0,
+      "❤️": 1,
+      "😆": 2,
+      "😮": 3,
+      "😢": 4,
+      "😡": 5,
+    };
+
+    const reactType = emojiToType[emoji];
+    if (reactType === undefined) return;
+
+    try {
+      if (!global.API?.Stories?.toggleReact) return;
+      const res = await global.API.Stories.toggleReact(story.storyId, reactType);
+      if (res.ok) {
+        const updatedStory = await res.json();
+        // Update local state
+        story.currentUserReactType = updatedStory.currentUserReactType;
+        // Re-highlight
+        stHighlightUserReact(story.currentUserReactType);
+        
+        // Optional: show small toast or subtle feedback
+        if (typeof global.toastSuccess === "function") {
+          const isUnreact = story.currentUserReactType === null || story.currentUserReactType === undefined;
+          global.toastSuccess(isUnreact ? "Reaction removed" : `Reacted ${emoji}`);
+        }
+      } else {
+        if (typeof global.toastError === "function") {
+          global.toastError("Failed to update reaction");
+        }
+      }
+    } catch (err) {
+      console.error("Error reacting to story:", err);
+    }
+  }
+
+  function stHighlightUserReact(reactType) {
+    const reactFrame = viewerState.dom.reactFrame;
+    if (!reactFrame) return;
+
+    const buttons = reactFrame.querySelectorAll(".sn-story-viewer-react-btn");
+    buttons.forEach((btn) => {
+      btn.classList.remove("sn-story-viewer-react-active");
+    });
+
+    if (reactType !== null && reactType !== undefined) {
+      const emojiMap = {
+        0: "👍",
+        1: "❤️",
+        2: "😆",
+        3: "😮",
+        4: "😢",
+        5: "😡",
+      };
+      const targetEmoji = emojiMap[reactType];
+      if (targetEmoji) {
+        const targetBtn = Array.from(buttons).find(
+          (b) => b.getAttribute("data-story-react") === targetEmoji,
+        );
+        if (targetBtn) {
+          targetBtn.classList.add("sn-story-viewer-react-active");
+        }
+      }
     }
   }
 
@@ -1032,7 +1143,7 @@
     if (global.lucide) global.lucide.createIcons();
   }
 
-  function stRenderStoryContent(story) {
+  function stRenderStoryContent(story, direction = "fade") {
     if (!viewerState.dom.content) return;
 
     viewerState.dom.content.innerHTML = "";
@@ -1041,7 +1152,7 @@
     stMarkViewedIfNeeded(story);
 
     const previewShell = document.createElement("div");
-    previewShell.className = "sn-story-viewer-preview-shell";
+    previewShell.className = `sn-story-viewer-preview-shell snsv-animate-${direction}`;
 
     const contentType = Number(story.contentType);
     if (contentType === 2) {
@@ -1173,7 +1284,7 @@
     stStartProgressTimer(DEFAULT_STORY_DURATION_MS);
   }
 
-  function stRenderCurrentStory() {
+  function stRenderCurrentStory(direction = "fade") {
     const story = stCurrentStory();
     if (!story) {
       stCloseViewer();
@@ -1218,7 +1329,8 @@
     }
 
     stUpdateProgressFill(0);
-    stRenderStoryContent(story);
+    stRenderStoryContent(story, direction);
+    stHighlightUserReact(story.currentUserReactType);
     stSyncUrlStory(story.storyId);
   }
 
@@ -1230,7 +1342,7 @@
       return;
     }
     viewerState.currentIndex += 1;
-    stRenderCurrentStory();
+    stRenderCurrentStory("next");
   }
 
   function stGoPrev() {
@@ -1240,7 +1352,7 @@
       return;
     }
     viewerState.currentIndex -= 1;
-    stRenderCurrentStory();
+    stRenderCurrentStory("prev");
   }
 
   /**

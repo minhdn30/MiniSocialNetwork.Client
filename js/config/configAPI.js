@@ -528,7 +528,14 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ privacy }),
         }),
-      delete: (storyId) => apiFetch(`/Stories/${storyId}`, { method: "DELETE" }),
+      delete: (storyId) =>
+        apiFetch(`/Stories/${storyId}`, { method: "DELETE" }),
+      toggleReact: (storyId, reactType) =>
+        apiFetch(`/Stories/${storyId}/react`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reactType }),
+        }),
     },
 
     Comments: {
@@ -590,7 +597,9 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             accountIds: (Array.isArray(accountIds) ? accountIds : [])
-              .map((id) => (id === null || id === undefined ? "" : String(id).trim()))
+              .map((id) =>
+                id === null || id === undefined ? "" : String(id).trim(),
+              )
               .filter((id) => id.length > 0),
           }),
         }),
