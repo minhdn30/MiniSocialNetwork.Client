@@ -1,0 +1,45 @@
+{
+  "categories": [
+    {
+      "name": "Expressions",
+      "stickers": [
+        { "id": "heart", "label": "Heart", "emoji": "❤️" },
+        { "id": "fire", "label": "Fire", "emoji": "🔥" },
+        { "id": "star", "label": "Star", "emoji": "⭐" },
+        { "id": "hundred", "label": "100", "emoji": "💯" },
+        { "id": "thumbsup", "label": "Thumbs Up", "emoji": "👍" },
+        { "id": "clap", "label": "Clap", "emoji": "👏" },
+        { "id": "sparkles", "label": "Sparkles", "emoji": "✨" },
+        { "id": "eyes", "label": "Eyes", "emoji": "👀" },
+        { "id": "laugh", "label": "Laugh", "emoji": "😂" },
+        { "id": "cool", "label": "Cool", "emoji": "😎" }
+      ]
+    },
+    {
+      "name": "Decorations",
+      "stickers": [
+        { "id": "arrow_up", "label": "Arrow Up", "emoji": "⬆️" },
+        { "id": "arrow_right", "label": "Arrow Right", "emoji": "➡️" },
+        { "id": "ribbon", "label": "Ribbon", "emoji": "🎀" },
+        { "id": "crown", "label": "Crown", "emoji": "👑" },
+        { "id": "gem", "label": "Gem", "emoji": "💎" },
+        { "id": "rainbow", "label": "Rainbow", "emoji": "🌈" },
+        { "id": "butterfly", "label": "Butterfly", "emoji": "🦋" },
+        { "id": "flower", "label": "Flower", "emoji": "🌸" }
+      ]
+    },
+    {
+      "name": "Social",
+      "stickers": [
+        { "id": "pin", "label": "Location", "emoji": "📍" },
+        { "id": "camera", "label": "Camera", "emoji": "📸" },
+        { "id": "music", "label": "Music", "emoji": "🎵" },
+        { "id": "party", "label": "Party", "emoji": "🎉" },
+        { "id": "gift", "label": "Gift", "emoji": "🎁" },
+        { "id": "coffee", "label": "Coffee", "emoji": "☕" },
+        { "id": "food", "label": "Food", "emoji": "🍕" },
+        { "id": "travel", "label": "Travel", "emoji": "✈️" }
+      ]
+    }
+  ]
+}

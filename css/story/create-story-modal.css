@@ -167,13 +167,19 @@
 
 #createStoryModal .create-story-preview-shell {
   position: relative;
-  width: 100%;
+  aspect-ratio: 1 / 1;
+  width: auto;
   height: 100%;
-  flex: 1;
-  min-height: 0;
+  max-width: 100%;
+  margin: 0 auto;
+  flex-shrink: 0;
   border-radius: 0;
-  overflow: visible;
-  background: transparent;
+  overflow: hidden;
+  background: linear-gradient(
+    135deg,
+    var(--bg-primary) 0%,
+    var(--accent-primary) 100%
+  );
   display: flex;
   align-items: center;
   justify-content: center;
@@ -186,20 +192,64 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 24px;
   color: var(--text-secondary);
   text-align: center;
-  padding: 16px;
+  padding: 40px;
+  z-index: 2;
 }
 
-#createStoryModal .create-story-preview-empty svg {
-  width: 44px;
-  height: 44px;
+#createStoryModal .create-story-placeholder-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  pointer-events: none;
+  opacity: 0.1;
+  z-index: 1;
+  color: var(--text-primary);
+}
+
+#createStoryModal .create-story-placeholder-icon i:first-child,
+#createStoryModal .create-story-placeholder-icon svg:first-child {
+  width: 200px !important;
+  height: 200px !important;
+}
+
+#createStoryModal .create-story-placeholder-icon i:last-child,
+#createStoryModal .create-story-placeholder-icon svg:last-child {
+  width: 200px !important;
+  height: 200px !important;
 }
 
 #createStoryModal .create-story-preview-empty p {
   margin: 0;
+  font-size: 22px;
+  color: var(--text-primary);
+  font-weight: 300;
+  line-height: 1.4;
+  position: relative;
+  z-index: 2;
+}
+
+#createStoryModal .create-story-upload-btn {
+  padding: 10px 24px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent-primary);
+  color: var(--text-white);
   font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  position: relative;
+  z-index: 2;
+}
+
+#createStoryModal .create-story-upload-btn:hover {
+  background: var(--accent-hover);
 }
 
 #createStoryModal .create-story-image-preview,
@@ -320,38 +370,6 @@
   margin: 0 0 6px;
   color: var(--text-tertiary);
   font-size: 12px;
-}
-
-#createStoryModal .create-story-media-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-#createStoryModal .create-story-select-file-btn {
-  padding: 10px 14px;
-  border-radius: 10px;
-  border: 1px solid var(--accent-primary);
-  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
-  color: var(--accent-primary);
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  white-space: nowrap;
-}
-
-#createStoryModal .create-story-select-file-btn:hover {
-  background: color-mix(in srgb, var(--accent-primary) 20%, transparent);
-}
-
-#createStoryModal .create-story-file-name {
-  color: var(--text-tertiary);
-  font-size: 12px;
-  line-height: 1.4;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 #createStoryModal .create-story-meta-grid {
@@ -544,36 +562,45 @@
 }
 
 #createStoryModal .create-story-bg-btn,
+#createStoryModal .create-story-media-bg-btn,
 #createStoryModal .create-story-color-btn {
-  border: 1px solid var(--border-primary);
-  background: var(--bg-secondary);
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0;
+  margin: 0;
+  border: none;
   cursor: pointer;
   transition: all var(--transition-fast);
   position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
-#createStoryModal .create-story-bg-btn {
+#createStoryModal .create-story-bg-btn,
+#createStoryModal .create-story-media-bg-btn {
   width: 48px;
   height: 32px;
-  border-radius: 9px;
+  border-radius: 8px;
 }
 
 #createStoryModal .create-story-color-btn {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
 }
 
 #createStoryModal .create-story-bg-btn:hover,
+#createStoryModal .create-story-media-bg-btn:hover,
 #createStoryModal .create-story-color-btn:hover {
   transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
 #createStoryModal .create-story-bg-btn.active,
+#createStoryModal .create-story-media-bg-btn.active,
 #createStoryModal .create-story-color-btn.active {
-  border-color: var(--text-primary);
-  box-shadow: 0 0 0 2px
-    color-mix(in srgb, var(--accent-primary) 25%, transparent);
+  outline: 2.5px solid var(--accent-primary);
+  outline-offset: 2px;
 }
 
 #createStoryModal .create-story-pill-btn {
@@ -790,7 +817,8 @@
   }
 
   #createStoryModal .create-story-preview-panel {
-    min-height: 260px;
+    min-height: 300px;
+    max-height: 50vh;
     border-right: none;
     border-bottom: 1px solid var(--border-tertiary);
   }

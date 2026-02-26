@@ -146,8 +146,9 @@
   min-width: 0;
 }
 
-/* ================= MEDIA PLACEHOLDER ================= */
 .media-placeholder {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -155,13 +156,20 @@
   gap: 24px;
   padding: 40px;
   text-align: center;
-  position: relative;
   z-index: 2;
+  pointer-events: none;
+}
+
+.media-placeholder p,
+.media-placeholder button {
+  pointer-events: auto;
 }
 
 .placeholder-icon {
   position: absolute;
-  inset: 0;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -171,17 +179,11 @@
   color: var(--text-primary);
 }
 
-.placeholder-icon svg:first-child {
-  width: 250px !important;
-  height: 250px !important;
-  transform: translate(-120px, 0px);
-}
-
-.placeholder-icon svg:last-child {
-  width: 250px !important;
-  height: 250px !important;
-  position: absolute;
-  transform: translate(120px, 0px);
+.placeholder-icon svg,
+.placeholder-icon i {
+  width: 320px !important;
+  height: 320px !important;
+  margin: 0 !important;
 }
 
 .placeholder-text {

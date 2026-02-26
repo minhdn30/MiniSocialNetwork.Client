@@ -62,10 +62,18 @@
               class="create-story-preview-empty"
               id="createStoryPreviewEmpty"
             >
-              <i data-lucide="sparkles"></i>
-              <p id="createStoryPreviewHint">
-                Upload image or video to preview your story
-              </p>
+              <div class="create-story-placeholder-icon">
+                <i data-lucide="image"></i>
+                <i data-lucide="video"></i>
+              </div>
+              <p id="createStoryPreviewHint">Upload photos or videos here</p>
+              <button
+                type="button"
+                class="create-story-upload-btn"
+                id="createStoryUploadBtn"
+              >
+                Upload
+              </button>
             </div>
 
             <img
@@ -80,6 +88,8 @@
               controls
               preload="metadata"
             ></video>
+
+            <div id="createStoryMediaEditorContainer"></div>
 
             <div id="createStoryTextPreview" class="create-story-text-preview">
               <div
@@ -116,29 +126,33 @@
         </div>
 
         <div class="create-story-form-panel">
+          <input
+            type="file"
+            id="createStoryMediaInput"
+            hidden
+            accept="image/*,video/*"
+          />
+
+          <!-- Media Mode Panel -->
           <div
             class="create-story-section create-story-hidden"
             id="createStoryMediaSection"
           >
-            <label class="create-story-label">Upload Image/Video</label>
-            <div class="create-story-media-row">
-              <button
-                type="button"
-                class="create-story-select-file-btn"
-                id="createStorySelectFileBtn"
-              >
-                Select File
-              </button>
-              <span class="create-story-file-name" id="createStoryFileName"
-                >No file selected</span
-              >
+            <div class="create-story-style-group">
+              <label class="create-story-label">Background</label>
+              <div
+                class="create-story-bg-row"
+                id="createStoryMediaBgPalette"
+              ></div>
             </div>
-            <input
-              type="file"
-              id="createStoryMediaInput"
-              hidden
-              accept="image/*,video/*"
-            />
+
+            <div
+              class="create-story-style-group create-story-hidden"
+              id="createStoryMediaToolsGroup"
+            >
+              <label class="create-story-label">Tools</label>
+              <div id="createStoryMediaToolbarMount"></div>
+            </div>
           </div>
 
           <div

@@ -395,14 +395,14 @@
     }
     if (viewerState.dom.content) {
       viewerState.dom.content.addEventListener("click", (event) => {
-        const textPreview = event.target.closest(
-          ".sn-story-viewer-text-preview",
+        const isContent = event.target.closest(
+          ".sn-story-viewer-text-preview, .sn-story-viewer-image-preview, .sn-story-viewer-video-preview, .sn-story-viewer-preview-shell",
         );
-        if (!textPreview) return;
+        if (!isContent) return;
 
         event.preventDefault();
         event.stopPropagation();
-        stToggleTextStoryPause();
+        stToggleStoryPause();
       });
     }
 
@@ -522,16 +522,35 @@
     stStartProgressTimerInternal(viewerState.progressDurationMs, elapsed);
   }
 
-  function stToggleTextStoryPause() {
+  function stToggleStoryPause(shouldPause) {
     const story = stCurrentStory();
-    if (!story || Number(story.contentType) !== 2) return;
+    if (!story) return;
 
-    if (viewerState.isProgressPaused) {
-      stResumeProgressTimer();
-      return;
+    const isPaused = !!viewerState.isProgressPaused;
+    const targetPause =
+      typeof shouldPause === "boolean" ? shouldPause : !isPaused;
+
+    if (targetPause) {
+      if (!isPaused) {
+        stPauseProgressTimer();
+        stPauseAnyVideo();
+      }
+    } else {
+      if (isPaused) {
+        stResumeProgressTimer();
+        stResumeAnyVideo();
+      }
     }
+  }
 
-    stPauseProgressTimer();
+  function stResumeAnyVideo() {
+    if (!viewerState.dom.content) return;
+    const videos = viewerState.dom.content.querySelectorAll("video");
+    videos.forEach((v) => {
+      try {
+        v.play().catch(() => {});
+      } catch (_) {}
+    });
   }
 
   function stRenderProgressBars(totalStories) {
@@ -669,7 +688,7 @@
     const menu = viewerState.dom.moreMenu;
     if (!menu) return;
 
-    stPauseProgressTimer();
+    stToggleStoryPause(true);
 
     const story = stCurrentStory();
     const isOwn = stIsOwnStory();
@@ -727,7 +746,7 @@
     if (!menu.classList.contains("sn-story-viewer-hidden")) {
       menu.classList.add("sn-story-viewer-hidden");
       menu.innerHTML = "";
-      stResumeProgressTimer();
+      stToggleStoryPause(false);
     }
   }
 
@@ -767,13 +786,17 @@
     popup.innerHTML = `
       <h3>Edit Story Privacy</h3>
       <div class="sn-story-viewer-privacy-options">
-        ${options.map((opt) => `
+        ${options
+          .map(
+            (opt) => `
           <label class="sn-story-viewer-privacy-option ${opt.value === currentPrivacy ? "selected" : ""}">
             <input type="radio" name="storyPrivacy" value="${opt.value}" ${opt.value === currentPrivacy ? "checked" : ""}>
             <i data-lucide="${opt.icon}"></i>
             <span>${opt.label}</span>
           </label>
-        `).join("")}
+        `,
+          )
+          .join("")}
       </div>
       <div class="sn-story-viewer-privacy-actions">
         <button class="sn-story-viewer-privacy-cancel" id="stPrivacyCancelBtn">Cancel</button>
@@ -790,8 +813,12 @@
     // Highlight selected on change
     popup.querySelectorAll("input[name='storyPrivacy']").forEach((radio) => {
       radio.addEventListener("change", () => {
-        popup.querySelectorAll(".sn-story-viewer-privacy-option").forEach((el) => el.classList.remove("selected"));
-        radio.closest(".sn-story-viewer-privacy-option").classList.add("selected");
+        popup
+          .querySelectorAll(".sn-story-viewer-privacy-option")
+          .forEach((el) => el.classList.remove("selected"));
+        radio
+          .closest(".sn-story-viewer-privacy-option")
+          .classList.add("selected");
       });
     });
 
@@ -801,33 +828,44 @@
       stResumeProgressTimer();
     };
 
-    popup.querySelector("#stPrivacyCancelBtn").addEventListener("click", closeOverlay);
+    popup
+      .querySelector("#stPrivacyCancelBtn")
+      .addEventListener("click", closeOverlay);
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) closeOverlay();
     });
 
-    popup.querySelector("#stPrivacySaveBtn").addEventListener("click", async () => {
-      const selected = popup.querySelector("input[name='storyPrivacy']:checked");
-      if (!selected) return;
-      const newPrivacy = Number(selected.value);
-      if (newPrivacy === currentPrivacy) {
-        closeOverlay();
-        return;
-      }
+    popup
+      .querySelector("#stPrivacySaveBtn")
+      .addEventListener("click", async () => {
+        const selected = popup.querySelector(
+          "input[name='storyPrivacy']:checked",
+        );
+        if (!selected) return;
+        const newPrivacy = Number(selected.value);
+        if (newPrivacy === currentPrivacy) {
+          closeOverlay();
+          return;
+        }
 
-      try {
-        const res = await global.API.Stories.updatePrivacy(story.storyId, newPrivacy);
-        if (res?.ok) {
-          story.privacy = newPrivacy;
-          if (global.toastSuccess) global.toastSuccess("Story privacy updated.");
-        } else {
+        try {
+          const res = await global.API.Stories.updatePrivacy(
+            story.storyId,
+            newPrivacy,
+          );
+          if (res?.ok) {
+            story.privacy = newPrivacy;
+            if (global.toastSuccess)
+              global.toastSuccess("Story privacy updated.");
+          } else {
+            if (global.toastError)
+              global.toastError("Failed to update privacy.");
+          }
+        } catch (_) {
           if (global.toastError) global.toastError("Failed to update privacy.");
         }
-      } catch (_) {
-        if (global.toastError) global.toastError("Failed to update privacy.");
-      }
-      closeOverlay();
-    });
+        closeOverlay();
+      });
   }
 
   function stConfirmDeleteStory() {
@@ -836,10 +874,14 @@
 
     stPauseProgressTimer();
 
-    if (global.ChatCommon && typeof global.ChatCommon.showConfirm === "function") {
+    if (
+      global.ChatCommon &&
+      typeof global.ChatCommon.showConfirm === "function"
+    ) {
       global.ChatCommon.showConfirm({
         title: "Delete Story",
-        message: "Are you sure you want to delete this story? This action cannot be undone.",
+        message:
+          "Are you sure you want to delete this story? This action cannot be undone.",
         confirmText: "Delete",
         cancelText: "Cancel",
         isDanger: true,
@@ -901,7 +943,6 @@
       global.toastInfo("Report feature will be available soon.");
     }
   }
-
 
   function stPauseAnyVideo() {
     if (!viewerState.dom.content) return;
@@ -969,7 +1010,10 @@
         // Sync ring globally: if all stories are now viewed → seen, otherwise unseen
         const authorId = viewerState.author?.accountId;
         if (authorId) {
-          stSyncRingGlobally(authorId, stAllStoriesViewed() ? "seen" : "unseen");
+          stSyncRingGlobally(
+            authorId,
+            stAllStoriesViewed() ? "seen" : "unseen",
+          );
         }
       }
     } catch (_) {
@@ -1046,7 +1090,10 @@
 
       video.addEventListener("error", () => {
         previewShell.innerHTML = "";
-        stRenderUnavailableContent(previewShell, "This story could not be loaded.");
+        stRenderUnavailableContent(
+          previewShell,
+          "This story could not be loaded.",
+        );
         stStartProgressTimer(DEFAULT_STORY_DURATION_MS);
       });
 
@@ -1054,14 +1101,20 @@
       viewerState.dom.content.appendChild(previewShell);
       video.play().catch(() => {
         previewShell.innerHTML = "";
-        stRenderUnavailableContent(previewShell, "This story could not be loaded.");
+        stRenderUnavailableContent(
+          previewShell,
+          "This story could not be loaded.",
+        );
         stStartProgressTimer(DEFAULT_STORY_DURATION_MS);
       });
       return;
     }
 
     if (!story.mediaUrl) {
-      stRenderUnavailableContent(previewShell, "This story is no longer available.");
+      stRenderUnavailableContent(
+        previewShell,
+        "This story is no longer available.",
+      );
       viewerState.dom.content.appendChild(previewShell);
       stStartProgressTimer(DEFAULT_STORY_DURATION_MS);
       return;
@@ -1073,7 +1126,10 @@
     image.alt = "";
     image.addEventListener("error", () => {
       previewShell.innerHTML = "";
-      stRenderUnavailableContent(previewShell, "This story could not be loaded.");
+      stRenderUnavailableContent(
+        previewShell,
+        "This story could not be loaded.",
+      );
     });
     previewShell.appendChild(image);
     viewerState.dom.content.appendChild(previewShell);
@@ -1115,9 +1171,12 @@
       const privacy = story.privacy ?? 0;
       const iconName = global.PostUtils?.getPrivacyIconName
         ? global.PostUtils.getPrivacyIconName(privacy)
-        : (privacy === 2 ? "lock" : privacy === 1 ? "users" : "globe");
-      viewerState.dom.privacy.innerHTML =
-        `<i data-lucide="${stEscapeAttr(iconName)}"></i>`;
+        : privacy === 2
+          ? "lock"
+          : privacy === 1
+            ? "users"
+            : "globe";
+      viewerState.dom.privacy.innerHTML = `<i data-lucide="${stEscapeAttr(iconName)}"></i>`;
       if (global.lucide) global.lucide.createIcons();
     }
 

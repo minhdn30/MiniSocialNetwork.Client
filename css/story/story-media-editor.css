@@ -1,0 +1,717 @@
+/* ===== Story Media Editor v2 ===== */
+
+/* Container */
+#createStoryMediaEditorContainer {
+  position: absolute;
+  inset: 0;
+  display: none;
+  overflow: hidden;
+  background: #0f1115;
+  z-index: 1;
+}
+
+#createStoryMediaEditorContainer.sme-active {
+  display: block;
+}
+
+/* Objects Layer */
+.sme-objects-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+}
+
+/* Text-mode cursor when text tool is active */
+.sme-objects-layer.sme-cursor-text {
+  cursor: text;
+}
+
+.sme-objects-layer.sme-cursor-text .sme-object {
+  cursor: text;
+}
+
+/* Draw Canvas */
+.sme-draw-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  cursor: crosshair;
+}
+
+.sme-draw-canvas.sme-canvas-inactive {
+  pointer-events: none;
+}
+
+/* ===== Objects ===== */
+.sme-object {
+  position: absolute;
+  cursor: move;
+  user-select: none;
+  box-sizing: border-box;
+  touch-action: none;
+}
+
+.sme-object.sme-dragging {
+  opacity: 0.85;
+  cursor: grabbing;
+}
+
+/* Image content */
+.sme-image-content {
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  object-fit: fill;
+}
+
+/* Text content */
+.sme-text-content {
+  display: block;
+  width: 100%;
+  height: 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: hidden;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.sme-object.sme-selected .sme-text-content {
+  pointer-events: auto;
+}
+
+.sme-text-content:empty::before {
+  content: "Type here...";
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Sticker content */
+.sme-sticker-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* ===== Selection Frame & Handles ===== */
+.sme-object.sme-selected {
+  outline: 1.5px dashed rgba(255, 255, 255, 0.85);
+  outline-offset: 0px;
+}
+
+/* Container is flush with the object — handles use translate to straddle edges */
+.sme-handles-container {
+  display: none;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.sme-object.sme-selected .sme-handles-container {
+  display: block;
+}
+
+/* Shared handle base — circles */
+.sme-handle {
+  position: absolute;
+  background: #ffffff;
+  border: 1.5px solid var(--accent-primary, #ff416c);
+  border-radius: 50%;
+  pointer-events: auto;
+  z-index: 10;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  box-sizing: border-box;
+}
+
+/* Corner handles — 8×8 */
+.sme-handle-nw,
+.sme-handle-ne,
+.sme-handle-sw,
+.sme-handle-se {
+  width: 8px;
+  height: 8px;
+}
+
+/* Edge handles — 6×6 */
+.sme-handle-n,
+.sme-handle-s,
+.sme-handle-e,
+.sme-handle-w {
+  width: 6px;
+  height: 6px;
+}
+
+/* Corner positions — translate(-50%,-50%) centers dot exactly on the corner */
+.sme-handle-nw {
+  top: 0;
+  left: 0;
+  transform: translate(-50%, -50%);
+  cursor: nw-resize;
+}
+.sme-handle-ne {
+  top: 0;
+  right: 0;
+  transform: translate(50%, -50%);
+  cursor: ne-resize;
+}
+.sme-handle-sw {
+  bottom: 0;
+  left: 0;
+  transform: translate(-50%, 50%);
+  cursor: sw-resize;
+}
+.sme-handle-se {
+  bottom: 0;
+  right: 0;
+  transform: translate(50%, 50%);
+  cursor: se-resize;
+}
+
+/* Edge positions — centered on midpoints */
+.sme-handle-n {
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  cursor: n-resize;
+}
+.sme-handle-s {
+  bottom: 0;
+  left: 50%;
+  transform: translate(-50%, 50%);
+  cursor: s-resize;
+}
+.sme-handle-e {
+  top: 50%;
+  right: 0;
+  transform: translate(50%, -50%);
+  cursor: e-resize;
+}
+.sme-handle-w {
+  top: 50%;
+  left: 0;
+  transform: translate(-50%, -50%);
+  cursor: w-resize;
+}
+
+/* Delete handle */
+.sme-delete-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  background: var(--danger, #ed4956);
+  color: #fff;
+  border: 1.5px solid #fff;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  transform: translate(50%, -50%);
+}
+
+.sme-object.sme-selected .sme-delete-handle {
+  display: flex;
+}
+
+.sme-delete-handle:hover {
+  background: var(--danger-alt, #ff5a5a);
+}
+
+/* ===== Toolbar (horizontal top-center pill — default floating) ===== */
+.sme-toolbar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 8px;
+  background: rgba(15, 17, 21, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+/* ===== Toolbar in form panel ===== */
+.sme-toolbar.sme-toolbar-panel {
+  position: static;
+  transform: none;
+  z-index: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px;
+  background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
+  border-radius: 10px;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+
+.sme-toolbar-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.sme-toolbar-panel .sme-toolbar-btn {
+  color: var(--text-secondary, rgba(255, 255, 255, 0.6));
+}
+
+/* Icon sizing — works for both inline SVGs and lucide <i>/<svg> */
+.sme-toolbar-btn svg,
+.sme-toolbar-btn i {
+  width: 17px;
+  height: 17px;
+  color: inherit;
+  flex-shrink: 0;
+}
+
+.sme-toolbar-btn i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-style: normal;
+}
+
+.sme-toolbar-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.sme-toolbar-panel .sme-toolbar-btn:hover {
+  background: var(--bg-secondary, rgba(255, 255, 255, 0.1));
+  color: var(--text-primary, #ffffff);
+}
+
+.sme-toolbar-btn.sme-btn-danger:hover {
+  background: rgba(255, 65, 108, 0.15);
+  color: #ff416c;
+}
+
+.sme-toolbar-panel .sme-toolbar-btn.sme-btn-danger:hover {
+  background: rgba(255, 65, 108, 0.15);
+  color: #ff416c;
+}
+
+.sme-toolbar-btn.sme-active {
+  background: var(--accent-primary, #e91e63);
+  color: #ffffff;
+}
+
+/* Vertical divider for horizontal toolbar */
+.sme-toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 3px;
+  flex-shrink: 0;
+}
+
+.sme-toolbar-panel .sme-toolbar-divider {
+  background: var(--border-primary, rgba(255, 255, 255, 0.08));
+}
+
+/* ===== Sub-panels (floating below toolbar — default) ===== */
+.sme-draw-options,
+.sme-text-options {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 14px;
+  background: rgba(15, 17, 21, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+}
+
+/* Sub-panels in form panel mode */
+.sme-toolbar-panel .sme-draw-options,
+.sme-toolbar-panel .sme-text-options {
+  position: static;
+  transform: none;
+  width: 100%;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px;
+  margin-top: 6px;
+  background: var(--bg-secondary, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+
+.sme-draw-options.sme-show,
+.sme-text-options.sme-show {
+  display: flex;
+}
+
+/* Option group (label + control inline) */
+.sme-option-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sme-option-group label {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  user-select: none;
+}
+
+.sme-toolbar-panel .sme-option-group label {
+  color: var(--text-tertiary, rgba(255, 255, 255, 0.45));
+}
+
+/* ===== Color Preset Swatches ===== */
+.sme-color-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+
+.sme-color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  transition:
+    transform 0.1s ease,
+    border-color 0.1s ease;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.sme-color-swatch:hover {
+  transform: scale(1.15);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+.sme-color-swatch.sme-color-active {
+  border-color: var(--accent-primary, #ff416c);
+  outline: 2px solid var(--accent-primary, #ff416c);
+  outline-offset: 1px;
+}
+
+.sme-color-swatch[data-sme-color="#000000"] {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.sme-color-swatch[data-sme-color="#ffffff"] {
+  border-color: rgba(0, 0, 0, 0.25);
+}
+
+.sme-color-swatch.sme-color-custom {
+  background: conic-gradient(
+    red,
+    yellow,
+    lime,
+    aqua,
+    blue,
+    magenta,
+    red
+  ) !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  border: 2.5px solid #1a1c22;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.sme-color-input-hidden {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Legacy color picker (kept for backwards compat) */
+.sme-color-input {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+  background: none;
+  transition: border-color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.sme-color-input:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.sme-toolbar-panel .sme-color-input {
+  border-color: var(--border-primary, rgba(255, 255, 255, 0.2));
+}
+
+.sme-toolbar-panel .sme-color-input:hover {
+  border-color: var(--accent-primary, #e91e63);
+}
+
+.sme-color-input::-webkit-color-swatch-wrapper {
+  padding: 1px;
+}
+
+.sme-color-input::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+
+/* Brush size slider */
+.sme-size-slider {
+  width: 80px;
+  height: 4px;
+  accent-color: var(--accent-primary, #e91e63);
+  cursor: pointer;
+}
+
+/* Size value badge (displayed beside slider) */
+.sme-size-val {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.8);
+  min-width: 20px;
+  text-align: center;
+}
+
+.sme-toolbar-panel .sme-size-val {
+  color: var(--text-secondary);
+}
+
+/* Text size input */
+.sme-text-size-input {
+  width: 44px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 6px;
+  text-align: center;
+  transition: border-color 0.15s ease;
+}
+
+.sme-toolbar-panel .sme-text-size-input {
+  background: var(--bg-primary, rgba(255, 255, 255, 0.08));
+  border-color: var(--border-primary, rgba(255, 255, 255, 0.16));
+  color: var(--text-primary, #fff);
+}
+
+.sme-text-size-input:focus {
+  outline: none;
+  border-color: var(--accent-primary, #e91e63);
+}
+
+/* Font selector */
+.sme-font-select {
+  min-width: 120px;
+  max-width: 160px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 28px 6px 10px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23ffffff80'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 10px 6px;
+}
+
+.sme-toolbar-panel .sme-font-select {
+  background-color: var(--bg-primary, rgba(255, 255, 255, 0.08));
+  border-color: var(--border-primary, rgba(255, 255, 255, 0.16));
+  color: var(--text-primary, #fff);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2388888880'/%3E%3C/svg%3E");
+}
+
+.sme-font-select:focus {
+  outline: none;
+  border-color: var(--accent-primary, #e91e63);
+}
+
+.sme-font-select option {
+  background: #1a1c22;
+  color: #fff;
+  padding: 6px 10px;
+}
+
+body.light-mode .sme-font-select option {
+  background: #ffffff;
+  color: #1a1c22;
+}
+
+/* ===== Sticker Picker ===== */
+.sme-sticker-picker {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  background: rgba(15, 17, 21, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  max-height: 200px;
+  max-width: 180px;
+  overflow-y: auto;
+}
+
+/* Sticker picker in form panel mode */
+.sme-toolbar-panel .sme-sticker-picker {
+  position: static;
+  transform: none;
+  width: 100%;
+  max-width: 100%;
+  max-height: 180px;
+  margin-top: 6px;
+  background: var(--bg-secondary, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+
+.sme-sticker-picker.sme-show {
+  display: flex;
+}
+
+.sme-sticker-category-title {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 4px 0 2px;
+}
+
+.sme-toolbar-panel .sme-sticker-category-title {
+  color: var(--text-tertiary, rgba(255, 255, 255, 0.4));
+}
+
+.sme-sticker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+}
+
+.sme-toolbar-panel .sme-sticker-grid {
+  grid-template-columns: repeat(6, 1fr);
+}
+
+.sme-sticker-item {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s ease;
+}
+
+.sme-sticker-item:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.sme-toolbar-panel .sme-sticker-item:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.12));
+}
+
+/* Scrollbar for sticker picker */
+.sme-sticker-picker::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sme-sticker-picker::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sme-sticker-picker::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+
+/* ===== Export-time hiding ===== */
+.sme-exporting .sme-toolbar {
+  display: none !important;
+}
+
+.sme-exporting .sme-handles-container,
+.sme-exporting .sme-delete-handle {
+  display: none !important;
+}
+
+.sme-exporting .sme-object.sme-selected {
+  outline: none !important;
+}
