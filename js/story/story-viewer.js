@@ -1972,11 +1972,11 @@
     }
   }
 
-  function stRenderUnavailableContent(parentShell, reason) {
+  function stRenderUnavailableContent(parentShell, reason, iconName = "eye-off") {
     const unavailableEl = document.createElement("div");
     unavailableEl.className = "sn-story-viewer-unavailable";
     unavailableEl.innerHTML = `
-      <i data-lucide="eye-off" style="width:48px;height:48px;opacity:0.5;"></i>
+      <i data-lucide="${iconName}" style="width:48px;height:48px;opacity:0.5;"></i>
       <p style="margin-top:12px;font-size:15px;opacity:0.7;">${reason || "This story is no longer available."}</p>
     `;
     parentShell.appendChild(unavailableEl);
@@ -2158,7 +2158,8 @@
         previewShell.innerHTML = "";
         stRenderUnavailableContent(
           previewShell,
-          "This story could not be loaded.",
+          "this video could not be loaded",
+          "video-off",
         );
         stStartProgressTimer(DEFAULT_STORY_DURATION_MS);
       });
@@ -2171,7 +2172,8 @@
         previewShell.innerHTML = "";
         stRenderUnavailableContent(
           previewShell,
-          "This story could not be loaded.",
+          "this video could not be loaded",
+          "video-off",
         );
         stStartProgressTimer(DEFAULT_STORY_DURATION_MS);
       });
@@ -2196,7 +2198,8 @@
       previewShell.innerHTML = "";
       stRenderUnavailableContent(
         previewShell,
-        "This story could not be loaded.",
+        "this image could not be loaded",
+        "image-off",
       );
     });
     previewShell.appendChild(image);

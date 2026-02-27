@@ -613,6 +613,29 @@ body.light-mode .sn-story-viewer-mute-btn:hover {
   user-select: none;
 }
 
+.sn-story-viewer-unavailable i,
+.sn-story-viewer-unavailable svg {
+  width: 48px;
+  height: 48px;
+  color: rgba(255, 255, 255, 0.78);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  opacity: 0.8;
+}
+
+body.light-mode .sn-story-viewer-unavailable {
+  color: #c8d7ee;
+}
+
+body.light-mode .sn-story-viewer-unavailable i,
+body.light-mode .sn-story-viewer-unavailable svg {
+  color: #9db6da;
+  fill: none;
+  stroke: currentColor;
+  opacity: 0.95;
+}
+
 .sn-story-viewer-nav {
   position: absolute;
   top: 50%;
