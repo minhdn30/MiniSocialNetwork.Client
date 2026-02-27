@@ -1,0 +1,84 @@
+.sn-media-load-fallback-host {
+  isolation: isolate;
+}
+
+.sn-media-load-fallback-host--relative {
+  position: relative !important;
+}
+
+.sn-media-load-fallback-target {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.sn-media-load-fallback {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.78);
+  background: linear-gradient(
+    180deg,
+    rgba(8, 17, 27, 0.92) 0%,
+    rgba(5, 10, 16, 0.96) 100%
+  );
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.sn-media-load-fallback i,
+.sn-media-load-fallback svg {
+  width: 42px;
+  height: 42px;
+  color: rgba(255, 255, 255, 0.88);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  opacity: 0.9;
+}
+
+.sn-media-load-fallback-text {
+  font-size: 14px;
+  line-height: 1.35;
+  color: inherit;
+  max-width: 90%;
+}
+
+.sn-media-load-fallback--compact {
+  gap: 0;
+  padding: 8px;
+}
+
+.sn-media-load-fallback--compact i,
+.sn-media-load-fallback--compact svg {
+  width: 24px;
+  height: 24px;
+}
+
+.sn-media-load-fallback--compact .sn-media-load-fallback-text {
+  display: none;
+}
+
+body.light-mode .sn-media-load-fallback {
+  color: #314760;
+  background: linear-gradient(
+    180deg,
+    rgba(234, 241, 251, 0.95) 0%,
+    rgba(220, 233, 249, 0.98) 100%
+  );
+}
+
+body.light-mode .sn-media-load-fallback i,
+body.light-mode .sn-media-load-fallback svg {
+  color: #5f7fa8;
+  fill: none;
+  stroke: currentColor;
+  opacity: 0.96;
+}
