@@ -138,6 +138,7 @@
     MAX_COMMENT_INPUT_LENGTH: 500, // Số ký tự tối đa khi nhập comment/reply
     INTERACTIONS_PAGE_SIZE: 10, // Số lượng người react load mỗi lần
     PROFILE_POSTS_PAGE_SIZE: 12, // Số lượng post load mỗi lần ở trang cá nhân (nên là bội số của 3)
+    PROFILE_ARCHIVED_STORIES_PAGE_SIZE: 12, // Số lượng archived stories load mỗi lần ở trang profile
     PREVIEW_BIO_TRUNCATE_LENGTH: 80, // Chiều dài tối đa của bio trong thẻ preview trước khi bị cắt
     REGISTER_USERNAME_MIN_LENGTH: 6, // Số ký tự tối thiểu cho username khi đăng ký
     REGISTER_USERNAME_MAX_LENGTH: 30, // Số ký tự tối đa cho username khi đăng ký

@@ -512,6 +512,13 @@
         apiFetch(
           `/Stories/viewable-authors?page=${encodeURIComponent(page)}&pageSize=${encodeURIComponent(pageSize)}`,
         ),
+      getArchived: (
+        page = 1,
+        pageSize = window.APP_CONFIG?.PROFILE_ARCHIVED_STORIES_PAGE_SIZE || 12,
+      ) =>
+        apiFetch(
+          `/Stories/archive?page=${encodeURIComponent(page)}&pageSize=${encodeURIComponent(pageSize)}`,
+        ),
       resolveByStoryId: (storyId) =>
         apiFetch(`/Stories/${encodeURIComponent(storyId)}/resolve`),
       getActiveByAuthor: (authorId) =>

@@ -8,7 +8,16 @@
   let page = 1;
   let isLoading = false;
   let hasMore = true;
-  const PAGE_SIZE = APP_CONFIG.PROFILE_POSTS_PAGE_SIZE;
+  let archivedStoriesPage = 1;
+  let isArchivedStoriesLoading = false;
+  let hasMoreArchivedStories = true;
+  let activeTab = "posts";
+
+  const POSTS_PAGE_SIZE = APP_CONFIG.PROFILE_POSTS_PAGE_SIZE;
+  const ARCHIVED_STORIES_PAGE_SIZE =
+    APP_CONFIG.PROFILE_ARCHIVED_STORIES_PAGE_SIZE ||
+    APP_CONFIG.PROFILE_POSTS_PAGE_SIZE;
+  const PROFILE_ARCHIVED_STORIES_TAB = "archived-stories";
 
   // Post navigation: Store post IDs in grid order for next/prev navigation
   let profilePostIds = [];
@@ -78,6 +87,198 @@
       .replace(/"/g, "&quot;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
+  }
+
+  function escapeHtml(value) {
+    return (value || "")
+      .toString()
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function normalizeStoryStyleKey(value) {
+    return (value || "").toString().trim().toLowerCase();
+  }
+
+  function parseIntSafe(value, fallbackValue) {
+    const parsed = Number.parseInt(String(value ?? ""), 10);
+    return Number.isFinite(parsed) ? parsed : fallbackValue;
+  }
+
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function isPlainObject(value) {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  }
+
+  function normalizeStyleMap(rawMap, fallbackMap) {
+    const sourceMap =
+      isPlainObject(rawMap) && Object.keys(rawMap).length > 0
+        ? rawMap
+        : fallbackMap;
+    const normalized = {};
+
+    Object.entries(sourceMap || {}).forEach(([rawKey, rawOption]) => {
+      const key = normalizeStoryStyleKey(rawKey);
+      if (!key) return;
+
+      const option = isPlainObject(rawOption) ? rawOption : {};
+      const fallbackOption = isPlainObject(fallbackMap?.[key])
+        ? fallbackMap[key]
+        : {};
+      const css =
+        (typeof option.css === "string" && option.css.trim()) ||
+        (typeof fallbackOption.css === "string" && fallbackOption.css.trim()) ||
+        "";
+
+      if (!css) return;
+      normalized[key] = { ...option, css };
+    });
+
+    return Object.keys(normalized).length > 0 ? normalized : { ...(fallbackMap || {}) };
+  }
+
+  function resolveStyleKey(collection, rawKey, fallbackKey) {
+    const normalizedRawKey = normalizeStoryStyleKey(rawKey);
+    if (
+      normalizedRawKey &&
+      Object.prototype.hasOwnProperty.call(collection, normalizedRawKey)
+    ) {
+      return normalizedRawKey;
+    }
+
+    const normalizedFallbackKey = normalizeStoryStyleKey(fallbackKey);
+    if (
+      normalizedFallbackKey &&
+      Object.prototype.hasOwnProperty.call(collection, normalizedFallbackKey)
+    ) {
+      return normalizedFallbackKey;
+    }
+
+    const firstKey = Object.keys(collection || {})[0];
+    return typeof firstKey === "string" ? firstKey : "";
+  }
+
+  function resolveStoryTextThumbnailStyle(story) {
+    const fallback = {
+      options: {
+        backgrounds: {
+          accent: {
+            css: "linear-gradient(150deg, var(--accent-primary) 0%, color-mix(in srgb, var(--accent-primary) 45%, #000000) 100%)",
+          },
+        },
+        textColors: {
+          light: { css: "#ffffff" },
+          ink: { css: "#0f172a" },
+        },
+        fonts: {
+          modern: { css: "'Segoe UI', 'Inter', system-ui, sans-serif" },
+        },
+      },
+      fontSize: {
+        min: 8,
+        max: 72,
+        default: 32,
+      },
+      defaults: {
+        backgroundColorKey: "accent",
+        textColorKey: "light",
+        fontTextKey: "modern",
+        fontSizePx: 32,
+      },
+    };
+
+    const config = isPlainObject(window.STORY_TEXT_EDITOR_CONFIG)
+      ? window.STORY_TEXT_EDITOR_CONFIG
+      : {};
+    const options = isPlainObject(config.options) ? config.options : {};
+    const defaults = isPlainObject(config.defaults) ? config.defaults : {};
+    const fontSize = isPlainObject(config.fontSize) ? config.fontSize : {};
+
+    const backgrounds = normalizeStyleMap(
+      options.backgrounds,
+      fallback.options.backgrounds,
+    );
+    const textColors = normalizeStyleMap(
+      options.textColors,
+      fallback.options.textColors,
+    );
+    const fonts = normalizeStyleMap(options.fonts, fallback.options.fonts);
+
+    const defaultBackgroundKey = resolveStyleKey(
+      backgrounds,
+      defaults.backgroundColorKey,
+      fallback.defaults.backgroundColorKey,
+    );
+    const defaultTextColorKey = resolveStyleKey(
+      textColors,
+      defaults.textColorKey,
+      fallback.defaults.textColorKey,
+    );
+    const defaultFontKey = resolveStyleKey(
+      fonts,
+      defaults.fontTextKey,
+      fallback.defaults.fontTextKey,
+    );
+
+    const backgroundKey = resolveStyleKey(
+      backgrounds,
+      story.backgroundColorKey ?? story.BackgroundColorKey,
+      defaultBackgroundKey,
+    );
+    const textColorKey = resolveStyleKey(
+      textColors,
+      story.textColorKey ?? story.TextColorKey,
+      defaultTextColorKey,
+    );
+    const fontKey = resolveStyleKey(
+      fonts,
+      story.fontTextKey ?? story.FontTextKey,
+      defaultFontKey,
+    );
+
+    const minSize = Math.max(1, parseIntSafe(fontSize.min, fallback.fontSize.min));
+    const maxSize = Math.max(minSize, parseIntSafe(fontSize.max, fallback.fontSize.max));
+    const defaultSize = clamp(
+      parseIntSafe(
+        defaults.fontSizePx,
+        parseIntSafe(fontSize.default, fallback.fontSize.default),
+      ),
+      minSize,
+      maxSize,
+    );
+    const finalSize = clamp(
+      parseIntSafe(
+        story.fontSizeKey ?? story.FontSizeKey,
+        defaultSize,
+      ),
+      minSize,
+      maxSize,
+    );
+
+    // Scale text from story-viewer size to profile-grid thumbnail size.
+    const thumbnailFontSize = clamp(Math.round(finalSize * 0.55), 12, 34);
+
+    return {
+      background:
+        backgrounds[backgroundKey]?.css ||
+        backgrounds[defaultBackgroundKey]?.css ||
+        fallback.options.backgrounds.accent.css,
+      color:
+        textColors[textColorKey]?.css ||
+        textColors[defaultTextColorKey]?.css ||
+        fallback.options.textColors.light.css,
+      fontFamily:
+        fonts[fontKey]?.css ||
+        fonts[defaultFontKey]?.css ||
+        fallback.options.fonts.modern.css,
+      fontSizePx: thumbnailFontSize,
+    };
   }
 
   function renderProfileAvatar(avatarWrapper, avatarUrl, storyRingState, accountId) {
@@ -198,12 +399,18 @@
       currentProfileId = data.currentProfileId;
       page = data.page;
       hasMore = data.hasMore;
+      archivedStoriesPage = data.archivedStoriesPage ?? 1;
+      hasMoreArchivedStories = data.hasMoreArchivedStories ?? true;
+      activeTab = data.activeTab || "posts";
       currentProfileData = data.currentProfileData;
     },
     getPageData: () => ({
       currentProfileId,
       page,
       hasMore,
+      archivedStoriesPage,
+      hasMoreArchivedStories,
+      activeTab,
       currentProfileData,
     }),
   };
@@ -330,10 +537,17 @@
     page = 1;
     isLoading = false;
     hasMore = true;
+    archivedStoriesPage = 1;
+    isArchivedStoriesLoading = false;
+    hasMoreArchivedStories = true;
+    activeTab = "posts";
     profilePostIds = []; // Reset post navigation list
     // Clear grid immediately to avoid showing previous user's posts
     const grid = document.getElementById("profile-posts-grid");
-    if (grid) grid.innerHTML = "";
+    if (grid) {
+      grid.innerHTML = "";
+      grid.classList.remove("placeholder-mode");
+    }
 
     // Reset Header UI placeholders to prevent confusing user with old data while loading
     const avatarWrapper = document.querySelector(".profile-avatar-wrapper");
@@ -367,11 +581,24 @@
     const grid = document.getElementById("profile-posts-grid");
     if (!grid || !document.body.contains(grid)) return;
 
-    if (isLoading || !hasMore) return;
+    if (activeTab !== "posts" && activeTab !== PROFILE_ARCHIVED_STORIES_TAB)
+      return;
+
+    if (activeTab === "posts" && (isLoading || !hasMore)) return;
+    if (
+      activeTab === PROFILE_ARCHIVED_STORIES_TAB &&
+      (isArchivedStoriesLoading || !hasMoreArchivedStories)
+    )
+      return;
+
     const mc = document.querySelector(".main-content");
     if (!mc) return;
     if (mc.scrollTop + mc.clientHeight >= mc.scrollHeight - 500) {
-      loadPosts();
+      if (activeTab === "posts") {
+        loadPosts();
+      } else if (activeTab === PROFILE_ARCHIVED_STORIES_TAB) {
+        loadArchivedStories();
+      }
     }
   };
   const mc = document.querySelector(".main-content");
@@ -523,6 +750,10 @@
         ensureProfilePresenceSnapshot(currentProfileId);
 
         // Now that we have the GUID, we can load posts
+        activeTab = "posts";
+        archivedStoriesPage = 1;
+        isArchivedStoriesLoading = false;
+        hasMoreArchivedStories = true;
         isLoading = false;
         loadPosts();
       }
@@ -787,30 +1018,54 @@
 
     if (isOwner) {
       tabs.push({ id: "saved", label: "Saved", icon: "bookmark" });
+      tabs.push({
+        id: PROFILE_ARCHIVED_STORIES_TAB,
+        label: "Archived Stories",
+        icon: "archive",
+      });
     }
 
     tabsContainer.innerHTML = tabs
       .map(
         (tab) => `
-            <div class="profile-tab ${tab.id === "posts" ? "active" : ""}" data-tab="${tab.id}" onclick="switchProfileTab('${tab.id}')">
+            <div class="profile-tab ${tab.id === activeTab ? "active" : ""}" data-tab="${tab.id}" onclick="switchProfileTab('${tab.id}')">
                 <i data-lucide="${tab.icon}"></i>
                 <span>${tab.label}</span>
             </div>
         `,
       )
-      .join("");
+      .join("") + '<div class="profile-tabs-indicator" id="profile-tabs-indicator"></div>';
 
     if (window.lucide) lucide.createIcons();
+    requestAnimationFrame(updateProfileTabsIndicator);
   }
+
+  function updateProfileTabsIndicator() {
+    const activeTabEl = document.querySelector(".profile-tab.active");
+    const indicator = document.getElementById("profile-tabs-indicator");
+    if (!activeTabEl || !indicator) return;
+
+    indicator.style.transform = `translateX(${activeTabEl.offsetLeft}px)`;
+    indicator.style.width = `${activeTabEl.offsetWidth}px`;
+  }
+
+  window.addEventListener("resize", () => {
+    requestAnimationFrame(updateProfileTabsIndicator);
+  });
 
   window.switchProfileTab = function (tabName) {
     const grid = document.getElementById("profile-posts-grid");
     const loader = document.getElementById("profile-posts-loader");
+    if (!grid) return;
+
+    activeTab = tabName;
 
     // Update UI active state
     document.querySelectorAll(".profile-tab").forEach((t) => {
       t.classList.toggle("active", t.dataset.tab === tabName);
     });
+
+    updateProfileTabsIndicator();
 
     if (tabName === "posts") {
       // Restore posts grid
@@ -820,6 +1075,14 @@
       hasMore = true;
       isLoading = false;
       loadPosts();
+    } else if (tabName === PROFILE_ARCHIVED_STORIES_TAB) {
+      // Archived stories grid (owner only)
+      grid.innerHTML = "";
+      grid.classList.remove("placeholder-mode");
+      archivedStoriesPage = 1;
+      hasMoreArchivedStories = true;
+      isArchivedStoriesLoading = false;
+      loadArchivedStories();
     } else {
       // Show placeholder
       const iconMap = {
@@ -844,16 +1107,19 @@
                 </div>
             `;
       if (loader) loader.style.display = "none";
-      hasMore = false;
+      isLoading = false;
+      isArchivedStoriesLoading = false;
       if (window.lucide) lucide.createIcons();
     }
   };
 
   async function loadPosts() {
+    if (activeTab !== "posts") return;
     if (isLoading || !hasMore) return;
 
     // Capture the ID we are fetching for at the start
     const fetchForId = currentProfileId;
+    const fetchForTab = activeTab;
     // console.log(`[Profile] loadPosts START for ${fetchForId}, page ${page}`);
     isLoading = true;
 
@@ -874,11 +1140,11 @@
         return;
       }
 
-      const res = await API.Posts.getByAccountId(fetchForId, page, PAGE_SIZE);
+      const res = await API.Posts.getByAccountId(fetchForId, page, POSTS_PAGE_SIZE);
 
       // RACECONDITION FIX:
       // Check if user switched profiles while we were fetching
-      if (fetchForId !== currentProfileId) {
+      if (fetchForId !== currentProfileId || fetchForTab !== activeTab) {
         // console.log(`[Profile] IGNORING posts for ${fetchForId} because we switched to ${currentProfileId}`);
         return;
       }
@@ -888,7 +1154,7 @@
       const data = await res.json();
       const items = data.items || data; // Fallback if it's already an array
 
-      if (!items || items.length < PAGE_SIZE) {
+      if (!items || items.length < POSTS_PAGE_SIZE) {
         hasMore = false;
       }
 
@@ -902,8 +1168,79 @@
       // actually, we should always turn it off?
       // If we switched profiles, resetState() would have set isLoading=false already.
       // But if we are still here, we need to complete the lifecycle.
-      if (fetchForId === currentProfileId) {
+      if (fetchForId === currentProfileId && fetchForTab === activeTab) {
         isLoading = false;
+        if (loader) loader.style.display = "none";
+      }
+    }
+  }
+
+  async function loadArchivedStories() {
+    if (activeTab !== PROFILE_ARCHIVED_STORIES_TAB) return;
+    if (isArchivedStoriesLoading || !hasMoreArchivedStories) return;
+
+    const fetchForId = currentProfileId;
+    const fetchForTab = activeTab;
+    isArchivedStoriesLoading = true;
+
+    const grid = document.getElementById("profile-posts-grid");
+    const loader = document.getElementById("profile-posts-loader");
+    if (!grid) {
+      isArchivedStoriesLoading = false;
+      return;
+    }
+
+    if (loader) loader.style.display = "block";
+
+    try {
+      const isGuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          fetchForId,
+        );
+      if (!isGuid) {
+        isArchivedStoriesLoading = false;
+        return;
+      }
+
+      if (!global.API?.Stories?.getArchived) {
+        throw new Error("Story archive API is unavailable");
+      }
+
+      const res = await API.Stories.getArchived(
+        archivedStoriesPage,
+        ARCHIVED_STORIES_PAGE_SIZE,
+      );
+
+      if (fetchForId !== currentProfileId || fetchForTab !== activeTab) {
+        return;
+      }
+      if (!res.ok) throw new Error("Failed to load archived stories");
+
+      const data = await res.json();
+      const items = Array.isArray(data?.items)
+        ? data.items
+        : Array.isArray(data)
+          ? data
+          : [];
+
+      if (archivedStoriesPage === 1) {
+        grid.innerHTML = "";
+      }
+
+      renderArchivedStories(items);
+      archivedStoriesPage += 1;
+
+      const hasNextPage =
+        typeof data?.hasNextPage === "boolean"
+          ? data.hasNextPage
+          : items.length >= ARCHIVED_STORIES_PAGE_SIZE;
+      hasMoreArchivedStories = hasNextPage;
+    } catch (err) {
+      console.error(err);
+      if (window.toastError) toastError("Failed to load archived stories.");
+    } finally {
+      if (fetchForId === currentProfileId && fetchForTab === activeTab) {
+        isArchivedStoriesLoading = false;
         if (loader) loader.style.display = "none";
       }
     }
@@ -929,7 +1266,11 @@
         return [];
       }
 
-      const res = await API.Posts.getByAccountId(fetchForId, page, PAGE_SIZE);
+      const res = await API.Posts.getByAccountId(
+        fetchForId,
+        page,
+        POSTS_PAGE_SIZE,
+      );
 
       if (fetchForId !== currentProfileId) return [];
       if (!res.ok) throw new Error("Failed to load posts");
@@ -937,7 +1278,7 @@
       const data = await res.json();
       const items = data.items || data;
 
-      if (!items || items.length < PAGE_SIZE) {
+      if (!items || items.length < POSTS_PAGE_SIZE) {
         hasMore = false;
       }
 
@@ -1050,6 +1391,146 @@
           item.style.background = `linear-gradient(135deg, ${color}, var(--img-gradient-base))`;
         })
         .catch((err) => console.warn("Color extraction failed", err));
+    }
+
+    return item;
+  }
+
+  function renderArchivedStories(stories) {
+    const grid = document.getElementById("profile-posts-grid");
+    if (!grid) return;
+
+    stories.forEach((story) => {
+      const item = createArchivedStoryGridItem(story);
+      grid.appendChild(item);
+    });
+
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function resolveStoryContentType(rawStory) {
+    const value =
+      rawStory?.contentType ??
+      rawStory?.ContentType ??
+      rawStory?.type ??
+      rawStory?.Type ??
+      0;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function formatArchiveStoryCreatedAt(rawValue) {
+    if (!rawValue) return "";
+
+    const createdAt = new Date(rawValue);
+    if (Number.isNaN(createdAt.getTime())) return "";
+
+    const day = String(createdAt.getDate()).padStart(2, "0");
+    const month = String(createdAt.getMonth() + 1).padStart(2, "0");
+    const year = createdAt.getFullYear();
+    const currentYear = new Date().getFullYear();
+
+    if (year === currentYear) {
+      return `${day}/${month}`;
+    }
+
+    return `${day}/${month}/${year}`;
+  }
+
+  function createArchivedStoryGridItem(story) {
+    const item = document.createElement("div");
+    item.className = "profile-grid-item profile-story-grid-item skeleton";
+    item.dataset.storyId = story?.storyId ?? story?.StoryId ?? "";
+
+    const contentType = resolveStoryContentType(story);
+    const mediaUrl = escapeAttr(story?.mediaUrl ?? story?.MediaUrl ?? "");
+    const viewCount = Math.max(
+      0,
+      Number.parseInt(String(story?.viewCount ?? story?.ViewCount ?? 0), 10) || 0,
+    );
+    const reactCount = Math.max(
+      0,
+      Number.parseInt(String(story?.reactCount ?? story?.ReactCount ?? 0), 10) || 0,
+    );
+    const createdAtLabel = formatArchiveStoryCreatedAt(
+      story?.createdAt ?? story?.CreatedAt ?? null,
+    );
+
+    const overlayHtml = `
+      <div class="profile-grid-overlay profile-story-grid-overlay">
+        <div class="profile-overlay-stat">
+          <i data-lucide="eye" class="profile-story-view-icon"></i>
+          <span>${viewCount}</span>
+        </div>
+        <div class="profile-overlay-stat">
+          <i data-lucide="heart"></i>
+          <span>${reactCount}</span>
+        </div>
+      </div>
+    `;
+    const createdAtBadgeHtml = `
+      <div class="profile-story-created-at-badge">
+        <i data-lucide="calendar-days" class="profile-story-created-at-icon"></i>
+        <span>${createdAtLabel || "--/--"}</span>
+      </div>
+    `;
+
+    if (contentType === 2) {
+      const style = resolveStoryTextThumbnailStyle(story);
+      const textContent = escapeHtml(story?.textContent ?? story?.TextContent ?? "");
+      item.innerHTML = `
+        <div class="profile-story-text-thumb" style="background:${style.background};">
+          <div class="profile-story-text-content" style="color:${style.color};font-family:${style.fontFamily};font-size:${style.fontSizePx}px;">${textContent}</div>
+        </div>
+        ${overlayHtml}
+        ${createdAtBadgeHtml}
+      `;
+      item.classList.remove("skeleton");
+      return item;
+    }
+
+    if (contentType === 1) {
+      item.innerHTML = `
+        <video class="profile-story-thumb-media" src="${mediaUrl}" muted playsinline preload="metadata"></video>
+        <div class="profile-story-video-icon"><i data-lucide="play"></i></div>
+        ${overlayHtml}
+        ${createdAtBadgeHtml}
+      `;
+
+      const video = item.querySelector("video");
+      if (video) {
+        const onReady = () => {
+          item.classList.remove("skeleton");
+          video.classList.add("show");
+        };
+        video.addEventListener("loadeddata", onReady, { once: true });
+        video.addEventListener("error", () => {
+          item.classList.remove("skeleton");
+        });
+      } else {
+        item.classList.remove("skeleton");
+      }
+
+      return item;
+    }
+
+    item.innerHTML = `
+      <img class="img-loaded profile-story-thumb-media" src="${mediaUrl}" alt="story">
+      ${overlayHtml}
+      ${createdAtBadgeHtml}
+    `;
+
+    const media = item.querySelector("img");
+    if (media) {
+      const onLoaded = () => {
+        item.classList.remove("skeleton");
+        media.classList.add("show");
+      };
+      if (media.complete) onLoaded();
+      else media.onload = onLoaded;
+      media.onerror = () => item.classList.remove("skeleton");
+    } else {
+      item.classList.remove("skeleton");
     }
 
     return item;
