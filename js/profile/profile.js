@@ -885,6 +885,7 @@
     const mainContent = document.querySelector(".profile-content-wrapper");
 
     if (window.LoadingUtils) LoadingUtils.toggle("profile-posts-loader", true);
+    let startedPostLoad = false;
 
     try {
       let res;
@@ -982,6 +983,7 @@
         isArchivedStoriesLoading = false;
         hasMoreArchivedStories = true;
         isLoading = false;
+        startedPostLoad = true;
         loadPosts();
       }
     } catch (err) {
@@ -992,9 +994,12 @@
           contentEl.innerHTML = `<div class="error-message">Failed to load profile. <button onclick="loadProfileData()">Retry</button></div>`;
       }
     } finally {
-      isLoading = false;
-      if (window.LoadingUtils)
-        LoadingUtils.toggle("profile-posts-loader", false);
+      if (!startedPostLoad) {
+        isLoading = false;
+        if (window.LoadingUtils) {
+          LoadingUtils.toggle("profile-posts-loader", false);
+        }
+      }
     }
   }
 
@@ -1607,9 +1612,10 @@
       post.medias && post.medias[0]
         ? post.medias[0].mediaUrl
         : window.APP_CONFIG?.DEFAULT_POST_IMAGE || "";
+    const safePrimaryMedia = escapeAttr(primaryMedia);
 
     item.innerHTML = `
-            <img class="img-loaded" src="${primaryMedia}" alt="post">
+            <img class="img-loaded" src="${safePrimaryMedia}" alt="post">
             ${isMulti ? '<div class="profile-multi-media-icon"><i data-lucide="layers"></i></div>' : ""}
             <div class="profile-grid-overlay">
                 <div class="profile-overlay-stat">

@@ -127,9 +127,19 @@ async function openPostDetail(postId, postCode = null, navContext = null, naviga
             if (res.status === 403 || res.status === 404 || res.status === 400) {
                 // Hide post from UI (feed/profile grid)
                 if (window.PostUtils) PostUtils.hidePost(postId);
+
+                const isProfileAutoSkip =
+                    navigationContext &&
+                    navigationContext.source === "profile" &&
+                    navigateDirection;
+
+                // Show a single toast for direct open, keep existing auto-skip toast for next/prev navigation.
+                if (!isProfileAutoSkip && window.toastInfo) {
+                    toastInfo("This post is no longer available or you don't have permission to view it.");
+                }
                 
                 // AUTO-SKIP: If navigating from profile, try to skip to next/prev post
-                if (navigationContext && navigationContext.source === 'profile' && navigateDirection) {
+                if (isProfileAutoSkip) {
                     if (window.toastInfo) toastInfo("Post unavailable, skipping...");
                     
                     // Remove invalid post from list

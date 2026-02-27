@@ -8,7 +8,36 @@
  * @param {string} imageDataUrl - Base64 data URL
  * @returns {Promise<string>} RGB color string
  */
+const DOMINANT_COLOR_CACHE_LIMIT = 300;
+const dominantColorCache = new Map();
+
+function cacheDominantColor(url, color) {
+  if (!url) return;
+
+  if (dominantColorCache.has(url)) {
+    dominantColorCache.delete(url);
+  }
+  dominantColorCache.set(url, color);
+
+  if (dominantColorCache.size > DOMINANT_COLOR_CACHE_LIMIT) {
+    const firstKey = dominantColorCache.keys().next().value;
+    if (firstKey !== undefined) {
+      dominantColorCache.delete(firstKey);
+    }
+  }
+}
+
 function extractDominantColor(imageDataUrl) {
+  const cacheKey = (imageDataUrl || "").toString();
+  if (!cacheKey) {
+    return Promise.resolve("var(--accent-primary)");
+  }
+
+  const cachedColor = dominantColorCache.get(cacheKey);
+  if (cachedColor) {
+    return Promise.resolve(cachedColor);
+  }
+
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = "Anonymous"; // Support CORS
@@ -20,12 +49,15 @@ function extractDominantColor(imageDataUrl) {
       ctx.drawImage(img, 0, 0, 1, 1);
       const imageData = ctx.getImageData(0, 0, 1, 1).data;
       const rgb = `rgb(${imageData[0]}, ${imageData[1]}, ${imageData[2]})`;
+      cacheDominantColor(cacheKey, rgb);
       resolve(rgb);
     };
     img.onerror = () => {
-      resolve("var(--accent-primary)"); // Fallback
+      const fallback = "var(--accent-primary)";
+      cacheDominantColor(cacheKey, fallback);
+      resolve(fallback); // Fallback
     };
-    img.src = imageDataUrl;
+    img.src = cacheKey;
   });
 }
 
