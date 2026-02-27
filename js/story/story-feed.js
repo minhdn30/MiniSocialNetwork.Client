@@ -2,11 +2,38 @@
   "use strict";
 
   /* ─── author queue for story-list viewer ─── */
-  const FEED_PAGE_SIZE = 30;
+  const DEFAULT_FEED_INITIAL_LOAD_COUNT = 6;
+  const DEFAULT_FEED_LOAD_MORE_PAGE_SIZE = 30;
+  const DEFAULT_FEED_API_PAGE_SIZE = 30;
+
+  function parsePositiveInt(value, fallbackValue) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallbackValue;
+    return parsed > 0 ? Math.trunc(parsed) : fallbackValue;
+  }
+
+  const FEED_INITIAL_LOAD_COUNT = parsePositiveInt(
+    window.APP_CONFIG?.STORY_FEED_INITIAL_LOAD_COUNT,
+    DEFAULT_FEED_INITIAL_LOAD_COUNT,
+  );
+  const FEED_LOAD_MORE_PAGE_SIZE = parsePositiveInt(
+    window.APP_CONFIG?.STORY_FEED_LOAD_MORE_PAGE_SIZE,
+    DEFAULT_FEED_LOAD_MORE_PAGE_SIZE,
+  );
+  const FEED_API_PAGE_SIZE = parsePositiveInt(
+    window.APP_CONFIG?.STORY_FEED_API_PAGE_SIZE,
+    DEFAULT_FEED_API_PAGE_SIZE,
+  );
+
   let feedAuthorItems = [];
-  let feedPage = 1;
+  let feedRenderItems = [];
+  let feedLoadMorePage = 0;
   let feedHasMore = true;
   let feedIsLoadingMore = false;
+  let feedNavActionInFlight = false;
+  let feedResizeBound = false;
+  let feedWindowStart = 0;
+  let feedTransitionCleanupTimer = null;
 
   function normalizeAuthorId(value) {
     return (value || "").toString().trim().toLowerCase();
@@ -31,29 +58,114 @@
     return fallbackCount >= pageSize;
   }
 
+  function normalizeFeedItem(raw) {
+    const defaultAvatar =
+      window.APP_CONFIG?.DEFAULT_AVATAR || "assets/images/default-avatar.jpg";
+    const activeStoryCount = parseCount(
+      raw?.activeStoryCount ?? raw?.ActiveStoryCount,
+      0,
+    );
+
+    return {
+      accountId: normalizeAuthorId(raw?.accountId || raw?.AccountId || ""),
+      avatarUrl: raw?.avatarUrl || raw?.AvatarUrl || defaultAvatar,
+      username:
+        raw?.username || raw?.Username || raw?.fullName || raw?.FullName || "User",
+      fullName: raw?.fullName || raw?.FullName || "",
+      isCurrentUser: !!(raw?.isCurrentUser || raw?.IsCurrentUser),
+      storyRingState: raw?.storyRingState ?? raw?.StoryRingState ?? 0,
+      activeStoryCount,
+    };
+  }
+
+  function buildFeedDisplayItems(items) {
+    return (Array.isArray(items) ? items : [])
+      .map((it) => normalizeFeedItem(it))
+      .filter((it) => {
+        if (!it.accountId) return false;
+        // Keep current user for "Your Story" placeholder.
+        if (it.isCurrentUser) return true;
+        return it.activeStoryCount > 0;
+      });
+  }
+
+  function getCurrentViewerStoryId() {
+    return normalizeAuthorId(localStorage.getItem("accountId"));
+  }
+
+  function buildOwnStoryPlaceholder(accountId) {
+    return {
+      accountId,
+      avatarUrl:
+        localStorage.getItem("avatarUrl") ||
+        window.APP_CONFIG?.DEFAULT_AVATAR ||
+        "assets/images/default-avatar.jpg",
+      username: localStorage.getItem("username") || "You",
+      fullName: "",
+      isCurrentUser: true,
+      storyRingState: 0,
+      activeStoryCount: 0,
+    };
+  }
+
+  function normalizeFeedRenderItems(items = feedRenderItems) {
+    const seenIds = new Set();
+    const normalized = [];
+    (Array.isArray(items) ? items : []).forEach((item) => {
+      if (!item?.accountId) return;
+      const id = normalizeAuthorId(item.accountId);
+      if (!id || seenIds.has(id)) return;
+      seenIds.add(id);
+      normalized.push({
+        ...item,
+        accountId: id,
+      });
+    });
+    return normalized;
+  }
+
+  function applyFeedRenderNormalization() {
+    feedRenderItems = normalizeFeedRenderItems(feedRenderItems);
+    return feedRenderItems;
+  }
+
+  function getVisibleWindowCount() {
+    return Math.max(1, FEED_INITIAL_LOAD_COUNT);
+  }
+
+  function getFeedNavStep() {
+    // Guard invalid config: step should not exceed visible window size.
+    const visibleCount = getVisibleWindowCount();
+    return Math.max(1, Math.min(FEED_LOAD_MORE_PAGE_SIZE, visibleCount));
+  }
+
+  function clampFeedWindowStart() {
+    const items = applyFeedRenderNormalization();
+    const maxStart = Math.max(0, items.length - getVisibleWindowCount());
+    feedWindowStart = Math.max(0, Math.min(feedWindowStart, maxStart));
+    return { items, maxStart };
+  }
+
+  function getVisibleWindowItems() {
+    const allItems = normalizeFeedRenderItems(feedRenderItems);
+    const visibleCount = getVisibleWindowCount();
+    const maxStart = Math.max(0, allItems.length - visibleCount);
+    const normalizedStart = Math.max(0, Math.min(feedWindowStart, maxStart));
+    const items = allItems.slice(normalizedStart, normalizedStart + visibleCount);
+    return {
+      allItems,
+      normalizedStart,
+      maxStart,
+      items,
+    };
+  }
+
   /**
    * Build queue from raw items array.
    * Excludes "Your Story" placeholder (no stories).
    */
   function buildAuthorQueue(items) {
-    const defaultAvatar =
-      window.APP_CONFIG?.DEFAULT_AVATAR || "assets/images/default-avatar.jpg";
-    return (Array.isArray(items) ? items : [])
-      .map((it) => {
-        const activeStoryCount = parseCount(
-          it.activeStoryCount ?? it.ActiveStoryCount,
-          0,
-        );
-        return {
-          accountId: normalizeAuthorId(it.accountId || it.AccountId || ""),
-          avatarUrl: it.avatarUrl || it.AvatarUrl || defaultAvatar,
-          username:
-            it.username || it.Username || it.fullName || it.FullName || "User",
-          isCurrentUser: !!(it.isCurrentUser || it.IsCurrentUser),
-          storyRingState: it.storyRingState ?? it.StoryRingState ?? 0,
-          activeStoryCount,
-        };
-      })
+    return buildFeedDisplayItems(items)
       .filter((it) => {
         const hasStories = it.activeStoryCount > 0;
         // Skip "Your Story" placeholder that has no stories
@@ -71,12 +183,24 @@
 
   function upsertStoryFeedAuthor(rawAuthor, options = {}) {
     const queueItems = buildAuthorQueue([rawAuthor]);
+    const displayItems = buildFeedDisplayItems([rawAuthor]);
     const normalizedId = normalizeAuthorId(
       rawAuthor?.accountId || rawAuthor?.AccountId || "",
     );
     if (!normalizedId) return;
 
     feedAuthorItems = feedAuthorItems.filter((a) => a.accountId !== normalizedId);
+    feedRenderItems = feedRenderItems.filter((a) => a.accountId !== normalizedId);
+
+    if (displayItems.length > 0) {
+      const displayItem = displayItems[0];
+      if (options.prepend) {
+        feedRenderItems.unshift(displayItem);
+      } else {
+        feedRenderItems.push(displayItem);
+      }
+    }
+
     if (!queueItems.length) return;
 
     const author = queueItems[0];
@@ -95,6 +219,45 @@
     if (storyRingState === 1 || s === "1" || s === "seen")
       return "story-ring-seen";
     return "";
+  }
+
+  function normalizeStoryRingStateValue(nextState) {
+    const normalized = (nextState ?? "").toString().trim().toLowerCase();
+    if (nextState === 2 || normalized === "2" || normalized === "unseen") {
+      return 2;
+    }
+    if (nextState === 1 || normalized === "1" || normalized === "seen") {
+      return 1;
+    }
+    return 0;
+  }
+
+  function syncStoryFeedRingState(authorId, nextState) {
+    const id = normalizeAuthorId(authorId);
+    if (!id) return false;
+
+    const ringState = normalizeStoryRingStateValue(nextState);
+    let changed = false;
+
+    const renderIndex = feedRenderItems.findIndex((item) => item.accountId === id);
+    if (renderIndex >= 0 && feedRenderItems[renderIndex].storyRingState !== ringState) {
+      feedRenderItems[renderIndex] = {
+        ...feedRenderItems[renderIndex],
+        storyRingState: ringState,
+      };
+      changed = true;
+    }
+
+    const queueIndex = feedAuthorItems.findIndex((item) => item.accountId === id);
+    if (queueIndex >= 0 && feedAuthorItems[queueIndex].storyRingState !== ringState) {
+      feedAuthorItems[queueIndex] = {
+        ...feedAuthorItems[queueIndex],
+        storyRingState: ringState,
+      };
+      changed = true;
+    }
+
+    return changed;
   }
 
   function escapeAttr(value) {
@@ -199,6 +362,209 @@
     });
   }
 
+  function getStoryFeedElements() {
+    const container = document.getElementById("story-feed");
+    const shell = document.getElementById("story-feed-shell");
+    if (!container || !shell) return { container: null, shell: null, prevBtn: null, nextBtn: null };
+    return {
+      container,
+      shell,
+      prevBtn: document.getElementById("storyFeedPrevBtn"),
+      nextBtn: document.getElementById("storyFeedNextBtn"),
+    };
+  }
+
+  function getStoryFeedScrollStep(container) {
+    const configStep = parseCount(window.APP_CONFIG?.STORY_FEED_NAV_SCROLL_STEP_PX, 0);
+    if (configStep > 0) return configStep;
+    return Math.max(220, Math.round((container?.clientWidth || 0) * 0.82));
+  }
+
+  function getStoryTransitionShiftPx(container) {
+    if (!container) return 0;
+    const storyEls = container.querySelectorAll(".story");
+    if (!storyEls.length) {
+      return Math.max(160, Math.round((container.clientWidth || 0) * 0.72));
+    }
+
+    let unitStep = 0;
+    if (storyEls.length > 1) {
+      unitStep = storyEls[1].offsetLeft - storyEls[0].offsetLeft;
+    }
+    if (!unitStep || unitStep <= 0) {
+      const firstRect = storyEls[0].getBoundingClientRect();
+      const style = window.getComputedStyle(container);
+      const rawGap = parseFloat(style.gap || style.columnGap || "16");
+      const gap = Number.isFinite(rawGap) ? rawGap : 16;
+      unitStep = Math.round(firstRect.width + gap);
+    }
+
+    const desiredShift = Math.max(unitStep, unitStep * getFeedNavStep());
+    const maxShift = Math.max(unitStep, (container.clientWidth || desiredShift) - 24);
+    return Math.min(desiredShift, maxShift);
+  }
+
+  function clearStoryFeedTransition(shell, container) {
+    if (feedTransitionCleanupTimer) {
+      clearTimeout(feedTransitionCleanupTimer);
+      feedTransitionCleanupTimer = null;
+    }
+    if (shell) {
+      const activeOverlay = shell.querySelector(".stories-transition-overlay");
+      if (activeOverlay) activeOverlay.remove();
+    }
+    if (container) {
+      container.classList.remove("stories-transitioning");
+    }
+  }
+
+  function runStoryFeedTransition(container, direction, previousHtml = "") {
+    if (!container) return;
+    const { shell } = getStoryFeedElements();
+    clearStoryFeedTransition(shell, container);
+
+    if (direction !== "next" && direction !== "prev") return;
+    if (!shell || !previousHtml || !previousHtml.trim()) return;
+
+    const shiftPx = getStoryTransitionShiftPx(container);
+    if (!shiftPx || shiftPx <= 0) return;
+
+    const overlay = document.createElement("div");
+    overlay.className = "stories-transition-overlay";
+    overlay.setAttribute("aria-hidden", "true");
+
+    const oldTrack = document.createElement("div");
+    oldTrack.className = "stories-transition-track stories-transition-track-old";
+    oldTrack.innerHTML = previousHtml;
+
+    const newTrack = document.createElement("div");
+    newTrack.className = "stories-transition-track stories-transition-track-new";
+    newTrack.innerHTML = container.innerHTML;
+
+    const incomingFrom = direction === "next" ? shiftPx : -shiftPx;
+    const outgoingTo = direction === "next" ? -shiftPx : shiftPx;
+
+    oldTrack.style.transform = "translate3d(0,0,0)";
+    oldTrack.style.opacity = "1";
+    newTrack.style.transform = `translate3d(${incomingFrom}px,0,0)`;
+    newTrack.style.opacity = "1";
+
+    overlay.appendChild(oldTrack);
+    overlay.appendChild(newTrack);
+    shell.appendChild(overlay);
+    container.classList.add("stories-transitioning");
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        oldTrack.style.transform = `translate3d(${outgoingTo}px,0,0)`;
+        oldTrack.style.opacity = "0.82";
+        newTrack.style.transform = "translate3d(0,0,0)";
+      });
+    });
+
+    const finish = () => {
+      clearStoryFeedTransition(shell, container);
+    };
+
+    newTrack.addEventListener("transitionend", finish, { once: true });
+    feedTransitionCleanupTimer = setTimeout(finish, 320);
+  }
+
+  function renderCurrentStoryWindow(direction = "") {
+    const { container } = getStoryFeedElements();
+    if (!container) return;
+    const previousHtml =
+      direction === "next" || direction === "prev" ? container.innerHTML : "";
+
+    clampFeedWindowStart();
+    const { items } = getVisibleWindowItems();
+    renderStoryItems(container, items);
+    runStoryFeedTransition(container, direction, previousHtml);
+    updateStoryFeedNavButtons();
+  }
+
+  async function ensureStoryWindowData(requiredItemsCount) {
+    const targetCount = Math.max(0, requiredItemsCount);
+    let guard = 0;
+    while (feedHasMore) {
+      const beforeCount = normalizeFeedRenderItems(feedRenderItems).length;
+      if (beforeCount >= targetCount) break;
+
+      const newAuthors = await loadMoreStoryFeedAuthors();
+      const afterCount = normalizeFeedRenderItems(feedRenderItems).length;
+      guard += 1;
+
+      if ((newAuthors?.length || 0) === 0 && afterCount <= beforeCount) {
+        break;
+      }
+      if (guard >= 20) {
+        break;
+      }
+    }
+  }
+
+  function updateStoryFeedNavButtons() {
+    const { container, shell, prevBtn, nextBtn } = getStoryFeedElements();
+    if (!container || !shell || !prevBtn || !nextBtn) return;
+
+    const { allItems, normalizedStart } = getVisibleWindowItems();
+    const visibleCount = getVisibleWindowCount();
+    const hasPrev = normalizedStart > 0;
+    const hasLoadedNext = normalizedStart + visibleCount < allItems.length;
+    const hasNext = hasLoadedNext || feedHasMore;
+
+    prevBtn.classList.toggle("is-hidden", !hasPrev);
+    nextBtn.classList.toggle("is-hidden", !hasNext);
+    nextBtn.classList.toggle("is-loading", feedNavActionInFlight);
+    shell.classList.toggle("stories-shell-scrollable", hasPrev || hasNext);
+  }
+
+  function bindStoryFeedNavigation() {
+    const { container, prevBtn, nextBtn } = getStoryFeedElements();
+    if (!container || !prevBtn || !nextBtn) return;
+
+    prevBtn.onclick = () => {
+      if (feedNavActionInFlight) return;
+      const step = getFeedNavStep();
+      if (feedWindowStart <= 0) return;
+      feedWindowStart = Math.max(0, feedWindowStart - step);
+      renderCurrentStoryWindow("prev");
+    };
+
+    nextBtn.onclick = async () => {
+      if (feedNavActionInFlight) return;
+      const step = getFeedNavStep();
+      const visibleCount = getVisibleWindowCount();
+      const targetStart = feedWindowStart + step;
+
+      feedNavActionInFlight = true;
+      updateStoryFeedNavButtons();
+      try {
+        await ensureStoryWindowData(targetStart + visibleCount);
+      } finally {
+        feedNavActionInFlight = false;
+      }
+
+      const { items } = clampFeedWindowStart();
+      const maxStart = Math.max(0, items.length - visibleCount);
+      const nextStart = Math.min(targetStart, maxStart);
+      if (nextStart === feedWindowStart) {
+        updateStoryFeedNavButtons();
+        return;
+      }
+
+      feedWindowStart = nextStart;
+      renderCurrentStoryWindow("next");
+    };
+
+    if (!feedResizeBound) {
+      window.addEventListener("resize", () => renderCurrentStoryWindow(""));
+      feedResizeBound = true;
+    }
+
+    updateStoryFeedNavButtons();
+  }
+
   /* ─── sync own story UI (no re-fetch) ─── */
 
   /**
@@ -206,14 +572,24 @@
    * @param {boolean} hasStories – whether the current user now has active stories.
    */
   function syncOwnStoryUI(hasStories) {
+    const myId = (localStorage.getItem("accountId") || "").toLowerCase();
+    if (!myId) return;
+
+    const ownIndex = feedRenderItems.findIndex((item) => item.accountId === myId);
+    if (ownIndex >= 0) {
+      feedRenderItems[ownIndex] = {
+        ...feedRenderItems[ownIndex],
+        isCurrentUser: true,
+        activeStoryCount: hasStories ? 1 : 0,
+        storyRingState: hasStories ? 2 : 0,
+      };
+    }
+
     const container = document.getElementById("story-feed");
     if (!container) return;
 
     const storyEl = container.querySelector(".story-own");
     if (!storyEl) return;
-
-    const myId = (localStorage.getItem("accountId") || "").toLowerCase();
-    if (!myId) return;
 
     // Update data attribute
     storyEl.setAttribute("data-has-stories", String(hasStories));
@@ -302,6 +678,7 @@
       },
       { prepend: true },
     );
+    updateStoryFeedNavButtons();
   });
 
   window.addEventListener("story:deleted", (e) => {
@@ -315,7 +692,10 @@
     if (authorId && authorId !== myId) {
       if (hasRemainingInfo && remaining <= 0) {
         removeStoryFeedAuthor(authorId);
+        renderCurrentStoryWindow("");
+        return;
       }
+      updateStoryFeedNavButtons();
       return;
     }
 
@@ -333,12 +713,14 @@
         },
         { prepend: true },
       );
+      updateStoryFeedNavButtons();
       return;
     }
 
     if (hasRemainingInfo || authorId === myId) {
       removeStoryFeedAuthor(authorId || myId);
     }
+    updateStoryFeedNavButtons();
   });
 
   window.addEventListener("story:unavailable", (e) => {
@@ -355,6 +737,7 @@
     if (authorId === myId) {
       // Own story became unavailable → sync to "no stories" state
       syncOwnStoryUI(false);
+      updateStoryFeedNavButtons();
       return;
     }
 
@@ -377,6 +760,7 @@
     // Fallback removal in case transitionend never fires
     setTimeout(() => {
       if (storyEl.parentNode) storyEl.remove();
+      updateStoryFeedNavButtons();
     }, 400);
   });
 
@@ -385,11 +769,13 @@
     const container = document.getElementById("story-feed");
     if (!container) return;
 
+    feedNavActionInFlight = false;
+
     // Hiển thị skeleton ngay lập tức
     renderSkeletons(container, 7);
 
     try {
-      const res = await API.Stories.getViewableAuthors(1, FEED_PAGE_SIZE);
+      const res = await API.Stories.getViewableAuthors(1, FEED_API_PAGE_SIZE);
       if (!res.ok) throw new Error("Failed to load story feed");
 
       const data = await res.json();
@@ -420,20 +806,24 @@
         ];
       }
 
-      renderStoryItems(container, items);
+      feedRenderItems = buildFeedDisplayItems(items);
+      feedWindowStart = 0;
 
       // Build author queue for story-list viewer
-      feedAuthorItems = buildAuthorQueue(rawItems);
-      feedPage = 1;
+      feedAuthorItems = buildAuthorQueue(items);
+      feedLoadMorePage = 1;
       feedHasMore = resolveHasMoreFromPayload(
         data,
         1,
-        FEED_PAGE_SIZE,
+        FEED_API_PAGE_SIZE,
         Array.isArray(rawItems) ? rawItems.length : 0,
       );
+      bindStoryFeedNavigation();
+      renderCurrentStoryWindow("");
     } catch (err) {
       console.error("Story feed load failed:", err);
       container.innerHTML = "";
+      updateStoryFeedNavButtons();
     }
   }
 
@@ -452,10 +842,10 @@
     if (feedIsLoadingMore || !feedHasMore) return [];
     feedIsLoadingMore = true;
     try {
-      const nextPage = feedPage + 1;
+      const nextPage = feedLoadMorePage + 1;
       const res = await API.Stories.getViewableAuthors(
         nextPage,
-        FEED_PAGE_SIZE,
+        FEED_API_PAGE_SIZE,
       );
       if (!res.ok) {
         feedHasMore = false;
@@ -466,11 +856,14 @@
       feedHasMore = resolveHasMoreFromPayload(
         data,
         nextPage,
-        FEED_PAGE_SIZE,
+        FEED_API_PAGE_SIZE,
         Array.isArray(rawItems) ? rawItems.length : 0,
       );
 
       const newAuthors = buildAuthorQueue(rawItems);
+      const newRenderItems = buildFeedDisplayItems(rawItems).filter(
+        (item) => item.activeStoryCount > 0 || item.isCurrentUser,
+      );
       const existingIds = new Set(feedAuthorItems.map((a) => a.accountId));
       const uniqueAuthors = newAuthors.filter((author) => {
         if (!author?.accountId || existingIds.has(author.accountId)) {
@@ -479,8 +872,30 @@
         existingIds.add(author.accountId);
         return true;
       });
+
       feedAuthorItems = feedAuthorItems.concat(uniqueAuthors);
-      feedPage = nextPage;
+      newRenderItems.forEach((item) => {
+        if (!item?.accountId) return;
+        const existingIndex = feedRenderItems.findIndex(
+          (existing) => existing.accountId === item.accountId,
+        );
+        if (existingIndex < 0) {
+          feedRenderItems.push(item);
+          return;
+        }
+
+        const existingItem = feedRenderItems[existingIndex];
+        if (
+          (existingItem?.activeStoryCount || 0) <= 0 &&
+          (item?.activeStoryCount || 0) > 0
+        ) {
+          feedRenderItems[existingIndex] = {
+            ...existingItem,
+            ...item,
+          };
+        }
+      });
+      feedLoadMorePage = nextPage;
       return uniqueAuthors;
     } catch (_) {
       feedHasMore = false;
@@ -495,6 +910,11 @@
     const id = normalizeAuthorId(authorId);
     if (!id) return;
     feedAuthorItems = feedAuthorItems.filter((a) => a.accountId !== id);
+
+    const myId = normalizeAuthorId(localStorage.getItem("accountId"));
+    if (id !== myId) {
+      feedRenderItems = feedRenderItems.filter((a) => a.accountId !== id);
+    }
   }
 
   /* ─── expose ─── */
@@ -502,4 +922,5 @@
   window.getStoryFeedQueue = getStoryFeedQueue;
   window.loadMoreStoryFeedAuthors = loadMoreStoryFeedAuthors;
   window.removeStoryFeedAuthor = removeStoryFeedAuthor;
+  window.syncStoryFeedRingState = syncStoryFeedRingState;
 })();

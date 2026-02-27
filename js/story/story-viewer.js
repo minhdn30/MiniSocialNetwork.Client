@@ -93,6 +93,33 @@
     return (value || "").toString().trim().toLowerCase();
   }
 
+  function stNormalizeRingState(nextState) {
+    const normalized = (nextState ?? "").toString().trim().toLowerCase();
+    if (nextState === 2 || normalized === "2" || normalized === "unseen") {
+      return "unseen";
+    }
+    if (nextState === 1 || normalized === "1" || normalized === "seen") {
+      return "seen";
+    }
+    return "none";
+  }
+
+  function stGetViewedAuthorState(authorId) {
+    const normalizedAuthorId = stNormalizeId(authorId);
+    if (!normalizedAuthorId) return "";
+    return (
+      viewerState.viewedAuthors.get(normalizedAuthorId) ||
+      viewerState.viewedAuthors.get((authorId || "").toString().trim()) ||
+      ""
+    );
+  }
+
+  function stSetViewedAuthorState(authorId, state) {
+    const normalizedAuthorId = stNormalizeId(authorId);
+    if (!normalizedAuthorId) return;
+    viewerState.viewedAuthors.set(normalizedAuthorId, state);
+  }
+
   function stCurrentAccountId() {
     return stNormalizeId(localStorage.getItem("accountId"));
   }
@@ -1480,18 +1507,47 @@
    * @param {"unseen"|"seen"|"none"} newState
    */
   function stSyncRingGlobally(authorId, newState) {
-    const id = (authorId || "").toString().trim();
-    if (!id) return;
+    const rawId = (authorId || "").toString().trim();
+    const normalizedAuthorId = stNormalizeId(rawId);
+    if (!normalizedAuthorId) return;
 
-    const selector = `.post-avatar-ring[data-story-author-id="${CSS.escape(id)}"]`;
-    const rings = document.querySelectorAll(selector);
+    const normalizedState = stNormalizeRingState(newState);
+    const ringMap = new Map();
 
-    rings.forEach((ring) => {
+    const addRingCandidates = (selector) => {
+      document.querySelectorAll(selector).forEach((ring) => {
+        ringMap.set(ring, ring);
+      });
+    };
+
+    addRingCandidates(
+      `.post-avatar-ring[data-story-author-id="${CSS.escape(rawId)}"]`,
+    );
+    if (normalizedAuthorId !== rawId) {
+      addRingCandidates(
+        `.post-avatar-ring[data-story-author-id="${CSS.escape(normalizedAuthorId)}"]`,
+      );
+    }
+
+    if (!ringMap.size) {
+      document
+        .querySelectorAll(".post-avatar-ring[data-story-author-id]")
+        .forEach((ring) => {
+          const candidateId = stNormalizeId(
+            ring.getAttribute("data-story-author-id") || "",
+          );
+          if (candidateId === normalizedAuthorId) {
+            ringMap.set(ring, ring);
+          }
+        });
+    }
+
+    ringMap.forEach((ring) => {
       ring.classList.remove("story-ring-unseen", "story-ring-seen");
 
-      if (newState === "unseen") {
+      if (normalizedState === "unseen") {
         ring.classList.add("story-ring-unseen");
-      } else if (newState === "seen") {
+      } else if (normalizedState === "seen") {
         ring.classList.add("story-ring-seen");
       } else {
         // "none" → remove ring entirely
@@ -1499,6 +1555,24 @@
         ring.removeAttribute("data-story-author-id");
       }
     });
+
+    const queueIndex = viewerState.authorQueue.findIndex(
+      (author) => stNormalizeId(author?.accountId) === normalizedAuthorId,
+    );
+    if (queueIndex >= 0) {
+      const nextRingState = normalizedState === "unseen" ? 2 : normalizedState === "seen" ? 1 : 0;
+      const current = viewerState.authorQueue[queueIndex];
+      if ((current?.storyRingState ?? 0) !== nextRingState) {
+        viewerState.authorQueue[queueIndex] = {
+          ...current,
+          storyRingState: nextRingState,
+        };
+      }
+    }
+
+    if (typeof global.syncStoryFeedRingState === "function") {
+      global.syncStoryFeedRingState(normalizedAuthorId, normalizedState);
+    }
   }
 
   /**
@@ -1528,10 +1602,15 @@
         // Sync ring globally: if all stories are now viewed → seen, otherwise unseen
         const authorId = viewerState.author?.accountId;
         if (authorId) {
-          stSyncRingGlobally(
+          const nextRingState = stAllStoriesViewed() ? "seen" : "unseen";
+          stSetViewedAuthorState(
             authorId,
-            stAllStoriesViewed() ? "seen" : "unseen",
+            nextRingState === "seen" ? "seen" : "partial",
           );
+          stSyncRingGlobally(authorId, nextRingState);
+          if (stHasQueue()) {
+            stUpdateStripHighlight();
+          }
         }
       }
     } catch (_) {
@@ -1550,16 +1629,94 @@
     if (global.lucide) global.lucide.createIcons();
   }
 
+  function stMountPreviewShell(previewShell, direction = "fade") {
+    const contentRoot = viewerState.dom.content;
+    if (!contentRoot || !previewShell) return;
+
+    const normalizedDirection =
+      direction === "next" || direction === "prev" ? direction : "fade";
+
+    // Clear stale transition shells to avoid DOM build-up on rapid navigation.
+    contentRoot
+      .querySelectorAll(".snsv-preview-shell-leaving")
+      .forEach((node) => node.remove());
+
+    const currentShell =
+      contentRoot.querySelector(
+        ".sn-story-viewer-preview-shell:not(.snsv-preview-shell-leaving)",
+      ) || contentRoot.querySelector(".sn-story-viewer-preview-shell");
+
+    if (!currentShell || normalizedDirection === "fade") {
+      contentRoot.innerHTML = "";
+      previewShell.classList.add("snsv-preview-shell-fade-in");
+      contentRoot.appendChild(previewShell);
+      requestAnimationFrame(() => {
+        previewShell.classList.add("snsv-preview-shell-fade-in-active");
+      });
+      setTimeout(() => {
+        previewShell.classList.remove(
+          "snsv-preview-shell-fade-in",
+          "snsv-preview-shell-fade-in-active",
+        );
+      }, 350);
+      return;
+    }
+
+    // Pause outgoing media early so transition feels lighter on lower-end devices.
+    const outgoingVideo = currentShell.querySelector("video");
+    if (outgoingVideo && !outgoingVideo.paused) {
+      try {
+        outgoingVideo.pause();
+      } catch (_) {
+        // Ignore pause errors.
+      }
+    }
+
+    const enterClass =
+      normalizedDirection === "next"
+        ? "snsv-preview-shell-enter-next"
+        : "snsv-preview-shell-enter-prev";
+    const leaveClass =
+      normalizedDirection === "next"
+        ? "snsv-preview-shell-leave-next"
+        : "snsv-preview-shell-leave-prev";
+
+    currentShell.classList.add("snsv-preview-shell-leaving", leaveClass);
+    previewShell.classList.add("snsv-preview-shell-entering", enterClass);
+    contentRoot.appendChild(previewShell);
+
+    requestAnimationFrame(() => {
+      previewShell.classList.add("snsv-preview-shell-enter-active");
+      currentShell.classList.add("snsv-preview-shell-leave-active");
+    });
+
+    let cleaned = false;
+    const finish = () => {
+      if (cleaned) return;
+      cleaned = true;
+      if (currentShell.parentNode === contentRoot) {
+        currentShell.remove();
+      }
+      previewShell.classList.remove(
+        "snsv-preview-shell-entering",
+        "snsv-preview-shell-enter-active",
+        enterClass,
+      );
+    };
+
+    previewShell.addEventListener("transitionend", finish, { once: true });
+    setTimeout(finish, 360);
+  }
+
   function stRenderStoryContent(story, direction = "fade") {
     if (!viewerState.dom.content) return;
 
-    viewerState.dom.content.innerHTML = "";
     stRenderViewerActions();
     stRenderSelfInsight(story);
     stMarkViewedIfNeeded(story);
 
     const previewShell = document.createElement("div");
-    previewShell.className = `sn-story-viewer-preview-shell snsv-animate-${direction}`;
+    previewShell.className = "sn-story-viewer-preview-shell";
 
     const contentType = Number(story.contentType);
     if (contentType === 2) {
@@ -1578,7 +1735,7 @@
 
       textPreview.appendChild(textEditor);
       previewShell.appendChild(textPreview);
-      viewerState.dom.content.appendChild(previewShell);
+      stMountPreviewShell(previewShell, direction);
       stStartProgressTimer(DEFAULT_STORY_DURATION_MS);
       return;
     }
@@ -1655,7 +1812,7 @@
       previewShell.style.position = "relative";
       previewShell.appendChild(video);
       previewShell.appendChild(muteBtn);
-      viewerState.dom.content.appendChild(previewShell);
+      stMountPreviewShell(previewShell, direction);
       video.play().catch(() => {
         previewShell.innerHTML = "";
         stRenderUnavailableContent(
@@ -1672,7 +1829,7 @@
         previewShell,
         "This story is no longer available.",
       );
-      viewerState.dom.content.appendChild(previewShell);
+      stMountPreviewShell(previewShell, direction);
       stStartProgressTimer(DEFAULT_STORY_DURATION_MS);
       return;
     }
@@ -1689,7 +1846,7 @@
       );
     });
     previewShell.appendChild(image);
-    viewerState.dom.content.appendChild(previewShell);
+    stMountPreviewShell(previewShell, direction);
     stStartProgressTimer(DEFAULT_STORY_DURATION_MS);
   }
 
@@ -1794,7 +1951,7 @@
     let stripHtml = "";
     queue.forEach((author, i) => {
       const isActive = i === activeIndex;
-      const viewedState = viewerState.viewedAuthors.get(author.accountId);
+      const viewedState = stGetViewedAuthorState(author.accountId);
       
       let finalRingClass = "ring-none";
       let isSeen = viewedState === "seen";
@@ -1955,12 +2112,13 @@
     if (!viewerState.modal) return;
     const strip = viewerState.modal.querySelector(".sn-story-viewer-strip");
     if (!strip) return;
+    const previousActive = strip.querySelector(".sn-story-viewer-strip-item.active");
 
     strip.querySelectorAll(".sn-story-viewer-strip-item").forEach((item) => {
       const idx = parseInt(item.getAttribute("data-strip-index"), 10);
-      const authId = item.getAttribute("data-strip-author") || "";
+      const authId = stNormalizeId(item.getAttribute("data-strip-author") || "");
       const isActive = idx === viewerState.authorQueueIndex;
-      const viewedState = viewerState.viewedAuthors.get(authId);
+      const viewedState = stGetViewedAuthorState(authId);
       const author = viewerState.authorQueue[idx];
       
       let isSeen = viewedState === "seen";
@@ -1994,19 +2152,20 @@
       }
     });
 
+
     stScrollStripToActive();
   }
 
   /** Sync ring state for current author before switching */
   function stSyncCurrentAuthorRing() {
-    const authorId = viewerState.author?.accountId;
+    const authorId = stNormalizeId(viewerState.author?.accountId);
     if (!authorId || stIsOwnStory()) return;
 
     if (stAllStoriesViewed()) {
-      viewerState.viewedAuthors.set(authorId, "seen");
+      stSetViewedAuthorState(authorId, "seen");
       stSyncRingGlobally(authorId, "seen");
     } else {
-      viewerState.viewedAuthors.set(authorId, "partial");
+      stSetViewedAuthorState(authorId, "partial");
     }
   }
 
@@ -2409,7 +2568,7 @@
       stPruneAuthorResumeMap(options.authorQueue);
       // Find index of this author in queue
       const qIdx = options.authorQueue.findIndex(
-        (a) => a.accountId === normalizedAuthorId.toLowerCase(),
+        (a) => stNormalizeId(a?.accountId) === stNormalizeId(normalizedAuthorId),
       );
       viewerState.authorQueueIndex = qIdx >= 0 ? qIdx : 0;
     }
@@ -2592,7 +2751,7 @@
     const authorId = viewerState.author?.accountId;
     if (authorId && !stIsOwnStory()) {
       if (stAllStoriesViewed()) {
-        viewerState.viewedAuthors.set(authorId, "seen");
+        stSetViewedAuthorState(authorId, "seen");
         stSyncRingGlobally(authorId, "seen");
       }
     }
@@ -2684,14 +2843,17 @@
     stOpenViewerByAuthorId(authorId, openOptions);
   }
 
-  function stTryOpenFromUrl() {
+  function stTryOpenFromUrl(options = {}) {
+    const useSearchParam = options.useSearchParam !== false;
     const { hashPath, hashParams } = stParseHash();
     const storyIdFromPath = stExtractStoryIdFromHashPath(hashPath);
     const storyIdFromHashQuery = (hashParams.get(STORY_URL_PARAM) || "").trim();
-    const storyIdFromSearch = (
-      new URLSearchParams(global.location.search || "").get(STORY_URL_PARAM) ||
-      ""
-    ).trim();
+    const storyIdFromSearch = useSearchParam
+      ? (
+          new URLSearchParams(global.location.search || "").get(STORY_URL_PARAM) ||
+          ""
+        ).trim()
+      : "";
     const storyId = storyIdFromPath || storyIdFromHashQuery || storyIdFromSearch;
     if (!storyId) return;
     stOpenViewerByStoryId(storyId, { syncUrl: true });
@@ -2699,6 +2861,9 @@
 
   document.addEventListener("click", stHandleFeedRingClick, true);
   document.addEventListener("keydown", stHandleKeydown);
+  global.addEventListener("hashchange", () =>
+    stTryOpenFromUrl({ useSearchParam: false }),
+  );
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", stTryOpenFromUrl);

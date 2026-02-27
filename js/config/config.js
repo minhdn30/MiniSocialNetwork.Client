@@ -180,5 +180,9 @@
     STORY_VIDEO_MAX_DURATION_SEC: 20, // Thời lượng tối đa của story video (giây)
     STORY_VIDEO_MAX_SIZE_MB: 10, // Dung lượng tối đa của story video (MB)
     STORY_DEFAULT_DURATION_MS: 5000, // Thời gian mặc định hiển thị 1 story ảnh/text (ms)
+    STORY_FEED_INITIAL_LOAD_COUNT: 8, // Tổng số ô story hiển thị tại 1 thời điểm ở home (đã gồm "Your Story" nếu có)
+    STORY_FEED_LOAD_MORE_PAGE_SIZE: 4, // Bước dịch chuyển UI mỗi lần bấm next/prev ở story-section
+    STORY_FEED_API_PAGE_SIZE: 30, // Kích thước page thực tế khi gọi API lấy author story
+    STORY_FEED_NAV_SCROLL_STEP_PX: 0, // Bước cuộn khi bấm prev/next ở story-section (0 = tự tính theo chiều rộng container)
   };
 })(window);

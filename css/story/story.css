@@ -1,13 +1,80 @@
 /* Stories container */
+.stories-shell {
+  position: relative;
+  overflow: hidden;
+}
+
 .stories {
   display: flex;
   gap: 16px;
   padding: 16px 20px;
   overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+}
+
+.stories-shell-scrollable .stories {
+  padding-left: 54px;
+  padding-right: 54px;
 }
 
 .stories::-webkit-scrollbar {
   display: none;
+}
+
+.story-feed-nav {
+  position: absolute;
+  top: 52px;
+  transform: translateY(-50%);
+  z-index: 6;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  background: var(--bg-tertiary, var(--bg-secondary));
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-md, 0 2px 10px rgba(0, 0, 0, 0.18));
+  transition:
+    opacity var(--transition-normal),
+    transform var(--transition-normal),
+    background var(--transition-normal),
+    color var(--transition-normal);
+}
+
+.story-feed-nav:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.story-feed-nav:active {
+  transform: translateY(-50%) scale(0.96);
+}
+
+.story-feed-nav-prev {
+  left: 10px;
+}
+
+.story-feed-nav-next {
+  right: 10px;
+}
+
+.story-feed-nav.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.story-feed-nav i {
+  width: 18px;
+  height: 18px;
+}
+
+.story-feed-nav.is-loading {
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 /* Story item */
@@ -171,11 +238,33 @@
   }
 }
 
+@media (max-width: 768px) {
+  .stories-shell-scrollable .stories {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .story-feed-nav {
+    width: 30px;
+    height: 30px;
+    top: 50px;
+  }
+
+  .story-feed-nav-prev {
+    left: 6px;
+  }
+
+  .story-feed-nav-next {
+    right: 6px;
+  }
+}
+
 /* ─── Story Feed: Scroll enhancements ─── */
 .stories {
   -webkit-overflow-scrolling: touch;
   scroll-snap-type: x proximity;
   scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge legacy */
 }
 
 .story {
@@ -286,4 +375,70 @@
   height: 10px;
   border-radius: 4px;
   margin-top: 8px;
+}
+
+/* ─── Story Feed: Next/Prev slider animation (Instagram-like) ─── */
+.stories {
+  position: relative;
+}
+
+.stories.stories-transitioning {
+  visibility: hidden;
+}
+
+.stories-transition-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  overflow: hidden;
+  contain: paint;
+  clip-path: inset(0 var(--stories-transition-clip-inline, 0px));
+}
+
+.stories-transition-track {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  gap: 16px;
+  padding: 16px 20px;
+  overflow: hidden;
+  will-change: transform, opacity;
+  transition:
+    transform 200ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 260ms ease;
+}
+
+.stories-shell-scrollable .stories-transition-overlay {
+  --stories-transition-clip-inline: 54px;
+}
+
+.stories-shell-scrollable .stories-transition-track {
+  padding-left: 54px;
+  padding-right: 54px;
+}
+
+@media (max-width: 768px) {
+  .stories-shell-scrollable .stories-transition-overlay {
+    --stories-transition-clip-inline: 20px;
+  }
+
+  .stories-shell-scrollable .stories-transition-track {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stories.stories-transitioning {
+    visibility: visible;
+  }
+
+  .stories-transition-overlay {
+    display: none;
+  }
+
+  .stories-transition-track {
+    transition: none;
+  }
 }

@@ -153,72 +153,23 @@ body.light-mode .sn-story-viewer-modal {
 }
 
 /* 
-   Soft Glide Transition (Silk Slide)
-   Focusing on eye comfort and extreme smoothness
+   UI Chrome Transition (Ultra-Soft Fade)
+   Synchronized perfectly with the Zoom-Fade of the main content.
 */
 
 .snsv-animate-next,
 .snsv-animate-prev,
 .snsv-animate-fade {
-  animation-duration: 0.45s;
-  animation-timing-function: cubic-bezier(0.25, 1, 0.5, 1); /* Soft Out */
-  animation-fill-mode: forwards;
+  animation: snsvSoftFade 320ms cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
 }
 
-@keyframes snsvNextIn {
+@keyframes snsvSoftFade {
   0% {
-    transform: translateX(30px);
     opacity: 0;
   }
   100% {
-    transform: translateX(0);
     opacity: 1;
   }
-}
-
-@keyframes snsvPrevIn {
-  0% {
-    transform: translateX(-30px);
-    opacity: 0;
-  }
-  100% {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-@keyframes snsvFadeIn {
-  0% {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Apply specific animations */
-.sn-story-viewer-preview-shell.snsv-animate-next {
-  animation-name: snsvNextIn;
-}
-.sn-story-viewer-preview-shell.snsv-animate-prev {
-  animation-name: snsvPrevIn;
-}
-.snsv-animate-fade {
-  animation-name: snsvFadeIn;
-}
-
-/* Keep Chrome (UI Frame) very subtle fade to avoid strobe effect */
-.sn-story-viewer-header.snsv-animate-next,
-.sn-story-viewer-header.snsv-animate-prev,
-.sn-story-viewer-progress.snsv-animate-next,
-.sn-story-viewer-progress.snsv-animate-prev,
-.sn-story-viewer-actions.snsv-animate-next,
-.sn-story-viewer-actions.snsv-animate-prev,
-.sn-story-viewer-self-insight.snsv-animate-next,
-.sn-story-viewer-self-insight.snsv-animate-prev {
-  animation: snsvFadeIn 0.25s ease-out forwards;
 }
 
 .sn-story-viewer-backdrop {
@@ -433,6 +384,7 @@ body.light-mode .sn-story-viewer-close-btn:hover {
   position: absolute;
   inset: 0;
   background: var(--snsv-surface-bg);
+  overflow: hidden;
 }
 
 .sn-story-viewer-preview-shell {
@@ -447,6 +399,53 @@ body.light-mode .sn-story-viewer-close-btn:hover {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* -- Zoom-Fade Transition (Ultra-Premium & Ergonomic) -- */
+.sn-story-viewer-preview-shell.snsv-preview-shell-entering,
+.sn-story-viewer-preview-shell.snsv-preview-shell-leaving {
+  position: absolute;
+  inset: 0;
+  will-change: transform, opacity;
+  transition:
+    transform 320ms cubic-bezier(0.25, 0.1, 0.25, 1),
+    opacity 320ms ease;
+}
+
+.sn-story-viewer-preview-shell.snsv-preview-shell-entering.snsv-preview-shell-enter-next,
+.sn-story-viewer-preview-shell.snsv-preview-shell-entering.snsv-preview-shell-enter-prev {
+  transform: scale(1.03);
+  opacity: 0;
+}
+
+.sn-story-viewer-preview-shell.snsv-preview-shell-entering.snsv-preview-shell-enter-active {
+  transform: scale(1);
+  opacity: 1;
+}
+
+.sn-story-viewer-preview-shell.snsv-preview-shell-leaving.snsv-preview-shell-leave-next,
+.sn-story-viewer-preview-shell.snsv-preview-shell-leaving.snsv-preview-shell-leave-prev {
+  transform: scale(1);
+  opacity: 1;
+}
+
+.sn-story-viewer-preview-shell.snsv-preview-shell-leaving.snsv-preview-shell-leave-next.snsv-preview-shell-leave-active,
+.sn-story-viewer-preview-shell.snsv-preview-shell-leaving.snsv-preview-shell-leave-prev.snsv-preview-shell-leave-active {
+  transform: scale(0.97);
+  opacity: 0;
+}
+
+.sn-story-viewer-preview-shell.snsv-preview-shell-fade-in {
+  opacity: 0;
+  transform: scale(0.97);
+  transition:
+    transform 320ms cubic-bezier(0.25, 0.1, 0.25, 1),
+    opacity 320ms ease;
+}
+
+.sn-story-viewer-preview-shell.snsv-preview-shell-fade-in.snsv-preview-shell-fade-in-active {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .sn-story-viewer-image-preview,
@@ -1523,22 +1522,24 @@ body.light-mode .sn-story-viewer-viewers-item-avatar {
   align-items: center;
   gap: 6px;
   cursor: pointer;
-  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-  opacity: 0.55;
+  transition:
+    transform 320ms cubic-bezier(0.25, 0.1, 0.25, 1),
+    opacity 320ms ease;
+  opacity: 0.62;
 }
 
 .sn-story-viewer-strip-item:hover {
   opacity: 1;
-  transform: scale(1.08);
+  transform: scale(1.02);
 }
 
 .sn-story-viewer-strip-item.active {
   opacity: 1;
-  transform: scale(1.15);
+  transform: scale(1.04);
 }
 
 .sn-story-viewer-strip-item.strip-seen:not(.active) {
-  opacity: 0.3;
+  opacity: 0.38;
 }
 
 /* ─── Story Ring (High-End Gradient) ─── */
@@ -1550,7 +1551,11 @@ body.light-mode .sn-story-viewer-viewers-item-avatar {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.4s ease;
+  transition:
+    box-shadow 320ms ease,
+    transform 320ms cubic-bezier(0.25, 0.1, 0.25, 1),
+    background 320ms ease,
+    opacity 320ms ease;
   background: transparent;
   position: relative;
 }
@@ -1572,8 +1577,9 @@ body.light-mode .sn-story-viewer-viewers-item-avatar {
 
 /* Glow on Active Author */
 .sn-story-viewer-strip-item.active .sn-story-viewer-strip-ring {
-  box-shadow: 0 0 30px
-    color-mix(in srgb, var(--accent-primary) 70%, transparent);
+  box-shadow: 0 0 14px
+    color-mix(in srgb, var(--accent-primary) 65%, transparent);
+  transform: translateZ(0) scale(1.03);
 }
 
 /* ─── Avatar Image ─── */
@@ -1597,13 +1603,32 @@ body.light-mode .sn-story-viewer-viewers-item-avatar {
   text-overflow: ellipsis;
   text-align: center;
   font-weight: 500;
-  transition: all 0.3s ease;
+  transition:
+    color 320ms ease,
+    transform 320ms cubic-bezier(0.25, 0.1, 0.25, 1),
+    opacity 320ms ease;
 }
 
 .sn-story-viewer-strip-item.active .sn-story-viewer-strip-name {
   color: #ffffff;
   font-weight: 700;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.42);
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .snsv-animate-next,
+  .snsv-animate-prev,
+  .snsv-animate-fade,
+  .sn-story-viewer-preview-shell.snsv-preview-shell-entering,
+  .sn-story-viewer-preview-shell.snsv-preview-shell-leaving,
+  .sn-story-viewer-preview-shell.snsv-preview-shell-fade-in,
+  .sn-story-viewer-strip-item,
+  .sn-story-viewer-strip-ring,
+  .sn-story-viewer-strip-name {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 /* ─── Author Nav Buttons (▲ ▼) ─── */
