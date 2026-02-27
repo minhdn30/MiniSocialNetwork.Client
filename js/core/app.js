@@ -73,6 +73,10 @@ function closeAllOverlayModals() {
       else storyViewerModal.classList.add("sn-story-viewer-hidden");
   }
 
+  if (typeof window.closeProfileHighlightModal === "function") {
+      window.closeProfileHighlightModal();
+  }
+
   // React List
   if (window.InteractionModule && typeof window.InteractionModule.closeReactList === 'function') {
       const interactModal = document.getElementById("interactionModal");
@@ -127,11 +131,43 @@ function getCacheKey(hash) {
 
 let lastHash = null;
 
+function extractProfileRouteTargetFromHash(hash) {
+  const normalizedHash = (hash || "").toString();
+  const hashPath = normalizedHash.split("?")[0] || "";
+  const marker = "#/profile";
+  const markerIndex = hashPath.indexOf(marker);
+  if (markerIndex < 0) return "";
+
+  const tail = hashPath.slice(markerIndex + marker.length);
+  const segments = tail.split("/").filter(Boolean);
+  if (!segments.length) return "";
+  if (
+    segments[0].toLowerCase() === "story" ||
+    segments[0].toLowerCase() === "highlight"
+  ) {
+    return "";
+  }
+
+  try {
+    return decodeURIComponent(segments[0]);
+  } catch (_) {
+    return segments[0];
+  }
+}
+
 function router() {
   const hash = window.location.hash || "#/";
   const path = hash.slice(1).split("?")[0];
+  const isProfileHighlightRoute = path
+    .toLowerCase()
+    .includes("/highlight/") &&
+    path.toLowerCase().includes("/story/");
   
-  if (!path.startsWith("/p/") && !path.startsWith("/story")) {
+  if (
+    !path.startsWith("/p/") &&
+    !path.startsWith("/story") &&
+    !isProfileHighlightRoute
+  ) {
       window._lastSafeHash = hash;
   }
   
@@ -162,8 +198,8 @@ function router() {
           targetId = hash.split("?id=")[1].split("&")[0];
       } else if (hash.includes("?u=")) {
           targetId = hash.split("?u=")[1].split("&")[0];
-      } else if (hash.includes("/profile/") && hash.split("/profile/")[1]) {
-          targetId = hash.split("/profile/")[1].split("?")[0];
+      } else {
+          targetId = extractProfileRouteTargetFromHash(hash) || null;
       }
 
       const isMe = !targetId || 

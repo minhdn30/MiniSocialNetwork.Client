@@ -647,13 +647,38 @@
     const hash = window.location.hash || "";
     let accountId = null;
 
+    const extractProfileRouteTarget = (rawHash) => {
+      const normalizedHash = (rawHash || "").toString();
+      const hashPath = normalizedHash.split("?")[0] || "";
+      const marker = "#/profile";
+      const markerIndex = hashPath.indexOf(marker);
+      if (markerIndex < 0) return "";
+
+      const tail = hashPath.slice(markerIndex + marker.length);
+      const segments = tail.split("/").filter(Boolean);
+      if (!segments.length) return "";
+      if (
+        segments[0].toLowerCase() === "story" ||
+        segments[0].toLowerCase() === "highlight"
+      ) {
+        return "";
+      }
+
+      try {
+        return decodeURIComponent(segments[0]);
+      } catch (_) {
+        return segments[0];
+      }
+    };
+
     if (hash.includes("?")) {
       const queryString = hash.split("?")[1];
       const params = new URLSearchParams(queryString);
       accountId = params.get("id");
-    } else if (hash.includes("/profile/") && hash.split("/profile/")[1]) {
-      // Support #/profile/{id} format just in case
-      accountId = hash.split("/profile/")[1].split("?")[0];
+    }
+
+    if (!accountId) {
+      accountId = extractProfileRouteTarget(hash);
     }
 
     // Fallback to logged-in user if no ID in URL
@@ -770,6 +795,14 @@
     profilePostIds = []; // Reset post navigation list
     archivedStoryItems = [];
     archivedStoryIdSet.clear();
+    const highlightModule = syncProfileStoryHighlightModule();
+    if (highlightModule?.reset) {
+      highlightModule.reset();
+    } else {
+      closeHighlightMenu();
+      closeHighlightModal();
+      renderProfileHighlightsLoading();
+    }
     // Clear grid immediately to avoid showing previous user's posts
     const grid = document.getElementById("profile-posts-grid");
     if (grid) {
@@ -869,18 +902,35 @@
     let usernameParam = params.get("u");
 
     // Check for /profile/username path format
-    if (!usernameParam && hash.includes("#/profile/")) {
-      const parts = hash.split("#/profile/");
-      if (parts.length > 1) {
-        // Remove any query params that might follow
-        const potentialParam = parts[1].split("?")[0];
-        // Ensure it is NOT a GUID (if it's a GUID, let logic below handle it via currentProfileId)
-        const isGuid =
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-            potentialParam,
-          );
-        if (!isGuid) {
-          usernameParam = potentialParam;
+    if (!usernameParam && hash.includes("#/profile")) {
+      const hashPath = hash.split("?")[0] || "";
+      const marker = "#/profile";
+      const markerIndex = hashPath.indexOf(marker);
+      if (markerIndex >= 0) {
+        const tail = hashPath.slice(markerIndex + marker.length);
+        const segments = tail.split("/").filter(Boolean);
+        const candidate = segments.length
+          ? segments[0].toLowerCase() === "story" ||
+            segments[0].toLowerCase() === "highlight"
+            ? ""
+            : segments[0]
+          : "";
+        if (candidate) {
+          let decodedCandidate = candidate;
+          try {
+            decodedCandidate = decodeURIComponent(candidate);
+          } catch (_) {
+            decodedCandidate = candidate;
+          }
+
+          // Ensure it is NOT a GUID (if it's a GUID, let logic below handle it via currentProfileId)
+          const isGuid =
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              decodedCandidate,
+            );
+          if (!isGuid) {
+            usernameParam = decodedCandidate;
+          }
         }
       }
     }
@@ -974,6 +1024,7 @@
         updateProfileStatsOnly(data);
         applyProfilePresenceDot(currentProfileId);
         ensureProfilePresenceSnapshot(currentProfileId);
+        loadProfileHighlightGroups({ silent: true });
       } else {
         // Full render
         currentProfileData = data;
@@ -1221,6 +1272,8 @@
 
     // Render Tabs
     renderProfileTabs(isOwner);
+    renderProfileHighlightsSection();
+    loadProfileHighlightGroups({ silent: false });
 
     // Auto-shrink font size for long usernames
     if (usernameHeader) {
@@ -1242,6 +1295,64 @@
 
     if (window.lucide) lucide.createIcons();
     applyProfilePresenceDot(info.accountId || info.id || currentProfileId);
+  }
+
+  function syncProfileStoryHighlightModule() {
+    const module = window.ProfileStoryHighlights;
+    if (!module) return null;
+
+    if (!syncProfileStoryHighlightModule._configured) {
+      module.configure({
+        resolveStoryTextThumbnailStyle,
+        formatArchiveStoryCreatedAt,
+      });
+      syncProfileStoryHighlightModule._configured = true;
+    }
+
+    module.setContext({
+      currentProfileId,
+      currentProfileData,
+    });
+
+    return module;
+  }
+
+  function closeHighlightMenu() {
+    const module = syncProfileStoryHighlightModule();
+    if (module?.closeMenu) {
+      module.closeMenu();
+    }
+  }
+
+  function closeHighlightModal() {
+    const module = syncProfileStoryHighlightModule();
+    if (module?.closeModal) {
+      module.closeModal();
+    }
+  }
+
+  function renderProfileHighlightsLoading() {
+    const module = syncProfileStoryHighlightModule();
+    if (module?.renderLoading) {
+      module.renderLoading();
+    }
+  }
+
+  function renderProfileHighlightsSection() {
+    const module = syncProfileStoryHighlightModule();
+    if (module?.render) {
+      module.render();
+    }
+  }
+
+  async function loadProfileHighlightGroups(options = {}) {
+    const module = syncProfileStoryHighlightModule();
+    if (!module?.loadGroups) {
+      return [];
+    }
+
+    const result = await module.loadGroups(options);
+    return Array.isArray(result) ? result : [];
   }
 
   function renderProfileTabs(isOwner) {
@@ -1823,6 +1934,7 @@
     }
 
     removeArchivedStoryGridItem(deletedStoryId, { animate: true });
+    loadProfileHighlightGroups({ silent: true });
   });
 
   function formatArchiveStoryCreatedAt(rawValue) {
@@ -2767,4 +2879,5 @@
   global.initProfilePage = initProfile;
   global.getProfileAccountId = () => currentProfileId;
   global.prependPostToProfile = prependPostToProfile;
+  global.closeProfileHighlightModal = closeHighlightModal;
 })(window);

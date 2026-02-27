@@ -546,7 +546,58 @@
           body: JSON.stringify({ reactType }),
         }),
       getViewers: (storyId, page = 1, pageSize = 20) =>
-        apiFetch(`/Stories/${storyId}/viewers?page=${page}&pageSize=${pageSize}`),
+        apiFetch(
+          `/Stories/${storyId}/viewers?page=${page}&pageSize=${pageSize}`,
+        ),
+      getHighlightGroupsByProfile: (targetAccountId) =>
+        apiFetch(
+          `/Stories/highlights/profiles/${encodeURIComponent(targetAccountId)}/groups`,
+        ),
+      getHighlightGroupStories: (targetAccountId, groupId) =>
+        apiFetch(
+          `/Stories/highlights/profiles/${encodeURIComponent(targetAccountId)}/groups/${encodeURIComponent(groupId)}/stories`,
+        ),
+      getHighlightArchiveCandidates: (
+        page = 1,
+        pageSize = 20,
+        excludeGroupId = null,
+      ) => {
+        let url = `/Stories/highlights/archive-candidates?page=${encodeURIComponent(page)}&pageSize=${encodeURIComponent(pageSize)}`;
+        if (excludeGroupId) {
+          url += `&excludeGroupId=${encodeURIComponent(excludeGroupId)}`;
+        }
+        return apiFetch(url);
+      },
+      createHighlightGroup: (formData) =>
+        apiFetch("/Stories/highlights/groups", {
+          method: "POST",
+          body: formData,
+        }),
+      addHighlightItems: (groupId, storyIds = []) =>
+        apiFetch(
+          `/Stories/highlights/groups/${encodeURIComponent(groupId)}/items`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              storyIds: Array.isArray(storyIds) ? storyIds : [],
+            }),
+          },
+        ),
+      removeHighlightItem: (groupId, storyId) =>
+        apiFetch(
+          `/Stories/highlights/groups/${encodeURIComponent(groupId)}/items/${encodeURIComponent(storyId)}`,
+          { method: "DELETE" },
+        ),
+      updateHighlightGroup: (groupId, formData) =>
+        apiFetch(`/Stories/highlights/groups/${encodeURIComponent(groupId)}`, {
+          method: "PATCH",
+          body: formData,
+        }),
+      deleteHighlightGroup: (groupId) =>
+        apiFetch(`/Stories/highlights/groups/${encodeURIComponent(groupId)}`, {
+          method: "DELETE",
+        }),
     },
 
     Comments: {
