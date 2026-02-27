@@ -62,6 +62,69 @@ const ChatCommon = {
     return conv.storyRingState ?? conv.StoryRingState ?? null;
   },
 
+  getStoryAccentCssMap() {
+    if (!window.getComputedStyle || !document?.documentElement) return null;
+
+    const themeKey = document.body?.classList.contains("light-mode")
+      ? "light"
+      : "dark";
+    if (
+      this._storyAccentCssCache &&
+      this._storyAccentCssCache.themeKey === themeKey
+    ) {
+      return this._storyAccentCssCache.map;
+    }
+
+    const rootStyles = window.getComputedStyle(document.documentElement);
+    if (!rootStyles) return null;
+
+    const accentMap = {
+      "--accent-primary": (
+        rootStyles.getPropertyValue("--accent-primary") || ""
+      ).trim(),
+      "--accent-hover": (
+        rootStyles.getPropertyValue("--accent-hover") || ""
+      ).trim(),
+      "--accent-active": (
+        rootStyles.getPropertyValue("--accent-active") || ""
+      ).trim(),
+    };
+
+    this._storyAccentCssCache = {
+      themeKey,
+      map: accentMap,
+    };
+
+    return accentMap;
+  },
+
+  resolveStoryTextBackgroundCss(cssValue) {
+    if (
+      typeof cssValue !== "string" ||
+      !cssValue.includes("var(--accent-")
+    ) {
+      return cssValue;
+    }
+
+    const accentMap = this.getStoryAccentCssMap();
+    if (!accentMap) return cssValue;
+
+    return cssValue.replace(
+      /var\(\s*(--accent-(?:primary|hover|active))\s*(?:,\s*([^)]+))?\)/gi,
+      (match, variableName, fallbackValue) => {
+        const key = String(variableName || "")
+          .trim()
+          .toLowerCase();
+        const resolved = accentMap[key];
+        if (resolved) return resolved;
+
+        const fallback =
+          typeof fallbackValue === "string" ? fallbackValue.trim() : "";
+        return fallback || match;
+      },
+    );
+  },
+
   /**
    * Helper to render avatar HTML (supports both img and Lucide icons)
    */
@@ -3264,7 +3327,12 @@ const ChatCommon = {
                                     opts.backgrounds,
                                     bgKeyRaw,
                                   );
-                                  if (matchedBg) bgCss = matchedBg;
+                                  if (matchedBg) {
+                                    bgCss =
+                                      ChatCommon.resolveStoryTextBackgroundCss(
+                                        matchedBg,
+                                      );
+                                  }
 
                                   const matchedColor = getCssValue(
                                     opts.textColors,
