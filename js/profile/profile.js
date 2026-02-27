@@ -26,6 +26,8 @@
 
   // Post navigation: Store post IDs in grid order for next/prev navigation
   let profilePostIds = [];
+  let archivedStoryItems = [];
+  let archivedStoryIdSet = new Set();
 
   let currentProfileData = null;
   let profilePresenceUnsubscribe = null;
@@ -766,6 +768,8 @@
     hasMoreArchivedStories = true;
     activeTab = "posts";
     profilePostIds = []; // Reset post navigation list
+    archivedStoryItems = [];
+    archivedStoryIdSet.clear();
     // Clear grid immediately to avoid showing previous user's posts
     const grid = document.getElementById("profile-posts-grid");
     if (grid) {
@@ -982,6 +986,8 @@
         archivedStoriesPage = 1;
         isArchivedStoriesLoading = false;
         hasMoreArchivedStories = true;
+        archivedStoryItems = [];
+        archivedStoryIdSet.clear();
         isLoading = false;
         startedPostLoad = true;
         loadPosts();
@@ -1329,6 +1335,8 @@
       archivedStoriesPage = 1;
       hasMoreArchivedStories = true;
       isArchivedStoriesLoading = false;
+      archivedStoryItems = [];
+      archivedStoryIdSet.clear();
       loadArchivedStories();
     } else {
       // Show placeholder
@@ -1427,8 +1435,8 @@
   }
 
   async function loadArchivedStories() {
-    if (activeTab !== PROFILE_ARCHIVED_STORIES_TAB) return;
-    if (isArchivedStoriesLoading || !hasMoreArchivedStories) return;
+    if (activeTab !== PROFILE_ARCHIVED_STORIES_TAB) return [];
+    if (isArchivedStoriesLoading || !hasMoreArchivedStories) return [];
 
     const fetchForId = currentProfileId;
     const fetchForTab = activeTab;
@@ -1438,7 +1446,7 @@
     const loader = document.getElementById("profile-posts-loader");
     if (!grid) {
       isArchivedStoriesLoading = false;
-      return;
+      return [];
     }
 
     if (loader) loader.style.display = "block";
@@ -1450,7 +1458,7 @@
         );
       if (!isGuid) {
         isArchivedStoriesLoading = false;
-        return;
+        return [];
       }
 
       if (!global.API?.Stories?.getArchived) {
@@ -1463,7 +1471,7 @@
       );
 
       if (fetchForId !== currentProfileId || fetchForTab !== activeTab) {
-        return;
+        return [];
       }
       if (!res.ok) throw new Error("Failed to load archived stories");
 
@@ -1476,9 +1484,12 @@
 
       if (archivedStoriesPage === 1) {
         grid.innerHTML = "";
+        archivedStoryItems = [];
+        archivedStoryIdSet.clear();
       }
 
-      renderArchivedStories(items);
+      const appendedItems = mergeArchivedStories(items);
+      renderArchivedStories(appendedItems);
       archivedStoriesPage += 1;
 
       const hasNextPage =
@@ -1486,9 +1497,11 @@
           ? data.hasNextPage
           : items.length >= ARCHIVED_STORIES_PAGE_SIZE;
       hasMoreArchivedStories = hasNextPage;
+      return appendedItems;
     } catch (err) {
       console.error(err);
       if (window.toastError) toastError("Failed to load archived stories.");
+      return [];
     } finally {
       if (fetchForId === currentProfileId && fetchForTab === activeTab) {
         isArchivedStoriesLoading = false;
@@ -1679,6 +1692,139 @@
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
+  function normalizeStoryId(value) {
+    return (value || "").toString().trim().toLowerCase();
+  }
+
+  function readStoryId(rawStory) {
+    return (
+      rawStory?.storyId ??
+      rawStory?.StoryId ??
+      ""
+    )
+      .toString()
+      .trim();
+  }
+
+  function mergeArchivedStories(items) {
+    const incoming = Array.isArray(items) ? items : [];
+    if (!incoming.length) return [];
+    const appended = [];
+
+    incoming.forEach((story) => {
+      const storyId = readStoryId(story);
+      const normalizedStoryId = normalizeStoryId(storyId);
+      if (!normalizedStoryId || archivedStoryIdSet.has(normalizedStoryId)) return;
+
+      archivedStoryItems.push(story);
+      appended.push(story);
+      archivedStoryIdSet.add(normalizedStoryId);
+    });
+
+    return appended;
+  }
+
+  function resolveArchiveAuthorInfo() {
+    const accountInfo =
+      currentProfileData?.accountInfo ||
+      currentProfileData?.AccountInfo ||
+      {};
+
+    return {
+      accountId:
+        accountInfo.accountId ??
+        accountInfo.AccountId ??
+        currentProfileId ??
+        "",
+      username:
+        accountInfo.username ??
+        accountInfo.Username ??
+        localStorage.getItem("username") ??
+        "",
+      fullName:
+        accountInfo.fullName ??
+        accountInfo.FullName ??
+        localStorage.getItem("fullname") ??
+        "",
+      avatarUrl:
+        accountInfo.avatarUrl ??
+        accountInfo.AvatarUrl ??
+        localStorage.getItem("avatarUrl") ??
+        APP_CONFIG.DEFAULT_AVATAR,
+    };
+  }
+
+  async function loadMoreArchivedStoriesForViewer() {
+    const newItems = await loadArchivedStories();
+    return {
+      items: Array.isArray(newItems) ? newItems : [],
+      hasMore: hasMoreArchivedStories,
+    };
+  }
+
+  function animateArchivedStoryGridItemRemoval(item) {
+    if (!item || item.dataset.removingStory === "1") return;
+
+    item.dataset.removingStory = "1";
+    item.style.transition = "all 0.4s ease";
+    item.style.opacity = "0";
+    item.style.transform = "scale(0.86)";
+    item.style.pointerEvents = "none";
+    item.style.filter = "blur(1px)";
+
+    setTimeout(() => {
+      if (item.parentNode) {
+        item.remove();
+      }
+    }, 420);
+  }
+
+  function removeArchivedStoryGridItem(storyId, options = {}) {
+    const normalizedStoryId = normalizeStoryId(storyId);
+    if (!normalizedStoryId) return;
+    const useAnimation = options.animate === true;
+
+    archivedStoryItems = archivedStoryItems.filter(
+      (story) => normalizeStoryId(readStoryId(story)) !== normalizedStoryId,
+    );
+    archivedStoryIdSet.delete(normalizedStoryId);
+
+    const grid = document.getElementById("profile-posts-grid");
+    if (!grid) return;
+
+    const targets = grid.querySelectorAll(
+      '.profile-story-grid-item[data-story-id]',
+    );
+    targets.forEach((item) => {
+      const itemStoryId = normalizeStoryId(item.getAttribute("data-story-id"));
+      if (itemStoryId === normalizedStoryId) {
+        if (useAnimation) {
+          animateArchivedStoryGridItemRemoval(item);
+        } else {
+          item.remove();
+        }
+      }
+    });
+  }
+
+  window.addEventListener("story:deleted", (event) => {
+    const detail = event?.detail || {};
+    const deletedStoryId = readStoryId(detail);
+    if (!deletedStoryId) return;
+
+    const deletedAuthorId = normalizeStoryId(detail.authorId || detail.AuthorId || "");
+    const currentProfileNormalizedId = normalizeStoryId(currentProfileId);
+    if (
+      deletedAuthorId &&
+      currentProfileNormalizedId &&
+      deletedAuthorId !== currentProfileNormalizedId
+    ) {
+      return;
+    }
+
+    removeArchivedStoryGridItem(deletedStoryId, { animate: true });
+  });
+
   function formatArchiveStoryCreatedAt(rawValue) {
     if (!rawValue) return "";
 
@@ -1701,6 +1847,30 @@
     const item = document.createElement("div");
     item.className = "profile-grid-item profile-story-grid-item skeleton";
     item.dataset.storyId = story?.storyId ?? story?.StoryId ?? "";
+    item.onclick = async () => {
+      const storyId = (item.dataset.storyId || "").toString().trim();
+      if (!storyId) return;
+      if (typeof window.openStoryViewerByAuthorId !== "function") return;
+      if (!Array.isArray(archivedStoryItems) || !archivedStoryItems.length) return;
+      const author = resolveArchiveAuthorInfo();
+
+      const openStatus = await window.openStoryViewerByAuthorId(currentProfileId, {
+        syncUrl: true,
+        startAtUnviewed: false,
+        targetStoryId: storyId,
+        storyMode: "archive",
+        pageSize: ARCHIVED_STORIES_PAGE_SIZE,
+        page: 1,
+        archiveStories: archivedStoryItems,
+        archiveHasMore: hasMoreArchivedStories,
+        archiveAuthor: author,
+        loadMoreArchiveStories: loadMoreArchivedStoriesForViewer,
+      });
+
+      if (openStatus === "unavailable") {
+        removeArchivedStoryGridItem(storyId);
+      }
+    };
 
     const contentType = resolveStoryContentType(story);
     const mediaUrl = escapeAttr(story?.mediaUrl ?? story?.MediaUrl ?? "");
