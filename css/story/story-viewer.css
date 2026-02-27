@@ -793,6 +793,15 @@ body.light-mode .sn-story-viewer-top-viewer-react {
   align-items: center;
 }
 
+.sn-story-viewer-actions.sn-story-viewer-highlight-footer-empty {
+  display: block;
+  min-height: 56px;
+}
+
+.sn-story-viewer-actions.sn-story-viewer-highlight-footer-empty > * {
+  display: none !important;
+}
+
 .sn-story-viewer-reply-frame {
   display: flex;
   align-items: center;
@@ -1068,8 +1077,31 @@ body.light-mode .sn-story-viewer-react-btn.sn-story-viewer-react-active {
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   z-index: 50;
-  overflow: hidden;
   animation: stMenuFadeIn 0.15s ease;
+}
+
+/* Arrow pointer to the More Button */
+.sn-story-viewer-more-menu::before,
+.sn-story-viewer-more-menu::after {
+  content: "";
+  position: absolute;
+  right: 11px; /* Center with the 32px button (16px from right edge - 5px arrow width) */
+  border-style: solid;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.sn-story-viewer-more-menu::before {
+  top: -6px;
+  border-width: 0 6px 6px 6px;
+  border-color: transparent transparent var(--border-secondary) transparent;
+}
+
+.sn-story-viewer-more-menu::after {
+  top: -5px;
+  right: 12px; /* Slight offset for inner arrow */
+  border-width: 0 5px 5px 5px;
+  border-color: transparent transparent var(--bg-primary) transparent;
 }
 
 body.light-mode .sn-story-viewer-more-menu {
@@ -1101,6 +1133,16 @@ body.light-mode .sn-story-viewer-more-menu {
   cursor: pointer;
   transition: background 0.12s ease;
   text-align: left;
+}
+
+.sn-story-viewer-menu-item:first-child {
+  border-top-left-radius: 9px;
+  border-top-right-radius: 9px;
+}
+
+.sn-story-viewer-menu-item:last-child {
+  border-bottom-left-radius: 9px;
+  border-bottom-right-radius: 9px;
 }
 
 .sn-story-viewer-menu-item:hover {

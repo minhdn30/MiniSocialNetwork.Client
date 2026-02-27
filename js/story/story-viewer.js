@@ -1,6 +1,9 @@
 (function (global) {
   const STORY_URL_PARAM = "storyId";
   const STORY_HASH_ROUTE_PREFIX = "/story/";
+  const STORY_HIGHLIGHT_HASH_ROUTE_PREFIX = "/story/highlight/";
+  const STORY_HIGHLIGHT_PROFILE_ROUTE_SEGMENT = "/highlight/";
+  const STORY_HIGHLIGHT_PROFILE_STORY_SEGMENT = "/story/";
   const DEFAULT_STORY_DURATION_MS =
     global.APP_CONFIG?.STORY_DEFAULT_DURATION_MS || 5000;
   const PROGRESS_TICK_MS = 50;
@@ -14,6 +17,7 @@
   const STORY_VIEW_MODE = {
     ACTIVE: "active",
     ARCHIVE: "archive",
+    HIGHLIGHT: "highlight",
   };
   const ARCHIVE_PREFETCH_THRESHOLD = 2;
   const STORY_PRIVACY_OPTIONS = [
@@ -52,6 +56,10 @@
   const viewerState = {
     isOpen: false,
     storyMode: STORY_VIEW_MODE.ACTIVE,
+    highlightTargetAccountId: "",
+    highlightGroupId: "",
+    highlightGroupName: "",
+    highlightOnRemoveStory: null,
     author: null,
     stories: [],
     currentIndex: 0,
@@ -108,13 +116,102 @@
 
   function stNormalizeStoryMode(mode) {
     const normalized = (mode || "").toString().trim().toLowerCase();
-    return normalized === STORY_VIEW_MODE.ARCHIVE
-      ? STORY_VIEW_MODE.ARCHIVE
-      : STORY_VIEW_MODE.ACTIVE;
+    if (normalized === STORY_VIEW_MODE.ARCHIVE) {
+      return STORY_VIEW_MODE.ARCHIVE;
+    }
+    if (normalized === STORY_VIEW_MODE.HIGHLIGHT) {
+      return STORY_VIEW_MODE.HIGHLIGHT;
+    }
+    return STORY_VIEW_MODE.ACTIVE;
   }
 
   function stIsArchiveMode() {
     return viewerState.storyMode === STORY_VIEW_MODE.ARCHIVE;
+  }
+
+  function stIsHighlightMode() {
+    return viewerState.storyMode === STORY_VIEW_MODE.HIGHLIGHT;
+  }
+
+  function stIsArchiveLikeMode() {
+    return stIsArchiveMode() || stIsHighlightMode();
+  }
+
+  function stCanViewHighlightByPrivacy(
+    ownerAccountId,
+    privacyValue,
+    isFollowedByCurrentUser,
+  ) {
+    const normalizedOwnerId = stNormalizeId(ownerAccountId);
+    const currentAccountId = stCurrentAccountId();
+    const isOwner =
+      !!normalizedOwnerId &&
+      !!currentAccountId &&
+      normalizedOwnerId === currentAccountId;
+    if (isOwner) {
+      return true;
+    }
+
+    const privacy = Number.parseInt(String(privacyValue ?? 0), 10);
+    if (privacy === 2) {
+      return false;
+    }
+    if (privacy === 1) {
+      return isFollowedByCurrentUser === true;
+    }
+    return true;
+  }
+
+  function stHandleHighlightPrivacyRealtime(payload = {}) {
+    if (!viewerState.isOpen || !stIsHighlightMode()) {
+      return false;
+    }
+
+    const ownerAccountId = (
+      payload.accountId ??
+      payload.AccountId ??
+      payload.targetAccountId ??
+      payload.TargetAccountId ??
+      ""
+    )
+      .toString()
+      .trim();
+    const normalizedOwnerId = stNormalizeId(ownerAccountId);
+    if (!normalizedOwnerId) {
+      return false;
+    }
+
+    const currentHighlightOwnerId = stNormalizeId(
+      viewerState.highlightTargetAccountId,
+    );
+    if (
+      !currentHighlightOwnerId ||
+      currentHighlightOwnerId !== normalizedOwnerId
+    ) {
+      return false;
+    }
+
+    const settings = payload.settings ?? payload.Settings ?? payload;
+    const privacyValue =
+      settings?.storyHighlightPrivacy ?? settings?.StoryHighlightPrivacy;
+    const isFollowedByCurrentUser = Boolean(
+      payload.isFollowedByCurrentUser ?? payload.IsFollowedByCurrentUser,
+    );
+
+    const canView = stCanViewHighlightByPrivacy(
+      normalizedOwnerId,
+      privacyValue,
+      isFollowedByCurrentUser,
+    );
+    if (canView) {
+      return false;
+    }
+
+    stCloseViewer();
+    if (typeof global.toastInfo === "function") {
+      global.toastInfo("You no longer have permission to view this highlight.");
+    }
+    return true;
   }
 
   function stNormalizeRingState(nextState) {
@@ -549,6 +646,9 @@
       moreBtn: modal.querySelector("#storyViewerMoreBtn"),
       moreMenu: modal.querySelector("#storyViewerMoreMenu"),
       privacy: modal.querySelector("#storyViewerPrivacy"),
+      privacyDivider: modal.querySelector(
+        ".sn-story-viewer-author-meta-divider",
+      ),
       author: modal.querySelector(".sn-story-viewer-author"),
       viewersPanel: modal.querySelector("#storyViewersPanel"),
       viewersList: modal.querySelector("#storyViewersList"),
@@ -745,6 +845,18 @@
     return viewerState.stories[viewerState.currentIndex];
   }
 
+  function stResolveViewerHeaderName() {
+    if (stIsHighlightMode()) {
+      const groupName = (viewerState.highlightGroupName || "")
+        .toString()
+        .trim();
+      if (groupName) return groupName;
+    }
+    return (
+      viewerState.author?.username || viewerState.author?.fullName || "user"
+    );
+  }
+
   function stUpdateProgressFill(progressRate) {
     if (!viewerState.dom.progress) return;
 
@@ -932,6 +1044,28 @@
   function stRenderViewerActions() {
     if (!viewerState.dom.actions) return;
 
+    viewerState.dom.actions.classList.remove(
+      "sn-story-viewer-highlight-footer-empty",
+    );
+
+    if (stIsHighlightMode()) {
+      viewerState.dom.actions.classList.remove("sn-story-viewer-hidden");
+      viewerState.dom.actions.classList.add(
+        "sn-story-viewer-highlight-footer-empty",
+      );
+      if (viewerState.dom.replyInput) {
+        viewerState.dom.replyInput.value = "";
+      }
+      if (
+        viewerState.dom.replyEmojiPicker &&
+        viewerState.dom.replyEmojiPicker.classList.contains("show") &&
+        global.EmojiUtils
+      ) {
+        global.EmojiUtils.closePicker(viewerState.dom.replyEmojiPicker);
+      }
+      return;
+    }
+
     if (stIsOwnStory()) {
       viewerState.dom.actions.classList.add("sn-story-viewer-hidden");
       return;
@@ -942,6 +1076,15 @@
 
   function stRenderSelfInsight(story) {
     if (!viewerState.dom.insight) return;
+
+    if (stIsHighlightMode()) {
+      viewerState.dom.insight.classList.add("sn-story-viewer-hidden");
+      viewerState.dom.insight.innerHTML = "";
+      if (viewerState.isViewersListOpen) {
+        stCloseViewersList();
+      }
+      return;
+    }
 
     const isOwnStory = stIsOwnStory();
     const summary = story?.viewSummary;
@@ -1296,7 +1439,7 @@
     let menuHtml = "";
 
     if (isOwn) {
-      if (!stIsArchiveMode()) {
+      if (!stIsArchiveLikeMode()) {
         const currentLabel = stGetStoryPrivacyLabel(story?.privacy ?? 0);
         menuHtml += `
           <button class="sn-story-viewer-menu-item" data-action="edit-privacy" title="Current: ${stEscapeAttr(currentLabel)}">
@@ -1304,6 +1447,20 @@
               <circle cx="12" cy="12" r="10"></circle><path d="M2 12h20"></path><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"></path>
             </svg>
             <span>Edit Privacy</span>
+          </button>
+        `;
+      }
+      if (
+        stIsHighlightMode() &&
+        typeof viewerState.highlightOnRemoveStory === "function"
+      ) {
+        menuHtml += `
+          <button class="sn-story-viewer-menu-item" data-action="remove-highlight-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="8" y1="12" x2="16" y2="12"></line>
+            </svg>
+            <span>Remove</span>
           </button>
         `;
       }
@@ -1358,9 +1515,151 @@
       case "delete-story":
         stConfirmDeleteStory();
         break;
+      case "remove-highlight-item":
+        stRemoveCurrentHighlightItem();
+        break;
       case "report-story":
         stReportStory();
         break;
+    }
+  }
+
+  function stShowSystemConfirm(options = {}) {
+    const {
+      title = "Are you sure?",
+      message = "",
+      confirmText = "Confirm",
+      cancelText = "Cancel",
+      isDanger = false,
+      onConfirm = null,
+      onCancel = null,
+    } = options;
+
+    if (
+      global.ChatCommon &&
+      typeof global.ChatCommon.showConfirm === "function"
+    ) {
+      global.ChatCommon.showConfirm({
+        title,
+        message,
+        confirmText,
+        cancelText,
+        isDanger,
+        onConfirm,
+        onCancel,
+      });
+      return;
+    }
+
+    const overlay = document.createElement("div");
+    overlay.className = "unfollow-overlay";
+
+    const popup = document.createElement("div");
+    popup.className = "unfollow-popup";
+    popup.innerHTML = `
+      <div class="unfollow-content">
+        <h3>${stEscapeHtml(title)}</h3>
+        ${message ? `<p>${stEscapeHtml(message)}</p>` : ""}
+      </div>
+      <div class="unfollow-actions">
+        <button type="button" class="unfollow-btn ${isDanger ? "unfollow-confirm" : "unfollow-cancel"}" data-action="confirm">${stEscapeHtml(confirmText)}</button>
+        <button type="button" class="unfollow-btn unfollow-cancel" data-action="cancel">${stEscapeHtml(cancelText)}</button>
+      </div>
+    `;
+
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
+
+    requestAnimationFrame(() => overlay.classList.add("show"));
+
+    const close = () => {
+      overlay.classList.remove("show");
+      setTimeout(() => overlay.remove(), 200);
+    };
+
+    const confirmBtn = popup.querySelector('[data-action="confirm"]');
+    if (confirmBtn) {
+      confirmBtn.addEventListener("click", () => {
+        close();
+        if (typeof onConfirm === "function") {
+          onConfirm();
+        }
+      });
+    }
+
+    const cancelBtn = popup.querySelector('[data-action="cancel"]');
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", () => {
+        close();
+        if (typeof onCancel === "function") {
+          onCancel();
+        }
+      });
+    }
+
+    overlay.addEventListener("click", (event) => {
+      if (event.target !== overlay) return;
+      close();
+      if (typeof onCancel === "function") {
+        onCancel();
+      }
+    });
+  }
+
+  function stRemoveCurrentHighlightItem() {
+    if (!stIsHighlightMode()) return;
+    if (typeof viewerState.highlightOnRemoveStory !== "function") return;
+
+    const story = stCurrentStory();
+    if (!story?.storyId) return;
+
+    stPauseProgressTimer();
+
+    stShowSystemConfirm({
+      title: "Remove from Group",
+      message:
+        "Are you sure you want to remove this story from the highlight group?",
+      confirmText: "Remove",
+      cancelText: "Cancel",
+      isDanger: true,
+      onConfirm: () => stExecuteRemoveHighlightItem(story),
+      onCancel: () => stResumeProgressTimer(),
+    });
+  }
+
+  async function stExecuteRemoveHighlightItem(story) {
+    stToggleStoryPause(true);
+
+    try {
+      const result = await viewerState.highlightOnRemoveStory(story);
+      if (!result?.ok) {
+        stToggleStoryPause(false);
+        return;
+      }
+
+      if (result.groupDeleted) {
+        stCloseViewer();
+        return;
+      }
+
+      const normalizedStoryId = stNormalizeId(story.storyId);
+      viewerState.stories = (viewerState.stories || []).filter(
+        (item) => stNormalizeId(item?.storyId) !== normalizedStoryId,
+      );
+
+      if (!viewerState.stories.length) {
+        stCloseViewer();
+        return;
+      }
+
+      if (viewerState.currentIndex >= viewerState.stories.length) {
+        viewerState.currentIndex = viewerState.stories.length - 1;
+      }
+
+      stRenderProgressBars(viewerState.stories.length);
+      stRenderCurrentStory("fade");
+    } catch (_) {
+      stToggleStoryPause(false);
     }
   }
 
@@ -1470,28 +1769,16 @@
 
     stPauseProgressTimer();
 
-    if (
-      global.ChatCommon &&
-      typeof global.ChatCommon.showConfirm === "function"
-    ) {
-      global.ChatCommon.showConfirm({
-        title: "Delete Story",
-        message:
-          "Are you sure you want to delete this story? This action cannot be undone.",
-        confirmText: "Delete",
-        cancelText: "Cancel",
-        isDanger: true,
-        onConfirm: () => stDeleteStory(story),
-        onCancel: () => stResumeProgressTimer(),
-      });
-    } else {
-      // Fallback if ChatCommon not available
-      if (confirm("Are you sure you want to delete this story?")) {
-        stDeleteStory(story);
-      } else {
-        stResumeProgressTimer();
-      }
-    }
+    stShowSystemConfirm({
+      title: "Delete Story",
+      message:
+        "Are you sure you want to delete this story? This action cannot be undone.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      isDanger: true,
+      onConfirm: () => stDeleteStory(story),
+      onCancel: () => stResumeProgressTimer(),
+    });
   }
 
   async function stDeleteStory(story) {
@@ -1653,7 +1940,7 @@
 
   async function stMarkViewedIfNeeded(story) {
     if (!story || !story.storyId) return;
-    if (stIsArchiveMode()) return;
+    if (stIsArchiveLikeMode()) return;
     if (stIsOwnStory()) return;
     if (viewerState.markedStoryIds.has(story.storyId)) return;
     if (story.isViewedByCurrentUser) return;
@@ -1958,8 +2245,7 @@
       viewerState.dom.avatar.src = avatarUrl;
     }
     if (viewerState.dom.username) {
-      viewerState.dom.username.textContent =
-        viewerState.author?.username || viewerState.author?.fullName || "user";
+      viewerState.dom.username.textContent = stResolveViewerHeaderName();
     }
     if (viewerState.dom.time) {
       if (global.PostUtils?.timeAgo && story.createdAt) {
@@ -1983,16 +2269,32 @@
 
     // Privacy icon
     if (viewerState.dom.privacy) {
-      const privacy = story.privacy ?? 0;
-      const iconName = global.PostUtils?.getPrivacyIconName
-        ? global.PostUtils.getPrivacyIconName(privacy)
-        : privacy === 2
-          ? "lock"
-          : privacy === 1
-            ? "users"
-            : "globe";
-      viewerState.dom.privacy.innerHTML = `<i data-lucide="${stEscapeAttr(iconName)}"></i>`;
-      if (global.lucide) global.lucide.createIcons();
+      if (stIsHighlightMode()) {
+        viewerState.dom.privacy.innerHTML = "";
+        viewerState.dom.privacy.classList.add("sn-story-viewer-hidden");
+        if (viewerState.dom.privacyDivider) {
+          viewerState.dom.privacyDivider.classList.add(
+            "sn-story-viewer-hidden",
+          );
+        }
+      } else {
+        const privacy = story.privacy ?? 0;
+        const iconName = global.PostUtils?.getPrivacyIconName
+          ? global.PostUtils.getPrivacyIconName(privacy)
+          : privacy === 2
+            ? "lock"
+            : privacy === 1
+              ? "users"
+              : "globe";
+        viewerState.dom.privacy.classList.remove("sn-story-viewer-hidden");
+        if (viewerState.dom.privacyDivider) {
+          viewerState.dom.privacyDivider.classList.remove(
+            "sn-story-viewer-hidden",
+          );
+        }
+        viewerState.dom.privacy.innerHTML = `<i data-lucide="${stEscapeAttr(iconName)}"></i>`;
+        if (global.lucide) global.lucide.createIcons();
+      }
     }
 
     stUpdateProgressFill(0);
@@ -2415,7 +2717,7 @@
 
   /** Sync ring state for current author before switching */
   function stSyncCurrentAuthorRing() {
-    if (stIsArchiveMode()) return;
+    if (stIsArchiveLikeMode()) return;
     const authorId = stNormalizeId(viewerState.author?.accountId);
     if (!authorId || stIsOwnStory()) return;
 
@@ -2602,8 +2904,8 @@
    * Parse the hash fragment into path + query params.
    * e.g. "#/messages?id=abc" → { hashPath: "#/messages", hashParams: URLSearchParams("id=abc") }
    */
-  function stParseHash() {
-    const raw = global.location.hash || "";
+  function stParseHashRaw(rawHash) {
+    const raw = (rawHash || "").toString();
     const qIndex = raw.indexOf("?");
     if (qIndex === -1) {
       return { hashPath: raw, hashParams: new URLSearchParams() };
@@ -2614,26 +2916,160 @@
     };
   }
 
+  function stParseHash() {
+    return stParseHashRaw(global.location.hash || "");
+  }
+
+  function stParseHashFromUrlString(urlString) {
+    const rawUrl = (urlString || "").toString();
+    const hashIndex = rawUrl.indexOf("#");
+    if (hashIndex === -1) {
+      return { hashPath: "", hashParams: new URLSearchParams() };
+    }
+    return stParseHashRaw(rawUrl.slice(hashIndex));
+  }
+
   function stBuildHashString(hashPath, hashParams) {
     const qs = hashParams.toString();
     return qs ? `${hashPath}?${qs}` : hashPath;
   }
 
+  function stDecodeRouteSegment(segment) {
+    try {
+      return decodeURIComponent(segment);
+    } catch (_) {
+      return segment;
+    }
+  }
+
+  function stExtractProfileHashPath(hashPath) {
+    const normalizedHashPath = (hashPath || "").toString().trim();
+    if (!normalizedHashPath.startsWith("#")) return "";
+
+    const rawPath = normalizedHashPath.slice(1);
+    const normalizedPath = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
+    if (!normalizedPath.startsWith("/profile")) return "";
+
+    const tail = normalizedPath.slice("/profile".length);
+    const segments = tail.split("/").filter(Boolean);
+    if (
+      !segments.length ||
+      segments[0].toLowerCase() === "story" ||
+      segments[0].toLowerCase() === "highlight"
+    ) {
+      return "#/profile";
+    }
+
+    return `#/profile/${segments[0]}`;
+  }
+
   function stIsStoryHashRoute(hashPath) {
     const normalizedHashPath = (hashPath || "").toString().trim();
+    const normalizedLowerHashPath = normalizedHashPath.toLowerCase();
+    const isProfileHighlightRoute =
+      normalizedLowerHashPath.startsWith("#/profile") &&
+      normalizedLowerHashPath.includes(STORY_HIGHLIGHT_PROFILE_ROUTE_SEGMENT) &&
+      normalizedLowerHashPath.includes(STORY_HIGHLIGHT_PROFILE_STORY_SEGMENT);
+
     return (
       normalizedHashPath === "#/story" ||
-      normalizedHashPath.startsWith(`#${STORY_HASH_ROUTE_PREFIX}`)
+      normalizedHashPath.startsWith(`#${STORY_HASH_ROUTE_PREFIX}`) ||
+      isProfileHighlightRoute
     );
+  }
+
+  function stExtractHighlightRouteContext(hashPath) {
+    const normalizedHashPath = (hashPath || "").toString().trim();
+    if (!normalizedHashPath.startsWith("#")) return null;
+
+    const rawPath = normalizedHashPath.slice(1);
+    const normalizedPath = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
+    if (!normalizedPath.startsWith(STORY_HIGHLIGHT_HASH_ROUTE_PREFIX)) {
+      return null;
+    }
+
+    const remainder = normalizedPath.slice(
+      STORY_HIGHLIGHT_HASH_ROUTE_PREFIX.length,
+    );
+    const segments = remainder.split("/").filter(Boolean);
+    if (segments.length < 2) return null;
+
+    const decodeSegment = (segment) => {
+      try {
+        return decodeURIComponent(segment);
+      } catch (_) {
+        return segment;
+      }
+    };
+
+    return {
+      targetAccountId: decodeSegment(segments[0]),
+      groupId: decodeSegment(segments[1]),
+      storyId: segments[2] ? decodeSegment(segments[2]) : "",
+    };
+  }
+
+  function stExtractProfileHighlightRouteContext(hashPath) {
+    const normalizedHashPath = (hashPath || "").toString().trim();
+    if (!normalizedHashPath.startsWith("#")) return null;
+
+    const rawPath = normalizedHashPath.slice(1);
+    const normalizedPath = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
+    if (!normalizedPath.startsWith("/profile")) return null;
+
+    const tail = normalizedPath.slice("/profile".length);
+    const segments = tail.split("/").filter(Boolean);
+    if (!segments.length) return null;
+
+    let routeStartIndex = 0;
+    let profileTarget = "";
+
+    const firstSegment = (segments[0] || "").toLowerCase();
+    if (firstSegment !== "highlight") {
+      if (firstSegment === "story") return null;
+      profileTarget = stDecodeRouteSegment(segments[0]);
+      routeStartIndex = 1;
+    }
+
+    const routeSegment = (segments[routeStartIndex] || "").toLowerCase();
+    const groupSegment = segments[routeStartIndex + 1] || "";
+    const storyMarkerSegment = (
+      segments[routeStartIndex + 2] || ""
+    ).toLowerCase();
+    const storySegment = segments[routeStartIndex + 3] || "";
+    if (
+      routeSegment !== "highlight" ||
+      !groupSegment ||
+      storyMarkerSegment !== "story" ||
+      !storySegment
+    ) {
+      return null;
+    }
+
+    const profileHashPath = profileTarget
+      ? `#/profile/${encodeURIComponent(profileTarget)}`
+      : "#/profile";
+
+    return {
+      profileHashPath,
+      profileTarget,
+      groupId: stDecodeRouteSegment(groupSegment),
+      storyId: stDecodeRouteSegment(storySegment),
+    };
   }
 
   function stExtractStoryIdFromHashPath(hashPath) {
     if (!stIsStoryHashRoute(hashPath)) return "";
+    if (stExtractHighlightRouteContext(hashPath)) return "";
+    if (stExtractProfileHighlightRouteContext(hashPath)) return "";
+
     const normalizedHashPath = (hashPath || "").toString().trim();
     const rawPath = normalizedHashPath.startsWith("#")
       ? normalizedHashPath.slice(1)
       : normalizedHashPath;
     const normalizedPath = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
+    if (normalizedPath.startsWith("/profile")) return "";
+
     const rawStoryId = normalizedPath.slice(STORY_HASH_ROUTE_PREFIX.length);
     if (!rawStoryId) return "";
 
@@ -2656,6 +3092,34 @@
     return `#${STORY_HASH_ROUTE_PREFIX}${encodeURIComponent(normalizedStoryId)}`;
   }
 
+  function stBuildProfileHighlightStoryHashPath(
+    profileHashPath,
+    groupId,
+    storyId,
+  ) {
+    const normalizedProfileHashPath =
+      stExtractProfileHashPath(profileHashPath) || "#/profile";
+    const normalizedGroupId = (groupId || "").toString().trim();
+    const normalizedStoryId = (storyId || "").toString().trim();
+    if (!normalizedGroupId || !normalizedStoryId)
+      return normalizedProfileHashPath;
+    return `${normalizedProfileHashPath}${STORY_HIGHLIGHT_PROFILE_ROUTE_SEGMENT}${encodeURIComponent(normalizedGroupId)}${STORY_HIGHLIGHT_PROFILE_STORY_SEGMENT}${encodeURIComponent(normalizedStoryId)}`;
+  }
+
+  function stBuildHighlightStoryHashPath(targetAccountId, groupId, storyId) {
+    const normalizedTargetAccountId = (targetAccountId || "").toString().trim();
+    const normalizedGroupId = (groupId || "").toString().trim();
+    const normalizedStoryId = (storyId || "").toString().trim();
+
+    if (!normalizedTargetAccountId || !normalizedGroupId) {
+      return stBuildStoryHashPath(normalizedStoryId);
+    }
+
+    const basePath = `#${STORY_HIGHLIGHT_HASH_ROUTE_PREFIX}${encodeURIComponent(normalizedTargetAccountId)}/${encodeURIComponent(normalizedGroupId)}`;
+    if (!normalizedStoryId) return basePath;
+    return `${basePath}/${encodeURIComponent(normalizedStoryId)}`;
+  }
+
   function stGetFallbackHashPath() {
     const lastSafeHashRaw = (global._lastSafeHash || "").toString().trim();
     const fallbackHash = lastSafeHashRaw || "#/home";
@@ -2669,9 +3133,14 @@
     const { hashPath, hashParams } = stParseHash();
     hashParams.delete(STORY_URL_PARAM);
     hashParams.delete("storyAuthorId");
-    const effectiveHashPath = stIsStoryHashRoute(hashPath)
-      ? stGetFallbackHashPath()
-      : hashPath;
+
+    const profileHighlightContext =
+      stExtractProfileHighlightRouteContext(hashPath);
+    const effectiveHashPath = profileHighlightContext?.profileHashPath
+      ? profileHighlightContext.profileHashPath
+      : stIsStoryHashRoute(hashPath)
+        ? stGetFallbackHashPath()
+        : hashPath;
     const base = global.location.pathname + global.location.search;
     return base + stBuildHashString(effectiveHashPath, hashParams);
   }
@@ -2683,7 +3152,38 @@
       viewerState.baseUrl = stGetBaseUrlWithoutStoryParam();
     }
     const base = global.location.pathname + global.location.search;
-    const nextUrl = base + stBuildStoryHashPath(normalizedStoryId);
+    let nextHash = stBuildStoryHashPath(normalizedStoryId);
+
+    if (stIsHighlightMode()) {
+      const { hashPath } = stParseHashFromUrlString(viewerState.baseUrl);
+      const profileHashPath =
+        stExtractProfileHashPath(hashPath) ||
+        stExtractProfileHashPath(stParseHash().hashPath) ||
+        "";
+      const profileUsername = (viewerState.author?.username || "")
+        .toString()
+        .trim();
+      const resolvedProfileHashPath =
+        (profileHashPath && profileHashPath !== "#/profile") || !profileUsername
+          ? profileHashPath
+          : `#/profile/${encodeURIComponent(profileUsername)}`;
+
+      if (resolvedProfileHashPath) {
+        nextHash = stBuildProfileHighlightStoryHashPath(
+          resolvedProfileHashPath,
+          viewerState.highlightGroupId,
+          normalizedStoryId,
+        );
+      } else {
+        nextHash = stBuildProfileHighlightStoryHashPath(
+          "#/profile",
+          viewerState.highlightGroupId,
+          normalizedStoryId,
+        );
+      }
+    }
+
+    const nextUrl = base + nextHash;
     history.replaceState(history.state, "", nextUrl);
   }
 
@@ -2846,6 +3346,10 @@
     const requestId = viewerState.requestId;
 
     viewerState.storyMode = STORY_VIEW_MODE.ARCHIVE;
+    viewerState.highlightTargetAccountId = "";
+    viewerState.highlightGroupId = "";
+    viewerState.highlightGroupName = "";
+    viewerState.highlightOnRemoveStory = null;
     viewerState.archivePage = 0;
     viewerState.archivePageSize = Math.max(
       1,
@@ -2952,6 +3456,191 @@
     return STORY_OPEN_STATUS.SUCCESS;
   }
 
+  async function stOpenHighlightViewerByGroup(
+    targetAccountId,
+    groupId,
+    options = {},
+  ) {
+    const normalizedTargetAccountId = (targetAccountId || "").toString().trim();
+    const normalizedGroupId = (groupId || "").toString().trim();
+    if (!normalizedTargetAccountId || !normalizedGroupId) {
+      return STORY_OPEN_STATUS.ERROR;
+    }
+
+    if (!global.API?.Stories?.getHighlightGroupStories) {
+      if (global.toastError) {
+        global.toastError("Story highlight API is unavailable.");
+      }
+      return STORY_OPEN_STATUS.ERROR;
+    }
+
+    if (!viewerState.baseUrl) {
+      viewerState.baseUrl = stGetBaseUrlWithoutStoryParam();
+    }
+    viewerState.shouldSyncUrl = options.syncUrl !== false;
+
+    stEnsureModal();
+    stShowLoading();
+
+    viewerState.modal.classList.remove("sn-story-viewer-hidden");
+    viewerState.isOpen = true;
+    viewerState.markedStoryIds.clear();
+    viewerState.requestId += 1;
+    const requestId = viewerState.requestId;
+
+    viewerState.storyMode = STORY_VIEW_MODE.HIGHLIGHT;
+    viewerState.highlightTargetAccountId = normalizedTargetAccountId;
+    viewerState.highlightGroupId = normalizedGroupId;
+    viewerState.highlightGroupName = "";
+    viewerState.highlightOnRemoveStory =
+      typeof options.onRemoveCurrentStory === "function"
+        ? options.onRemoveCurrentStory
+        : null;
+
+    viewerState.archivePage = 0;
+    viewerState.archiveHasMore = false;
+    viewerState.archiveIsLoadingMore = false;
+    viewerState.archiveLoadPromise = null;
+    viewerState.archiveLoadMoreFn = null;
+
+    viewerState.authorQueue = [];
+    viewerState.authorQueueIndex = -1;
+    viewerState.queueHasMore = false;
+    viewerState.viewedAuthors = new Map();
+    stPruneAuthorResumeMap([]);
+
+    try {
+      let payload = options.prefetchedGroup || null;
+      if (!payload) {
+        const response = await global.API.Stories.getHighlightGroupStories(
+          normalizedTargetAccountId,
+          normalizedGroupId,
+        );
+
+        if (requestId !== viewerState.requestId) {
+          return STORY_OPEN_STATUS.ERROR;
+        }
+
+        if (!response?.ok) {
+          if (response?.status === 404 || response?.status === 403) {
+            if (global.toastInfo) {
+              global.toastInfo("This highlight group is no longer available.");
+            }
+            stCloseViewer();
+            return STORY_OPEN_STATUS.UNAVAILABLE;
+          }
+
+          if (global.toastError) {
+            global.toastError("Failed to load highlight stories.");
+          }
+          stCloseViewer();
+          return STORY_OPEN_STATUS.ERROR;
+        }
+
+        payload = await response.json().catch(() => null);
+      }
+
+      if (requestId !== viewerState.requestId) {
+        return STORY_OPEN_STATUS.ERROR;
+      }
+
+      const rawStories = Array.isArray(payload?.stories ?? payload?.Stories)
+        ? (payload.stories ?? payload.Stories)
+        : [];
+      const stories = rawStories
+        .map(stResolveStoryItem)
+        .filter((story) => !!story.storyId);
+
+      viewerState.highlightGroupName = (payload?.name ?? payload?.Name ?? "")
+        .toString()
+        .trim();
+
+      if (!stories.length) {
+        if (global.toastInfo) {
+          global.toastInfo("This highlight group is no longer available.");
+        }
+        stCloseViewer();
+        return STORY_OPEN_STATUS.UNAVAILABLE;
+      }
+
+      const highlightAuthor = options.highlightAuthor || {};
+      viewerState.author = {
+        accountId:
+          highlightAuthor.accountId ??
+          highlightAuthor.AccountId ??
+          payload?.accountId ??
+          payload?.AccountId ??
+          normalizedTargetAccountId,
+        username:
+          highlightAuthor.username ??
+          highlightAuthor.Username ??
+          payload?.username ??
+          payload?.Username ??
+          "user",
+        fullName:
+          highlightAuthor.fullName ??
+          highlightAuthor.FullName ??
+          payload?.fullName ??
+          payload?.FullName ??
+          "",
+        avatarUrl:
+          (highlightAuthor.avatarUrl ??
+            highlightAuthor.AvatarUrl ??
+            payload?.avatarUrl ??
+            payload?.AvatarUrl ??
+            global.APP_CONFIG?.DEFAULT_AVATAR) ||
+          "",
+      };
+
+      viewerState.stories = stories;
+      stories.forEach((story) => {
+        stCacheStoryAuthor(story.storyId, viewerState.author.accountId);
+      });
+
+      const targetStoryId = stNormalizeId(options.targetStoryId);
+      const targetStoryIndex = targetStoryId
+        ? stories.findIndex(
+            (story) => stNormalizeId(story.storyId) === targetStoryId,
+          )
+        : -1;
+      const resumeStoryId = stNormalizeId(options.resumeStoryId);
+      const resumeStoryIndex = resumeStoryId
+        ? stories.findIndex(
+            (story) => stNormalizeId(story.storyId) === resumeStoryId,
+          )
+        : -1;
+
+      if (targetStoryId && targetStoryIndex === -1) {
+        if (global.toastInfo) {
+          global.toastInfo("This story is no longer available in this group.");
+        }
+        stCloseViewer();
+        return STORY_OPEN_STATUS.UNAVAILABLE;
+      }
+
+      if (targetStoryIndex >= 0) {
+        viewerState.currentIndex = targetStoryIndex;
+      } else if (resumeStoryIndex >= 0) {
+        viewerState.currentIndex = resumeStoryIndex;
+      } else {
+        viewerState.currentIndex = 0;
+      }
+
+      stRenderProgressBars(stories.length);
+      stRenderCurrentStory(options.direction || "fade");
+      return STORY_OPEN_STATUS.SUCCESS;
+    } catch (error) {
+      if (requestId !== viewerState.requestId) {
+        return STORY_OPEN_STATUS.ERROR;
+      }
+      if (global.toastError) {
+        global.toastError("Failed to load highlight stories.");
+      }
+      stCloseViewer();
+      return STORY_OPEN_STATUS.ERROR;
+    }
+  }
+
   async function stOpenViewerByAuthorId(authorId, options = {}) {
     const normalizedAuthorId = (authorId || "").toString().trim();
     if (!normalizedAuthorId) return STORY_OPEN_STATUS.ERROR;
@@ -2959,6 +3648,13 @@
     const requestedMode = stNormalizeStoryMode(options.storyMode);
     if (requestedMode === STORY_VIEW_MODE.ARCHIVE) {
       return stOpenArchiveViewerByAuthorId(normalizedAuthorId, options);
+    }
+    if (requestedMode === STORY_VIEW_MODE.HIGHLIGHT) {
+      return stOpenHighlightViewerByGroup(
+        options.highlightTargetAccountId || normalizedAuthorId,
+        options.highlightGroupId,
+        options,
+      );
     }
 
     if (!global.API?.Stories?.getActiveByAuthor) {
@@ -2983,6 +3679,10 @@
     const requestId = viewerState.requestId;
 
     viewerState.storyMode = STORY_VIEW_MODE.ACTIVE;
+    viewerState.highlightTargetAccountId = "";
+    viewerState.highlightGroupId = "";
+    viewerState.highlightGroupName = "";
+    viewerState.highlightOnRemoveStory = null;
     viewerState.archivePage = 0;
     viewerState.archiveHasMore = false;
     viewerState.archiveIsLoadingMore = false;
@@ -3194,6 +3894,10 @@
     viewerState.requestId += 1;
     viewerState.isOpen = false;
     viewerState.storyMode = STORY_VIEW_MODE.ACTIVE;
+    viewerState.highlightTargetAccountId = "";
+    viewerState.highlightGroupId = "";
+    viewerState.highlightGroupName = "";
+    viewerState.highlightOnRemoveStory = null;
     viewerState.author = null;
     viewerState.stories = [];
     viewerState.currentIndex = 0;
@@ -3213,6 +3917,14 @@
     viewerState.authorQueueIndex = -1;
     viewerState.queueHasMore = false;
     viewerState.viewedAuthors = new Map();
+
+    if (viewerState.dom.privacy) {
+      viewerState.dom.privacy.classList.remove("sn-story-viewer-hidden");
+      viewerState.dom.privacy.innerHTML = "";
+    }
+    if (viewerState.dom.privacyDivider) {
+      viewerState.dom.privacyDivider.classList.remove("sn-story-viewer-hidden");
+    }
 
     // Remove strip and author-nav DOM
     if (viewerState.modal) {
@@ -3279,22 +3991,149 @@
     stOpenViewerByAuthorId(authorId, openOptions);
   }
 
-  function stTryOpenFromUrl(options = {}) {
-    const useSearchParam = options.useSearchParam !== false;
-    const { hashPath, hashParams } = stParseHash();
-    const storyIdFromPath = stExtractStoryIdFromHashPath(hashPath);
-    const storyIdFromHashQuery = (hashParams.get(STORY_URL_PARAM) || "").trim();
-    const storyIdFromSearch = useSearchParam
-      ? (
-          new URLSearchParams(global.location.search || "").get(
-            STORY_URL_PARAM,
-          ) || ""
-        ).trim()
-      : "";
-    const storyId =
-      storyIdFromPath || storyIdFromHashQuery || storyIdFromSearch;
-    if (!storyId) return;
-    stOpenViewerByStoryId(storyId, { syncUrl: true });
+  function stIsGuidLike(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      (value || "").toString().trim(),
+    );
+  }
+
+  async function stResolveHighlightTargetAccountId(profileTarget) {
+    const normalizedProfileTarget = (profileTarget || "").toString().trim();
+    if (!normalizedProfileTarget) {
+      return (localStorage.getItem("accountId") || "").toString().trim();
+    }
+
+    if (stIsGuidLike(normalizedProfileTarget)) {
+      return normalizedProfileTarget;
+    }
+
+    const currentAccountId = (localStorage.getItem("accountId") || "")
+      .toString()
+      .trim();
+    const currentUsername = (localStorage.getItem("username") || "")
+      .toString()
+      .trim();
+    if (
+      currentUsername &&
+      currentUsername.toLowerCase() === normalizedProfileTarget.toLowerCase()
+    ) {
+      return currentAccountId || normalizedProfileTarget;
+    }
+
+    if (!global.API?.Accounts?.getProfileByUsername) {
+      return "";
+    }
+
+    try {
+      const response = await global.API.Accounts.getProfileByUsername(
+        normalizedProfileTarget,
+      );
+      if (!response?.ok) return "";
+
+      const payload = await response.json().catch(() => null);
+      const accountInfo =
+        payload?.accountInfo ||
+        payload?.AccountInfo ||
+        payload?.account ||
+        payload?.Account ||
+        {};
+      return (
+        accountInfo.accountId ??
+        accountInfo.AccountId ??
+        accountInfo.id ??
+        accountInfo.Id ??
+        ""
+      )
+        .toString()
+        .trim();
+    } catch (_) {
+      return "";
+    }
+  }
+
+  async function stTryOpenFromUrl(options = {}) {
+    try {
+      const useSearchParam = options.useSearchParam !== false;
+      const { hashPath, hashParams } = stParseHash();
+      const lowerHashPath = (hashPath || "").toString().toLowerCase();
+      const looksLikeProfileHighlightRoute =
+        lowerHashPath.startsWith("#/profile") &&
+        lowerHashPath.includes("/highlight/");
+      const looksLikeLegacyHighlightRoute =
+        lowerHashPath.startsWith("#/story/highlight/");
+
+      const profileHighlightContext =
+        stExtractProfileHighlightRouteContext(hashPath);
+      if (looksLikeProfileHighlightRoute && !profileHighlightContext) {
+        if (global.toastInfo) {
+          global.toastInfo("Invalid highlight link.");
+        }
+        return;
+      }
+
+      if (
+        profileHighlightContext?.groupId &&
+        profileHighlightContext?.storyId
+      ) {
+        const targetAccountId = await stResolveHighlightTargetAccountId(
+          profileHighlightContext.profileTarget,
+        );
+        if (!targetAccountId) {
+          if (global.toastInfo) {
+            global.toastInfo("This highlight story is no longer available.");
+          }
+          return;
+        }
+
+        stOpenHighlightViewerByGroup(
+          targetAccountId,
+          profileHighlightContext.groupId,
+          {
+            syncUrl: true,
+            targetStoryId: profileHighlightContext.storyId,
+          },
+        );
+        return;
+      }
+
+      const highlightContext = stExtractHighlightRouteContext(hashPath);
+      if (looksLikeLegacyHighlightRoute && !highlightContext) {
+        if (global.toastInfo) {
+          global.toastInfo("Invalid highlight link.");
+        }
+        return;
+      }
+
+      if (highlightContext?.targetAccountId && highlightContext?.groupId) {
+        stOpenHighlightViewerByGroup(
+          highlightContext.targetAccountId,
+          highlightContext.groupId,
+          {
+            syncUrl: true,
+            targetStoryId: highlightContext.storyId || "",
+          },
+        );
+        return;
+      }
+
+      const storyIdFromPath = stExtractStoryIdFromHashPath(hashPath);
+      const storyIdFromHashQuery = (
+        hashParams.get(STORY_URL_PARAM) || ""
+      ).trim();
+      const storyIdFromSearch = useSearchParam
+        ? (
+            new URLSearchParams(global.location.search || "").get(
+              STORY_URL_PARAM,
+            ) || ""
+          ).trim()
+        : "";
+      const storyId =
+        storyIdFromPath || storyIdFromHashQuery || storyIdFromSearch;
+      if (!storyId) return;
+      stOpenViewerByStoryId(storyId, { syncUrl: true });
+    } catch (_) {
+      // Ignore deep-link parsing errors to avoid blocking page scripts.
+    }
   }
 
   document.addEventListener("click", stHandleFeedRingClick, true);
@@ -3311,6 +4150,8 @@
 
   global.openStoryViewerByAuthorId = stOpenViewerByAuthorId;
   global.openStoryViewerByStoryId = stOpenViewerByStoryId;
+  global.openStoryViewerByHighlightGroup = stOpenHighlightViewerByGroup;
+  global.handleStoryHighlightPrivacyRealtime = stHandleHighlightPrivacyRealtime;
   global.closeStoryViewer = stCloseViewer;
   global.syncStoryRingState = stSyncRingGlobally;
 })(window);
