@@ -185,5 +185,9 @@
     STORY_FEED_LOAD_MORE_PAGE_SIZE: 4, // Bước dịch chuyển UI mỗi lần bấm next/prev ở story-section
     STORY_FEED_API_PAGE_SIZE: 30, // Kích thước page thực tế khi gọi API lấy author story
     STORY_FEED_NAV_SCROLL_STEP_PX: 0, // Bước cuộn khi bấm prev/next ở story-section (0 = tự tính theo chiều rộng container)
+    STORY_HIGHLIGHT_GROUP_NAME_MAX_LENGTH: 50, // Max ký tự tên nhóm highlight
+    STORY_HIGHLIGHT_MAX_GROUPS: 20, // Số lượng nhóm highlight tối đa mỗi user
+    STORY_HIGHLIGHT_MAX_STORIES_PER_GROUP: 50, // Số lượng story tối đa trong 1 nhóm highlight
+    STORY_HIGHLIGHT_ARCHIVE_PAGE_SIZE: 24, // Page size cho modal chọn story archive của highlight
   };
 })(window);

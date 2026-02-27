@@ -379,6 +379,7 @@
                 const accountId = settings.accountId || settings.AccountId;
                 const myId = localStorage.getItem("accountId");
                 const isMe = accountId && myId && accountId.toLowerCase() === myId.toLowerCase();
+                let isFollowedByCurrentUser = false;
 
                 if (window.ProfilePage) {
                     const currentProfileId = window.ProfilePage.getAccountId();
@@ -387,22 +388,32 @@
                         if (currentProfileData) {
                             currentProfileData.settings = settings;
                             if (!isMe) {
-                                const isFollowed = currentProfileData?.followInfo?.isFollowedByCurrentUser ?? currentProfileData?.isFollowedByCurrentUser ?? false;
+                                isFollowedByCurrentUser = currentProfileData?.followInfo?.isFollowedByCurrentUser ?? currentProfileData?.isFollowedByCurrentUser ?? false;
                                 const info = currentProfileData.accountInfo || currentProfileData.account;
                                 
                                 if (info) {
                                     const phonePrivacy = settings.phonePrivacy ?? settings.PhonePrivacy ?? 0;
                                     const addressPrivacy = settings.addressPrivacy ?? settings.AddressPrivacy ?? 0;
                                     
-                                    const canSeePhone = phonePrivacy === 0 || (phonePrivacy === 1 && isFollowed);
+                                    const canSeePhone = phonePrivacy === 0 || (phonePrivacy === 1 && isFollowedByCurrentUser);
                                     if (!canSeePhone) info.phone = null;
                                     
-                                    const canSeeAddress = addressPrivacy === 0 || (addressPrivacy === 1 && isFollowed);
+                                    const canSeeAddress = addressPrivacy === 0 || (addressPrivacy === 1 && isFollowedByCurrentUser);
                                     if (!canSeeAddress) info.address = null;
                                 }
                             }
                             window.ProfilePage.setData(currentProfileData);
                             window.ProfilePage.renderHeader();
+
+                            if (
+                                typeof window.handleStoryHighlightPrivacyRealtime === 'function'
+                            ) {
+                                window.handleStoryHighlightPrivacyRealtime({
+                                    accountId,
+                                    settings,
+                                    isFollowedByCurrentUser
+                                });
+                            }
                         }
                     }
                 }
