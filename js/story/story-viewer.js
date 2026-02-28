@@ -1314,6 +1314,31 @@
 
       if (res.ok) {
         inputEl.value = "";
+        try {
+          const msg = await res.json();
+          if (
+            global.ChatSidebar &&
+            typeof global.ChatSidebar.incrementUnread === "function"
+          ) {
+            const sidebarConversationId = (
+              msg?.conversationId ||
+              msg?.ConversationId ||
+              ""
+            )
+              .toString()
+              .toLowerCase();
+            if (sidebarConversationId) {
+              global.ChatSidebar.incrementUnread(
+                sidebarConversationId,
+                msg,
+                true,
+              );
+            }
+          }
+        } catch (updateErr) {
+          console.warn("Could not push sent reply to sidebar", updateErr);
+        }
+
         if (typeof global.toastSuccess === "function") {
           global.toastSuccess("Reply sent!");
         }
@@ -3277,6 +3302,10 @@
 
     const normalizedStoryId = stNormalizeId(storyId);
     if (!normalizedStoryId) {
+      result.notFound = true;
+      return result;
+    }
+    if (!stIsGuidLike(normalizedStoryId)) {
       result.notFound = true;
       return result;
     }
