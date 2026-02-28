@@ -1,128 +1,148 @@
 <div class="error-container">
-    <div class="error-content">
-        <div class="error-code">404</div>
-        <div class="error-illustration">
-             <i data-lucide="ghost" class="ghost-icon"></i>
-        </div>
-        <h1 id="error-title">Page not found</h1>
-        <p id="error-message">Sorry, the page you are looking for doesn't exist or has been removed.</p>
-        <div class="error-actions">
-            <button class="primary-btn" onclick="window.location.hash='#/home'">
-                <i data-lucide="home"></i> Back to Home
-            </button>
-            <button class="secondary-btn" onclick="history.back()">
-                <i data-lucide="arrow-left"></i> Go Back
-            </button>
-        </div>
+  <div class="error-content">
+    <div class="error-code">404</div>
+    <div class="error-illustration">
+      <i data-lucide="ghost" class="ghost-icon"></i>
     </div>
+    <h1 id="error-title">Page not found</h1>
+    <p id="error-message">
+      Sorry, the page you are looking for doesn't exist or has been removed.
+    </p>
+    <div class="error-actions">
+      <button class="primary-btn" onclick="window.location.hash = '#/home'">
+        <i data-lucide="home"></i> Back to Home
+      </button>
+      <button class="secondary-btn" onclick="history.back()">
+        <i data-lucide="arrow-left"></i> Go Back
+      </button>
+    </div>
+  </div>
 </div>
 
 <style>
-    .error-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        min-height: 80vh;
-        width: 100%;
-        color: var(--text-main);
-        text-align: center;
-        padding: 20px;
-        animation: fadeIn 0.5s ease-out;
-    }
+  .error-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 80vh;
+    width: 100%;
+    color: var(--text-primary);
+    text-align: center;
+    padding: 20px;
+    animation: fadeIn 0.5s ease-out;
+  }
 
-    .error-content {
-        max-width: 500px;
-    }
+  .error-content {
+    max-width: 500px;
+  }
 
-    .error-code {
-        font-size: 8rem;
-        font-weight: 900;
-        line-height: 1;
-        background: linear-gradient(135deg, var(--primary-color), var(--primary-variant));
-        background-clip: text;
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-bottom: 20px;
-        opacity: 0.1;
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        transform: translate(-50%, -50%);
-        z-index: -1;
-    }
+  .error-code {
+    font-size: 8rem;
+    font-weight: 900;
+    line-height: 1;
+    background: linear-gradient(
+      135deg,
+      var(--accent-primary),
+      var(--accent-hover)
+    );
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 20px;
+    opacity: 0.1;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: -1;
+  }
 
-    .error-illustration {
-        margin-bottom: 30px;
-    }
+  .error-illustration {
+    margin-bottom: 30px;
+  }
 
-    .ghost-icon {
-        width: 100px;
-        height: 100px;
-        color: var(--primary-color);
-        animation: float 3s ease-in-out infinite;
-    }
+  .ghost-icon {
+    width: 100px;
+    height: 100px;
+    color: var(--text-primary);
+    animation: float 3s ease-in-out infinite;
+  }
 
-    .error-content h1 {
-        font-size: 2.5rem;
-        margin-bottom: 15px;
-        color: var(--text-main);
-    }
+  .error-content h1 {
+    font-size: 2.5rem;
+    margin-bottom: 15px;
+    color: var(--text-primary);
+  }
 
-    .error-content p {
-        font-size: 1.1rem;
-        color: var(--text-muted);
-        margin-bottom: 40px;
-        line-height: 1.6;
-    }
+  .error-content p {
+    font-size: 1.1rem;
+    color: var(--text-tertiary);
+    margin-bottom: 40px;
+    line-height: 1.6;
+  }
 
-    .error-actions {
-        display: flex;
-        gap: 15px;
-        justify-content: center;
-    }
+  .error-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+  }
 
-    .error-actions button {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 12px 24px;
-        border-radius: 12px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }
+  .error-actions button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
 
-    .primary-btn {
-        background: var(--primary-color);
-        color: white;
-        border: none;
-        box-shadow: 0 4px 15px rgba(var(--primary-rgb), 0.3);
-    }
+  .primary-btn {
+    background: var(--accent-primary);
+    color: var(--text-white);
+    border: none;
+    box-shadow: var(--shadow-sm);
+  }
+  .primary-btn i,
+  .primary-btn svg {
+    color: var(--text-white);
+  }
+  .primary-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+    background: var(--accent-hover);
+  }
 
-    .primary-btn:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(var(--primary-rgb), 0.4);
-        background: var(--primary-variant);
-    }
+  .secondary-btn {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+  }
 
-    .secondary-btn {
-        background: var(--surface-light);
-        color: var(--text-main);
-        border: 1px solid var(--border-color);
-    }
+  .secondary-btn:hover {
+    background: var(--bg-hover);
+    transform: translateY(-3px);
+  }
 
-    .secondary-btn:hover {
-        background: var(--surface-hover);
-        transform: translateY(-3px);
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
     }
+    50% {
+      transform: translateY(-20px);
+    }
+  }
 
-    @keyframes float {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-20px); }
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
     }
-
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
+    to {
+      opacity: 1;
+      transform: translateY(0);
     }
+  }
 </style>

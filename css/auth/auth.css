@@ -472,12 +472,11 @@ input:focus {
   justify-content: center;
   border-radius: 50%;
   overflow: hidden;
+  opacity: 0.01;
 }
 
 .google-signin-render-host iframe {
-  transform: scale(
-    1.3
-  ); /* slightly scale so the native borders are hidden by overflow */
+  transform: scale(1.3);
 }
 
 .social-btn.google,
@@ -485,10 +484,6 @@ input:focus {
 .social-btn.tiktok {
   position: relative;
   overflow: hidden;
-}
-
-.social-btn.google.google-ready img {
-  display: none;
 }
 
 .social-btn.is-loading {
