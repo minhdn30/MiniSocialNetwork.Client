@@ -150,6 +150,25 @@
 
   function renderAvatarHtml(target, className = "post-share-chat-avatar") {
     const useGroupIcon = !!target.useGroupIcon;
+    const groupAvatars = Array.isArray(target.groupAvatars)
+      ? target.groupAvatars.filter((_, index) => index in target.groupAvatars)
+      : [];
+
+    if (useGroupIcon && groupAvatars.length > 0) {
+      const fallbackAvatar = global.APP_CONFIG?.DEFAULT_AVATAR || "";
+      const membersToShow = groupAvatars.slice(0, 4);
+      let compositeHtml = `<div class="${className} composite-group-avatar count-${membersToShow.length}">`;
+      membersToShow.forEach((url, i) => {
+        const safeUrl =
+          typeof url === "string" && url.trim().length > 0
+            ? escapeAttr(url.trim())
+            : escapeAttr(fallbackAvatar);
+        compositeHtml += `<img src="${safeUrl}" alt="" class="composite-avatar-part item-${i}" onerror="this.src='${escapeAttr(fallbackAvatar)}';">`;
+      });
+      compositeHtml += `</div>`;
+      return compositeHtml;
+    }
+
     if (useGroupIcon) {
       return `<div class="${className} ${className}-icon"><i data-lucide="users"></i></div>`;
     }
@@ -202,6 +221,19 @@
       const conversationId = normalizeId(
         rawTarget.conversationId || rawTarget.ConversationId || "",
       );
+      const rawGroupAvatars =
+        rawTarget.groupAvatars || rawTarget.GroupAvatars || [];
+      const normalizedGroupAvatars = Array.isArray(rawGroupAvatars)
+        ? rawGroupAvatars
+            .filter((_, index) => index in rawGroupAvatars)
+            .map((url) => (typeof url === "string" ? url.trim() : ""))
+        : [];
+      const shouldUseGroupIcon =
+        useGroupIcon ||
+        (global.ChatCommon &&
+        typeof global.ChatCommon.isDefaultGroupAvatar === "function"
+          ? global.ChatCommon.isDefaultGroupAvatar(avatarUrl)
+          : false);
       if (!conversationId) return null;
       return {
         key: `conversation:${conversationId}`,
@@ -210,7 +242,8 @@
         name: name || "Group chat",
         subtitle: subtitle || "Group conversation",
         avatarUrl,
-        useGroupIcon,
+        useGroupIcon: shouldUseGroupIcon,
+        groupAvatars: normalizedGroupAvatars,
       };
     }
 
@@ -224,6 +257,7 @@
       subtitle,
       avatarUrl,
       useGroupIcon: false,
+      groupAvatars: [],
     };
   }
 

@@ -14,6 +14,7 @@ const ChatSidebar = {
     pageSize: window.APP_CONFIG?.CONVERSATIONS_PAGE_SIZE || 20,
     currentActiveId: null, // ID of the currently active chat (for highlighting)
     _presenceUnsubscribe: null,
+    _onResize: null,
     settingsPopupCleanup: null,
     settingsLevelMap: {
         onlineStatusVisibility: {
@@ -510,6 +511,14 @@ const ChatSidebar = {
                 this.updateActiveId(null);
             }
         });
+
+        if (!this._onResize) {
+            this._onResize = () => {
+                this.updateTabsIndicator();
+                this.updateActiveItemIndicator();
+            };
+            window.addEventListener('resize', this._onResize);
+        }
     },
 
     renderLayout() {
@@ -544,6 +553,7 @@ const ChatSidebar = {
                     <div class="chat-tab ${this.currentFilter === null ? 'active' : ''}" data-filter="null">All</div>
                     <div class="chat-tab ${this.currentFilter === true ? 'active' : ''}" data-filter="true">Private</div>
                     <div class="chat-tab ${this.currentFilter === false ? 'active' : ''}" data-filter="false">Group</div>
+                    <div class="chat-tabs-indicator" id="chat-tabs-indicator" aria-hidden="true"></div>
                 </div>
                 <button class="chat-tabs-more-btn" id="chat-tabs-more-btn" title="More options">
                     <i data-lucide="ellipsis" size="18"></i>
@@ -563,6 +573,7 @@ const ChatSidebar = {
         this.initHeaderSettings();
         this.initMoreMenu();
         lucide.createIcons();
+        requestAnimationFrame(() => this.updateTabsIndicator());
     },
 
     initHeaderSettings() {
@@ -925,6 +936,7 @@ const ChatSidebar = {
             tab.onclick = () => {
                 tabs.forEach(t => t.classList.remove('active'));
                 tab.classList.add('active');
+                this.updateTabsIndicator();
                 
                 const filterVal = tab.dataset.filter;
                 this.currentFilter = filterVal === 'null' ? null : filterVal === 'true';
@@ -933,6 +945,58 @@ const ChatSidebar = {
                 this.loadConversations(false);
             };
         });
+        this.updateTabsIndicator();
+    },
+
+    updateTabsIndicator() {
+        const tabsList = document.querySelector('.chat-tabs-list');
+        if (!tabsList) return;
+
+        const indicator = tabsList.querySelector('.chat-tabs-indicator');
+        if (!indicator) return;
+
+        const activeTab = tabsList.querySelector('.chat-tab.active');
+        if (!activeTab) {
+            indicator.classList.remove('is-visible');
+            return;
+        }
+
+        indicator.style.width = `${activeTab.offsetWidth}px`;
+        indicator.style.transform = `translateX(${activeTab.offsetLeft}px)`;
+        indicator.classList.add('is-visible');
+    },
+
+    ensureActiveItemIndicator() {
+        const listContainer = document.getElementById('chat-conversation-list');
+        if (!listContainer) return null;
+
+        let indicator = listContainer.querySelector('.chat-item-active-indicator');
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.className = 'chat-item-active-indicator';
+            indicator.setAttribute('aria-hidden', 'true');
+            listContainer.prepend(indicator);
+        }
+
+        return indicator;
+    },
+
+    updateActiveItemIndicator() {
+        const listContainer = document.getElementById('chat-conversation-list');
+        if (!listContainer) return;
+
+        const indicator = this.ensureActiveItemIndicator();
+        if (!indicator) return;
+
+        const activeItem = listContainer.querySelector('.chat-item.active');
+        if (!activeItem) {
+            indicator.classList.remove('is-visible');
+            return;
+        }
+
+        indicator.style.transform = `translateY(${activeItem.offsetTop}px)`;
+        indicator.style.height = `${activeItem.offsetHeight}px`;
+        indicator.classList.add('is-visible');
     },
 
     initSearch() {
@@ -978,6 +1042,7 @@ const ChatSidebar = {
             if (item.dataset.route === '/messages') item.classList.add('active');
         });
 
+        requestAnimationFrame(() => this.updateTabsIndicator());
         await this.loadConversations();
     },
 
@@ -1065,6 +1130,7 @@ const ChatSidebar = {
         
         if (!isAppend && items.length === 0) {
             listContainer.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-tertiary);">No messages yet</div>';
+            this.updateActiveItemIndicator();
             return;
         }
 
@@ -1168,6 +1234,7 @@ const ChatSidebar = {
         }
         
         lucide.createIcons();
+        this.updateActiveItemIndicator();
     },
 
     openConversation(id) {
@@ -1646,6 +1713,7 @@ const ChatSidebar = {
 
         // Move to top of list
         listContainer.prepend(item);
+        this.updateActiveItemIndicator();
     }
     // If item not in DOM (e.g. new conversation), do a reload IF it matches filter
     else {
@@ -1667,7 +1735,10 @@ const ChatSidebar = {
         this.currentActiveId = this.normalizeId(id || "");
 
         const items = document.querySelectorAll('.chat-item');
-        if (items.length === 0) return;
+        if (items.length === 0) {
+            this.updateActiveItemIndicator();
+            return;
+        }
 
         const isChatPage = this.isChatRouteFromHash();
         const routeConversationId = this.normalizeId(this.extractConversationIdFromHash());
@@ -1678,6 +1749,8 @@ const ChatSidebar = {
             const isTarget = isChatPage && targetId && convId === targetId;
             item.classList.toggle('active', !!isTarget);
         });
+
+        this.updateActiveItemIndicator();
     },
 
     /**

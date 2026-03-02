@@ -11,6 +11,9 @@
     const MESSAGE_NOTIFICATION_DEDUPE_WINDOW_MS =
         Number(window.APP_CONFIG?.CHAT_NOTIFICATION_DEDUPE_WINDOW_MS) || 10000;
     const processedMessageNotificationKeys = new Map();
+    const SYSTEM_MESSAGE_TYPE = 3;
+    const SYSTEM_MESSAGE_ACTION_MEMBER_ADDED = 1;
+    const SYSTEM_MESSAGE_ACTION_GROUP_CREATED = 7;
 
     function stopHeartbeatLoop() {
         if (heartbeatTimer) {
@@ -146,6 +149,61 @@
         return false;
     }
 
+    function getMessageType(message) {
+        if (!message || typeof message !== 'object') return null;
+
+        if (window.ChatCommon && typeof window.ChatCommon.getMessageType === 'function') {
+            const resolved = Number(window.ChatCommon.getMessageType(message));
+            return Number.isFinite(resolved) ? resolved : null;
+        }
+
+        const rawType =
+            message.messageType ??
+            message.MessageType ??
+            message.message_type ??
+            message.Type ??
+            null;
+
+        const normalized = Number(rawType);
+        return Number.isFinite(normalized) ? normalized : null;
+    }
+
+    function isSystemMessage(message) {
+        return getMessageType(message) === SYSTEM_MESSAGE_TYPE;
+    }
+
+    function parseSystemMessageData(message) {
+        if (!message || typeof message !== 'object') return null;
+
+        if (window.ChatCommon && typeof window.ChatCommon.parseSystemMessageData === 'function') {
+            return window.ChatCommon.parseSystemMessageData(message);
+        }
+
+        const raw = message.systemMessageDataJson ?? message.SystemMessageDataJson ?? '';
+        if (typeof raw !== 'string' || !raw.trim().length) return null;
+
+        try {
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function getSystemMessageAction(message) {
+        const payload = parseSystemMessageData(message);
+        if (!payload) return null;
+
+        const action = Number(payload.action ?? payload.Action);
+        return Number.isFinite(action) ? action : null;
+    }
+
+    function shouldSyncSidebarForOwnSystemMessage(message) {
+        if (!isSystemMessage(message)) return false;
+        const action = getSystemMessageAction(message);
+        return action === SYSTEM_MESSAGE_ACTION_MEMBER_ADDED || action === SYSTEM_MESSAGE_ACTION_GROUP_CREATED;
+    }
+
     function handleIncomingMessageNotification(data) {
         const convId = (data.ConversationId || data.conversationId || '').toLowerCase();
         const message = data.Message || data.message;
@@ -156,7 +214,9 @@
 
         // Safety guard: ignore notifications not explicitly targeted to this account.
         if (targetAccountId && myId && targetAccountId !== myId) return;
-        if (!convId || senderId === myId) return;
+        if (!convId) return;
+        const shouldSyncOwnSystemMessage = senderId === myId && shouldSyncSidebarForOwnSystemMessage(message);
+        if (senderId === myId && !shouldSyncOwnSystemMessage) return;
         if (isDuplicateMessageNotification(convId, message)) return;
 
         const isChatPage = document.body.classList.contains('is-chat-page');
@@ -176,7 +236,7 @@
             }
         }
 
-        const shouldIncrementUnread = !isActiveInPage && !isActiveInWindow;
+        const shouldIncrementUnread = senderId !== myId && !isActiveInPage && !isActiveInWindow;
 
         if (shouldIncrementUnread && typeof scheduleGlobalUnreadRefresh === 'function') {
             scheduleGlobalUnreadRefresh();
@@ -192,7 +252,7 @@
             });
         }
 
-        const shouldAutoOpenWindow = !isMuted && !isChatPage && !isOpenInWindow;
+        const shouldAutoOpenWindow = !isMuted && !isChatPage && !isOpenInWindow && !isSystemMessage(message);
         if (shouldAutoOpenWindow) {
             console.log(`💬 [UserHub] Auto-opening chat window for conversation: ${convId}`);
             // priorityLeft=true (leftmost position), shouldFocus=false (don't steal focus)
