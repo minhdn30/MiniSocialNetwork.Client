@@ -172,6 +172,7 @@ body.chat-sidebar-open #sidebar.expanded ~ .main-content {
 .chat-tabs-list {
   display: flex;
   gap: 0;
+  position: relative;
 }
 
 .chat-tabs-more-btn {
@@ -479,26 +480,41 @@ body.chat-sidebar-open #sidebar.expanded ~ .main-content {
   color: var(--text-tertiary);
   cursor: pointer;
   position: relative;
+  transition: color 0.3s ease;
+  white-space: nowrap;
+  z-index: 1;
 }
 
 .chat-tab.active {
   color: var(--text-primary);
 }
 
-.chat-tab.active::after {
-  content: "";
+.chat-tabs-indicator {
   position: absolute;
   bottom: -1px;
   left: 0;
-  width: 100%;
+  width: 0;
   height: 2px;
   background: var(--text-primary);
+  border-radius: 2px 2px 0 0;
+  transform: translateX(0);
+  opacity: 0;
+  transition:
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.chat-tabs-indicator.is-visible {
+  opacity: 1;
 }
 
 .chat-list {
   flex: 1;
   overflow-y: auto;
   padding: 8px 0;
+  position: relative;
 }
 
 .chat-item {
@@ -508,6 +524,8 @@ body.chat-sidebar-open #sidebar.expanded ~ .main-content {
   gap: 14px;
   cursor: pointer;
   transition: background 0.2s;
+  position: relative;
+  z-index: 1;
 }
 
 .chat-item:hover {
@@ -515,22 +533,39 @@ body.chat-sidebar-open #sidebar.expanded ~ .main-content {
 }
 
 /* Active conversation indicator */
-.chat-item.active {
+.chat-item-active-indicator {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 0;
+  border-left: 3px solid var(--accent-primary, #3b82f6);
   background: linear-gradient(
     90deg,
     rgba(var(--accent-primary-rgb, 59, 130, 246), 0.1) 0%,
     rgba(var(--accent-primary-rgb, 59, 130, 246), 0.05) 100%
   );
-  border-left: 3px solid var(--accent-primary, #3b82f6);
-  padding-left: 13px; /* Compensate for border */
+  border-radius: 0 10px 10px 0;
+  transform: translateY(0);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
+  transition:
+    transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+    height 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.2s ease;
+}
+
+.chat-item-active-indicator.is-visible {
+  opacity: 1;
+}
+
+.chat-item.active {
+  background: transparent;
 }
 
 .chat-item.active:hover {
-  background: linear-gradient(
-    90deg,
-    rgba(var(--accent-primary-rgb, 59, 130, 246), 0.15) 0%,
-    rgba(var(--accent-primary-rgb, 59, 130, 246), 0.08) 100%
-  );
+  background: rgba(var(--accent-primary-rgb, 59, 130, 246), 0.05);
 }
 
 /* Active conversation text styling */

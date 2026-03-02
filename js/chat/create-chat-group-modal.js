@@ -11,7 +11,9 @@ let cgAvatarPreviewObjectUrl = null;
 let cgIsEventBound = false;
 let cgIsCreatingGroup = false;
 
-const cgGetMemberLimit = () => window.APP_CONFIG?.GROUP_CHAT_MEMBER_LIMIT || 50;
+const cgGetTotalMemberLimit = () =>
+  window.APP_CONFIG?.GROUP_CHAT_MEMBER_LIMIT || 50;
+const cgGetMemberLimit = () => Math.max(0, cgGetTotalMemberLimit() - 1);
 const cgGetMinSelectedMembers = () =>
   window.APP_CONFIG?.GROUP_CHAT_MIN_SELECTED_MEMBERS || 2;
 const cgGetSearchLimit = () =>
@@ -447,7 +449,9 @@ function cgToggleMember(id, name, avatar, username) {
   if (idx === -1) {
     if (cgSelectedMembers.length >= cgGetMemberLimit()) {
       if (window.toastWarning)
-        window.toastWarning(`Max ${cgGetMemberLimit()} members per group`);
+        window.toastWarning(
+          `You can select up to ${cgGetMemberLimit()} members (max ${cgGetTotalMemberLimit()} including you)`,
+        );
       return;
     }
     cgSelectedMembers.push({ id, name, avatar, username });
