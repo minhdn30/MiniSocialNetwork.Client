@@ -1562,17 +1562,23 @@ const ChatSidebar = {
 
         // Update preview text
         if (message) {
-            let content = message.content || message.Content || '';
+            let content = (message.content || message.Content || '').toString().trim();
             const isMedia = (message.medias?.length > 0) || (message.Medias?.length > 0);
             const isRecalled = !!(message.isRecalled ?? message.IsRecalled);
             const isSystemMessage = window.ChatCommon && typeof ChatCommon.isSystemMessage === 'function'
                 ? ChatCommon.isSystemMessage(message)
                 : false;
+            const messageType = window.ChatCommon && typeof ChatCommon.getMessageType === 'function'
+                ? Number(ChatCommon.getMessageType(message))
+                : Number(message?.messageType ?? message?.MessageType ?? 0);
+            const isPostShare = messageType === 5;
             
             if (isRecalled) {
                 content = 'Message recalled';
             } else if (isSystemMessage && window.ChatCommon && typeof ChatCommon.getSystemMessageText === 'function') {
                 content = ChatCommon.getSystemMessageText(message);
+            } else if (isPostShare) {
+                content = content || 'Shared a post';
             } else if (!content && isMedia) {
                 const mediaItems = (message.medias || message.Medias || []);
                 const hasVisualMedia = Array.isArray(mediaItems) && mediaItems.some((m) => {

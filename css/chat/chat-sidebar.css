@@ -194,45 +194,47 @@ body.chat-sidebar-open #sidebar.expanded ~ .main-content {
 
 /* --- Chat Popups (Tabs/More) --- */
 .chat-tabs-popup-menu {
-    background: var(--bg-primary);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid var(--border-primary);
-    border-radius: 16px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 0 0 1px var(--border-primary);
-    padding: 6px;
-    min-width: 190px;
-    z-index: 1001;
-    animation: popupFadeScale 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    transform-origin: top right;
+  background: var(--bg-primary);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-primary);
+  border-radius: 16px;
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.15),
+    0 0 0 1px var(--border-primary);
+  padding: 6px;
+  min-width: 190px;
+  z-index: 1001;
+  animation: popupFadeScale 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top right;
 }
 
 .chat-popup-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    color: var(--text-primary);
-    font-size: 14px;
-    font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .chat-popup-item:hover {
-    background: var(--bg-hover);
-    color: var(--accent-primary);
-    transform: translateX(4px);
+  background: var(--bg-hover);
+  color: var(--accent-primary);
+  transform: translateX(4px);
 }
 
 .chat-popup-item i {
-    color: var(--text-secondary);
-    transition: color 0.2s;
+  color: var(--text-secondary);
+  transition: color 0.2s;
 }
 
 .chat-popup-item:hover i {
-    color: var(--accent-primary);
+  color: var(--accent-primary);
 }
 
 /* --- Chat Settings Popup --- */
@@ -544,9 +546,13 @@ body.chat-sidebar-open #sidebar.expanded ~ .main-content {
   position: relative;
   --presence-avatar-size: 56px;
   --presence-dot-ratio: 0.24;
-  --presence-dot-size: calc(var(--presence-avatar-size) * var(--presence-dot-ratio));
+  --presence-dot-size: calc(
+    var(--presence-avatar-size) * var(--presence-dot-ratio)
+  );
   --presence-dot-border-ratio: 0.045;
-  --presence-dot-border-size: calc(var(--presence-avatar-size) * var(--presence-dot-border-ratio));
+  --presence-dot-border-size: calc(
+    var(--presence-avatar-size) * var(--presence-dot-border-ratio)
+  );
   --presence-diagonal-inset-ratio: 0.1464466;
   width: 56px;
   height: 56px;

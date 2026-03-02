@@ -1040,6 +1040,7 @@ function renderPostDetail(post, navigateDirection = null) {
     const likeIcon = document.getElementById("detailLikeIcon");
     const likeCount = document.getElementById("detailLikeCount");
     const commentCount = document.getElementById("detailCommentCount");
+    const shareBtn = document.getElementById("detailShareBtn");
 
     likeBtn.onclick = (e) => {
         const clickedIcon = e.target.closest(".react-icon");
@@ -1063,6 +1064,19 @@ function renderPostDetail(post, navigateDirection = null) {
     
     likeCount.textContent = post.totalReacts || 0;
     commentCount.textContent = post.totalComments || post.commentCount || 0;
+
+    if (shareBtn) {
+        shareBtn.onclick = (event) => {
+            if (event) event.stopPropagation();
+            if (window.openPostShareChatModal) {
+                window.openPostShareChatModal(post.postId, { postCode: post.postCode || "" });
+                return;
+            }
+            if (window.toastError) {
+                toastError("Share is unavailable right now.");
+            }
+        };
+    }
     
     // Lucide icons
     if(window.lucide) lucide.createIcons();

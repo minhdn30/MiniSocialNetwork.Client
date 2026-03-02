@@ -679,6 +679,10 @@ function closeAllOverlayModals(options = {}) {
       window.closeProfileHighlightModal();
   }
 
+  if (typeof window.closePostShareChatModal === "function") {
+      window.closePostShareChatModal({ force: true });
+  }
+
   // React List
   if (window.InteractionModule && typeof window.InteractionModule.closeReactList === 'function') {
       const interactModal = document.getElementById("interactionModal");
