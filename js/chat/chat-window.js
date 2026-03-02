@@ -699,6 +699,25 @@ const ChatWindow = {
       .forEach((b) => b.classList.remove("is-focused"));
   },
 
+  closeFloatingMessageMenus() {
+    if (
+      window.ChatActions &&
+      typeof window.ChatActions.closeAllMenus === "function"
+    ) {
+      window.ChatActions.closeAllMenus();
+    }
+
+    document
+      .querySelectorAll(".msg-more-menu, .msg-react-menu")
+      .forEach((menu) => menu.remove());
+    document
+      .querySelectorAll(".msg-bubble-wrapper.menu-active")
+      .forEach((el) => el.classList.remove("menu-active"));
+    document
+      .querySelectorAll(".msg-action-btn.active")
+      .forEach((el) => el.classList.remove("active"));
+  },
+
   trackBlobUrl(url, key = "global") {
     const ctx = this.getAnyRuntimeCtx();
     if (ctx && window.ChatMessageRuntime) {
@@ -2493,6 +2512,7 @@ const ChatWindow = {
     if (!chat) return;
 
     if (!chat.minimized) {
+      this.closeFloatingMessageMenus();
       // Into bubble
       if (chat.element) {
         chat.element.classList.remove("show");
@@ -2589,6 +2609,7 @@ const ChatWindow = {
   closeChat(id) {
     const chat = this.openChats.get(id);
     if (chat) {
+      this.closeFloatingMessageMenus();
       if (
         this._membersModal &&
         (this._membersModal.conversationId || "").toLowerCase() ===

@@ -188,7 +188,7 @@
                 <i data-lucide="message-circle" class="hover-scale-sm"></i>
                 <span class="count hover-scale-text">${commentCount}</span>
               </div>
-              <div class="action-item">
+              <div class="action-item" onclick="event.stopPropagation(); if(window.openPostShareChatModal) window.openPostShareChatModal('${post.postId}', { postCode: '${post.postCode || ""}' });" style="cursor: pointer;">
                 <i data-lucide="send" class="hover-scale-sm"></i>
               </div>
             </div>

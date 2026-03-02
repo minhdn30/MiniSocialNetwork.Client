@@ -91,6 +91,7 @@ window.EmojiUtils = {
             .edit-emoji-picker-container.show, 
             .chat-emoji-picker-container.show,
             .chat-window-emoji-container.show,
+            .post-share-chat-content-emoji-picker.show,
             .create-story-emoji-picker-container.show
         `);
     allPickers.forEach((p) => {

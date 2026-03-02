@@ -932,6 +932,19 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
         }),
+      searchPostShareTargets: (
+        keyword = "",
+        limit = window.APP_CONFIG?.POST_SHARE_CHAT_SEARCH_LIMIT || 20,
+      ) =>
+        apiFetch(
+          `/Messages/share-post/targets?keyword=${encodeURIComponent(keyword ?? "")}&limit=${encodeURIComponent(limit)}`,
+        ),
+      sharePost: (data) =>
+        apiFetch("/Messages/share-post", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }),
     },
   };
 

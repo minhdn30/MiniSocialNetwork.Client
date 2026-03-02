@@ -132,8 +132,8 @@
     MAX_POST_CONTENT_LENGTH: 3000, // Số ký tự tối đa cho caption của post
     MAX_STORY_TEXT_LENGTH: 500, // Số ký tự tối đa cho text story
     MAX_NAME_DISPLAY_LENGTH: 25, // Độ dài tối đa của tên user khi hiển thị (được cắt thông minh theo từ)
-    COMMENTS_PAGE_SIZE: 3, // Số lượng comment load mỗi lần
-    REPLIES_PAGE_SIZE: 3, // Số lượng reply load mỗi lần
+    COMMENTS_PAGE_SIZE: 5, // Số lượng comment load mỗi lần
+    REPLIES_PAGE_SIZE: 5, // Số lượng reply load mỗi lần
     COMMENT_CONTENT_TRUNCATE_LENGTH: 100, // Chiều dài nội dung comment tối đa trước khi bị cắt (tương tự post caption)
     MAX_COMMENT_INPUT_LENGTH: 500, // Số ký tự tối đa khi nhập comment/reply
     INTERACTIONS_PAGE_SIZE: 10, // Số lượng người react load mỗi lần
@@ -175,6 +175,7 @@
     GROUP_CHAT_INVITE_SEARCH_DEBOUNCE_MS: 300, // Debounce delay for invite member search input
     GROUP_CHAT_ADD_MEMBER_SEARCH_LIMIT: 10, // Max accounts returned per add-member search request
     GROUP_CHAT_ADD_MEMBER_SEARCH_DEBOUNCE_MS: 300, // Debounce delay for add-member search input
+    POST_SHARE_CHAT_SEARCH_LIMIT: 20, // Max recipients returned per post-share search request
     GROUP_NAME_MIN_LENGTH: 3, // Minimum characters for group name
     GROUP_NAME_MAX_LENGTH: 50, // Maximum characters for group name
     GROUP_CHAT_AVATAR_MAX_SIZE_MB: 5, // Max allowed group avatar upload size (MB)

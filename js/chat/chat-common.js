@@ -1391,6 +1391,7 @@ const ChatCommon = {
       if (normalized === "media") return 2;
       if (normalized === "system") return 3;
       if (normalized === "storyreply") return 4;
+      if (normalized === "postshare") return 5;
     }
 
     return rawType;
@@ -2362,7 +2363,9 @@ const ChatCommon = {
       if (
         child.classList.contains("msg-bubble") ||
         child.classList.contains("msg-media-anchor") ||
-        child.classList.contains("msg-file-anchor")
+        child.classList.contains("msg-file-anchor") ||
+        child.classList.contains("msg-post-share-preview") ||
+        child.classList.contains("msg-story-reply-preview")
       ) {
         anchor = child;
       }
@@ -2821,6 +2824,208 @@ const ChatCommon = {
     return `${display} ${units[unitIndex]}`;
   },
 
+  buildPostDetailPath(postCode) {
+    const normalizedPostCode = (postCode || "").toString().trim();
+    if (!normalizedPostCode) return "/posts";
+    if (window.RouteHelper?.buildPostDetailPath) {
+      return window.RouteHelper.buildPostDetailPath(normalizedPostCode);
+    }
+    return `/posts/${encodeURIComponent(normalizedPostCode)}`;
+  },
+
+  openPostShareTarget(postCode, postId = "") {
+    const normalizedPostCode = (postCode || "").toString().trim();
+    const normalizedPostId = (postId || "").toString().trim();
+
+    if (!normalizedPostCode && normalizedPostId) {
+      if (typeof window.openPostDetail === "function") {
+        window.openPostDetail(normalizedPostId, "");
+      }
+      return;
+    }
+    if (!normalizedPostCode) return;
+
+    if (typeof window.openPostDetailByCode === "function") {
+      window.openPostDetailByCode(normalizedPostCode);
+      return;
+    }
+
+    const path = this.buildPostDetailPath(normalizedPostCode);
+    if (window.RouteHelper?.goTo) {
+      window.RouteHelper.goTo(path);
+      return;
+    }
+
+    if (window.RouteHelper?.buildHash) {
+      window.location.hash = window.RouteHelper.buildHash(path);
+      return;
+    }
+
+    window.location.hash = `#${path}`;
+  },
+
+  handlePostSharePreviewClick(el) {
+    const postCode = (el?.dataset?.postCode || "").toString().trim();
+    const postId = (el?.dataset?.postId || "").toString().trim();
+    if (!postCode && !postId) return;
+    this.openPostShareTarget(postCode, postId);
+  },
+
+  toSafeText(value) {
+    if (value === null || value === undefined) return "";
+    try {
+      return String(value);
+    } catch (_) {
+      return "";
+    }
+  },
+
+  truncateTextSafe(value, maxChars) {
+    const normalized = this.toSafeText(value).trim();
+    if (!normalized) return "";
+    const max = Number(maxChars);
+    if (!Number.isFinite(max) || max <= 0) return "";
+    const chars = Array.from(normalized);
+    if (chars.length <= max) return normalized;
+    return `${chars.slice(0, Math.max(1, max - 1)).join("")}\u2026`;
+  },
+
+  normalizePostShareInfo(rawInfo) {
+    const info =
+      rawInfo && typeof rawInfo === "object"
+        ? rawInfo
+        : rawInfo === null || rawInfo === undefined
+          ? null
+          : {};
+    if (!info) return null;
+
+    const parseBoolean = (value) => {
+      if (typeof value === "boolean") return value;
+      if (typeof value === "string") return value.trim().toLowerCase() === "true";
+      return !!value;
+    };
+
+    const parseNullableNumber = (value) => {
+      if (value === null || value === undefined || value === "") return null;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const postId = (
+      info.postId ??
+      info.PostId ??
+      ""
+    )
+      .toString()
+      .trim();
+    const postCode = (
+      info.postCode ??
+      info.PostCode ??
+      ""
+    )
+      .toString()
+      .trim();
+    const ownerUsername = (
+      info.ownerUsername ??
+      info.OwnerUsername ??
+      ""
+    )
+      .toString()
+      .trim();
+    const ownerDisplayName = (
+      info.ownerDisplayName ??
+      info.OwnerDisplayName ??
+      ""
+    )
+      .toString()
+      .trim();
+    const thumbnailUrl = (
+      info.thumbnailUrl ??
+      info.ThumbnailUrl ??
+      ""
+    )
+      .toString()
+      .trim();
+    const contentSnippet = (
+      info.contentSnippet ??
+      info.ContentSnippet ??
+      ""
+    )
+      .toString()
+      .trim();
+
+    const thumbnailMediaType = parseNullableNumber(
+      info.thumbnailMediaType ?? info.ThumbnailMediaType,
+    );
+    const isPostUnavailable = parseBoolean(
+      info.isPostUnavailable ?? info.IsPostUnavailable,
+    );
+
+    return {
+      postCode,
+      postId,
+      ownerUsername,
+      ownerDisplayName,
+      thumbnailUrl,
+      thumbnailMediaType,
+      contentSnippet,
+      isPostUnavailable,
+    };
+  },
+
+  renderPostSharePreview(msg) {
+    const info = this.normalizePostShareInfo(
+      msg?.postShareInfo || msg?.PostShareInfo,
+    );
+    if (!info) return "";
+
+    const safeOwnerUsername = this.truncateTextSafe(info.ownerUsername, 40);
+    const safeOwnerDisplayName = this.truncateTextSafe(info.ownerDisplayName, 52);
+    const safeSnippet = this.truncateTextSafe(info.contentSnippet, 140);
+    const ownerPrimary = safeOwnerUsername
+      ? `@${safeOwnerUsername}`
+      : safeOwnerDisplayName || "Post";
+    const canOpenPost = !info.isPostUnavailable && (!!info.postCode || !!info.postId);
+    const rootAttrs = canOpenPost
+      ? ` data-post-code="${escapeHtml(info.postCode)}" data-post-id="${escapeHtml(info.postId)}" onclick="ChatCommon.handlePostSharePreviewClick(this)" style="cursor: pointer;"`
+      : "";
+
+    let thumbHtml = `<div class="msg-post-share-thumb-placeholder"><i data-lucide="image"></i></div>`;
+    if (info.isPostUnavailable) {
+      thumbHtml = `<div class="msg-post-share-thumb-placeholder msg-post-share-thumb-placeholder-unavailable"><i data-lucide="image-off"></i></div>`;
+    } else if (info.thumbnailUrl) {
+      if (info.thumbnailMediaType === 1) {
+        thumbHtml = `<video src="${escapeHtml(info.thumbnailUrl)}" muted playsinline preload="metadata"></video>
+          <div class="msg-post-share-thumb-play"><i data-lucide="play"></i></div>`;
+      } else {
+        thumbHtml = `<img src="${escapeHtml(info.thumbnailUrl)}" alt="Post thumbnail" loading="lazy">`;
+      }
+    }
+
+    const statusText = info.isPostUnavailable
+      ? "Post is no longer available"
+      : "Tap to view post";
+    const snippetHtml = safeSnippet
+      ? `<div class="msg-post-share-snippet">${escapeHtml(safeSnippet)}</div>`
+      : "";
+
+    return `
+      <div class="msg-post-share-preview ${info.isPostUnavailable ? "msg-post-share-unavailable" : ""}"${rootAttrs}>
+        <div class="msg-post-share-label"><i data-lucide="send"></i> Shared a post</div>
+        <div class="msg-post-share-card">
+          <div class="msg-post-share-thumb">
+            ${thumbHtml}
+          </div>
+          <div class="msg-post-share-meta">
+            <div class="msg-post-share-owner">${escapeHtml(ownerPrimary)}</div>
+            ${snippetHtml}
+            <div class="msg-post-share-status">${escapeHtml(statusText)}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
   /**
    * Normalize text for comparison by stripping whitespace and standardizing newlines.
    */
@@ -3256,12 +3461,22 @@ const ChatCommon = {
                             </div>`;
                         })()}
                         ${(() => {
+                          const textBubbleHtml =
+                            isRecalled || msg.content
+                              ? `<div class="msg-bubble${isRecalled ? " msg-bubble-recalled" : ""}">${isRecalled ? escapeHtml(recalledText) : linkify(escapeHtml(msg.content))}</div>`
+                              : "";
+
+                          // --- Post Share Preview ---
+                          if (!isRecalled && messageType === 5) {
+                            return `${textBubbleHtml}${this.renderPostSharePreview(msg)}`;
+                          }
+
                           // --- Story Reply Preview ---
-                          if (messageType === 4) {
+                          if (!isRecalled && messageType === 4) {
                             const sri =
                               msg.storyReplyInfo || msg.StoryReplyInfo;
                             if (!sri || sri.isStoryExpired) {
-                              return `<div class="msg-story-reply-preview msg-story-reply-expired">
+                              return `${textBubbleHtml}<div class="msg-story-reply-preview msg-story-reply-expired">
                                 <div class="msg-story-reply-expired-icon"><i data-lucide="image-off"></i></div>
                                 <span>Story is no longer available</span>
                               </div>`;
@@ -3368,19 +3583,14 @@ const ChatCommon = {
                                   <img src="${escapeHtml(sri.mediaUrl)}" alt="Story" loading="lazy">
                                 </div>`;
                               }
-                              return `<div class="msg-story-reply-preview" data-story-id="${escapeHtml(sri.storyId)}" onclick="if(window.openStoryViewerByStoryId) window.openStoryViewerByStoryId('${sri.storyId}')" style="cursor: pointer;">
+                              return `${textBubbleHtml}<div class="msg-story-reply-preview" data-story-id="${escapeHtml(sri.storyId)}" onclick="if(window.openStoryViewerByStoryId) window.openStoryViewerByStoryId('${sri.storyId}')" style="cursor: pointer;">
                                 <div class="msg-story-reply-label"><i data-lucide="reply"></i> Replied to story</div>
                                 ${thumbHtml}
                               </div>`;
                             }
                           }
-                          return "";
+                          return textBubbleHtml;
                         })()}
-                        ${
-                          isRecalled || msg.content
-                            ? `<div class="msg-bubble${isRecalled ? " msg-bubble-recalled" : ""}">${isRecalled ? escapeHtml(recalledText) : linkify(escapeHtml(msg.content))}</div>`
-                            : ""
-                        }
                         ${mediaHtml}
                         ${reactionBadgeHtml}
                     </div>
@@ -3762,6 +3972,10 @@ const ChatCommon = {
    */
   getLastMsgPreview(conv) {
     const lastMessage = conv?.lastMessage || conv?.LastMessage || null;
+    const messageType = this.getMessageType(lastMessage);
+    const rawContent = lastMessage?.content ?? lastMessage?.Content ?? "";
+    const contentText =
+      typeof rawContent === "string" ? rawContent.trim() : "";
 
     if (lastMessage?.isRecalled || lastMessage?.IsRecalled) {
       return "Message recalled";
@@ -3771,9 +3985,12 @@ const ChatCommon = {
       return this.getSystemMessageText(lastMessage);
     }
 
-    const rawContent = lastMessage?.content ?? lastMessage?.Content ?? "";
-    if (typeof rawContent === "string" && rawContent.trim().length) {
-      return rawContent.trim();
+    if (messageType === 5) {
+      return contentText || "Shared a post";
+    }
+
+    if (contentText.length) {
+      return contentText;
     }
 
     const medias = lastMessage?.medias || lastMessage?.Medias || [];
