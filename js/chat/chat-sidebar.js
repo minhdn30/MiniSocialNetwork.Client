@@ -346,6 +346,73 @@ const ChatSidebar = {
     return "User";
   },
 
+  buildLastMessagePreviewDisplay(conv = {}, message = null) {
+    const hasExplicitMessageOverride =
+      message !== null && message !== undefined;
+    const resolvedMessage =
+      message || conv?.lastMessage || conv?.LastMessage || null;
+    const meta =
+      window.ChatCommon &&
+      typeof ChatCommon.getLastMsgPreviewMeta === "function"
+        ? hasExplicitMessageOverride
+          ? ChatCommon.getLastMsgPreviewMeta(conv, { message: resolvedMessage })
+          : ChatCommon.getLastMsgPreviewMeta(conv)
+        : {
+            text:
+              window.ChatCommon &&
+              typeof ChatCommon.getLastMsgPreview === "function"
+                ? hasExplicitMessageOverride
+                  ? ChatCommon.getLastMsgPreview(conv, {
+                      message: resolvedMessage,
+                    })
+                  : ChatCommon.getLastMsgPreview(conv)
+                : "",
+            isDerived: false,
+          };
+
+    const isSystemLastMessage =
+      window.ChatCommon && typeof ChatCommon.isSystemMessage === "function"
+        ? ChatCommon.isSystemMessage(resolvedMessage)
+        : false;
+
+    const senderId = (
+      resolvedMessage?.sender?.accountId ||
+      resolvedMessage?.sender?.AccountId ||
+      resolvedMessage?.Sender?.accountId ||
+      resolvedMessage?.Sender?.AccountId ||
+      ""
+    ).toLowerCase();
+    const myId = (localStorage.getItem("accountId") || "").toLowerCase();
+    const isGroup = !!(conv?.isGroup ?? conv?.IsGroup ?? false);
+
+    let prefix = "";
+    if (senderId && !isSystemLastMessage) {
+      if (senderId === myId) {
+        prefix = "You: ";
+      } else if (isGroup) {
+        const senderPayload = resolvedMessage?.sender || resolvedMessage?.Sender || {};
+        const senderName = this.getGroupSenderName(senderPayload, conv);
+        prefix = `${senderName}: `;
+      }
+    }
+
+    return {
+      prefix,
+      text: meta?.text || "",
+      isDerived: !!meta?.isDerived,
+    };
+  },
+
+  buildLastMessagePreviewHtml(previewData = {}) {
+    const prefixText = escapeHtml(previewData.prefix || "");
+    const contentText = escapeHtml(previewData.text || "");
+    const contentClass = previewData.isDerived
+      ? "chat-last-msg-text chat-last-msg-derived"
+      : "chat-last-msg-text";
+
+    return `${prefixText ? `<span class="chat-last-msg-prefix">${prefixText}</span>` : ""}<span class="${contentClass}">${contentText}</span>`;
+  },
+
   getMemberAvatarUrl(member = {}) {
     return (
       member.avatarUrl ||
@@ -1242,11 +1309,8 @@ const ChatSidebar = {
       .map((conv) => {
         const name = escapeHtml(ChatCommon.getDisplayName(conv));
 
-        // --- Improved Last Message Preview ---
-        let previewText = ChatCommon.getLastMsgPreview(conv);
-        const isSystemLastMessage = ChatCommon.isSystemMessage(
-          conv?.lastMessage,
-        );
+        const previewData = this.buildLastMessagePreviewDisplay(conv);
+        const lastMsgHtml = this.buildLastMessagePreviewHtml(previewData);
         const lastMsgSenderId = (
           conv.lastMessage?.sender?.accountId ||
           conv.lastMessage?.sender?.AccountId ||
@@ -1254,17 +1318,6 @@ const ChatSidebar = {
           conv.lastMessage?.Sender?.AccountId ||
           ""
         ).toLowerCase();
-        if (lastMsgSenderId && !isSystemLastMessage) {
-          if (lastMsgSenderId === myId) {
-            previewText = `You: ${previewText}`;
-          } else if (conv.isGroup) {
-            const sender =
-              conv.lastMessage?.sender || conv.lastMessage?.Sender || {};
-            const senderName = this.getGroupSenderName(sender, conv);
-            previewText = `${senderName}: ${previewText}`;
-          }
-        }
-        const lastMsgEscaped = escapeHtml(previewText);
 
         const time = conv.lastMessageSentAt
           ? PostUtils.timeAgo(conv.lastMessageSentAt, true)
@@ -1335,7 +1388,7 @@ const ChatSidebar = {
                             ${isMuted ? '<i data-lucide="bell-off" class="chat-muted-icon"></i>' : ""}
                         </div>
                         <div class="chat-msg-row">
-                            <span class="chat-last-msg">${lastMsgEscaped}</span>
+                            <span class="chat-last-msg">${lastMsgHtml}</span>
                             ${time ? `<span class="chat-msg-dot">·</span><span class="chat-meta">${time}</span>` : ""}
                         </div>
                     </div>
@@ -1639,33 +1692,12 @@ const ChatSidebar = {
     );
     if (!item) return true;
 
-    let previewText = ChatCommon.getLastMsgPreview(conv);
-    const myId = (localStorage.getItem("accountId") || "").toLowerCase();
-    const lastMessage = conv.lastMessage || {};
-    const isSystemLastMessage =
-      window.ChatCommon && typeof ChatCommon.isSystemMessage === "function"
-        ? ChatCommon.isSystemMessage(lastMessage)
-        : false;
-    const lastMsgSenderId = (
-      lastMessage?.sender?.accountId ||
-      lastMessage?.sender?.AccountId ||
-      lastMessage?.Sender?.accountId ||
-      lastMessage?.Sender?.AccountId ||
-      ""
-    ).toLowerCase();
-
-    if (lastMsgSenderId && !isSystemLastMessage) {
-      if (lastMsgSenderId === myId) {
-        previewText = `You: ${previewText}`;
-      } else if (conv.isGroup) {
-        const sender = lastMessage?.sender || lastMessage?.Sender || {};
-        const senderName = this.getGroupSenderName(sender, conv);
-        previewText = `${senderName}: ${previewText}`;
-      }
-    }
+    const previewData = this.buildLastMessagePreviewDisplay(conv);
 
     const preview = item.querySelector(".chat-last-msg");
-    if (preview) preview.textContent = previewText;
+    if (preview) {
+      preview.innerHTML = this.buildLastMessagePreviewHtml(previewData);
+    }
 
     const msgRow = item.querySelector(".chat-msg-row");
     if (!msgRow) return true;
@@ -1790,6 +1822,12 @@ const ChatSidebar = {
         conv.lastMessage = message;
         conv.lastMessageSentAt =
           message.sentAt || message.SentAt || new Date().toISOString();
+        const previewMeta =
+          window.ChatCommon &&
+          typeof ChatCommon.getLastMsgPreviewMeta === "function"
+            ? ChatCommon.getLastMsgPreviewMeta(conv, { message })
+            : null;
+        conv.lastMessagePreview = previewMeta?.text || null;
         // Reset seen-by since it's a new message
         conv.lastMessageSeenBy = [];
         conv.lastMessageSeenCount = 0;
@@ -1830,78 +1868,14 @@ const ChatSidebar = {
 
       // Update preview text
       if (message) {
-        let content = (message.content || message.Content || "")
-          .toString()
-          .trim();
-        const isMedia =
-          message.medias?.length > 0 || message.Medias?.length > 0;
-        const isRecalled = !!(message.isRecalled ?? message.IsRecalled);
-        const isSystemMessage =
-          window.ChatCommon && typeof ChatCommon.isSystemMessage === "function"
-            ? ChatCommon.isSystemMessage(message)
-            : false;
-        const messageType =
-          window.ChatCommon && typeof ChatCommon.getMessageType === "function"
-            ? Number(ChatCommon.getMessageType(message))
-            : Number(message?.messageType ?? message?.MessageType ?? 0);
-        const isPostShare = messageType === 5;
-
-        if (isRecalled) {
-          content = "Message recalled";
-        } else if (
-          isSystemMessage &&
-          window.ChatCommon &&
-          typeof ChatCommon.getSystemMessageText === "function"
-        ) {
-          content = ChatCommon.getSystemMessageText(message);
-        } else if (isPostShare) {
-          content = content || "Shared a post";
-        } else if (!content && isMedia) {
-          const mediaItems = message.medias || message.Medias || [];
-          const hasVisualMedia =
-            Array.isArray(mediaItems) &&
-            mediaItems.some((m) => {
-              const mediaType = Number(m?.mediaType ?? m?.MediaType ?? 0);
-              return mediaType === 0 || mediaType === 1;
-            });
-          if (hasVisualMedia) {
-            content = "[Media]";
-          } else {
-            const firstMedia = mediaItems[0] || {};
-            const mediaType = Number(
-              firstMedia?.mediaType ?? firstMedia?.MediaType ?? 0,
-            );
-            const type =
-              window.ChatCommon &&
-              typeof ChatCommon.getMediaTypeLabel === "function"
-                ? ChatCommon.getMediaTypeLabel(mediaType)
-                : "[File]";
-            content = type;
-          }
-        }
-
-        // Group chat sender name prefix
-        const senderId = (
-          message.sender?.accountId ||
-          message.sender?.AccountId ||
-          message.Sender?.accountId ||
-          message.Sender?.AccountId ||
-          ""
-        ).toLowerCase();
-        const myId = (localStorage.getItem("accountId") || "").toLowerCase();
-
-        let prefix = "";
-        if (!isSystemMessage && senderId === myId) {
-          prefix = "You: ";
-        } else if (!isSystemMessage && conv?.isGroup) {
-          const senderPayload = message.sender || message.Sender || {};
-          const senderName = this.getGroupSenderName(senderPayload, conv);
-          prefix = `${senderName}: `;
-        }
-
-        const previewText = prefix + content;
+        const previewData = this.buildLastMessagePreviewDisplay(
+          conv || {},
+          message,
+        );
         const preview = item.querySelector(".chat-last-msg");
-        if (preview) preview.textContent = previewText;
+        if (preview) {
+          preview.innerHTML = this.buildLastMessagePreviewHtml(previewData);
+        }
 
         // Clear any seen avatars when new message arrives
         const endArea = item.querySelector(".chat-item-end");

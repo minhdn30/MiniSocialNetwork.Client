@@ -3972,50 +3972,200 @@ const ChatCommon = {
     window.location.hash = this.buildProfileHash(profileParam);
   },
 
-  /**
-   * Format last message preview
-   */
-  getLastMsgPreview(conv) {
-    const lastMessage = conv?.lastMessage || conv?.LastMessage || null;
+  buildLastMsgMediaSummary(medias) {
+    const items = Array.isArray(medias) ? medias : [];
+    if (!items.length) {
+      return {
+        sentText: "Sent a media file",
+        replyWithText: "a media file",
+      };
+    }
+
+    const counts = new Map();
+    let total = 0;
+    items.forEach((media) => {
+      const mediaType = Number(media?.mediaType ?? media?.MediaType ?? 3);
+      const normalizedType = Number.isFinite(mediaType) ? mediaType : 3;
+      counts.set(normalizedType, (counts.get(normalizedType) || 0) + 1);
+      total += 1;
+    });
+
+    if (counts.size === 1) {
+      const [[mediaType, count]] = Array.from(counts.entries());
+      if (mediaType === 0) {
+        if (count === 1)
+          return { sentText: "Sent a photo", replyWithText: "a photo" };
+        return {
+          sentText: `Sent ${count} photos`,
+          replyWithText: `${count} photos`,
+        };
+      }
+      if (mediaType === 1) {
+        if (count === 1)
+          return { sentText: "Sent a video", replyWithText: "a video" };
+        return {
+          sentText: `Sent ${count} videos`,
+          replyWithText: `${count} videos`,
+        };
+      }
+      if (mediaType === 2) {
+        if (count === 1)
+          return { sentText: "Sent an audio", replyWithText: "an audio" };
+        return {
+          sentText: `Sent ${count} audio files`,
+          replyWithText: `${count} audio files`,
+        };
+      }
+      if (count === 1)
+        return { sentText: "Sent a file", replyWithText: "a file" };
+      return {
+        sentText: `Sent ${count} files`,
+        replyWithText: `${count} files`,
+      };
+    }
+
+    if (total === 1) {
+      return {
+        sentText: "Sent an attachment",
+        replyWithText: "an attachment",
+      };
+    }
+
+    return {
+      sentText: "Sent attachments",
+      replyWithText: "attachments",
+    };
+  },
+
+  getLastMsgPreviewMeta(conv, options = {}) {
+    const messageOverride = options?.message || null;
+    const lastMessage =
+      messageOverride || conv?.lastMessage || conv?.LastMessage || null;
+    const rawServerPreview = !messageOverride
+      ? conv?.lastMessagePreview ?? conv?.LastMessagePreview ?? ""
+      : "";
+    const serverPreview =
+      typeof rawServerPreview === "string" ? rawServerPreview.trim() : "";
     const messageType = this.getMessageType(lastMessage);
+    const hasReplyFromPayload = !!(lastMessage?.replyTo || lastMessage?.ReplyTo);
+    const hasReplyFromFlag = !!(lastMessage?.hasReply ?? lastMessage?.HasReply);
+    const hasReplyFromServerPreview =
+      !messageOverride && /^replied\b/i.test(serverPreview);
+    const hasReply =
+      hasReplyFromPayload || hasReplyFromFlag || hasReplyFromServerPreview;
     const rawContent = lastMessage?.content ?? lastMessage?.Content ?? "";
     const contentText =
       typeof rawContent === "string" ? rawContent.trim() : "";
 
     if (lastMessage?.isRecalled || lastMessage?.IsRecalled) {
-      return "Message recalled";
+      return { text: "Message recalled", isDerived: true };
     }
 
     if (lastMessage && this.isSystemMessage(lastMessage)) {
-      return this.getSystemMessageText(lastMessage);
+      return {
+        text: this.getSystemMessageText(lastMessage),
+        isDerived: true,
+      };
+    }
+
+    if (!messageOverride && serverPreview.length > 0) {
+      const isLegacyReplyPreviewMissingPrefix =
+        hasReply && contentText.length > 0 && serverPreview === contentText;
+      if (isLegacyReplyPreviewMissingPrefix) {
+        // Skip stale server preview and rebuild from current message + reply flag
+      } else {
+      const isRawContentText =
+        (messageType === 1 || messageType === 2 || messageType === null) &&
+        !hasReply &&
+        contentText.length > 0 &&
+        serverPreview === contentText;
+
+        return {
+          text: serverPreview,
+          isDerived: !isRawContentText,
+        };
+      }
     }
 
     if (messageType === 5) {
-      return contentText || "Shared a post";
+      return {
+        text: hasReply ? "Replied with a shared post" : "Shared a post",
+        isDerived: true,
+      };
     }
 
-    if (contentText.length) {
-      return contentText;
+    if (messageType === 4) {
+      if (contentText.length > 0) {
+        return {
+          text: `Replied to a story: ${contentText}`,
+          isDerived: true,
+        };
+      }
+      return { text: "Replied to a story", isDerived: true };
     }
 
-    const medias = lastMessage?.medias || lastMessage?.Medias || [];
-    if (Array.isArray(medias) && medias.length > 0) {
-      const hasVisualMedia = medias.some((m) => {
-        const mediaType = Number(m?.mediaType ?? m?.MediaType ?? 0);
-        return mediaType === 0 || mediaType === 1;
-      });
-      if (hasVisualMedia) {
-        return "[Media]";
+    if (messageType === 2) {
+      if (contentText.length > 0) {
+        return {
+          text: hasReply ? `Replied: ${contentText}` : contentText,
+          isDerived: hasReply,
+        };
       }
 
-      const first = medias[0] || {};
-      const mediaType = Number(first.mediaType ?? first.MediaType);
-      return this.getMediaTypeLabel(mediaType);
+      const mediaSummary = this.buildLastMsgMediaSummary(
+        lastMessage?.medias || lastMessage?.Medias || [],
+      );
+      return {
+        text: hasReply
+          ? `Replied with ${mediaSummary.replyWithText}`
+          : mediaSummary.sentText,
+        isDerived: true,
+      };
     }
 
-    if (conv?.lastMessagePreview) return conv.lastMessagePreview;
+    if (messageType === 1 || messageType === null) {
+      if (contentText.length > 0) {
+        return {
+          text: hasReply ? `Replied: ${contentText}` : contentText,
+          isDerived: hasReply,
+        };
+      }
+      if (hasReply) {
+        return { text: "Replied to a message", isDerived: true };
+      }
+      if (messageType === 1) {
+        return { text: "Sent a message", isDerived: true };
+      }
+    }
 
-    return conv?.isGroup ? "Group created" : "Started a conversation";
+    if (contentText.length > 0) {
+      return {
+        text: hasReply ? `Replied: ${contentText}` : contentText,
+        isDerived: hasReply,
+      };
+    }
+
+    if (hasReply) {
+      return { text: "Replied to a message", isDerived: true };
+    }
+
+    if (conv?.lastMessagePreview) {
+      return { text: conv.lastMessagePreview, isDerived: true };
+    }
+
+    const isGroup = !!(conv?.isGroup ?? conv?.IsGroup ?? false);
+    return {
+      text: isGroup ? "Group created" : "Started a conversation",
+      isDerived: true,
+    };
+  },
+
+  /**
+   * Format last message preview
+   */
+  getLastMsgPreview(conv, options = {}) {
+    const meta = this.getLastMsgPreviewMeta(conv, options);
+    return meta?.text || "";
   },
 
   /**

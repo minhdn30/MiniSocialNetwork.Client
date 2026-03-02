@@ -1877,6 +1877,15 @@ const ChatActions = {
             </div>
         `;
 
+    if (!isRecalled) {
+      itemsHtml += `
+            <div class="msg-more-item" onclick="window.ChatActions.copyMessageContent('${resolvedMessageId}')">
+                <i data-lucide="copy"></i>
+                <span>Copy</span>
+            </div>
+            `;
+    }
+
     if (canForward) {
       itemsHtml += `
             <div class="msg-more-item" onclick="window.ChatActions && ChatActions.closeAllMenus(); if(window.openForwardMessageModal){ window.openForwardMessageModal('${resolvedMessageId}'); } else if(window.toastInfo){ window.toastInfo('Forward is unavailable'); }">
@@ -2030,6 +2039,69 @@ const ChatActions = {
         }
       },
     );
+  },
+
+  getMessageCopyText(messageId) {
+    const normId = (messageId || "").toString().toLowerCase();
+    if (!normId) return "";
+
+    const bubble = document.querySelector(
+      `.msg-bubble-wrapper[data-message-id="${normId}"]`,
+    );
+    if (!bubble) return "";
+
+    const isRecalled =
+      (bubble.dataset?.isRecalled || "").toString().toLowerCase() === "true";
+    if (isRecalled) return "";
+
+    const textEl = bubble.querySelector(".msg-bubble");
+    if (!textEl) return "";
+
+    return (textEl.textContent || "").replace(/\u00a0/g, " ").trim();
+  },
+
+  async writeTextToClipboard(text) {
+    if (!text) return false;
+
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    let isCopied = false;
+    try {
+      isCopied = document.execCommand("copy");
+    } finally {
+      textarea.remove();
+    }
+
+    return isCopied;
+  },
+
+  async copyMessageContent(messageId) {
+    this.closeAllMenus();
+
+    const contentText = this.getMessageCopyText(messageId);
+    if (!contentText) return;
+
+    try {
+      const copied = await this.writeTextToClipboard(contentText);
+      if (copied && window.toastSuccess) {
+        window.toastSuccess("Message copied");
+      }
+    } catch (error) {
+      console.error("Failed to copy message content:", error);
+      window.toastError && window.toastError("Failed to copy message");
+    }
   },
 
   /**

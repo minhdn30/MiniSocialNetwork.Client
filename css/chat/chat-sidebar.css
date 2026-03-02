@@ -672,6 +672,18 @@ body.chat-sidebar-open #sidebar.expanded ~ .main-content {
   line-height: 1.4;
 }
 
+.chat-last-msg-prefix {
+  font-style: normal;
+}
+
+.chat-last-msg-text {
+  font-style: normal;
+}
+
+.chat-last-msg-derived {
+  font-style: italic;
+}
+
 .chat-msg-dot {
   color: var(--text-tertiary);
   font-size: 13px;

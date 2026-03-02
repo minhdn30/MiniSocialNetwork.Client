@@ -542,6 +542,14 @@
             result.message.sentAt ||
             result.message.SentAt ||
             new Date().toISOString();
+          const previewMeta =
+            window.ChatCommon &&
+            typeof ChatCommon.getLastMsgPreviewMeta === "function"
+              ? ChatCommon.getLastMsgPreviewMeta(conversation, {
+                  message: result.message,
+                })
+              : null;
+          conversation.lastMessagePreview = previewMeta?.text || null;
         }
       }
 
