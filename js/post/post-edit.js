@@ -97,13 +97,13 @@
         editPanel.style.display = "flex";
         
         // UI Resets
-        const emojiHeader = document.getElementById("editEmojiHeader");
-        if (emojiHeader) emojiHeader.classList.remove("expanded");
         const emojiContainer = document.getElementById("editEmojiPickerContainer");
+        const emojiBtn = document.getElementById("editPostEmojiBtn");
         if (emojiContainer) {
             emojiContainer.classList.remove("show");
             emojiContainer.innerHTML = "";
         }
+        if (emojiBtn) emojiBtn.setAttribute("aria-expanded", "false");
         
         // Hide all extra sections
         this.toggleSection('location', false);
@@ -145,9 +145,12 @@
 
                 // Emoji Picker
                 const emojiContainer = document.getElementById("editEmojiPickerContainer");
-                const emojiTrigger = document.getElementById("editEmojiHeader");
+                const emojiTrigger = document.getElementById("editPostEmojiBtn");
                 if (emojiContainer && emojiContainer.classList.contains("show")) {
-                    if (!emojiContainer.contains(e.target) && !emojiTrigger.contains(e.target)) {
+                    if (
+                        !emojiContainer.contains(e.target) &&
+                        !(emojiTrigger && emojiTrigger.contains(e.target))
+                    ) {
                         this.toggleEmojiPicker(); // Close it
                     }
                 }
@@ -168,9 +171,11 @@
 
         // Close emoji picker if open
         const emojiContainer = document.getElementById("editEmojiPickerContainer");
+        const emojiBtn = document.getElementById("editPostEmojiBtn");
         if (emojiContainer && window.EmojiUtils) {
             EmojiUtils.closePicker(emojiContainer);
         }
+        if (emojiBtn) emojiBtn.setAttribute("aria-expanded", "false");
         
         // Close privacy dropdown
         const dropdown = document.getElementById("editPrivacyDropdown");
@@ -327,9 +332,9 @@
         const container = document.getElementById("editEmojiPickerContainer");
         if (!container) return;
 
-        const header = document.getElementById("editEmojiHeader");
+        const triggerBtn = document.getElementById("editPostEmojiBtn");
         const textarea = document.getElementById("editPostTextarea");
-        
+
         // Check if currently showing
         const isShowing = container.classList.contains("show");
         
@@ -340,7 +345,7 @@
                 container.classList.remove("show");
                 container.innerHTML = "";
             }
-            if (header) header.classList.remove("expanded");
+            if (triggerBtn) triggerBtn.setAttribute("aria-expanded", "false");
         } else {
             // Opening
             if (window.EmojiUtils) {
@@ -348,7 +353,7 @@
                     EmojiUtils.insertAtCursor(textarea, emoji.native);
                     this.updateCharCount();
                 });
-                if (header) header.classList.add("expanded");
+                if (triggerBtn) triggerBtn.setAttribute("aria-expanded", "true");
             } else {
                 console.error("EmojiUtils not found");
             }

@@ -3116,7 +3116,8 @@ const ChatCommon = {
     const messageType = this.getMessageType(msg);
     const isSystemMessage = this.isSystemMessage(msg);
     const isRecalled = !!(msg.isRecalled ?? msg.IsRecalled);
-    const isPinned = !!(msg.isPinned ?? msg.IsPinned);
+    const isPinnedRaw = !!(msg.isPinned ?? msg.IsPinned);
+    const isPinned = isPinnedRaw && !isRecalled;
     const reactionData = this.getMessageReactionData(msg);
     const currentReactRaw =
       msg.currentUserReactType !== undefined
@@ -4793,10 +4794,70 @@ const ChatCommon = {
   /**
    * Load a cursor-based message slice around a target message, clear and re-render.
    */
+  contextFindMessageElement(msgContainer, normalizedMessageId) {
+    if (!msgContainer || !normalizedMessageId) return null;
+
+    const exact = msgContainer.querySelector(
+      `.msg-bubble-wrapper[data-message-id="${normalizedMessageId}"]`,
+    );
+    if (exact) return exact;
+
+    const all = msgContainer.querySelectorAll(
+      ".msg-bubble-wrapper[data-message-id]",
+    );
+    for (const bubble of all) {
+      const currentId = (bubble?.dataset?.messageId || "")
+        .toString()
+        .toLowerCase();
+      if (currentId && currentId === normalizedMessageId) return bubble;
+    }
+
+    return null;
+  },
+
+  async contextFocusTargetMessage(msgContainer, messageId, options = {}) {
+    const normalizedMessageId = (messageId || "").toString().toLowerCase();
+    if (!normalizedMessageId || !msgContainer) return false;
+
+    const maxAttempts =
+      Number(options.maxAttempts) > 0 ? Number(options.maxAttempts) : 12;
+    const delayMs = Number(options.delayMs) > 0 ? Number(options.delayMs) : 90;
+    let target = null;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      target = this.contextFindMessageElement(msgContainer, normalizedMessageId);
+      if (target) break;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
+    if (!target) return false;
+
+    const centerTarget = () => {
+      if (!target || !target.isConnected) return;
+      try {
+        target.scrollIntoView({
+          behavior: "auto",
+          block: "center",
+          inline: "nearest",
+        });
+      } catch {
+        target.scrollIntoView();
+      }
+    };
+
+    centerTarget();
+    [90, 220].forEach((waitMs) => {
+      setTimeout(() => centerTarget(), waitMs);
+    });
+    window.ChatActions?.highlightMessage(target);
+    return true;
+  },
+
   async contextLoadMessageContext(ctx, messageId) {
     const state = ctx.getState();
     if (state.isLoading) return;
     ctx.setState({ isLoading: true });
+    const normalizedMessageId = (messageId || "").toString().toLowerCase();
 
     const pageSize = ctx.getPageSize();
     const conversationId = ctx.getConversationId();
@@ -4874,16 +4935,11 @@ const ChatCommon = {
 
       ctx.setState({ isLoading: false });
 
-      // Scroll to target and highlight
-      requestAnimationFrame(() => {
-        const target = msgContainer.querySelector(
-          `.msg-bubble-wrapper[data-message-id="${messageId}"]`,
-        );
-        if (target) {
-          target.scrollIntoView({ behavior: "auto", block: "center" });
-          window.ChatActions?.highlightMessage(target);
-        }
-      });
+      // Focus target with retries to keep jump position stable after async rendering/layout.
+      await ChatCommon.contextFocusTargetMessage(
+        msgContainer,
+        normalizedMessageId,
+      );
     } catch (err) {
       console.error("contextLoadMessageContext error:", err);
       window.toastError && window.toastError("Failed to jump to message");

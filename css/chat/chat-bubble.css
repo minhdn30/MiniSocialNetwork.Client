@@ -100,6 +100,7 @@
   font-size: 15px;
   line-height: 1.4;
   word-break: break-word;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
@@ -185,6 +186,19 @@
   position: relative;
   min-width: 0;
   max-width: 100%;
+}
+
+/* hard guard: every direct message block must stay inside bubble width */
+.msg-content-container > :not(.msg-pinned-badge):not(.msg-reactions-summary) {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.msg-content-container > .msg-reply-preview,
+.msg-content-container > .msg-post-share-preview,
+.msg-content-container > .msg-story-reply-preview {
+  width: 100%;
 }
 
 .sent .msg-content-container {
@@ -1023,9 +1037,9 @@ body.light-mode {
 
 .chat-pinned-item {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 12px 52px 12px 16px;
   border-bottom: 1px solid var(--border-secondary, rgba(255, 255, 255, 0.1));
   transition: background 0.15s ease;
   cursor: pointer;
@@ -1054,7 +1068,7 @@ body.light-mode {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 6px;
 }
 
 .chat-pinned-item-top {
@@ -1098,7 +1112,7 @@ body.light-mode {
 .chat-pinned-item-message-meta {
   font-size: 11px;
   color: var(--text-tertiary);
-  margin-top: 2px;
+  margin-top: 1px;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -1141,15 +1155,16 @@ body.light-mode {
 /* Media thumbnails */
 .chat-pinned-media-preview {
   display: flex;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 8px;
+  margin-top: 4px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .chat-pinned-media-thumb {
-  width: 48px;
-  height: 48px;
-  border-radius: 6px;
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
   overflow: hidden;
   position: relative;
   flex-shrink: 0;
@@ -1203,21 +1218,138 @@ body.light-mode {
   color: #fff;
 }
 
+.chat-pinned-media-more {
+  min-width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  background: var(--chat-theme-action-hover-bg, rgba(255, 255, 255, 0.12));
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 8px;
+}
+
+.chat-pinned-media-preview.count-1.media-only .chat-pinned-media-thumb {
+  width: 128px;
+  height: 92px;
+}
+
+.chat-pinned-media-preview.count-1:not(.media-only) .chat-pinned-media-thumb {
+  width: 72px;
+  height: 72px;
+}
+
+.chat-pinned-item-content > .msg-reply-preview,
+.chat-pinned-item-content > .msg-story-reply-preview,
+.chat-pinned-item-content > .msg-post-share-preview {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.chat-pinned-item-content > .msg-post-share-preview .msg-post-share-card,
+.chat-pinned-item-content > .msg-story-reply-preview {
+  min-width: 0;
+}
+
+.chat-pinned-item-content > .msg-reply-preview {
+  padding: 6px 8px;
+}
+
+.chat-pinned-item-content > .msg-post-share-preview {
+  padding: 8px 10px;
+  gap: 6px;
+  pointer-events: none;
+  cursor: default !important;
+}
+
+.chat-pinned-item-content > .msg-post-share-preview .msg-post-share-label {
+  font-size: 12.5px;
+}
+
+.chat-pinned-item-content > .msg-post-share-preview .msg-post-share-thumb {
+  width: 64px;
+}
+
+.chat-pinned-item-content > .msg-story-reply-preview {
+  padding: 8px 10px;
+  gap: 6px;
+}
+
+.chat-pinned-item-content > .msg-story-reply-preview .msg-story-reply-thumb {
+  width: 72px;
+  height: 72px;
+}
+
+.chat-pinned-item-content > .msg-post-share-preview .msg-post-share-owner,
+.chat-pinned-item-content > .msg-post-share-preview .msg-post-share-status,
+.chat-pinned-item-content > .msg-story-reply-preview .msg-story-reply-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-pinned-item-content > .msg-post-share-preview .msg-post-share-snippet {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.chat-pinned-load-more {
+  padding: 10px 14px 12px;
+  display: flex;
+  justify-content: center;
+}
+
+.chat-pinned-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+
+.chat-pinned-loading.done {
+  opacity: 0.8;
+}
+
+.chat-pinned-load-more-btn {
+  border: none;
+  background: transparent;
+  color: var(--chat-theme-accent, var(--accent-primary, #6366f1));
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chat-pinned-load-more-btn:hover {
+  text-decoration: underline;
+}
+
 /* More button (replaces Jump) */
 .chat-pinned-more-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
   background: none;
   border: none;
   color: var(--chat-theme-system-text, var(--text-tertiary));
   cursor: pointer;
   padding: 6px;
   border-radius: 50%;
-  flex-shrink: 0;
-  align-self: flex-start;
-  margin-top: 2px;
   opacity: 0;
   transition:
     opacity 0.15s,
-    background 0.15s;
+    background 0.15s,
+    color 0.15s;
 }
 
 .chat-pinned-item:hover .chat-pinned-more-btn {
@@ -2159,6 +2291,8 @@ body.light-mode {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  width: 100%;
+  min-width: 0;
   padding: 6px 10px;
   border-left: 3px solid
     var(--chat-theme-accent, var(--accent-primary, #6366f1));
@@ -2187,6 +2321,8 @@ body.light-mode .msg-reply-preview:hover {
 .msg-reply-author {
   font-weight: 600;
   color: var(--chat-theme-accent, var(--accent-primary, #6366f1));
+  min-width: 0;
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2194,6 +2330,8 @@ body.light-mode .msg-reply-preview:hover {
 
 .msg-reply-text {
   color: var(--text-secondary, #a0a3a8);
+  min-width: 0;
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

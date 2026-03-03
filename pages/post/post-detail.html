@@ -162,19 +162,19 @@
                         <!-- Caption Input -->
                         <div class="post-caption-container">
                             <textarea id="editPostTextarea" class="post-caption-input" placeholder="Write a caption..." maxlength="3000"></textarea>
-                            <div class="char-count"><span id="editCharCount">0</span>/<span id="editMaxCharCount">3000</span></div>
-                        </div>
-    
-                        <!-- Emoji Section -->
-                        <div class="post-section">
-                            <div class="section-header" id="editEmojiHeader" onclick="toggleEditPostEmojiPicker(event)">
-                                <div class="section-left">
-                                    <i data-lucide="smile" class="section-icon"></i>
-                                    <span class="section-title">Add emoji</span>
-                                </div>
-                                <i data-lucide="chevron-right" class="chevron-icon" id="editEmojiChevron"></i>
+                            <div class="post-caption-tools">
+                                <div class="char-count"><span id="editCharCount">0</span>/<span id="editMaxCharCount">3000</span></div>
+                                <button
+                                  type="button"
+                                  id="editPostEmojiBtn"
+                                  class="post-caption-emoji-btn"
+                                  onclick="toggleEditPostEmojiPicker(event)"
+                                  aria-label="Add emoji"
+                                >
+                                    <i data-lucide="smile-plus"></i>
+                                </button>
+                                <div id="editEmojiPickerContainer" class="post-emoji-picker-container edit-emoji-picker-container"></div>
                             </div>
-                            <div id="editEmojiPickerContainer" class="edit-emoji-picker-container"></div>
                         </div>
     
                         <!-- Location Section -->
