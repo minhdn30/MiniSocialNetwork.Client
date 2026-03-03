@@ -40,28 +40,34 @@
         }, HEARTBEAT_INTERVAL_MS);
     }
 
+    function normalizeConversationId(value) {
+        return (value || "").toString().trim().toLowerCase();
+    }
+
     function isConversationOpenInWindow(conversationId) {
-        if (!conversationId || !window.ChatWindow || typeof window.ChatWindow.getOpenChatId !== 'function') {
+        const normalizedConversationId = normalizeConversationId(conversationId);
+        if (!normalizedConversationId || !window.ChatWindow || typeof window.ChatWindow.getOpenChatId !== 'function') {
             return false;
         }
-        return !!window.ChatWindow.getOpenChatId(conversationId);
+        return !!window.ChatWindow.getOpenChatId(normalizedConversationId);
     }
 
     async function tryAutoOpenConversationWindow(conversationId) {
-        if (!conversationId || pendingAutoOpenConversations.has(conversationId)) {
+        const normalizedConversationId = normalizeConversationId(conversationId);
+        if (!normalizedConversationId || pendingAutoOpenConversations.has(normalizedConversationId)) {
             return;
         }
         if (!window.ChatWindow || typeof window.ChatWindow.openById !== 'function') {
             return;
         }
 
-        pendingAutoOpenConversations.add(conversationId);
+        pendingAutoOpenConversations.add(normalizedConversationId);
         try {
-            if (isConversationOpenInWindow(conversationId)) return;
+            if (isConversationOpenInWindow(normalizedConversationId)) return;
 
             // Attempt 1: immediate open.
-            await window.ChatWindow.openById(conversationId, true, false);
-            if (isConversationOpenInWindow(conversationId)) return;
+            await window.ChatWindow.openById(normalizedConversationId, true, false);
+            if (isConversationOpenInWindow(normalizedConversationId)) return;
 
             // Attempt 2: refresh sidebar source, then open again.
             if (window.ChatSidebar && typeof window.ChatSidebar.loadConversations === 'function') {
@@ -71,8 +77,8 @@
                     console.warn("[UserHub] Sidebar refresh before auto-open failed:", e);
                 }
             }
-            await window.ChatWindow.openById(conversationId, true, false);
-            if (isConversationOpenInWindow(conversationId)) return;
+            await window.ChatWindow.openById(normalizedConversationId, true, false);
+            if (isConversationOpenInWindow(normalizedConversationId)) return;
 
             // Attempt 3: short delayed retry for post-reload race windows.
             await new Promise(resolve => setTimeout(resolve, 300));
@@ -83,11 +89,11 @@
                     console.warn("[UserHub] Delayed sidebar refresh before auto-open failed:", e);
                 }
             }
-            await window.ChatWindow.openById(conversationId, true, false);
+            await window.ChatWindow.openById(normalizedConversationId, true, false);
         } catch (e) {
             console.error("[UserHub] Auto-open chat window failed:", e);
         } finally {
-            pendingAutoOpenConversations.delete(conversationId);
+            pendingAutoOpenConversations.delete(normalizedConversationId);
         }
     }
 
@@ -220,7 +226,13 @@
         if (isDuplicateMessageNotification(convId, message)) return;
 
         const isChatPage = document.body.classList.contains('is-chat-page');
-        const isActiveInPage = isChatPage && window.ChatPage && window.ChatPage.currentChatId?.toLowerCase() === convId;
+        let isActiveInPage = false;
+        if (isChatPage && window.ChatPage && window.ChatPage.currentChatId?.toLowerCase() === convId) {
+            const isNearBottomInPage = typeof window.ChatPage.isNearBottom === 'function'
+                ? !!window.ChatPage.isNearBottom()
+                : true;
+            isActiveInPage = isNearBottomInPage;
+        }
 
         let isActiveInWindow = false;
         let isOpenInWindow = false;
@@ -231,7 +243,10 @@
                 const chatObj = window.ChatWindow.openChats.get(openId);
                 const chatBox = document.getElementById(`chat-box-${openId}`);
                 if (chatObj && chatBox && chatBox.classList.contains("is-focused") && !chatObj.minimized) {
-                    isActiveInWindow = true;
+                    const isNearBottomInWindow = typeof window.ChatWindow.isNearBottom === 'function'
+                        ? !!window.ChatWindow.isNearBottom(openId)
+                        : true;
+                    isActiveInWindow = isNearBottomInWindow;
                 }
             }
         }
@@ -244,6 +259,15 @@
 
         if (window.ChatSidebar && typeof window.ChatSidebar.incrementUnread === 'function') {
             window.ChatSidebar.incrementUnread(convId, message, !shouldIncrementUnread);
+        }
+
+        if (
+            isChatPage &&
+            window.ChatPage &&
+            window.ChatPage.currentChatId?.toLowerCase() === convId &&
+            typeof window.ChatPage.updateHeaderUnreadState === 'function'
+        ) {
+            window.ChatPage.updateHeaderUnreadState(convId);
         }
 
         if (isOpenInWindow && window.ChatWindow && typeof window.ChatWindow.syncUnreadFromSidebar === 'function') {

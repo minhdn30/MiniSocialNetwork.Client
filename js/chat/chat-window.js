@@ -18,6 +18,7 @@ const ChatWindow = {
   _membersModal: null,
   _themeModeEvent: null,
   _themeModeHandler: null,
+  _sidebarConversationsUpdatedHandler: null,
   _permissionRefreshTimers: new Map(),
   _permissionRefreshInFlight: new Map(),
   _presenceUnsubscribe: null,
@@ -141,6 +142,18 @@ const ChatWindow = {
 
     // Restore open chats from previous session/navigation
     this.restoreState();
+    this.syncAllUnreadFromSidebar();
+    this.ensureUnreadSnapshotReady();
+
+    if (!this._sidebarConversationsUpdatedHandler) {
+      this._sidebarConversationsUpdatedHandler = () => {
+        this.syncAllUnreadFromSidebar();
+      };
+      window.addEventListener(
+        "chat:sidebar-conversations-updated",
+        this._sidebarConversationsUpdatedHandler,
+      );
+    }
 
     if (!this._themeModeHandler) {
       this._themeModeEvent = window.themeManager?.EVENT || "app:theme-changed";
@@ -235,7 +248,9 @@ const ChatWindow = {
           freshData = item.data;
         }
 
-        const unreadCount = item.unreadCount || freshData?.unreadCount || 0;
+        const unreadCount = freshData
+          ? freshData.unreadCount || 0
+          : item.unreadCount || 0;
 
         if (freshData) {
           const payload = { ...freshData, unreadCount };
@@ -327,6 +342,68 @@ const ChatWindow = {
     );
   },
 
+  normalizeConversationId(id) {
+    const raw = (id || "").toString().trim();
+    if (!raw) return "";
+    return this.isGuidConversationId(raw) ? raw.toLowerCase() : raw;
+  },
+
+  getRealtimeOwnerKey(conversationId) {
+    const normalizedConversationId = this.normalizeConversationId(conversationId);
+    if (!normalizedConversationId) return "";
+    return `chat-window:${normalizedConversationId}`;
+  },
+
+  notifyRealtimeOwnerChanged(conversationId, hasOwner) {
+    const normalizedConversationId = this.normalizeConversationId(conversationId);
+    if (!normalizedConversationId) return;
+
+    window.dispatchEvent(
+      new CustomEvent("chat:window-realtime-owner-changed", {
+        detail: {
+          conversationId: normalizedConversationId,
+          hasOwner: !!hasOwner,
+        },
+      }),
+    );
+  },
+
+  hasRealtimeConversationOwner(conversationId) {
+    const normalizedConversationId =
+      this.normalizeConversationId(conversationId);
+    if (!this.isGuidConversationId(normalizedConversationId)) return false;
+
+    const openId = this.getOpenChatId(normalizedConversationId);
+    if (!openId) return false;
+
+    const chat = this.openChats.get(openId);
+    if (!chat || chat._isClosing) return false;
+
+    const ownerKey =
+      chat._realtimeOwnerKey || this.getRealtimeOwnerKey(normalizedConversationId);
+    if (chat._realtimeJoined || chat._realtimeJoining) return true;
+
+    if (
+      window.ChatRealtime &&
+      typeof window.ChatRealtime.hasConversationOwner === "function"
+    ) {
+      return !!window.ChatRealtime.hasConversationOwner(openId, ownerKey);
+    }
+
+    return false;
+  },
+
+  cancelPendingChatDispose(chatObj) {
+    if (!chatObj) return false;
+    const wasClosing = !!(chatObj._isClosing || chatObj._disposeTimerId);
+    if (chatObj._disposeTimerId) {
+      clearTimeout(chatObj._disposeTimerId);
+      chatObj._disposeTimerId = null;
+    }
+    chatObj._isClosing = false;
+    return wasClosing;
+  },
+
   registerRealtimeHandlers() {
     if (this._realtimeBound) return;
 
@@ -397,21 +474,28 @@ const ChatWindow = {
   },
 
   tryJoinRealtimeConversation(conversationId, chatObj = null) {
-    if (!this.isGuidConversationId(conversationId)) return false;
+    const normalizedConversationId =
+      this.normalizeConversationId(conversationId);
+    if (!this.isGuidConversationId(normalizedConversationId)) return false;
     if (
       !window.ChatRealtime ||
       typeof window.ChatRealtime.joinConversation !== "function"
     )
       return false;
 
-    const openId = this.getOpenChatId(conversationId) || conversationId;
+    const openId =
+      this.getOpenChatId(normalizedConversationId) ||
+      normalizedConversationId;
     const chat = chatObj || this.openChats.get(openId);
-    if (!chat || chat._realtimeJoined || chat._realtimeJoining)
+    if (!chat || chat._isClosing || chat._realtimeJoined || chat._realtimeJoining)
       return !!(chat && (chat._realtimeJoined || chat._realtimeJoining));
+
+    const ownerKey = chat._realtimeOwnerKey || this.getRealtimeOwnerKey(openId);
+    chat._realtimeOwnerKey = ownerKey;
 
     chat._realtimeJoining = true;
 
-    window.ChatRealtime.joinConversation(openId)
+    window.ChatRealtime.joinConversation(openId, ownerKey)
       .then((ok) => {
         if (ok === false) {
           setTimeout(() => this.rejoinAllRealtimeConversations(), 1000);
@@ -419,8 +503,9 @@ const ChatWindow = {
         }
         const activeId = this.getOpenChatId(openId) || openId;
         const activeChat = this.openChats.get(activeId);
-        if (activeChat) {
+        if (activeChat && !activeChat._isClosing) {
           activeChat._realtimeJoined = true;
+          this.notifyRealtimeOwnerChanged(activeId, true);
         }
       })
       .catch((err) => console.error("Error joining conversation group:", err))
@@ -945,7 +1030,10 @@ const ChatWindow = {
     this.remapConversationDomIds(oldId, realId, chatObj);
     this.getRuntimeCtx(realId, chatObj);
 
+    this.cancelPendingChatDispose(chatObj);
+    chatObj._realtimeOwnerKey = this.getRealtimeOwnerKey(realId);
     chatObj._realtimeJoined = false;
+    chatObj._realtimeJoining = false;
     this.tryJoinRealtimeConversation(realId, chatObj);
 
     this.saveState();
@@ -1190,9 +1278,56 @@ const ChatWindow = {
 
     const chatBox = document.getElementById(`chat-box-${convId}`);
     if (chatBox && chatBox.classList.contains("is-focused")) {
+      const shouldAutoSeen = wasNearBottom || this.isNearBottom(convId);
+      if (!shouldAutoSeen) return;
       const lastId = messageId || this.getLastMessageId(convId);
       if (lastId) this.markConversationSeen(convId, lastId);
     }
+  },
+
+  syncAllUnreadFromSidebar(options = {}) {
+    if (!this.openChats || this.openChats.size === 0) return;
+    if (typeof this.syncUnreadFromSidebar !== "function") return;
+
+    for (const [openId] of this.openChats.entries()) {
+      this.syncUnreadFromSidebar(openId, options);
+    }
+  },
+
+  ensureUnreadSnapshotReady(retryCount = 0) {
+    if (!window.ChatSidebar) return;
+
+    if (
+      !document.getElementById("chat-panel") &&
+      typeof window.ChatSidebar.init === "function"
+    ) {
+      Promise.resolve(window.ChatSidebar.init())
+        .then(() => this.ensureUnreadSnapshotReady(retryCount))
+        .catch(() => {});
+      return;
+    }
+
+    const hasSnapshot =
+      Array.isArray(window.ChatSidebar.conversations) &&
+      window.ChatSidebar.conversations.length > 0;
+    if (hasSnapshot) {
+      this.syncAllUnreadFromSidebar();
+      return;
+    }
+
+    if (window.ChatSidebar.isLoading) {
+      if (retryCount >= 12) return;
+      setTimeout(() => this.ensureUnreadSnapshotReady(retryCount + 1), 250);
+      return;
+    }
+
+    if (typeof window.ChatSidebar.loadConversations !== "function") return;
+    window.ChatSidebar
+      .loadConversations(false)
+      .then(() => {
+        this.syncAllUnreadFromSidebar();
+      })
+      .catch(() => {});
   },
 
   incrementBubbleUnread(id, alreadyIncremented = false) {
@@ -1242,19 +1377,30 @@ const ChatWindow = {
     const chat = this.openChats.get(openId);
     if (!chat) return;
 
-    const syncedUnread = this.getSyncUnreadCount(openId) || 0;
+    const unreadSnapshot = this.getSyncUnreadSnapshot(openId);
+    const syncedUnread = unreadSnapshot.unreadCount;
     const localUnread = chat.unreadCount || 0;
     const expectIncomingUnreadIncrement =
       !!options.expectIncomingUnreadIncrement;
-    let resolvedUnread = syncedUnread;
+    const forcedUnreadRaw = Number(options.forceUnreadCount);
+    const hasForcedUnread = Number.isFinite(forcedUnreadRaw);
+    let resolvedUnread = hasForcedUnread
+      ? Math.max(0, Math.floor(forcedUnreadRaw))
+      : syncedUnread;
 
     // After reload, sidebar unread can lag behind the incoming realtime event.
     // For incoming notifications that should increment unread, enforce monotonic growth.
-    if (expectIncomingUnreadIncrement && syncedUnread <= localUnread) {
-      resolvedUnread = localUnread + 1;
-    } else if (chat.minimized && syncedUnread < localUnread) {
-      // In non-increment paths (active view), keep local value if sidebar snapshot is older.
-      resolvedUnread = localUnread;
+    if (!hasForcedUnread) {
+      if (expectIncomingUnreadIncrement && syncedUnread <= localUnread) {
+        resolvedUnread = localUnread + 1;
+      } else if (
+        !unreadSnapshot.hasValue &&
+        chat.minimized &&
+        syncedUnread < localUnread
+      ) {
+        // In non-increment paths (active view), keep local value if sidebar snapshot is older.
+        resolvedUnread = localUnread;
+      }
     }
 
     chat.unreadCount = resolvedUnread;
@@ -1283,16 +1429,27 @@ const ChatWindow = {
   /**
    * Get unread count from Sidebar to ensure consistency across UI
    */
-  getSyncUnreadCount(convId) {
-    if (!convId) return 0;
+  getSyncUnreadSnapshot(convId) {
+    if (!convId) return { hasValue: false, unreadCount: 0 };
     const target = convId.toLowerCase();
     if (window.ChatSidebar && window.ChatSidebar.conversations) {
       const conv = window.ChatSidebar.conversations.find(
         (c) => (c.conversationId || "").toLowerCase() === target,
       );
-      if (conv) return conv.unreadCount || 0;
+      if (conv) {
+        const rawUnread = Number(conv.unreadCount || 0);
+        const unreadCount =
+          Number.isFinite(rawUnread) && rawUnread > 0
+            ? Math.floor(rawUnread)
+            : 0;
+        return { hasValue: true, unreadCount };
+      }
     }
-    return 0;
+    return { hasValue: false, unreadCount: 0 };
+  },
+
+  getSyncUnreadCount(convId) {
+    return this.getSyncUnreadSnapshot(convId).unreadCount;
   },
 
   handleMemberSeen(data) {
@@ -1912,10 +2069,25 @@ const ChatWindow = {
   openChat(conv, shouldFocus = true, priorityLeft = false) {
     if (!conv) return;
     this.init();
-    const convId = conv.conversationId;
+    const rawConvId = conv.conversationId || conv.ConversationId || "";
+    const normalizedConvId = this.normalizeConversationId(rawConvId);
+    if (!normalizedConvId) return;
+
+    const existingOpenId = this.getOpenChatId(normalizedConvId);
+    const convId = existingOpenId || normalizedConvId;
+    conv.conversationId = convId;
 
     if (this.openChats.has(convId)) {
       const chat = this.openChats.get(convId);
+      const wasClosing = this.cancelPendingChatDispose(chat);
+      if (wasClosing && chat.element && !chat.minimized) {
+        chat.element.style.display = "flex";
+        requestAnimationFrame(() => {
+          if (chat.element) {
+            chat.element.classList.add("show");
+          }
+        });
+      }
 
       // Always refresh data to ensure consistency (fix for "header showing own info" if stale)
       if (conv) {
@@ -2000,9 +2172,10 @@ const ChatWindow = {
   },
 
   async openById(convId, priorityLeft = false, shouldFocus = true) {
-    if (!convId) return;
+    const normalizedInputId = this.normalizeConversationId(convId);
+    if (!normalizedInputId) return;
     this.init();
-    const target = convId.toLowerCase();
+    const target = normalizedInputId.toLowerCase();
 
     let convData = null;
     if (window.ChatSidebar && window.ChatSidebar.conversations) {
@@ -2040,18 +2213,18 @@ const ChatWindow = {
     // Fallback 2 (legacy): keep compatibility if backend adds/has this endpoint in future.
     if (convData) {
       if (!convData.conversationId) {
-        convData.conversationId = convData.ConversationId || convId;
+        convData.conversationId = convData.ConversationId || normalizedInputId;
       }
       this.openChat(convData, shouldFocus, priorityLeft);
       return true;
     } else {
       try {
-        const res = await window.API.Conversations.getById(convId);
+        const res = await window.API.Conversations.getById(normalizedInputId);
         if (res.ok) {
           const raw = await res.json();
           const data = raw?.metaData || raw;
           if (data && !data.conversationId) {
-            data.conversationId = data.ConversationId || convId;
+            data.conversationId = data.ConversationId || normalizedInputId;
           }
           this.openChat(data, shouldFocus, priorityLeft);
           return true;
@@ -2371,6 +2544,9 @@ const ChatWindow = {
       pendingFiles: [],
       _realtimeJoined: false,
       _realtimeJoining: false,
+      _realtimeOwnerKey: this.getRealtimeOwnerKey(conv.conversationId),
+      _isClosing: false,
+      _disposeTimerId: null,
       runtimeCtx: null,
       _replyToMessageId: null,
       _replySenderName: null,
@@ -2420,16 +2596,40 @@ const ChatWindow = {
   },
 
   renderBubble(id, data) {
+    const normalizedId = this.normalizeConversationId(id);
+    if (!normalizedId) return;
+    const openId = this.getOpenChatId(normalizedId) || normalizedId;
+
     const stack = document.getElementById("chat-bubbles-stack");
     if (!stack) return;
 
     // Prevent duplicates in DOM
-    const existing = document.getElementById(`chat-bubble-${id}`);
+    const existing = document.getElementById(`chat-bubble-${openId}`);
     if (existing) {
       // Already there, just ensure Map is in sync
-      let chat = this.openChats.get(id);
+      let chat = this.openChats.get(openId);
       if (chat) {
+        this.cancelPendingChatDispose(chat);
         chat.bubbleElement = existing;
+        if (data) {
+          chat.data = data;
+          const hasUnreadField =
+            Object.prototype.hasOwnProperty.call(data, "unreadCount") ||
+            Object.prototype.hasOwnProperty.call(data, "UnreadCount");
+          if (hasUnreadField) {
+            const rawUnread = Number(data.unreadCount ?? data.UnreadCount ?? 0);
+            const nextUnread =
+              Number.isFinite(rawUnread) && rawUnread > 0
+                ? Math.floor(rawUnread)
+                : 0;
+            chat.unreadCount = nextUnread;
+            if (nextUnread > 0) {
+              this.incrementBubbleUnread(openId, true);
+            } else {
+              this.clearBubbleUnread(openId);
+            }
+          }
+        }
         chat.minimized = true;
       }
       return;
@@ -2444,9 +2644,9 @@ const ChatWindow = {
 
     const bubble = document.createElement("div");
     bubble.className = "chat-bubble";
-    bubble.id = `chat-bubble-${id}`;
-    bubble.dataset.id = id;
-    bubble.onclick = () => this.toggleMinimize(id);
+    bubble.id = `chat-bubble-${openId}`;
+    bubble.dataset.id = openId;
+    bubble.onclick = () => this.toggleMinimize(openId);
 
     const escapedName = escapeHtml(name);
 
@@ -2454,13 +2654,13 @@ const ChatWindow = {
             ${ChatCommon.renderAvatar(data, { skipTitle: true })}
             <div class="chat-bubble-name">${escapedName}</div>
             ${shouldShowOnlineDot ? '<div class="chat-bubble-status"></div>' : ""}
-            <button class="chat-bubble-close" onclick="event.stopPropagation(); ChatWindow.closeChat('${id}')">
+            <button class="chat-bubble-close" onclick="event.stopPropagation(); ChatWindow.closeChat('${openId}')">
                 <i data-lucide="x"></i>
             </button>
         `;
 
     // Add unread badge if exists
-    const chatObj = this.openChats.get(id);
+    const chatObj = this.openChats.get(openId);
     const unreadCount = chatObj?.unreadCount ?? data?.unreadCount ?? 0;
     if (unreadCount > 0) {
       const badge = document.createElement("div");
@@ -2472,7 +2672,7 @@ const ChatWindow = {
     stack.appendChild(bubble);
     if (window.lucide) window.lucide.createIcons();
 
-    let chat = this.openChats.get(id);
+    let chat = this.openChats.get(openId);
     if (!chat) {
       // Check Total Limit before adding a NEW one (even as a bubble)
       if (this.openChats.size >= this.maxTotalWindows) {
@@ -2492,25 +2692,30 @@ const ChatWindow = {
         pendingFiles: [],
         _realtimeJoined: false,
         _realtimeJoining: false,
+        _realtimeOwnerKey: this.getRealtimeOwnerKey(openId),
+        _isClosing: false,
+        _disposeTimerId: null,
         runtimeCtx: null,
       };
-      this.openChats.set(id, chat);
-      this.getRuntimeCtx(id, chat);
-      this.tryJoinRealtimeConversation(id, chat);
+      this.openChats.set(openId, chat);
+      this.getRuntimeCtx(openId, chat);
+      this.tryJoinRealtimeConversation(openId, chat);
     } else {
+      this.cancelPendingChatDispose(chat);
       chat.bubbleElement = bubble;
       if (data) {
         chat.data = data;
       }
       chat.minimized = true;
-      this.getRuntimeCtx(id, chat);
-      this.tryJoinRealtimeConversation(id, chat);
+      this.getRuntimeCtx(openId, chat);
+      this.tryJoinRealtimeConversation(openId, chat);
     }
   },
 
   toggleMinimize(id, shouldFocus = true) {
     const chat = this.openChats.get(id);
     if (!chat) return;
+    this.cancelPendingChatDispose(chat);
 
     if (!chat.minimized) {
       this.closeFloatingMessageMenus();
@@ -2583,13 +2788,6 @@ const ChatWindow = {
     if (!chat || chat.minimized) return;
     const chatBox = chat.element;
 
-    // Remove unread state
-    chatBox.classList.remove("has-unread");
-    if (chat.unreadCount > 0) {
-      chat.unreadCount = 0;
-      this.saveState();
-    }
-
     // Remove focus from all others
     document.querySelectorAll(".chat-box.is-focused").forEach((b) => {
       if (b !== chatBox) b.classList.remove("is-focused");
@@ -2597,10 +2795,21 @@ const ChatWindow = {
 
     if (!chatBox.classList.contains("is-focused")) {
       chatBox.classList.add("is-focused");
+    }
 
-      // Mark as seen on focus
+    const syncedUnread = this.getSyncUnreadCount(id) || 0;
+    const unreadCount = Math.max(chat.unreadCount || 0, syncedUnread);
+    chat.unreadCount = unreadCount;
+    const shouldAutoSeen = unreadCount > 0 && this.isNearBottom(id);
+    if (shouldAutoSeen) {
       const lastId = this.getLastMessageId(id);
-      if (lastId) this.markConversationSeen(id, lastId);
+      if (lastId) {
+        this.markConversationSeen(id, lastId);
+      }
+    } else {
+      chat.unreadCount = unreadCount;
+      chatBox.classList.toggle("has-unread", unreadCount > 0);
+      this.saveState();
     }
 
     // Auto-focus input with visible caret.
@@ -2608,60 +2817,80 @@ const ChatWindow = {
   },
 
   closeChat(id) {
-    const chat = this.openChats.get(id);
-    if (chat) {
-      this.closeFloatingMessageMenus();
-      if (
-        this._membersModal &&
-        (this._membersModal.conversationId || "").toLowerCase() ===
-          (id || "").toLowerCase()
-      ) {
-        this.closeMembersModal();
-      }
+    const openId = this.getOpenChatId(this.normalizeConversationId(id)) || id;
+    const chat = this.openChats.get(openId);
+    if (!chat) return;
 
-      this.pendingSeenByConv.delete(id.toLowerCase());
-      const refreshKey = (id || "").toLowerCase();
-      const refreshTimer = this._permissionRefreshTimers.get(refreshKey);
-      if (refreshTimer) {
-        clearTimeout(refreshTimer);
-        this._permissionRefreshTimers.delete(refreshKey);
-      }
-      this._permissionRefreshInFlight.delete(refreshKey);
-      this.revokePreviewBlobUrls(id);
-      chat.pendingFiles = [];
-      chat.runtimeCtx = null;
-      // Cleanup typing timers
-      if (window.ChatTyping) ChatTyping.cleanup(id);
-      if (chat.element) {
-        chat.element.querySelectorAll("[data-temp-id]").forEach((el) => {
-          if (el.dataset.tempId) this.cleanupMessageBlobUrls(el.dataset.tempId);
-        });
-      }
-      // Leave the SignalR group
-      if (
-        chat._realtimeJoined &&
-        this.isGuidConversationId(id) &&
-        window.ChatRealtime &&
-        typeof window.ChatRealtime.leaveConversation === "function"
-      ) {
-        window.ChatRealtime.leaveConversation(id);
-        chat._realtimeJoined = false;
-      }
-      chat._realtimeJoining = false;
+    this.closeFloatingMessageMenus();
+    if (
+      this._membersModal &&
+      (this._membersModal.conversationId || "").toLowerCase() ===
+        (openId || "").toLowerCase()
+    ) {
+      this.closeMembersModal();
+    }
 
-      if (chat.element) {
-        chat.element.classList.remove("show");
-        setTimeout(() => {
-          chat.element.remove();
-          if (chat.bubbleElement) chat.bubbleElement.remove();
-          this.openChats.delete(id);
-          this.saveState();
-        }, 300);
-      } else {
-        if (chat.bubbleElement) chat.bubbleElement.remove();
-        this.openChats.delete(id);
-        this.saveState();
+    this.cancelPendingChatDispose(chat);
+    chat._isClosing = true;
+
+    this.pendingSeenByConv.delete(openId.toLowerCase());
+    const refreshKey = (openId || "").toLowerCase();
+    const refreshTimer = this._permissionRefreshTimers.get(refreshKey);
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+      this._permissionRefreshTimers.delete(refreshKey);
+    }
+    this._permissionRefreshInFlight.delete(refreshKey);
+    this.revokePreviewBlobUrls(openId);
+    chat.pendingFiles = [];
+    chat.runtimeCtx = null;
+    // Cleanup typing timers
+    if (window.ChatTyping) ChatTyping.cleanup(openId);
+    if (chat.element) {
+      chat.element.querySelectorAll("[data-temp-id]").forEach((el) => {
+        if (el.dataset.tempId) this.cleanupMessageBlobUrls(el.dataset.tempId);
+      });
+    }
+
+    // Release this chat-window owner from SignalR group
+    if (
+      this.isGuidConversationId(openId) &&
+      window.ChatRealtime &&
+      typeof window.ChatRealtime.leaveConversation === "function"
+    ) {
+      const ownerKey =
+        chat._realtimeOwnerKey || this.getRealtimeOwnerKey(openId);
+      chat._realtimeOwnerKey = ownerKey;
+      window.ChatRealtime.leaveConversation(openId, ownerKey).catch((err) => {
+        console.error("Error leaving conversation group from chat-window:", err);
+      });
+    }
+    chat._realtimeJoined = false;
+    chat._realtimeJoining = false;
+    this.notifyRealtimeOwnerChanged(openId, false);
+
+    const finalizeClose = () => {
+      const liveChat = this.openChats.get(openId);
+      if (!liveChat || liveChat !== chat || !liveChat._isClosing) return;
+
+      liveChat._disposeTimerId = null;
+      if (liveChat.element) {
+        liveChat.element.remove();
       }
+      if (liveChat.bubbleElement) {
+        liveChat.bubbleElement.remove();
+      }
+      this.openChats.delete(openId);
+      this.saveState();
+    };
+
+    if (chat.element) {
+      chat.element.classList.remove("show");
+      chat._disposeTimerId = setTimeout(() => {
+        finalizeClose();
+      }, 300);
+    } else {
+      finalizeClose();
     }
   },
 
@@ -6329,6 +6558,17 @@ const ChatWindow = {
         // Show/hide jump-to-bottom button based on scroll position
         ChatCommon.updateJumpBtnOnScroll(ctx, msgContainer);
       }
+
+      const chatBox = document.getElementById(`chat-box-${id}`);
+      const isFocused = !!chatBox?.classList.contains("is-focused");
+      if (!isFocused || !this.isNearBottom(id)) return;
+
+      const sidebarUnread = this.getSyncUnreadCount(id);
+      const localUnread = chat.unreadCount || 0;
+      if (sidebarUnread <= 0 && localUnread <= 0) return;
+
+      const lastId = this.getLastMessageId(id);
+      if (lastId) this.markConversationSeen(id, lastId);
     };
   },
 

@@ -41,6 +41,30 @@
   z-index: 10;
 }
 
+.chat-view-header.has-unread {
+  background: var(
+    --chat-theme-header-unread-bg,
+    var(--chat-theme-own-bubble-bg, var(--accent-primary, #3b82f6))
+  );
+  border-bottom: none;
+}
+
+.chat-view-header.has-unread .chat-view-name,
+.chat-view-header.has-unread .chat-view-status-text,
+.chat-view-header.has-unread .chat-icon-btn,
+.chat-view-header.has-unread .chat-icon-btn i,
+.chat-view-header.has-unread .chat-icon-btn svg {
+  color: #ffffff !important;
+}
+
+.chat-view-header.has-unread .chat-icon-btn:hover {
+  background: transparent;
+}
+
+.chat-view-header.has-unread .chat-view-status {
+  border-color: var(--accent-primary);
+}
+
 .chat-view-user {
   display: flex;
   align-items: center;

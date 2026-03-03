@@ -9,7 +9,8 @@
     const typingHandlers = new Set();
     const themeHandlers = new Set();
     const groupInfoHandlers = new Set();
-    const groupRefCount = new Map(); // conversationId -> count
+    const groupRefCount = new Map(); // legacy: conversationId -> count
+    const groupOwnerRefs = new Map(); // conversationId -> Set(ownerKey)
     let currentConnection = null;
     const pendingInvokes = new Map(); // key -> { method, args, resolve, timeoutId }
     const REJOIN_RETRY_DELAY_MS = 1500;
@@ -24,14 +25,103 @@
         return (id || '').toString().toLowerCase();
     }
 
+    function normalizeOwnerKey(ownerKey) {
+        return (ownerKey || '').toString().trim();
+    }
+
+    function getLegacyRefCount(conversationId) {
+        const count = groupRefCount.get(conversationId) || 0;
+        return Number.isFinite(count) && count > 0 ? count : 0;
+    }
+
+    function getOwnerRefCount(conversationId) {
+        const owners = groupOwnerRefs.get(conversationId);
+        return owners ? owners.size : 0;
+    }
+
+    function getTotalRefCount(conversationId) {
+        return getLegacyRefCount(conversationId) + getOwnerRefCount(conversationId);
+    }
+
+    function addLegacyRef(conversationId) {
+        const before = getTotalRefCount(conversationId);
+        const nextLegacy = getLegacyRefCount(conversationId) + 1;
+        groupRefCount.set(conversationId, nextLegacy);
+        return { changed: true, before, after: before + 1 };
+    }
+
+    function removeLegacyRef(conversationId) {
+        const currentLegacy = getLegacyRefCount(conversationId);
+        const before = getTotalRefCount(conversationId);
+        if (currentLegacy <= 0) {
+            return { changed: false, before, after: before };
+        }
+
+        if (currentLegacy === 1) {
+            groupRefCount.delete(conversationId);
+        } else {
+            groupRefCount.set(conversationId, currentLegacy - 1);
+        }
+        return { changed: true, before, after: Math.max(0, before - 1) };
+    }
+
+    function addOwnerRef(conversationId, ownerKey) {
+        const normalizedOwnerKey = normalizeOwnerKey(ownerKey);
+        if (!normalizedOwnerKey) {
+            return addLegacyRef(conversationId);
+        }
+
+        const before = getTotalRefCount(conversationId);
+        let owners = groupOwnerRefs.get(conversationId);
+        if (!owners) {
+            owners = new Set();
+            groupOwnerRefs.set(conversationId, owners);
+        }
+
+        if (owners.has(normalizedOwnerKey)) {
+            return { changed: false, before, after: before };
+        }
+
+        owners.add(normalizedOwnerKey);
+        return { changed: true, before, after: before + 1, ownerKey: normalizedOwnerKey };
+    }
+
+    function removeOwnerRef(conversationId, ownerKey) {
+        const normalizedOwnerKey = normalizeOwnerKey(ownerKey);
+        if (!normalizedOwnerKey) {
+            return removeLegacyRef(conversationId);
+        }
+
+        const before = getTotalRefCount(conversationId);
+        const owners = groupOwnerRefs.get(conversationId);
+        if (!owners || !owners.has(normalizedOwnerKey)) {
+            return { changed: false, before, after: before };
+        }
+
+        owners.delete(normalizedOwnerKey);
+        if (!owners.size) {
+            groupOwnerRefs.delete(conversationId);
+        }
+
+        return { changed: true, before, after: Math.max(0, before - 1), ownerKey: normalizedOwnerKey };
+    }
+
     function getTrackedConversationIds() {
-        const ids = [];
+        const ids = new Set();
+
         for (const [conversationId, refCount] of groupRefCount.entries()) {
             if (!conversationId || !isGuid(conversationId)) continue;
             if (!Number.isFinite(refCount) || refCount <= 0) continue;
-            ids.push(conversationId);
+            ids.add(conversationId);
         }
-        return ids;
+
+        for (const [conversationId, owners] of groupOwnerRefs.entries()) {
+            if (!conversationId || !isGuid(conversationId)) continue;
+            if (!owners || owners.size <= 0) continue;
+            ids.add(conversationId);
+        }
+
+        return Array.from(ids);
     }
 
     function scheduleRejoinRetry() {
@@ -41,6 +131,15 @@
             hasScheduledRejoinRetry = false;
             rejoinTrackedConversations('retry');
         }, REJOIN_RETRY_DELAY_MS);
+    }
+
+    function rollbackJoinRefCount(conversationId, ownerKey = '') {
+        const normalizedOwnerKey = normalizeOwnerKey(ownerKey);
+        if (normalizedOwnerKey) {
+            removeOwnerRef(conversationId, normalizedOwnerKey);
+            return;
+        }
+        removeLegacyRef(conversationId);
     }
 
     async function rejoinTrackedConversations(trigger = 'unknown') {
@@ -343,55 +442,91 @@
                 groupInfoHandlers.delete(handler);
             };
         },
-        joinConversation(conversationId) {
+        joinConversation(conversationId, ownerKey = '') {
             const normalizedConversationId = normalizeConversationId(conversationId);
             if (!isGuid(normalizedConversationId)) return Promise.reject(new Error('Invalid conversationId'));
-            
-            const count = groupRefCount.get(normalizedConversationId) || 0;
-            const newCount = count + 1;
-            groupRefCount.set(normalizedConversationId, newCount);
 
-            if (count === 0) {
+            const change = addOwnerRef(normalizedConversationId, ownerKey);
+            if (!change.changed) return Promise.resolve(true);
+
+            if (change.before === 0) {
                 // First joiner, actually tell server
                 return invokeOrQueue('JoinConversation', [normalizedConversationId], `join:${normalizedConversationId}`)
                     .then(res => {
                         if (res === false) {
-                            console.warn(`⛔ [SignalR] Join denied/failed: ${normalizedConversationId}`);
+                            rollbackJoinRefCount(normalizedConversationId, ownerKey);
+                            console.warn(`[SignalR] Join denied/failed: ${normalizedConversationId}`);
+                            scheduleRejoinRetry();
                             return false;
                         }
-                        console.log(`✅ [SignalR] Network Join: ${normalizedConversationId}`);
+                        console.log(`[SignalR] Network Join: ${normalizedConversationId}`);
+
+                        // Owner might have been released while JoinConversation was in flight.
+                        // In that case, immediately send a leave to prevent stale network membership.
+                        if (getTotalRefCount(normalizedConversationId) <= 0) {
+                            return invokeOrQueue('LeaveConversation', [normalizedConversationId], `leave:${normalizedConversationId}`)
+                                .then(() => true)
+                                .catch(() => true);
+                        }
                         return true;
                     });
-            } else {
-                console.log(`📡 [Realtime] Session Added: ${normalizedConversationId} (Total: ${newCount})`);
-                return Promise.resolve(true);
             }
+
+            console.log(`[Realtime] Session Added: ${normalizedConversationId} (Total: ${change.after})`);
+            return Promise.resolve(true);
         },
-        leaveConversation(conversationId) {
+        leaveConversation(conversationId, ownerKey = '') {
             const normalizedConversationId = normalizeConversationId(conversationId);
             if (!isGuid(normalizedConversationId)) return Promise.reject(new Error('Invalid conversationId'));
-            
-            const count = groupRefCount.get(normalizedConversationId) || 0;
-            if (count <= 0) return Promise.resolve(true);
 
-            const newCount = count - 1;
-            if (newCount === 0) {
+            const change = removeOwnerRef(normalizedConversationId, ownerKey);
+            if (!change.changed) return Promise.resolve(true);
+
+            if (change.after === 0) {
                 // Last joiner, actually tell server
-                groupRefCount.delete(normalizedConversationId);
                 return invokeOrQueue('LeaveConversation', [normalizedConversationId], `leave:${normalizedConversationId}`)
                     .then(res => {
                         if (res === false) {
-                            console.warn(`⚠️ [SignalR] Leave denied/failed: ${normalizedConversationId}`);
+                            console.warn(`[SignalR] Leave denied/failed: ${normalizedConversationId}`);
                             return false;
                         }
-                        console.log(`👋 [SignalR] Network Leave: ${normalizedConversationId}`);
+                        console.log(`[SignalR] Network Leave: ${normalizedConversationId}`);
+
+                        // A new owner may have been added while LeaveConversation was in flight.
+                        // Re-join immediately to keep network membership aligned with local refs.
+                        if (getTotalRefCount(normalizedConversationId) > 0) {
+                            return invokeOrQueue('JoinConversation', [normalizedConversationId], `join:${normalizedConversationId}`)
+                                .then(() => true)
+                                .catch(() => true);
+                        }
                         return true;
                     });
-            } else {
-                groupRefCount.set(normalizedConversationId, newCount);
-                console.log(`🚪 [Realtime] Session Removed: ${normalizedConversationId} (Remaining: ${newCount})`);
-                return Promise.resolve(true);
             }
+
+            console.log(`[Realtime] Session Removed: ${normalizedConversationId} (Remaining: ${change.after})`);
+            return Promise.resolve(true);
+        },
+        hasConversationOwner(conversationId, ownerKey = '') {
+            const normalizedConversationId = normalizeConversationId(conversationId);
+            if (!isGuid(normalizedConversationId)) return false;
+
+            const normalizedOwnerKey = normalizeOwnerKey(ownerKey);
+            if (!normalizedOwnerKey) {
+                return getTotalRefCount(normalizedConversationId) > 0;
+            }
+
+            const owners = groupOwnerRefs.get(normalizedConversationId);
+            return !!owners && owners.has(normalizedOwnerKey);
+        },
+        hasAnyConversationOwner(conversationId) {
+            const normalizedConversationId = normalizeConversationId(conversationId);
+            if (!isGuid(normalizedConversationId)) return false;
+            return getTotalRefCount(normalizedConversationId) > 0;
+        },
+        getConversationRefCount(conversationId) {
+            const normalizedConversationId = normalizeConversationId(conversationId);
+            if (!isGuid(normalizedConversationId)) return 0;
+            return getTotalRefCount(normalizedConversationId);
         },
         seenConversation(conversationId, messageId) {
             if (!isGuid(conversationId) || !messageId) return Promise.reject(new Error('Invalid seen payload'));

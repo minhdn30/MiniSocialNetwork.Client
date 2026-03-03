@@ -50,6 +50,9 @@ const ChatPage = {
   _permissionRefreshTimers: new Map(),
   _permissionRefreshInFlight: new Map(),
   _presenceUnsubscribe: null,
+  _realtimeJoinedConversationId: null,
+  _realtimeJoiningConversationId: null,
+  _realtimePassiveConversationId: null,
 
   async init() {
     this.cleanupEventListeners();
@@ -58,6 +61,12 @@ const ChatPage = {
     // Cleanup old group if exists (prevent leaks across re-initializations)
     if (this.currentChatId) {
       this.leaveCurrentConversation();
+    } else if (
+      this.isGuidConversationId(this._realtimeJoinedConversationId) ||
+      this.isGuidConversationId(this._realtimeJoiningConversationId) ||
+      this.isGuidConversationId(this._realtimePassiveConversationId)
+    ) {
+      this.leaveAllPageRealtimeConversations();
     }
 
     console.log("ChatPage initialized");
@@ -84,6 +93,9 @@ const ChatPage = {
     this._permissionRefreshTimers.forEach((timerId) => clearTimeout(timerId));
     this._permissionRefreshTimers.clear();
     this._permissionRefreshInFlight.clear();
+    this._realtimeJoinedConversationId = null;
+    this._realtimeJoiningConversationId = null;
+    this._realtimePassiveConversationId = null;
     this.removeJumpToBottomBtn();
 
     this.cacheElements();
@@ -123,6 +135,208 @@ const ChatPage = {
     this.runtimeCtx.pendingSeenByConv = this.pendingSeenByConv;
     this.runtimeCtx.blobUrls = this._blobUrls;
     return this.runtimeCtx;
+  },
+
+  normalizeRealtimeConversationId(value) {
+    return (value || "").toString().toLowerCase();
+  },
+
+  isGuidConversationId(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      value || "",
+    );
+  },
+
+  getPageRealtimeOwnerKey(conversationId) {
+    const target = this.normalizeRealtimeConversationId(conversationId);
+    if (!this.isGuidConversationId(target)) return "";
+    return `chat-page:${target}`;
+  },
+
+  hasWindowRealtimeOwner(conversationId) {
+    const target = this.normalizeRealtimeConversationId(conversationId);
+    if (!this.isGuidConversationId(target)) return false;
+    if (
+      !window.ChatWindow ||
+      typeof window.ChatWindow.hasRealtimeConversationOwner !== "function"
+    ) {
+      return false;
+    }
+    return !!window.ChatWindow.hasRealtimeConversationOwner(target);
+  },
+
+  handleWindowRealtimeOwnerChanged(detail = {}) {
+    const changedConversationId = this.normalizeRealtimeConversationId(
+      detail?.conversationId,
+    );
+    const currentConversationId =
+      this.normalizeRealtimeConversationId(this.currentChatId);
+
+    if (
+      !this.isGuidConversationId(changedConversationId) ||
+      !currentConversationId ||
+      changedConversationId !== currentConversationId
+    ) {
+      return;
+    }
+
+    if (detail?.hasOwner) {
+      const isPageOwner =
+        this._realtimeJoinedConversationId === changedConversationId ||
+        this._realtimeJoiningConversationId === changedConversationId;
+      if (isPageOwner) {
+        this.leavePageRealtimeConversation(changedConversationId);
+      }
+      this._realtimePassiveConversationId = changedConversationId;
+      return;
+    }
+
+    if (this._realtimePassiveConversationId === changedConversationId) {
+      this._realtimePassiveConversationId = null;
+      this.ensurePageRealtimeJoin(changedConversationId);
+    }
+  },
+
+  ensurePageRealtimeJoin(conversationId) {
+    const target = this.normalizeRealtimeConversationId(conversationId);
+    if (!this.isGuidConversationId(target)) return;
+    if (
+      !window.ChatRealtime ||
+      typeof window.ChatRealtime.joinConversation !== "function"
+    ) {
+      return;
+    }
+    const ownerKey = this.getPageRealtimeOwnerKey(target);
+    if (
+      this._realtimeJoinedConversationId &&
+      this._realtimeJoinedConversationId !== target
+    ) {
+      this.leavePageRealtimeConversation(this._realtimeJoinedConversationId);
+    }
+    if (
+      this._realtimeJoiningConversationId &&
+      this._realtimeJoiningConversationId !== target
+    ) {
+      this.leavePageRealtimeConversation(this._realtimeJoiningConversationId);
+    }
+    if (
+      this._realtimePassiveConversationId &&
+      this._realtimePassiveConversationId !== target
+    ) {
+      this._realtimePassiveConversationId = null;
+    }
+
+    const hasPageOwner =
+      window.ChatRealtime &&
+      typeof window.ChatRealtime.hasConversationOwner === "function"
+        ? !!window.ChatRealtime.hasConversationOwner(target, ownerKey)
+        : false;
+
+    if (
+      hasPageOwner ||
+      this._realtimeJoinedConversationId === target ||
+      this._realtimeJoiningConversationId === target
+    ) {
+      this._realtimeJoinedConversationId = target;
+      this._realtimePassiveConversationId = null;
+      return;
+    }
+
+    if (this.hasWindowRealtimeOwner(target)) {
+      this._realtimePassiveConversationId = target;
+      this._realtimeJoinedConversationId = null;
+      this._realtimeJoiningConversationId = null;
+      return;
+    }
+
+    this._realtimePassiveConversationId = null;
+    this._realtimeJoiningConversationId = target;
+    window.ChatRealtime.joinConversation(target, ownerKey)
+      .then((ok) => {
+        if (this._realtimeJoiningConversationId !== target) {
+          return;
+        }
+        if (ok === false) {
+          if (this._realtimeJoinedConversationId === target) {
+            this._realtimeJoinedConversationId = null;
+          }
+          if (this.hasWindowRealtimeOwner(target)) {
+            this._realtimePassiveConversationId = target;
+          }
+          return;
+        }
+        this._realtimeJoinedConversationId = target;
+        this._realtimePassiveConversationId = null;
+      })
+      .catch((err) => {
+        if (this._realtimeJoiningConversationId !== target) {
+          return;
+        }
+        if (this._realtimeJoinedConversationId === target) {
+          this._realtimeJoinedConversationId = null;
+        }
+        if (this.hasWindowRealtimeOwner(target)) {
+          this._realtimePassiveConversationId = target;
+        }
+        console.error("Error joining page conversation group:", err);
+      })
+      .finally(() => {
+        if (this._realtimeJoiningConversationId === target) {
+          this._realtimeJoiningConversationId = null;
+        }
+      });
+  },
+
+  leavePageRealtimeConversation(conversationId) {
+    const target = this.normalizeRealtimeConversationId(conversationId);
+    if (!this.isGuidConversationId(target)) return;
+
+    const ownerKey = this.getPageRealtimeOwnerKey(target);
+    const isJoined = this._realtimeJoinedConversationId === target;
+    const isJoining = this._realtimeJoiningConversationId === target;
+    const isPassive = this._realtimePassiveConversationId === target;
+    const hasTrackedPageOwner =
+      window.ChatRealtime &&
+      typeof window.ChatRealtime.hasConversationOwner === "function"
+        ? !!window.ChatRealtime.hasConversationOwner(target, ownerKey)
+        : false;
+    const shouldLeaveOwnedMembership = isJoined || isJoining || hasTrackedPageOwner;
+    if (!shouldLeaveOwnedMembership && !isPassive) return;
+
+    if (isJoined) this._realtimeJoinedConversationId = null;
+    if (isJoining) this._realtimeJoiningConversationId = null;
+    if (isPassive) this._realtimePassiveConversationId = null;
+
+    if (
+      shouldLeaveOwnedMembership &&
+      window.ChatRealtime &&
+      typeof window.ChatRealtime.leaveConversation === "function"
+    ) {
+      window.ChatRealtime.leaveConversation(target, ownerKey).catch((err) => {
+        console.error("Error leaving page conversation group:", err);
+      });
+    }
+  },
+
+  leaveAllPageRealtimeConversations(primaryConversationId = null) {
+    const targets = new Set();
+    const primary = this.normalizeRealtimeConversationId(primaryConversationId);
+    if (this.isGuidConversationId(primary)) {
+      targets.add(primary);
+    }
+    if (this.isGuidConversationId(this._realtimeJoinedConversationId)) {
+      targets.add(this._realtimeJoinedConversationId);
+    }
+    if (this.isGuidConversationId(this._realtimeJoiningConversationId)) {
+      targets.add(this._realtimeJoiningConversationId);
+    }
+    if (this.isGuidConversationId(this._realtimePassiveConversationId)) {
+      targets.add(this._realtimePassiveConversationId);
+    }
+
+    targets.forEach((conversationId) => {
+      this.leavePageRealtimeConversation(conversationId);
+    });
   },
 
   normalizePresenceId(value) {
@@ -669,6 +883,19 @@ const ChatPage = {
       type: "chat:reply",
       handler: onReply,
     });
+
+    const onWindowRealtimeOwnerChanged = (e) => {
+      this.handleWindowRealtimeOwnerChanged(e?.detail || {});
+    };
+    window.addEventListener(
+      "chat:window-realtime-owner-changed",
+      onWindowRealtimeOwnerChanged,
+    );
+    this._listenerRefs.push({
+      target: window,
+      type: "chat:window-realtime-owner-changed",
+      handler: onWindowRealtimeOwnerChanged,
+    });
   },
 
   queuePendingSeen(conversationId, messageId, accountId, memberInfo = null) {
@@ -746,6 +973,24 @@ const ChatPage = {
 
       // Show/hide jump-to-bottom button based on scroll position
       ChatCommon.updateJumpBtnOnScroll(ctx, msgContainer);
+
+      if (!this.currentChatId) return;
+
+      if (!this.isNearBottom()) {
+        this.updateHeaderUnreadState(this.currentChatId);
+        return;
+      }
+
+      const unreadCount = this.getSidebarUnreadCount(this.currentChatId);
+      if (unreadCount <= 0) {
+        this.updateHeaderUnreadState(this.currentChatId);
+        return;
+      }
+
+      const lastId = this.getLastMessageId();
+      if (lastId) {
+        this.markConversationSeen(this.currentChatId, lastId);
+      }
     };
   },
 
@@ -783,6 +1028,8 @@ const ChatPage = {
     ) {
       this.currentMetaData.unreadCount = 0;
     }
+
+    this.updateHeaderUnreadState(normConversationId);
 
     if (
       window.ChatWindow &&
@@ -868,6 +1115,56 @@ const ChatPage = {
         msgContainer.clientHeight <=
       threshold
     );
+  },
+
+  getSidebarUnreadSnapshot(conversationId = this.currentChatId) {
+    const target = (conversationId || "").toString().toLowerCase();
+    if (!target || !window.ChatSidebar || !window.ChatSidebar.conversations) {
+      return { hasValue: false, unreadCount: 0 };
+    }
+
+    const conv = window.ChatSidebar.conversations.find(
+      (c) => (c.conversationId || "").toLowerCase() === target,
+    );
+    if (!conv) {
+      return { hasValue: false, unreadCount: 0 };
+    }
+
+    const rawUnread = Number(conv.unreadCount || 0);
+    const unreadCount =
+      Number.isFinite(rawUnread) && rawUnread > 0 ? Math.floor(rawUnread) : 0;
+    return { hasValue: true, unreadCount };
+  },
+
+  getSidebarUnreadCount(conversationId = this.currentChatId) {
+    return this.getSidebarUnreadSnapshot(conversationId).unreadCount;
+  },
+
+  updateHeaderUnreadState(conversationId = this.currentChatId) {
+    const headerEl = document.querySelector(".chat-view-header");
+    if (!headerEl) return;
+
+    const target = (conversationId || "").toString().toLowerCase();
+    const current = (this.currentChatId || "").toString().toLowerCase();
+    if (!target || !current || target !== current) {
+      headerEl.classList.remove("has-unread");
+      return;
+    }
+
+    const unreadSnapshot = this.getSidebarUnreadSnapshot(target);
+    const fallbackUnreadRaw = Number(this.currentMetaData?.unreadCount || 0);
+    const fallbackUnread =
+      Number.isFinite(fallbackUnreadRaw) && fallbackUnreadRaw > 0
+        ? Math.floor(fallbackUnreadRaw)
+        : 0;
+    const unreadCount = unreadSnapshot.hasValue
+      ? unreadSnapshot.unreadCount
+      : fallbackUnread;
+
+    if (this.currentMetaData && unreadSnapshot.hasValue) {
+      this.currentMetaData.unreadCount = unreadCount;
+    }
+    headerEl.classList.toggle("has-unread", unreadCount > 0);
   },
 
   scrollToBottom(behavior = "auto") {
@@ -1090,7 +1387,11 @@ const ChatPage = {
         if (seenRow && messageId) seenRow.id = `seen-row-${messageId}`;
 
         if (messageId) {
-          this.markConversationSeen(convId, messageId);
+          if (this.isNearBottom()) {
+            this.markConversationSeen(convId, messageId);
+          } else {
+            this.updateHeaderUnreadState(convId);
+          }
           this.applyPendingSeenForMessage(convId, messageId);
         }
         if (tempId) {
@@ -1142,7 +1443,11 @@ const ChatPage = {
         this.applyPendingSeenForMessage(convId, messageId);
       }
       const lastId = messageId || this.getLastMessageId();
-      if (lastId) this.markConversationSeen(convId, lastId);
+      if (lastId && wasNearBottom) {
+        this.markConversationSeen(convId, lastId);
+      } else {
+        this.updateHeaderUnreadState(convId);
+      }
     }
   },
 
@@ -1516,34 +1821,62 @@ const ChatPage = {
         ChatTyping.hideIndicator("typing-indicator-page", oldId);
       }
 
-      // Only leave if not open in any floating ChatWindow
-      const isOpenInWindow =
-        window.ChatWindow &&
-        window.ChatWindow.openChats &&
-        window.ChatWindow.openChats.has(oldId);
-
-      if (
-        window.ChatRealtime &&
-        typeof window.ChatRealtime.leaveConversation === "function"
-      ) {
-        window.ChatRealtime.leaveConversation(oldId);
-      }
+      this.leaveAllPageRealtimeConversations(oldId);
       this.currentChatId = null;
       this.getRuntimeCtx();
+      this.updateHeaderUnreadState(null);
     }
   },
 
   async loadConversation(conversationId) {
     if (!conversationId) return;
-    const targetConversationId = conversationId.toString().trim();
+    const targetConversationId = this.normalizeRealtimeConversationId(
+      conversationId.toString().trim(),
+    );
     if (!targetConversationId) return;
 
-    // 1. If clicking the same conversation, skip only when it already has content
+    // 1. If clicking the same conversation, move user back to latest position.
     if (this.currentChatId === targetConversationId) {
       const msgContainer = document.getElementById("chat-view-messages");
       const hasMessages = !!msgContainer?.querySelector(".msg-bubble-wrapper");
-      if (hasMessages || this.isLoading) {
-        console.log("Already in this conversation, skipping re-load.");
+      if (this.isLoading) {
+        return;
+      }
+
+      if (hasMessages) {
+        if (this._isContextMode) {
+          this.jumpToBottom();
+          setTimeout(() => {
+            if (
+              (this.currentChatId || "").toLowerCase() !==
+              targetConversationId.toLowerCase()
+            ) {
+              return;
+            }
+            if (this.isNearBottom()) {
+              const lastId = this.getLastMessageId();
+              if (lastId) this.markConversationSeen(targetConversationId, lastId);
+            } else {
+              this.updateHeaderUnreadState(targetConversationId);
+            }
+          }, 260);
+        } else {
+          this.scrollToBottom("smooth");
+          setTimeout(() => {
+            if (
+              (this.currentChatId || "").toLowerCase() !==
+              targetConversationId.toLowerCase()
+            ) {
+              return;
+            }
+            if (this.isNearBottom()) {
+              const lastId = this.getLastMessageId();
+              if (lastId) this.markConversationSeen(targetConversationId, lastId);
+            } else {
+              this.updateHeaderUnreadState(targetConversationId);
+            }
+          }, 220);
+        }
         return;
       }
     }
@@ -1575,15 +1908,7 @@ const ChatPage = {
     this.resetMembersPanelState(targetConversationId);
     this.getRuntimeCtx();
 
-    // 4. Cleanup overlapping floating windows for THIS conversationId
-    if (
-      window.ChatWindow &&
-      typeof window.ChatWindow.closeChat === "function"
-    ) {
-      window.ChatWindow.closeChat(targetConversationId);
-    }
-
-    // 5. Visual update in Sidebar and Header pre-load
+    // 4. Visual update in Sidebar and Header pre-load
     if (window.ChatSidebar) {
       window.ChatSidebar.updateActiveId(targetConversationId);
       if (window.ChatSidebar.conversations) {
@@ -1604,19 +1929,12 @@ const ChatPage = {
     if (
       loaded &&
       this.currentChatId === targetConversationId &&
-      this._loadGeneration === gen &&
-      window.ChatRealtime &&
-      typeof window.ChatRealtime.joinConversation === "function"
+      this._loadGeneration === gen
     ) {
-      if (
-        previousConversationId &&
-        previousConversationId !== targetConversationId &&
-        window.ChatRealtime &&
-        typeof window.ChatRealtime.leaveConversation === "function"
-      ) {
-        window.ChatRealtime.leaveConversation(previousConversationId);
+      if (previousConversationId && previousConversationId !== targetConversationId) {
+        this.leavePageRealtimeConversation(previousConversationId);
       }
-      window.ChatRealtime.joinConversation(targetConversationId);
+      this.ensurePageRealtimeJoin(targetConversationId);
       return;
     }
 
@@ -1677,16 +1995,23 @@ const ChatPage = {
     }
 
     this.updateHeaderPresence(meta);
+    this.updateHeaderUnreadState(
+      meta?.conversationId || meta?.ConversationId || this.currentChatId,
+    );
   },
 
   minimizeToBubble() {
     if (window.ChatWindow && this.currentChatId && this.currentMetaData) {
       const conversationId = this.currentChatId;
-      const normConversationId = conversationId.toLowerCase();
-      const sidebarConv = window.ChatSidebar?.conversations?.find(
-        (c) => (c.conversationId || "").toLowerCase() === normConversationId,
-      );
-      const syncedUnread = sidebarConv ? sidebarConv.unreadCount || 0 : 0;
+      const unreadSnapshot = this.getSidebarUnreadSnapshot(conversationId);
+      const fallbackUnreadRaw = Number(this.currentMetaData?.unreadCount || 0);
+      const fallbackUnread =
+        Number.isFinite(fallbackUnreadRaw) && fallbackUnreadRaw > 0
+          ? Math.floor(fallbackUnreadRaw)
+          : 0;
+      const syncedUnread = unreadSnapshot.hasValue
+        ? unreadSnapshot.unreadCount
+        : fallbackUnread;
       const bubbleMeta = {
         ...this.currentMetaData,
         unreadCount: syncedUnread,
@@ -1695,7 +2020,9 @@ const ChatPage = {
       this.currentMetaData.unreadCount = syncedUnread;
       ChatWindow.renderBubble(conversationId, bubbleMeta);
       if (typeof ChatWindow.syncUnreadFromSidebar === "function") {
-        ChatWindow.syncUnreadFromSidebar(conversationId);
+        ChatWindow.syncUnreadFromSidebar(conversationId, {
+          forceUnreadCount: syncedUnread,
+        });
       }
       ChatWindow.saveState();
     }
@@ -1722,12 +2049,7 @@ const ChatPage = {
         );
       }
 
-      if (
-        window.ChatRealtime &&
-        typeof window.ChatRealtime.leaveConversation === "function"
-      ) {
-        window.ChatRealtime.leaveConversation(previousConversationId);
-      }
+      this.leaveAllPageRealtimeConversations(previousConversationId);
     }
 
     this.currentChatId = null;
@@ -1758,6 +2080,7 @@ const ChatPage = {
     if (this.infoContent) {
       this.infoContent.innerHTML = "";
     }
+    this.updateHeaderUnreadState(null);
     this.updateInputState();
   },
 
@@ -1773,12 +2096,7 @@ const ChatPage = {
       ChatTyping.cancelTyping(this.currentChatId);
       ChatTyping.hideIndicator("typing-indicator-page", this.currentChatId);
     }
-    if (
-      window.ChatRealtime &&
-      typeof window.ChatRealtime.leaveConversation === "function"
-    ) {
-      window.ChatRealtime.leaveConversation(this.currentChatId);
-    }
+    this.leaveAllPageRealtimeConversations(this.currentChatId);
 
     this.renderNoConversationState();
     if (
@@ -6356,10 +6674,12 @@ const ChatPage = {
             );
           }
 
-          // Auto mark seen when opening chat-page
+          // Auto mark seen only when user is actually at bottom.
           const lastId = this.getLastMessageId();
-          if (lastId) {
+          if (lastId && this.isNearBottom()) {
             this.markConversationSeen(id, lastId);
+          } else {
+            this.updateHeaderUnreadState(id);
           }
         }
         isSuccess = true;

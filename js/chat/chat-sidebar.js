@@ -1301,6 +1301,32 @@ const ChatSidebar = {
 
         this.syncPresenceSnapshotForConversations(this.conversations);
         this.renderConversations(items, isLoadMore);
+
+        if (
+          window.ChatWindow &&
+          window.ChatWindow.openChats &&
+          typeof window.ChatWindow.syncUnreadFromSidebar === "function"
+        ) {
+          for (const [openId] of window.ChatWindow.openChats.entries()) {
+            window.ChatWindow.syncUnreadFromSidebar(openId);
+          }
+        }
+
+        if (
+          window.ChatPage &&
+          typeof window.ChatPage.updateHeaderUnreadState === "function"
+        ) {
+          window.ChatPage.updateHeaderUnreadState(window.ChatPage.currentChatId);
+        }
+
+        window.dispatchEvent(
+          new CustomEvent("chat:sidebar-conversations-updated", {
+            detail: {
+              count: this.conversations.length,
+              isLoadMore: !!isLoadMore,
+            },
+          }),
+        );
       }
     } catch (error) {
       console.error("Failed to load conversations:", error);
