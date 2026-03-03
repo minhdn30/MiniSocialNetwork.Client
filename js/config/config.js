@@ -168,6 +168,7 @@
     CHAT_SEARCH_PAGE_SIZE: 20, // Số lượng kết quả tìm kiếm tin nhắn load mỗi lần
     CHAT_MEDIA_PAGE_SIZE: 20, // Number of media items loaded per request in chat media panel
     CHAT_FILES_PAGE_SIZE: 20, // Number of file/document items loaded per request in chat file panel
+    CHAT_PINNED_MESSAGES_PAGE_SIZE: 20, // Number of pinned messages loaded per request in pinned popup
     GROUP_CHAT_MEMBER_LIMIT: 50, // Maximum total members in a group chat (including current user)
     GROUP_CHAT_MIN_SELECTED_MEMBERS: 2, // Minimum additional members to create a group (you + 2 others)
     GROUP_CHAT_MEMBERS_PAGE_SIZE: 20, // Number of members loaded per request in group members panel

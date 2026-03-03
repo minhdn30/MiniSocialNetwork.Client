@@ -901,8 +901,14 @@
           onProgress,
         ),
 
-      getPinned: (conversationId) =>
-        apiFetch(`/Messages/pinned/${conversationId}`),
+      getPinned: (
+        conversationId,
+        page = 1,
+        pageSize = window.APP_CONFIG?.CHAT_PINNED_MESSAGES_PAGE_SIZE || 20,
+      ) =>
+        apiFetch(
+          `/Messages/pinned/${conversationId}?page=${encodeURIComponent(page)}&pageSize=${encodeURIComponent(pageSize)}`,
+        ),
       pin: (conversationId, messageId) =>
         apiFetch(`/Messages/pin/${conversationId}/${messageId}`, {
           method: "POST",

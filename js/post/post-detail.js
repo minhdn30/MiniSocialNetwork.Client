@@ -1282,7 +1282,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Broaden selectors to cover both main post detail and inline replies
         window.EmojiUtils.setupClickOutsideHandler(
             '.detail-emoji-picker, .reply-emoji-picker-container, .edit-emoji-picker-container', 
-            '.emoji-trigger'
+            '.emoji-trigger, #editPostEmojiBtn'
         );
     }
     

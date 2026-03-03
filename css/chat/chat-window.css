@@ -465,7 +465,8 @@ body.is-dragging-chat #chat-windows-stack {
 }
 
 .chat-box .msg-bubble-wrapper {
-  max-width: 110%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .chat-box .msg-bubble {
@@ -1180,7 +1181,7 @@ body.is-dragging-chat #chat-windows-stack {
   }
 }
 
-/* Seen indicators (Facebook Messenger style) - MOVED TO SHARED/CHAT-BUBBLE.CSS */
+/* Seen indicators (Facebook Messenger style) - MOVED TO CHAT/CHAT-BUBBLE.CSS */
 
 /* Group members modal in chat-window */
 .chat-window-members-popup {
