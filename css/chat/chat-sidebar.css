@@ -238,6 +238,58 @@ body.chat-sidebar-open #sidebar.expanded ~ .main-content {
   color: var(--accent-primary);
 }
 
+/* Drag ghost for external chat drag-drop */
+.chat-drag-ghost {
+  position: absolute;
+  left: 0;
+  width: 260px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-primary);
+  box-shadow:
+    0 16px 30px rgba(0, 0, 0, 0.22),
+    0 0 0 1px var(--border-primary);
+  color: var(--text-primary);
+  pointer-events: none;
+  z-index: 12000;
+}
+
+.chat-drag-ghost-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--border-primary);
+  flex-shrink: 0;
+}
+
+.chat-drag-ghost-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-drag-ghost-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-drag-ghost-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* --- Chat Settings Popup --- */
 .chat-settings-popup {
   position: fixed;
@@ -754,15 +806,50 @@ body.chat-sidebar-open #sidebar.expanded ~ .main-content {
   border: 1.5px solid var(--bg-primary);
   margin-left: -5px; /* Stack avatars */
   transition: transform 0.2s;
+  animation: sidebarSeenAvatarEnter 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: 100% 50%;
 }
 
 .chat-mini-seen-avatar:first-child {
   margin-left: 0;
 }
 
+.chat-mini-seen-avatar:nth-child(2) {
+  animation-delay: 0.02s;
+}
+
+.chat-mini-seen-avatar:nth-child(3) {
+  animation-delay: 0.04s;
+}
+
+.chat-mini-seen-avatar:nth-child(4) {
+  animation-delay: 0.06s;
+}
+
+.chat-mini-seen-avatar:nth-child(5) {
+  animation-delay: 0.08s;
+}
+
 .chat-mini-seen-avatar:hover {
   transform: scale(1.2);
   z-index: 10;
+}
+
+@keyframes sidebarSeenAvatarEnter {
+  from {
+    opacity: 0;
+    transform: translateX(4px) scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-mini-seen-avatar {
+    animation: none;
+  }
 }
 
 .chat-seen-more {

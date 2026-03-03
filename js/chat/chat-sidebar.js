@@ -16,6 +16,8 @@ const ChatSidebar = {
   currentActiveId: null, // ID of the currently active chat (for highlighting)
   _presenceUnsubscribe: null,
   _onResize: null,
+  _dragScrollBlocker: null,
+  _draggingConversationId: "",
   settingsPopupCleanup: null,
   settingsLevelMap: {
     onlineStatusVisibility: {
@@ -579,34 +581,46 @@ const ChatSidebar = {
     e.dataTransfer.setData("text/plain", conversationId);
     e.dataTransfer.setData("application/x-social-chat-external", "true");
     e.dataTransfer.effectAllowed = "move";
+    this._draggingConversationId = conversationId || "";
 
     document.body.classList.add("is-dragging-chat");
+    if (
+      window.ChatWindow &&
+      typeof window.ChatWindow.setGlobalDragInteractionLock === "function"
+    ) {
+      window.ChatWindow.setGlobalDragInteractionLock(true);
+    }
+    if (!this._dragScrollBlocker) {
+      this._dragScrollBlocker = (evt) => {
+        evt.preventDefault();
+      };
+    }
+    window.addEventListener("wheel", this._dragScrollBlocker, {
+      passive: false,
+    });
+    window.addEventListener("touchmove", this._dragScrollBlocker, {
+      passive: false,
+    });
 
     // Better Drag Image (Ghost Card)
     const item = e.target.closest(".chat-item");
-    const name = item.querySelector(".chat-name").textContent;
-    const avatarSrc = item.querySelector(".chat-avatar").src;
+    const name = item?.querySelector(".chat-name")?.textContent?.trim() || "Chat";
+    const avatarSrc =
+      item?.querySelector(".chat-avatar")?.src ||
+      window.APP_CONFIG?.DEFAULT_AVATAR;
 
     const ghost = document.createElement("div");
-    ghost.style.cssText = `
-            position: absolute; top: -1000px;
-            width: 200px; padding: 10px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            display: flex; align-items: center; gap: 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            pointer-events: none;
-            color: white; font-weight: 600;
-        `;
+    ghost.className = "chat-drag-ghost";
+    ghost.style.top = "-1000px";
     ghost.innerHTML = `
-            <img src="${avatarSrc}" style="width: 32px; height: 32px; border-radius: 50%;">
-            <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${name}</div>
+            <img src="${avatarSrc}" class="chat-drag-ghost-avatar">
+            <div class="chat-drag-ghost-meta">
+              <div class="chat-drag-ghost-name">${escapeHtml(name)}</div>
+              <div class="chat-drag-ghost-sub">Drop to open chat</div>
+            </div>
         `;
     document.body.appendChild(ghost);
-    e.dataTransfer.setDragImage(ghost, 100, 25);
+    e.dataTransfer.setDragImage(ghost, 20, 20);
     setTimeout(() => ghost.remove(), 0);
 
     // Background sync if it's already open
@@ -616,9 +630,30 @@ const ChatSidebar = {
 
   handleDragEnd() {
     document.body.classList.remove("is-dragging-chat");
+    if (
+      window.ChatWindow &&
+      typeof window.ChatWindow.setGlobalDragInteractionLock === "function"
+    ) {
+      window.ChatWindow.setGlobalDragInteractionLock(false);
+    }
+    if (this._dragScrollBlocker) {
+      window.removeEventListener("wheel", this._dragScrollBlocker);
+      window.removeEventListener("touchmove", this._dragScrollBlocker);
+    }
+    const stack = document.getElementById("chat-windows-stack");
+    if (stack) {
+      stack.classList.remove("drag-over-stack");
+    }
+    if (
+      window.ChatWindow &&
+      typeof window.ChatWindow.clearDropIndicator === "function"
+    ) {
+      window.ChatWindow.clearDropIndicator();
+    }
     document
       .querySelectorAll(".is-dragging-external")
       .forEach((el) => el.classList.remove("is-dragging-external"));
+    this._draggingConversationId = "";
   },
 
   async init() {

@@ -29,22 +29,62 @@ body.is-chat-page .chat-window-container {
   z-index: 11000;
   min-width: 150px;
   min-height: 80px;
-  transition: all 0.2s ease;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    padding 0.18s ease;
 }
 
 /* Enable pointer events on the stack when dragging from outside to capture the drop */
-body.is-dragging-chat #chat-windows-stack {
+body.is-dragging-chat #chat-windows-stack,
+body.is-dragging-chat-window #chat-windows-stack {
   pointer-events: auto;
-  background: rgba(var(--accent-primary-rgb, 59, 130, 246), 0.03);
-  border: 2px dashed var(--border-primary);
-  border-radius: 12px 12px 0 0;
-  margin-right: -10px;
-  padding: 0 10px;
+}
+
+body.is-dragging-chat {
+  user-select: none;
+}
+
+body.is-dragging-chat .chat-box,
+body.is-dragging-chat-window .chat-box {
+  transition: none !important;
+}
+
+body.is-dragging-chat .chat-box,
+body.is-dragging-chat .chat-bubble,
+body.is-dragging-chat .chat-box * {
+  pointer-events: none !important;
 }
 
 #chat-windows-stack.drag-over-stack {
   background: rgba(var(--accent-primary-rgb, 59, 130, 246), 0.08);
-  border-color: var(--accent-primary);
+  outline: 2px dashed var(--accent-primary);
+  outline-offset: 2px;
+  border-radius: 12px 12px 0 0;
+}
+
+.chat-window-drop-indicator {
+  position: absolute;
+  top: 10px;
+  bottom: 8px;
+  width: 4px;
+  border-radius: 999px;
+  background: var(--accent-primary);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+  opacity: 0;
+  transform: scaleY(0.75);
+  transform-origin: center;
+  transition:
+    left 0.14s ease,
+    opacity 0.14s ease,
+    transform 0.14s ease;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.chat-window-drop-indicator.show {
+  opacity: 1;
+  transform: scaleY(1);
 }
 
 /* Bubbles Stack - Vertical stack for minimized chat heads */
@@ -74,25 +114,29 @@ body.is-dragging-chat #chat-windows-stack {
   pointer-events: auto;
   border: 1px solid var(--chat-theme-border, var(--border-primary));
   transition:
-    transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1),
-    opacity 0.3s ease,
-    box-shadow 0.3s ease;
-  transform: translateY(20px);
+    transform 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.2s ease,
+    box-shadow 0.25s ease;
+  transform: translateY(14px) scale(0.985);
+  transform-origin: bottom right;
+  will-change: transform, opacity;
   opacity: 0;
 }
 
 /* State when being dragged or moved */
 .chat-box.is-dragging {
-  opacity: 0.6;
-  transform: scale(0.96) translateY(5px);
-  box-shadow: var(--shadow-md);
+  opacity: 0.92;
+  transform: scale(0.97) translateY(4px);
+  box-shadow: var(--shadow-2xl, 0 18px 42px rgba(15, 23, 42, 0.34));
+  outline: none;
   cursor: grabbing;
+  z-index: 4;
 }
 
 /* Highlight the destination when dragging over other boxes */
 .chat-box.drag-target {
-  border: 2px solid var(--accent-primary);
-  transform: scale(1.02);
+  border-color: rgba(var(--accent-primary-rgb, 59, 130, 246), 0.85);
+  box-shadow: 0 0 0 2px rgba(var(--accent-primary-rgb, 59, 130, 246), 0.2);
 }
 
 /* Placeholder for the item being dragged */
@@ -104,8 +148,12 @@ body.is-dragging-chat #chat-windows-stack {
 }
 
 .chat-box.show {
-  transform: translateY(0);
+  transform: translateY(0) scale(1);
   opacity: 1;
+}
+
+.chat-box.no-transition {
+  transition: none !important;
 }
 
 .chat-box.minimized {
@@ -151,9 +199,12 @@ body.is-dragging-chat #chat-windows-stack {
   user-select: none;
 }
 
-.chat-box.is-dragging {
-  opacity: 0.5;
+.chat-box.is-dragging .chat-box-header {
   cursor: grabbing;
+}
+
+.chat-box.is-dragging-external {
+  box-shadow: 0 0 0 2px rgba(var(--accent-primary-rgb, 59, 130, 246), 0.34);
 }
 
 .chat-header-info {
@@ -284,7 +335,6 @@ body.is-dragging-chat #chat-windows-stack {
   background: var(--bg-primary);
   box-shadow: var(--shadow-lg);
   transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  animation: bubbleAppear 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 @keyframes bubbleAppear {
@@ -296,6 +346,26 @@ body.is-dragging-chat #chat-windows-stack {
     transform: scale(1);
     opacity: 1;
   }
+}
+
+.chat-bubble.is-entering {
+  animation: bubbleAppear 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes bubbleExit {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+}
+
+.chat-bubble.is-exiting {
+  animation: bubbleExit 0.18s ease forwards;
+  pointer-events: none;
 }
 
 .chat-bubble:hover {
@@ -527,6 +597,19 @@ body.is-dragging-chat #chat-windows-stack {
   grid-column: span 2;
   grid-row: auto;
   aspect-ratio: 16/9;
+}
+
+/* Compact play button for chat-window videos */
+.chat-box .msg-video-overlay .play-button-wrapper {
+  width: 44px;
+  height: 44px;
+  border-width: 1.25px;
+}
+
+.chat-box .msg-video-overlay .play-icon {
+  width: 20px;
+  height: 20px;
+  margin-left: 3px;
 }
 
 /* Input Area */

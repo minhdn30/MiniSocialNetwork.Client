@@ -22,6 +22,10 @@ const ChatWindow = {
   _permissionRefreshTimers: new Map(),
   _permissionRefreshInFlight: new Map(),
   _presenceUnsubscribe: null,
+  _dropIndicatorEl: null,
+  _activeDropReferenceId: null,
+  _dragInteractionBlocker: null,
+  _dragInteractionLockCount: 0,
   _initialized: false,
 
   init() {
@@ -48,41 +52,89 @@ const ChatWindow = {
 
       // Stack Drop handling (Specific Position)
       windowsStack.addEventListener("dragover", (e) => {
-        if (
-          e.dataTransfer.types.includes("application/x-social-chat-external")
-        ) {
-          e.preventDefault();
-          e.dataTransfer.dropEffect = "move";
-          windowsStack.classList.add("drag-over-stack");
+        const dragTypes = Array.from(e.dataTransfer?.types || []);
+        const isExternal = dragTypes.includes(
+          "application/x-social-chat-external",
+        );
+        const draggingInternal = windowsStack.querySelector(
+          ".chat-box.is-dragging",
+        );
+        if (!isExternal && !draggingInternal) return;
+
+        if (isExternal && !this.isExternalDropAllowed(e.clientX, e.target)) {
+          windowsStack.classList.remove("drag-over-stack");
+          this.clearDropIndicator();
+          return;
         }
+
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const excludingId = isExternal
+          ? this.resolveExternalDragExistingWindowId(e.dataTransfer)
+          : draggingInternal?.dataset?.id || "";
+        windowsStack.classList.remove("drag-over-stack");
+        this.updateDropReference(e.clientX, excludingId, e.clientY);
       });
 
-      windowsStack.addEventListener("dragleave", () => {
+      windowsStack.addEventListener("dragleave", (e) => {
+        const rect = windowsStack.getBoundingClientRect();
+        const isStillInside =
+          e.clientX >= rect.left &&
+          e.clientX <= rect.right &&
+          e.clientY >= rect.top &&
+          e.clientY <= rect.bottom;
+        if (isStillInside) return;
+
         windowsStack.classList.remove("drag-over-stack");
+        this.clearDropIndicator();
       });
 
       windowsStack.addEventListener("drop", (e) => {
         windowsStack.classList.remove("drag-over-stack");
-        const isExternal = e.dataTransfer.getData(
+        e.preventDefault();
+        e.stopPropagation();
+
+        const dragTypes = Array.from(e.dataTransfer?.types || []);
+        const isExternal = dragTypes.includes(
           "application/x-social-chat-external",
         );
-        if (isExternal) {
-          e.preventDefault();
-          const convId = e.dataTransfer.getData("text/plain");
-          if (convId) {
-            // Determine drop position relative to existing windows
-            const children = Array.from(windowsStack.children);
-            let targetId = null;
-            for (const child of children) {
-              const rect = child.getBoundingClientRect();
-              if (e.clientX < rect.left + rect.width / 2) {
-                targetId = child.dataset.id;
-                break;
-              }
-            }
-            this.openByIdAtPosition(convId, targetId);
-          }
+        const draggingInternal = windowsStack.querySelector(
+          ".chat-box.is-dragging",
+        );
+
+        if (isExternal && !this.isExternalDropAllowed(e.clientX, e.target)) {
+          this.clearDropIndicator();
+          return;
         }
+
+        const excludingId = isExternal
+          ? this.resolveExternalDragExistingWindowId(e.dataTransfer)
+          : draggingInternal?.dataset?.id || "";
+        const dropSlot = this.resolveWindowDropTarget(
+          e.clientX,
+          e.clientY,
+          excludingId,
+        );
+        const referenceId = dropSlot.referenceId ?? null;
+
+        this.closeFloatingMessageMenus();
+
+        if (isExternal) {
+          const convId = e.dataTransfer.getData("text/plain");
+          this.setGlobalDragInteractionLock(false);
+          this.clearDropIndicator();
+          if (convId) {
+            this.openByIdAtPosition(convId, referenceId);
+          }
+          return;
+        }
+
+        if (draggingInternal) {
+          this.reorderDraggingWindow(draggingInternal, referenceId);
+        }
+
+        this.setGlobalDragInteractionLock(false);
+        this.clearDropIndicator();
       });
     }
 
@@ -116,6 +168,7 @@ const ChatWindow = {
       if (document.body.classList.contains("is-chat-page")) return;
 
       if (e.dataTransfer.types.includes("application/x-social-chat-external")) {
+        if (!this.isExternalDropAllowed(e.clientX, e.target)) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
       }
@@ -128,15 +181,21 @@ const ChatWindow = {
         "application/x-social-chat-external",
       );
       if (isExternal) {
+        if (e.target?.closest?.("#chat-windows-stack")) {
+          return;
+        }
+        if (!this.isExternalDropAllowed(e.clientX, e.target)) {
+          this.clearDropIndicator();
+          return;
+        }
         e.preventDefault();
         const convId = e.dataTransfer.getData("text/plain");
         if (convId) {
-          // If target is the stack, let the stack listener handle it
-          if (e.target.closest("#chat-windows-stack")) return;
-
-          // Otherwise, open at default position (left-most / end of map)
+          // Body-level drop only handles outside stack; stack drop is handled by stack listener.
           this.openById(convId, true);
         }
+        this.setGlobalDragInteractionLock(false);
+        this.clearDropIndicator();
       }
     });
 
@@ -222,22 +281,29 @@ const ChatWindow = {
       const state = JSON.parse(saved);
       if (!Array.isArray(state)) return;
 
-      state.forEach((item) => {
-        if (!item.id) return;
+      const restoreItemInOrder = async (item) => {
+        if (!item?.id) return;
 
-        // Defensive: Ensure we don't restore temporary/broken ID states
-        const isGuid =
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-            item.id,
-          );
+        const rawId = (item.id || "").toString();
+        const normalizedId = this.normalizeConversationId(rawId) || rawId;
+        const normalizedIdLower = normalizedId.toLowerCase();
+        const isGuid = this.isGuidConversationId(normalizedId);
         if (!isGuid && !(item.data && typeof item.data === "object")) return;
 
         // Always prefer fresh metadata from Sidebar.
         let freshData = null;
         if (window.ChatSidebar && window.ChatSidebar.conversations) {
-          const realConv = window.ChatSidebar.conversations.find(
-            (c) => c.conversationId === item.id,
-          );
+          const realConv = window.ChatSidebar.conversations.find((c) => {
+            const convId = (
+              c?.conversationId ||
+              c?.ConversationId ||
+              ""
+            ).toString();
+            if (!convId) return false;
+            const convNormalized =
+              this.normalizeConversationId(convId) || convId;
+            return convNormalized.toLowerCase() === normalizedIdLower;
+          });
           if (realConv) {
             freshData = realConv;
           }
@@ -248,87 +314,105 @@ const ChatWindow = {
           freshData = item.data;
         }
 
-        const unreadCount = freshData
-          ? freshData.unreadCount || 0
-          : item.unreadCount || 0;
+        const rawUnread = freshData
+          ? (freshData.unreadCount ??
+            freshData.UnreadCount ??
+            item.unreadCount ??
+            0)
+          : (item.unreadCount ?? 0);
+        const unreadAsNumber = Number(rawUnread);
+        const unreadCount =
+          Number.isFinite(unreadAsNumber) && unreadAsNumber > 0
+            ? Math.floor(unreadAsNumber)
+            : 0;
+
+        const applyRestoredState = (openId) => {
+          if (!openId || !this.openChats.has(openId)) return;
+          const chat = this.openChats.get(openId);
+          if (!chat) return;
+
+          chat.unreadCount = unreadCount;
+
+          if (item.minimized && !chat.minimized) {
+            this.toggleMinimize(openId, false);
+          }
+
+          if (!item.minimized && chat.element) {
+            chat.element.classList.toggle("has-unread", unreadCount > 0);
+          }
+
+          if (chat.minimized) {
+            if (unreadCount > 0) {
+              this.incrementBubbleUnread(openId, true);
+            } else {
+              this.clearBubbleUnread(openId);
+            }
+          }
+        };
 
         if (freshData) {
           const payload = { ...freshData, unreadCount };
+          const payloadConvIdRaw =
+            payload.conversationId || payload.ConversationId || normalizedId;
           const payloadConvId =
-            payload.conversationId || payload.ConversationId || item.id;
+            this.normalizeConversationId(payloadConvIdRaw) || payloadConvIdRaw;
           if (!payload.conversationId && payloadConvId) {
             payload.conversationId = payloadConvId;
           }
+
           if (item.minimized) {
             this.renderBubble(payloadConvId, payload);
           } else {
             this.openChat(payload, false); // Do not focus on restore
           }
+
+          const openId = this.getOpenChatId(payloadConvId) || payloadConvId;
+          applyRestoredState(openId);
           return;
         }
 
         // Final fallback: fetch fresh metadata by conversation ID.
         if (!isGuid) {
-          if (typeof item.id === "string" && item.id.startsWith("new-")) {
-            const accountId = item.id.slice(4);
-            if (accountId) {
-              this.openByAccountId(accountId, false)
-                .then(() => {
-                  let openId = this.getOpenChatId(item.id);
-                  if (!openId) {
-                    for (const [id, chatObj] of this.openChats.entries()) {
-                      const otherId = (
-                        chatObj?.data?.otherMember?.accountId ||
-                        chatObj?.data?.otherMemberId ||
-                        ""
-                      ).toLowerCase();
-                      if (otherId && otherId === accountId.toLowerCase()) {
-                        openId = id;
-                        break;
-                      }
-                    }
-                  }
-                  if (!openId) return;
-                  const chat = this.openChats.get(openId);
-                  if (!chat) return;
+          if (typeof rawId === "string" && rawId.startsWith("new-")) {
+            const accountId = rawId.slice(4);
+            if (!accountId) return;
 
-                  chat.unreadCount = unreadCount;
-                  if (item.minimized && !chat.minimized) {
-                    this.toggleMinimize(openId, false);
-                  }
-                  if (!item.minimized && chat.element && unreadCount > 0) {
-                    chat.element.classList.add("has-unread");
-                  }
-                  if (chat.minimized && unreadCount > 0) {
-                    this.incrementBubbleUnread(openId, true);
-                  }
-                  this.saveState();
-                })
-                .catch((err) =>
-                  console.error("Failed to restore transient chat state:", err),
-                );
+            await this.openByAccountId(accountId, false);
+            let openId = this.getOpenChatId(normalizedId) || null;
+            if (!openId) {
+              for (const [id, chatObj] of this.openChats.entries()) {
+                const otherId = (
+                  chatObj?.data?.otherMember?.accountId ||
+                  chatObj?.data?.otherMemberId ||
+                  ""
+                )
+                  .toString()
+                  .toLowerCase();
+                if (otherId && otherId === accountId.toLowerCase()) {
+                  openId = id;
+                  break;
+                }
+              }
             }
+            applyRestoredState(openId);
           }
           return;
         }
-        this.openById(item.id, false, false)
-          .then(() => {
-            const openId = this.getOpenChatId(item.id);
-            if (!openId) return;
-            const chat = this.openChats.get(openId);
-            if (!chat) return;
 
-            chat.unreadCount = unreadCount;
+        await this.openById(normalizedId, false, false);
+        const openId = this.getOpenChatId(normalizedId) || normalizedId;
+        applyRestoredState(openId);
+      };
 
-            if (item.minimized && !chat.minimized) {
-              this.toggleMinimize(openId, false);
-            }
+      const runRestoreSequentially = async () => {
+        for (const item of state) {
+          await restoreItemInOrder(item);
+        }
+        this.saveState();
+      };
 
-            if (!item.minimized && chat.element && unreadCount > 0) {
-              chat.element.classList.add("has-unread");
-            }
-          })
-          .catch((err) => console.error("Failed to restore chat state:", err));
+      runRestoreSequentially().catch((err) => {
+        console.error("Failed to restore chat state:", err);
       });
     } catch (e) {
       console.error("Failed to restore ChatWindow state:", e);
@@ -348,14 +432,78 @@ const ChatWindow = {
     return this.isGuidConversationId(raw) ? raw.toLowerCase() : raw;
   },
 
+  resolveExternalDragExistingWindowId(dataTransfer = null) {
+    const rawFromTransfer = dataTransfer?.getData?.("text/plain") || "";
+    const rawFromSidebar = window.ChatSidebar?._draggingConversationId || "";
+    const rawId = (rawFromTransfer || rawFromSidebar || "").toString().trim();
+    if (!rawId) return "";
+
+    const normalizedId = this.normalizeConversationId(rawId) || rawId;
+    const openId = this.getOpenChatId(normalizedId);
+    if (!openId) return "";
+
+    const chat = this.openChats.get(openId);
+    if (!chat || chat.minimized) return "";
+    return openId;
+  },
+
+  isExternalDropAllowed(_clientX = 0, targetEl = null) {
+    const target = targetEl && targetEl.nodeType === 1 ? targetEl : null;
+
+    if (target?.closest?.("#sidebar") || target?.closest?.("#chat-panel")) {
+      return false;
+    }
+    return true;
+  },
+
+  setGlobalDragInteractionLock(locked) {
+    if (locked) {
+      this._dragInteractionLockCount += 1;
+      if (this._dragInteractionLockCount > 1) return;
+
+      if (!this._dragInteractionBlocker) {
+        this._dragInteractionBlocker = (event) => {
+          event.preventDefault();
+        };
+      }
+
+      window.addEventListener("wheel", this._dragInteractionBlocker, {
+        passive: false,
+        capture: true,
+      });
+      window.addEventListener("touchmove", this._dragInteractionBlocker, {
+        passive: false,
+        capture: true,
+      });
+      return;
+    }
+
+    this._dragInteractionLockCount = Math.max(
+      0,
+      this._dragInteractionLockCount - 1,
+    );
+    if (this._dragInteractionLockCount > 0) return;
+
+    if (this._dragInteractionBlocker) {
+      window.removeEventListener("wheel", this._dragInteractionBlocker, true);
+      window.removeEventListener(
+        "touchmove",
+        this._dragInteractionBlocker,
+        true,
+      );
+    }
+  },
+
   getRealtimeOwnerKey(conversationId) {
-    const normalizedConversationId = this.normalizeConversationId(conversationId);
+    const normalizedConversationId =
+      this.normalizeConversationId(conversationId);
     if (!normalizedConversationId) return "";
     return `chat-window:${normalizedConversationId}`;
   },
 
   notifyRealtimeOwnerChanged(conversationId, hasOwner) {
-    const normalizedConversationId = this.normalizeConversationId(conversationId);
+    const normalizedConversationId =
+      this.normalizeConversationId(conversationId);
     if (!normalizedConversationId) return;
 
     window.dispatchEvent(
@@ -380,7 +528,8 @@ const ChatWindow = {
     if (!chat || chat._isClosing) return false;
 
     const ownerKey =
-      chat._realtimeOwnerKey || this.getRealtimeOwnerKey(normalizedConversationId);
+      chat._realtimeOwnerKey ||
+      this.getRealtimeOwnerKey(normalizedConversationId);
     if (chat._realtimeJoined || chat._realtimeJoining) return true;
 
     if (
@@ -484,10 +633,14 @@ const ChatWindow = {
       return false;
 
     const openId =
-      this.getOpenChatId(normalizedConversationId) ||
-      normalizedConversationId;
+      this.getOpenChatId(normalizedConversationId) || normalizedConversationId;
     const chat = chatObj || this.openChats.get(openId);
-    if (!chat || chat._isClosing || chat._realtimeJoined || chat._realtimeJoining)
+    if (
+      !chat ||
+      chat._isClosing ||
+      chat._realtimeJoined ||
+      chat._realtimeJoining
+    )
       return !!(chat && (chat._realtimeJoined || chat._realtimeJoining));
 
     const ownerKey = chat._realtimeOwnerKey || this.getRealtimeOwnerKey(openId);
@@ -997,6 +1150,14 @@ const ChatWindow = {
 
   promoteConversationId(oldId, realId, chatObj) {
     if (!oldId || !realId || oldId === realId || !chatObj) return oldId;
+    const existingOrder = Array.from(this.openChats.keys());
+    const orderIndex = existingOrder.indexOf(oldId);
+    const reorderedIds = existingOrder.filter((id) => id !== oldId);
+    if (orderIndex >= 0) {
+      reorderedIds.splice(orderIndex, 0, realId);
+    } else {
+      reorderedIds.push(realId);
+    }
 
     this.openChats.delete(oldId);
     chatObj.data.conversationId = realId;
@@ -1007,6 +1168,21 @@ const ChatWindow = {
       chatObj.runtimeCtx.blobUrls = this._blobUrls;
     }
     this.openChats.set(realId, chatObj);
+
+    this.applyConversationOrder(
+      reorderedIds.filter((id) => {
+        const chat = this.openChats.get(id);
+        return !!chat && !chat.minimized;
+      }),
+      reorderedIds.filter((id) => {
+        const chat = this.openChats.get(id);
+        return !!chat && !!chat.minimized;
+      }),
+      {
+        animateWindows: false,
+        saveState: false,
+      },
+    );
 
     const oldPreviewKey = `preview:${oldId}`;
     const newPreviewKey = `preview:${realId}`;
@@ -1322,8 +1498,7 @@ const ChatWindow = {
     }
 
     if (typeof window.ChatSidebar.loadConversations !== "function") return;
-    window.ChatSidebar
-      .loadConversations(false)
+    window.ChatSidebar.loadConversations(false)
       .then(() => {
         this.syncAllUnreadFromSidebar();
       })
@@ -2066,7 +2241,12 @@ const ChatWindow = {
    * @param {Boolean} shouldFocus Whether to focus the window
    * @param {Boolean} priorityLeft Whether to move to the left-most position (end of map)
    */
-  openChat(conv, shouldFocus = true, priorityLeft = false) {
+  openChat(
+    conv,
+    shouldFocus = true,
+    priorityLeft = false,
+    insertBeforeId = null,
+  ) {
     if (!conv) return;
     this.init();
     const rawConvId = conv.conversationId || conv.ConversationId || "";
@@ -2098,74 +2278,82 @@ const ChatWindow = {
       this.syncPresenceSnapshotForConversations([chat?.data || conv]);
       this.applyPresenceToChatDom(convId, chat?.data || conv);
 
-      // Move to last position (leftmost) if requested even if already open
-      if (priorityLeft) {
-        this.openChats.delete(convId);
-        this.openChats.set(convId, chat);
-        this.reorderWindowsDOM();
-        this.reorderBubblesDOM();
-      }
-
       if (chat.minimized) {
-        this.toggleMinimize(convId, shouldFocus);
+        this.ensureWindowVisible(convId, false);
+        const baseWindowIds = this.getWindowOrderIds().filter(
+          (id) => id !== convId,
+        );
+        const targetIndex = insertBeforeId
+          ? this.resolveWindowInsertIndex(insertBeforeId, baseWindowIds)
+          : null;
+        const overflowStrategy = insertBeforeId ? "leftmost" : "rightmost";
+        this.arrangeWindowOrder(convId, {
+          targetIndex,
+          overflowStrategy,
+        });
+        if (shouldFocus) {
+          this.focusChat(convId);
+        }
       } else if (shouldFocus) {
+        if (insertBeforeId && insertBeforeId !== convId) {
+          const baseWindowIds = this.getWindowOrderIds().filter(
+            (id) => id !== convId,
+          );
+          const targetIndex = this.resolveWindowInsertIndex(
+            insertBeforeId,
+            baseWindowIds,
+          );
+          this.arrangeWindowOrder(convId, {
+            targetIndex,
+            overflowStrategy: "leftmost",
+          });
+        } else if (priorityLeft) {
+          this.arrangeWindowOrder(convId, {
+            targetIndex: null,
+            overflowStrategy: "rightmost",
+          });
+        }
         this.focusChat(convId);
+      } else if (insertBeforeId && insertBeforeId !== convId) {
+        const baseWindowIds = this.getWindowOrderIds().filter(
+          (id) => id !== convId,
+        );
+        const targetIndex = this.resolveWindowInsertIndex(
+          insertBeforeId,
+          baseWindowIds,
+        );
+        this.arrangeWindowOrder(convId, {
+          targetIndex,
+          overflowStrategy: "leftmost",
+        });
+      } else if (priorityLeft) {
+        this.arrangeWindowOrder(convId, {
+          targetIndex: null,
+          overflowStrategy: "rightmost",
+        });
       }
       this.tryJoinRealtimeConversation(convId, chat);
+      this.saveState();
       return;
     }
 
     this.syncPresenceSnapshotForConversations([conv]);
-
-    // Check Total Limit before opening a NEW one
-    if (this.openChats.size >= this.maxTotalWindows) {
-      // Prefer closing the oldest bubble (minimized) first to preserve active windows
-      const oldestBubbleId = Array.from(this.openChats.entries()).find(
-        ([, c]) => c.minimized,
-      )?.[0];
-      if (oldestBubbleId) {
-        console.log(
-          `💬 [ChatWindow] Total limit reached, closing oldest bubble: ${oldestBubbleId}`,
-        );
-        this.closeChat(oldestBubbleId);
-      } else {
-        // No bubbles → close the oldest window (rightmost)
-        const oldestId = Array.from(this.openChats.keys())[0];
-        if (oldestId) {
-          console.log(
-            `💬 [ChatWindow] Total limit reached, closing oldest window: ${oldestId}`,
-          );
-          this.closeChat(oldestId);
-        }
-      }
-    }
-
-    // Check Open Windows Limit — minimize the rightmost (oldest / first in Map)
-    const openWindowsCount = Array.from(this.openChats.values()).filter(
-      (c) => !c.minimized,
-    ).length;
-    if (openWindowsCount >= this.maxOpenWindows) {
-      const rightmostWindowId = Array.from(this.openChats.entries()).find(
-        ([, c]) => !c.minimized,
-      )?.[0];
-      if (rightmostWindowId) {
-        console.log(
-          `💬 [ChatWindow] Window limit reached, minimizing rightmost: ${rightmostWindowId}`,
-        );
-        this.toggleMinimize(rightmostWindowId);
-      }
-    }
-
-    this.renderChatBox(conv, shouldFocus);
+    this.renderChatBox(conv, false);
     this.tryJoinRealtimeConversation(convId);
+    const baseWindowIds = this.getWindowOrderIds().filter(
+      (id) => id !== convId,
+    );
+    const targetIndex = insertBeforeId
+      ? this.resolveWindowInsertIndex(insertBeforeId, baseWindowIds)
+      : null;
+    const overflowStrategy = insertBeforeId ? "leftmost" : "rightmost";
+    this.arrangeWindowOrder(convId, {
+      targetIndex,
+      overflowStrategy,
+    });
 
-    // Adjust internal Map order if opening at start
-    if (priorityLeft) {
-      const entry = this.openChats.get(convId);
-      this.openChats.delete(convId);
-      this.openChats.set(convId, entry);
-      this.reorderWindowsDOM();
-      this.reorderBubblesDOM();
+    if (shouldFocus) {
+      this.focusChat(convId);
     }
 
     this.saveState();
@@ -2237,11 +2425,23 @@ const ChatWindow = {
   },
 
   async openByIdAtPosition(convId, referenceId) {
-    if (!convId) return;
+    const normalizedInputId = this.normalizeConversationId(convId);
+    if (!normalizedInputId) return;
+
+    const existingOpenId = this.getOpenChatId(normalizedInputId);
+    if (existingOpenId && this.openChats.has(existingOpenId)) {
+      const existingChat = this.openChats.get(existingOpenId);
+      if (existingChat && !existingChat.minimized) {
+        this.closeFloatingMessageMenus();
+        this.reorderWindowById(existingOpenId, referenceId || null);
+        this.focusChat(existingOpenId);
+        return;
+      }
+    }
 
     let convData = null;
     if (window.ChatSidebar && window.ChatSidebar.conversations) {
-      const target = convId.toLowerCase();
+      const target = normalizedInputId.toLowerCase();
       convData = window.ChatSidebar.conversations.find(
         (c) => (c.conversationId || "").toLowerCase() === target,
       );
@@ -2249,36 +2449,24 @@ const ChatWindow = {
 
     if (!convData) {
       try {
-        const res = await window.API.Conversations.getById(convId);
-        if (res.ok) convData = await res.json();
+        const res = await window.API.Conversations.getById(normalizedInputId);
+        if (res.ok) {
+          const raw = await res.json();
+          const data = raw?.metaData || raw;
+          if (data && typeof data === "object") {
+            if (!data.conversationId) {
+              data.conversationId = data.ConversationId || normalizedInputId;
+            }
+            convData = data;
+          }
+        }
       } catch (err) {
         console.error("Failed to fetch conversation for drag-drop:", err);
       }
     }
 
     if (convData) {
-      // First open it normally (if not already open)
-      this.openChat(convData, true, false);
-
-      // Now precisely reorder it in the Map based on the referenceId
-      const ids = Array.from(this.openChats.keys());
-      const oldIdx = ids.indexOf(convId);
-      if (oldIdx !== -1) ids.splice(oldIdx, 1);
-
-      const targetIdx = referenceId ? ids.indexOf(referenceId) : ids.length;
-      ids.splice(targetIdx, 0, convId);
-
-      const newMap = new Map();
-      const existingMap = new Map(this.openChats);
-      ids.forEach((id) => {
-        const obj = existingMap.get(id);
-        if (obj) newMap.set(id, obj);
-      });
-
-      this.openChats = newMap;
-      this.reorderWindowsDOM();
-      this.reorderBubblesDOM();
-      this.saveState();
+      this.openChat(convData, true, false, referenceId || null);
     }
   },
 
@@ -2384,54 +2572,21 @@ const ChatWindow = {
     // Drag and Drop listeners
     chatBox.addEventListener("dragstart", (e) => {
       chatBox.classList.add("is-dragging");
+      document.body.classList.add("is-dragging-chat-window");
+      this.setGlobalDragInteractionLock(true);
       e.dataTransfer.setData("text/plain", conv.conversationId);
       e.dataTransfer.effectAllowed = "move";
-
-      // Set a drag image offset if needed (optional)
     });
 
     chatBox.addEventListener("dragend", () => {
       chatBox.classList.remove("is-dragging");
+      document.body.classList.remove("is-dragging-chat-window");
+      this.setGlobalDragInteractionLock(false);
+      const stackEl = document.getElementById("chat-windows-stack");
+      stackEl?.classList.remove("drag-over-stack");
+      this.clearDropIndicator();
       chatBox.draggable = false; // Reset
       this.syncChatOrderFromWindows();
-    });
-
-    // Internal Sorting (when dragging another box over this one)
-    chatBox.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      const dragging = document.querySelector(".chat-box.is-dragging");
-      if (!dragging || dragging === chatBox) return;
-
-      const stack = document.getElementById("chat-windows-stack");
-      const children = Array.from(stack.children);
-      const dragIdx = children.indexOf(dragging);
-      const targetIdx = children.indexOf(chatBox);
-
-      // Throttle swap to prevent flicker
-      if (dragIdx < targetIdx) {
-        stack.insertBefore(dragging, chatBox.nextSibling);
-      } else {
-        stack.insertBefore(dragging, chatBox);
-      }
-
-      // Re-scrolling after DOM move
-      if (dragging.dataset.id) this.scrollToBottom(dragging.dataset.id);
-    });
-
-    chatBox.addEventListener("dragenter", (e) => {
-      const dragging = document.querySelector(".chat-box.is-dragging");
-      if (dragging && dragging !== chatBox) {
-        chatBox.classList.add("drag-target");
-      }
-    });
-
-    chatBox.addEventListener("dragleave", () => {
-      chatBox.classList.remove("drag-target");
-    });
-
-    // Add drop listener to box just in case
-    chatBox.addEventListener("drop", () => {
-      chatBox.classList.remove("drag-target");
     });
 
     const otherAccountId =
@@ -2526,7 +2681,11 @@ const ChatWindow = {
         `;
 
     stack.appendChild(chatBox);
-    setTimeout(() => chatBox.classList.add("show"), 10);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        chatBox.classList.add("show");
+      });
+    });
 
     // Render Lucide icons for the new box
     if (window.lucide) window.lucide.createIcons();
@@ -2610,6 +2769,11 @@ const ChatWindow = {
       let chat = this.openChats.get(openId);
       if (chat) {
         this.cancelPendingChatDispose(chat);
+        existing.classList.remove("is-exiting");
+        existing.classList.remove("is-entering");
+        existing.style.position = "";
+        existing.style.top = "";
+        existing.style.right = "";
         chat.bubbleElement = existing;
         if (data) {
           chat.data = data;
@@ -2643,10 +2807,20 @@ const ChatWindow = {
     this.syncPresenceSnapshotForConversations([data]);
 
     const bubble = document.createElement("div");
-    bubble.className = "chat-bubble";
+    bubble.className = "chat-bubble is-entering";
+    bubble.style.position = "";
+    bubble.style.top = "";
+    bubble.style.right = "";
     bubble.id = `chat-bubble-${openId}`;
     bubble.dataset.id = openId;
     bubble.onclick = () => this.toggleMinimize(openId);
+    bubble.addEventListener(
+      "animationend",
+      () => {
+        bubble.classList.remove("is-entering");
+      },
+      { once: true },
+    );
 
     const escapedName = escapeHtml(name);
 
@@ -2676,8 +2850,13 @@ const ChatWindow = {
     if (!chat) {
       // Check Total Limit before adding a NEW one (even as a bubble)
       if (this.openChats.size >= this.maxTotalWindows) {
-        const oldestId = Array.from(this.openChats.keys())[0];
-        if (oldestId) this.closeChat(oldestId);
+        const bottomBubbleId = this.getBubbleOrderIds()[0];
+        if (bottomBubbleId) {
+          this.closeChat(bottomBubbleId);
+        } else {
+          const rightmostWindowId = this.getWindowOrderIds()[0];
+          if (rightmostWindowId) this.closeChat(rightmostWindowId);
+        }
       }
 
       chat = {
@@ -2710,6 +2889,39 @@ const ChatWindow = {
       this.getRuntimeCtx(openId, chat);
       this.tryJoinRealtimeConversation(openId, chat);
     }
+
+    this.arrangeBubbleOrder(openId);
+    this.saveState();
+  },
+
+  ensureWindowVisible(id, shouldFocus = true) {
+    const chat = this.openChats.get(id);
+    if (!chat) return false;
+
+    this.cancelPendingChatDispose(chat);
+
+    if (chat.bubbleElement) {
+      chat.bubbleElement.remove();
+      chat.bubbleElement = null;
+    }
+
+    if (chat.element) {
+      chat.element.classList.remove("no-transition");
+      chat.element.style.display = "flex";
+      requestAnimationFrame(() => {
+        if (!chat.element) return;
+        chat.element.classList.add("show");
+        if (shouldFocus) this.focusChat(id);
+      });
+    } else {
+      this.renderChatBox(chat.data, shouldFocus);
+    }
+
+    const liveChat = this.openChats.get(id);
+    if (liveChat) {
+      liveChat.minimized = false;
+    }
+    return true;
   },
 
   toggleMinimize(id, shouldFocus = true) {
@@ -2718,47 +2930,71 @@ const ChatWindow = {
     this.cancelPendingChatDispose(chat);
 
     if (!chat.minimized) {
-      this.closeFloatingMessageMenus();
-      // Into bubble
-      if (chat.element) {
-        chat.element.classList.remove("show");
-        setTimeout(() => {
-          chat.element.style.display = "none";
-          this.renderBubble(id, chat.data);
-        }, 300);
-      }
-      chat.minimized = true;
-      chat.element?.classList.remove("is-focused");
+      this.minimizeWindowToBubble(id);
     } else {
-      // Out of bubble (Become Window)
-      // If we are at window limit, minimize the oldest window first
-      const openWindowsCount = Array.from(this.openChats.values()).filter(
-        (c) => !c.minimized,
-      ).length;
-      if (openWindowsCount >= this.maxOpenWindows) {
-        const oldestWindowId = Array.from(this.openChats.entries()).find(
-          ([id, c]) => !c.minimized,
-        )?.[0];
-        if (oldestWindowId) this.toggleMinimize(oldestWindowId);
+      this.ensureWindowVisible(id, false);
+      this.arrangeWindowOrder(id, {
+        targetIndex: null,
+        overflowStrategy: "rightmost",
+      });
+      if (shouldFocus) {
+        this.focusChat(id);
       }
-
-      if (chat.bubbleElement) {
-        chat.bubbleElement.remove();
-        chat.bubbleElement = null;
-      }
-      if (chat.element) {
-        chat.element.style.display = "flex";
-        setTimeout(() => {
-          chat.element.classList.add("show");
-          if (shouldFocus) this.focusChat(id);
-        }, 10);
-      } else {
-        this.renderChatBox(chat.data, shouldFocus);
-        // focusChat is already inside renderChatBox's loadInitialMessages / timeout
-      }
-      chat.minimized = false;
     }
     this.saveState();
+  },
+
+  minimizeWindowToBubble(id, immediate = false) {
+    const chat = this.openChats.get(id);
+    if (!chat || chat.minimized) return false;
+
+    this.closeFloatingMessageMenus();
+    chat.minimized = true;
+    chat.element?.classList.remove("is-focused");
+
+    if (!chat.element) {
+      this.renderBubble(id, chat.data);
+      return true;
+    }
+
+    const windowEl = chat.element;
+    windowEl.classList.remove("show");
+
+    if (immediate) {
+      windowEl.classList.add("no-transition");
+      windowEl.style.display = "none";
+      requestAnimationFrame(() => {
+        windowEl.classList.remove("no-transition");
+      });
+      this.renderBubble(id, chat.data);
+      return true;
+    }
+
+    let completed = false;
+    const finalizeMinimize = () => {
+      if (completed) return;
+      completed = true;
+      const liveChat = this.openChats.get(id);
+      if (!liveChat || !liveChat.minimized || !liveChat.element) return;
+      liveChat.element.style.display = "none";
+      this.renderBubble(id, liveChat.data);
+    };
+
+    const onTransitionEnd = (event) => {
+      if (event?.target !== windowEl) return;
+      if (
+        event?.propertyName &&
+        !["transform", "opacity"].includes(event.propertyName)
+      ) {
+        return;
+      }
+      finalizeMinimize();
+    };
+
+    windowEl.addEventListener("transitionend", onTransitionEnd, { once: true });
+    setTimeout(finalizeMinimize, 220);
+
+    return true;
   },
 
   focusInputField(id) {
@@ -2862,7 +3098,10 @@ const ChatWindow = {
         chat._realtimeOwnerKey || this.getRealtimeOwnerKey(openId);
       chat._realtimeOwnerKey = ownerKey;
       window.ChatRealtime.leaveConversation(openId, ownerKey).catch((err) => {
-        console.error("Error leaving conversation group from chat-window:", err);
+        console.error(
+          "Error leaving conversation group from chat-window:",
+          err,
+        );
       });
     }
     chat._realtimeJoined = false;
@@ -2871,16 +3110,19 @@ const ChatWindow = {
 
     const finalizeClose = () => {
       const liveChat = this.openChats.get(openId);
-      if (!liveChat || liveChat !== chat || !liveChat._isClosing) return;
+      if (liveChat && liveChat !== chat) return;
+      if (liveChat && !liveChat._isClosing) return;
 
-      liveChat._disposeTimerId = null;
-      if (liveChat.element) {
-        liveChat.element.remove();
+      chat._disposeTimerId = null;
+      if (chat.element) {
+        chat.element.remove();
       }
-      if (liveChat.bubbleElement) {
-        liveChat.bubbleElement.remove();
+      if (chat.bubbleElement) {
+        chat.bubbleElement.remove();
       }
-      this.openChats.delete(openId);
+      if (liveChat === chat) {
+        this.openChats.delete(openId);
+      }
       this.saveState();
     };
 
@@ -2889,6 +3131,29 @@ const ChatWindow = {
       chat._disposeTimerId = setTimeout(() => {
         finalizeClose();
       }, 300);
+    } else if (chat.bubbleElement) {
+      const bubbleEl = chat.bubbleElement;
+      const bubbleParent = bubbleEl.parentElement;
+      if (bubbleParent) {
+        const bubbleRect = bubbleEl.getBoundingClientRect();
+        const parentRect = bubbleParent.getBoundingClientRect();
+        bubbleEl.style.position = "absolute";
+        bubbleEl.style.right = "0px";
+        bubbleEl.style.top = `${Math.max(0, bubbleRect.top - parentRect.top)}px`;
+      }
+
+      bubbleEl.classList.remove("is-entering");
+      bubbleEl.classList.add("is-exiting");
+      bubbleEl.addEventListener(
+        "animationend",
+        () => {
+          finalizeClose();
+        },
+        { once: true },
+      );
+      chat._disposeTimerId = setTimeout(() => {
+        finalizeClose();
+      }, 200);
     } else {
       finalizeClose();
     }
@@ -3224,37 +3489,485 @@ const ChatWindow = {
     const windowsStack = document.getElementById("chat-windows-stack");
     if (!windowsStack) return;
 
-    const windowIds = Array.from(windowsStack.children).map(
-      (c) => c.dataset.id,
+    const windowIds = Array.from(windowsStack.children)
+      .map((c) => c.dataset.id)
+      .filter((id) => id && this.openChats.has(id));
+    const bubbleIds = this.getBubbleOrderIds().filter(
+      (id) => !windowIds.includes(id),
     );
-    const newMap = new Map();
-    const existingMap = new Map(this.openChats);
 
-    // 1. Add windows in their new DOM order
-    windowIds.forEach((id) => {
-      const chatObj = existingMap.get(id);
-      if (chatObj) {
-        newMap.set(id, chatObj);
-        existingMap.delete(id);
-      }
+    this.applyConversationOrder(windowIds, bubbleIds, {
+      animateWindows: false,
+      saveState: true,
+    });
+  },
+
+  getWindowOrderIds() {
+    return Array.from(this.openChats.entries())
+      .filter(([, chat]) => !chat?.minimized)
+      .map(([id]) => id);
+  },
+
+  getBubbleOrderIds() {
+    return Array.from(this.openChats.entries())
+      .filter(([, chat]) => !!chat?.minimized)
+      .map(([id]) => id);
+  },
+
+  getVisibleWindowIdsInOrder() {
+    return this.getWindowOrderIds();
+  },
+
+  resolveWindowInsertIndex(referenceId, windowIds = null) {
+    const ids = Array.isArray(windowIds) ? windowIds : this.getWindowOrderIds();
+    if (!referenceId) return ids.length;
+    const idx = ids.indexOf(referenceId);
+    return idx >= 0 ? idx : ids.length;
+  },
+
+  trimBubblesToCapacity(windowIds, bubbleIds) {
+    while (windowIds.length + bubbleIds.length > this.maxTotalWindows) {
+      const droppedBubbleId = bubbleIds.shift();
+      if (!droppedBubbleId) break;
+      this.closeChat(droppedBubbleId);
+    }
+  },
+
+  applyConversationOrder(
+    windowIds,
+    bubbleIds,
+    { animateWindows = false, saveState = true } = {},
+  ) {
+    const orderedWindowIds = [];
+    const orderedBubbleIds = [];
+    const seen = new Set();
+
+    (Array.isArray(windowIds) ? windowIds : []).forEach((id) => {
+      if (!id || seen.has(id) || !this.openChats.has(id)) return;
+      const chat = this.openChats.get(id);
+      if (!chat || chat._isClosing) return;
+      chat.minimized = false;
+      orderedWindowIds.push(id);
+      seen.add(id);
     });
 
-    // 2. Add remaining (bubbles that might not be in the windows stack yet)
-    for (const [id, chatObj] of existingMap.entries()) {
-      newMap.set(id, chatObj);
+    (Array.isArray(bubbleIds) ? bubbleIds : []).forEach((id) => {
+      if (!id || seen.has(id) || !this.openChats.has(id)) return;
+      const chat = this.openChats.get(id);
+      if (!chat || chat._isClosing) return;
+      chat.minimized = true;
+      orderedBubbleIds.push(id);
+      seen.add(id);
+    });
+
+    // Preserve any leftover conversations defensively.
+    for (const [id, chat] of this.openChats.entries()) {
+      if (seen.has(id) || !chat || chat._isClosing) continue;
+      if (chat.minimized) {
+        orderedBubbleIds.push(id);
+      } else {
+        orderedWindowIds.push(id);
+      }
+      seen.add(id);
     }
 
-    this.openChats = newMap;
-    this.saveState();
+    const orderedIds = [...orderedWindowIds, ...orderedBubbleIds];
+    const nextMap = new Map();
+    orderedIds.forEach((id) => {
+      const chat = this.openChats.get(id);
+      if (chat) nextMap.set(id, chat);
+    });
+
+    this.openChats = nextMap;
+    this.reorderWindowsDOM(animateWindows);
     this.reorderBubblesDOM();
+
+    if (saveState) {
+      this.saveState();
+    }
+  },
+
+  arrangeWindowOrder(
+    id,
+    { targetIndex = null, overflowStrategy = "rightmost" } = {},
+  ) {
+    if (!id || !this.openChats.has(id)) return { windowIds: [], bubbleIds: [] };
+
+    let windowIds = this.getWindowOrderIds().filter((x) => x !== id);
+    let bubbleIds = this.getBubbleOrderIds().filter((x) => x !== id);
+
+    if (windowIds.length >= this.maxOpenWindows) {
+      const demoteId =
+        overflowStrategy === "leftmost"
+          ? windowIds[windowIds.length - 1]
+          : windowIds[0];
+      if (demoteId) {
+        this.minimizeWindowToBubble(demoteId, true);
+        windowIds = windowIds.filter((x) => x !== demoteId);
+        bubbleIds = bubbleIds.filter((x) => x !== demoteId);
+        bubbleIds.push(demoteId);
+      }
+    }
+
+    const insertIndexRaw =
+      typeof targetIndex === "number" ? targetIndex : windowIds.length;
+    const insertIndex = Math.max(0, Math.min(insertIndexRaw, windowIds.length));
+    windowIds.splice(insertIndex, 0, id);
+
+    this.trimBubblesToCapacity(windowIds, bubbleIds);
+    this.applyConversationOrder(windowIds, bubbleIds, {
+      animateWindows: false,
+      saveState: false,
+    });
+
+    return { windowIds, bubbleIds };
+  },
+
+  arrangeBubbleOrder(id) {
+    if (!id || !this.openChats.has(id)) return { windowIds: [], bubbleIds: [] };
+
+    let windowIds = this.getWindowOrderIds().filter((x) => x !== id);
+    let bubbleIds = this.getBubbleOrderIds().filter((x) => x !== id);
+    bubbleIds.push(id);
+
+    this.trimBubblesToCapacity(windowIds, bubbleIds);
+    this.applyConversationOrder(windowIds, bubbleIds, {
+      animateWindows: false,
+      saveState: false,
+    });
+
+    return { windowIds, bubbleIds };
+  },
+
+  getWindowStackGapPx(stack = null) {
+    const targetStack = stack || document.getElementById("chat-windows-stack");
+    if (!targetStack) return 15;
+    const styles = window.getComputedStyle(targetStack);
+    const rawGap = parseFloat(styles.columnGap || styles.gap || "15");
+    return Number.isFinite(rawGap) ? rawGap : 15;
+  },
+
+  ensureDropIndicator() {
+    const stack = document.getElementById("chat-windows-stack");
+    if (!stack) return null;
+    if (this._dropIndicatorEl && this._dropIndicatorEl.isConnected) {
+      return this._dropIndicatorEl;
+    }
+
+    const indicator = document.createElement("div");
+    indicator.className = "chat-window-drop-indicator";
+    stack.appendChild(indicator);
+    this._dropIndicatorEl = indicator;
+    return indicator;
+  },
+
+  clearDropIndicator() {
+    this._activeDropReferenceId = null;
+    const stack = document.getElementById("chat-windows-stack");
+    if (stack) {
+      stack
+        .querySelectorAll(".chat-box.drag-target")
+        .forEach((el) => el.classList.remove("drag-target"));
+    }
+    if (this._dropIndicatorEl) {
+      this._dropIndicatorEl.classList.remove("show");
+    }
+  },
+
+  updateDropReference(clientX, excludingId = "", clientY = null) {
+    const slot = this.resolveWindowDropTarget(clientX, clientY, excludingId);
+    this._activeDropReferenceId = slot.referenceId || null;
+
+    const stack = document.getElementById("chat-windows-stack");
+    if (stack) {
+      stack
+        .querySelectorAll(".chat-box.drag-target")
+        .forEach((el) => el.classList.remove("drag-target"));
+    }
+    if (this._dropIndicatorEl) {
+      this._dropIndicatorEl.classList.remove("show");
+    }
+
+    return slot;
+  },
+
+  resolveDirectDropReference(clientX, clientY, excludingId = "") {
+    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+    const stack = document.getElementById("chat-windows-stack");
+    if (!stack) return null;
+
+    const visibleBoxes = Array.from(stack.querySelectorAll(".chat-box"))
+      .filter((el) => {
+        if (excludingId && el.dataset.id === excludingId) return false;
+        if (el.classList.contains("minimized")) return false;
+        if (!el.classList.contains("show")) return false;
+        return true;
+      })
+      // DOM order is right -> left due row-reverse; keep deterministic order.
+      .sort((a, b) => {
+        const rectA = a.getBoundingClientRect();
+        const rectB = b.getBoundingClientRect();
+        return rectB.left - rectA.left;
+      });
+
+    for (const box of visibleBoxes) {
+      const rect = box.getBoundingClientRect();
+      if (
+        clientX >= rect.left &&
+        clientX <= rect.right &&
+        clientY >= rect.top &&
+        clientY <= rect.bottom
+      ) {
+        return box.dataset.id || null;
+      }
+    }
+
+    return null;
+  },
+
+  resolveWindowDropTarget(clientX, clientY = null, excludingId = "") {
+    const directReferenceId = this.resolveDirectDropReference(
+      clientX,
+      clientY,
+      excludingId,
+    );
+    if (directReferenceId) {
+      const stack = document.getElementById("chat-windows-stack");
+      const directEl = stack?.querySelector(
+        `.chat-box[data-id="${directReferenceId}"]`,
+      );
+      const directRect = directEl?.getBoundingClientRect();
+      return {
+        referenceId: directReferenceId,
+        indicatorX: directRect ? directRect.right : clientX,
+      };
+    }
+
+    return this.resolveWindowDropSlot(clientX, excludingId);
+  },
+
+  resolveWindowDropSlot(clientX, excludingId = "") {
+    const stack = document.getElementById("chat-windows-stack");
+    if (!stack) return { referenceId: null, indicatorX: 0 };
+
+    const stackRect = stack.getBoundingClientRect();
+    const windows = Array.from(stack.children)
+      .filter((el) => {
+        if (!el.classList.contains("chat-box")) return false;
+        if (excludingId && el.dataset.id === excludingId) return false;
+        if (el.classList.contains("minimized")) return false;
+        return true;
+      })
+      .map((el) => ({
+        el,
+        rect: el.getBoundingClientRect(),
+        id: el.dataset.id || null,
+      }));
+
+    if (windows.length === 0) {
+      return {
+        referenceId: null,
+        indicatorX: stackRect.right - 16,
+      };
+    }
+
+    // 1) If cursor is directly over a window, snap to that window index.
+    for (const windowItem of windows) {
+      if (clientX >= windowItem.rect.left && clientX <= windowItem.rect.right) {
+        return {
+          referenceId: windowItem.id,
+          indicatorX: windowItem.rect.right,
+        };
+      }
+    }
+
+    // 2) Outside the whole stack range.
+    const rightmost = windows[0];
+    const leftmost = windows[windows.length - 1];
+    if (clientX > rightmost.rect.right) {
+      return {
+        referenceId: rightmost.id,
+        indicatorX: rightmost.rect.right,
+      };
+    }
+    if (clientX < leftmost.rect.left) {
+      return {
+        referenceId: null,
+        indicatorX: leftmost.rect.left,
+      };
+    }
+
+    // 3) In gap between two windows (DOM order right -> left):
+    // choose insertion before the left-side window to place at nearest gap slot.
+    for (let i = 0; i < windows.length - 1; i += 1) {
+      const rightWindow = windows[i];
+      const leftWindow = windows[i + 1];
+      if (clientX < rightWindow.rect.left && clientX > leftWindow.rect.right) {
+        return {
+          referenceId: leftWindow.id,
+          indicatorX: leftWindow.rect.right,
+        };
+      }
+    }
+
+    // fallback
+    return {
+      referenceId: null,
+      indicatorX: leftmost.rect.left,
+    };
+  },
+
+  updateDropIndicator(clientX, excludingId = "") {
+    const stack = document.getElementById("chat-windows-stack");
+    if (!stack) return { referenceId: null, indicatorX: 0 };
+
+    const slot = this.resolveWindowDropSlot(clientX, excludingId);
+    this._activeDropReferenceId = slot.referenceId || null;
+
+    const indicator = this.ensureDropIndicator();
+    if (indicator) {
+      const stackRect = stack.getBoundingClientRect();
+      const indicatorHalfWidth = 2;
+      const maxLeft = Math.max(0, stackRect.width - indicatorHalfWidth * 2);
+      const normalizedLeft = Math.min(
+        Math.max(slot.indicatorX - stackRect.left - indicatorHalfWidth, 0),
+        maxLeft,
+      );
+      indicator.style.left = `${normalizedLeft}px`;
+      indicator.classList.add("show");
+    }
+
+    stack
+      .querySelectorAll(".chat-box.drag-target")
+      .forEach((el) => el.classList.remove("drag-target"));
+    if (slot.referenceId) {
+      const target = stack.querySelector(
+        `.chat-box[data-id="${slot.referenceId}"]`,
+      );
+      if (target) {
+        target.classList.add("drag-target");
+      }
+    }
+
+    return slot;
+  },
+
+  captureWindowRects(stack = null) {
+    const targetStack = stack || document.getElementById("chat-windows-stack");
+    if (!targetStack) return new Map();
+
+    const rects = new Map();
+    targetStack.querySelectorAll(".chat-box").forEach((el) => {
+      const id = el.dataset.id;
+      if (!id || el.classList.contains("minimized")) return;
+      rects.set(id, el.getBoundingClientRect());
+    });
+    return rects;
+  },
+
+  animateWindowsFromRects(beforeRects, durationMs = 170) {
+    if (!(beforeRects instanceof Map) || beforeRects.size === 0) return;
+
+    const stack = document.getElementById("chat-windows-stack");
+    if (!stack) return;
+
+    const afterRects = this.captureWindowRects(stack);
+    afterRects.forEach((afterRect, id) => {
+      const beforeRect = beforeRects.get(id);
+      if (!beforeRect) return;
+
+      const deltaX = beforeRect.left - afterRect.left;
+      if (Math.abs(deltaX) < 1) return;
+
+      const el = stack.querySelector(`.chat-box[data-id="${id}"]`);
+      if (!el || el.classList.contains("is-dragging")) return;
+
+      el.style.transition = "none";
+      el.style.transform = `translate3d(${deltaX}px, 0, 0)`;
+      el.getBoundingClientRect();
+
+      requestAnimationFrame(() => {
+        el.style.transition = `transform ${durationMs}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+        el.style.transform = "";
+        el.addEventListener(
+          "transitionend",
+          () => {
+            if (
+              el.style.transition.includes(`${durationMs}ms`) &&
+              !el.classList.contains("is-dragging")
+            ) {
+              el.style.transition = "";
+            }
+          },
+          { once: true },
+        );
+      });
+    });
+  },
+
+  reorderWindowById(draggingId, referenceId = null) {
+    if (!draggingId) return false;
+
+    const currentWindowIds = this.getWindowOrderIds();
+    const currentIndex = currentWindowIds.indexOf(draggingId);
+    if (currentIndex < 0) return false;
+
+    const nextWindowIds = currentWindowIds.filter((id) => id !== draggingId);
+    let targetIndex = nextWindowIds.length;
+
+    if (referenceId) {
+      const referenceIndexInCurrent = currentWindowIds.indexOf(referenceId);
+      if (referenceIndexInCurrent >= 0) {
+        targetIndex = Math.max(
+          0,
+          Math.min(referenceIndexInCurrent, nextWindowIds.length),
+        );
+      }
+    }
+
+    nextWindowIds.splice(targetIndex, 0, draggingId);
+    const hasChanged =
+      currentWindowIds.length === nextWindowIds.length &&
+      currentWindowIds.some((id, index) => id !== nextWindowIds[index]);
+    if (!hasChanged) return false;
+
+    this.applyConversationOrder(nextWindowIds, this.getBubbleOrderIds(), {
+      animateWindows: false,
+      saveState: true,
+    });
+    return true;
+  },
+
+  reorderDraggingWindow(draggingEl, referenceId = null) {
+    if (!draggingEl) return false;
+    const draggingId = draggingEl.dataset?.id || "";
+    if (!draggingId) return false;
+    return this.reorderWindowById(draggingId, referenceId);
+  },
+
+  reinsertChatEntryAtReference(chatId, referenceId = null) {
+    if (!chatId || !this.openChats.has(chatId)) return false;
+    const chat = this.openChats.get(chatId);
+    if (!chat || chat.minimized) return false;
+
+    const windowIds = this.getWindowOrderIds().filter((id) => id !== chatId);
+    const targetIndex = this.resolveWindowInsertIndex(referenceId, windowIds);
+    windowIds.splice(targetIndex, 0, chatId);
+
+    this.applyConversationOrder(windowIds, this.getBubbleOrderIds(), {
+      animateWindows: false,
+      saveState: true,
+    });
+    return true;
   },
 
   /**
    * Re-orders the chat windows in the DOM to match the insertion order of openChats.
    */
-  reorderWindowsDOM() {
+  reorderWindowsDOM(animate = true) {
     const stack = document.getElementById("chat-windows-stack");
     if (!stack) return;
+    const beforeRects = animate ? this.captureWindowRects(stack) : null;
 
     const children = Array.from(stack.children);
     const order = Array.from(this.openChats.keys());
@@ -3271,6 +3984,10 @@ const ChatWindow = {
       const id = child.dataset.id;
       if (id) this.scrollToBottom(id);
     });
+
+    if (animate) {
+      this.animateWindowsFromRects(beforeRects);
+    }
   },
 
   /**
@@ -3707,8 +4424,11 @@ const ChatWindow = {
     this.closeHeaderMenu();
 
     const otherMember = chat.data.otherMember;
-    const otherUsername = (otherMember?.username || otherMember?.Username || "")
-      .toString();
+    const otherUsername = (
+      otherMember?.username ||
+      otherMember?.Username ||
+      ""
+    ).toString();
     const otherAccountId = (otherMember?.accountId || "")
       .toString()
       .toLowerCase();
@@ -6476,6 +7196,12 @@ const ChatWindow = {
         });
 
         ChatCommon.cleanTimeSeparators(msgContainer);
+        if (
+          window.ChatActions &&
+          typeof window.ChatActions.syncPinnedBadgesInContainer === "function"
+        ) {
+          window.ChatActions.syncPinnedBadgesInContainer(msgContainer);
+        }
         if (window.lucide) lucide.createIcons();
         requestAnimationFrame(() => {
           msgContainer.scrollTop = msgContainer.scrollHeight;
@@ -6674,6 +7400,12 @@ const ChatWindow = {
         }
 
         ChatCommon.cleanTimeSeparators(msgContainer);
+        if (
+          window.ChatActions &&
+          typeof window.ChatActions.syncPinnedBadgesInContainer === "function"
+        ) {
+          window.ChatActions.syncPinnedBadgesInContainer(msgContainer);
+        }
         if (window.lucide) lucide.createIcons();
         // Maintain scroll position
         requestAnimationFrame(() => {
@@ -6785,6 +7517,12 @@ const ChatWindow = {
       ChatCommon.syncMessageBoundary(lastMsgEl, bubble);
     }
     ChatCommon.cleanTimeSeparators(msgContainer);
+    if (
+      window.ChatActions &&
+      typeof window.ChatActions.syncPinnedBadgesInContainer === "function"
+    ) {
+      window.ChatActions.syncPinnedBadgesInContainer(msgContainer);
+    }
 
     if (msg.messageId) {
       this.applyPendingSeenForMessage(id, msg.messageId);

@@ -6654,6 +6654,12 @@ const ChatPage = {
           }
 
           ChatCommon.cleanTimeSeparators(msgContainer);
+          if (
+            window.ChatActions &&
+            typeof window.ChatActions.syncPinnedBadgesInContainer === "function"
+          ) {
+            window.ChatActions.syncPinnedBadgesInContainer(msgContainer);
+          }
 
           requestAnimationFrame(() => {
             msgContainer.scrollTop =
@@ -6663,6 +6669,12 @@ const ChatPage = {
         } else {
           msgContainer.innerHTML = html;
           ChatCommon.cleanTimeSeparators(msgContainer);
+          if (
+            window.ChatActions &&
+            typeof window.ChatActions.syncPinnedBadgesInContainer === "function"
+          ) {
+            window.ChatActions.syncPinnedBadgesInContainer(msgContainer);
+          }
           this.scrollToBottom();
           if (window.lucide) lucide.createIcons();
 
@@ -6901,6 +6913,12 @@ const ChatPage = {
       ChatCommon.syncMessageBoundary(lastMsgEl, bubble);
     }
     ChatCommon.cleanTimeSeparators(msgContainer);
+    if (
+      window.ChatActions &&
+      typeof window.ChatActions.syncPinnedBadgesInContainer === "function"
+    ) {
+      window.ChatActions.syncPinnedBadgesInContainer(msgContainer);
+    }
 
     if (messageId) {
       this.applyPendingSeenForMessage(this.currentChatId, messageId);

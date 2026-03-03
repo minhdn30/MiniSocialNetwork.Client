@@ -211,39 +211,74 @@
 
 .msg-pinned-badge {
   position: absolute;
-  top: -10px;
-  right: -10px;
-  width: 24px;
-  height: 24px;
-  color: #3b82f6 !important;
+  top: var(--msg-pin-offset-top, -9px);
+  right: var(--msg-pin-offset-right, -9px);
+  width: 20px;
+  height: 20px;
+  color: var(--chat-theme-system-text, var(--text-tertiary)) !important;
+  opacity: 0.82;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  z-index: 3;
   pointer-events: none;
-  transform: rotate(35deg);
-  filter: drop-shadow(1px 2px 2px rgba(0, 0, 0, 0.4));
+  transform: rotate(24deg);
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.28));
   transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .msg-pinned-badge.msg-pinned-badge-media-anchor {
-  top: -10px;
-  right: -10px;
+  top: var(--msg-pin-offset-top, -9px);
+  right: var(--msg-pin-offset-right, -9px);
 }
 
 .received .msg-pinned-badge {
-  color: #ef4444 !important;
+  color: var(--chat-theme-system-text, var(--text-tertiary)) !important;
 }
 
 /* Ensure the pin pops on hover if we want, but it's pointer-events none */
 .msg-bubble-wrapper:hover .msg-pinned-badge {
-  transform: rotate(35deg) scale(1.1);
+  transform: rotate(24deg) scale(1.06);
 }
 
 .msg-pinned-badge i,
 .msg-pinned-badge svg {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
+}
+
+.msg-pin-anchor {
+  position: relative;
+  overflow: visible;
+  --msg-pin-offset-top: -9px;
+  --msg-pin-offset-right: -9px;
+}
+
+/* align visual pin depth across different message content blocks */
+.msg-content-container > .msg-media-anchor.msg-pin-anchor,
+.msg-content-container > .msg-file-anchor.msg-pin-anchor {
+  --msg-pin-offset-top: -10px;
+  --msg-pin-offset-right: -10px;
+}
+
+.msg-content-container > .msg-media-anchor > .msg-pinned-badge,
+.msg-content-container > .msg-file-anchor > .msg-pinned-badge {
+  top: -10px;
+  right: -10px;
+}
+
+.msg-content-container:has(> .msg-reply-preview) > .msg-pinned-badge,
+.msg-content-container:has(> .msg-post-share-preview) > .msg-pinned-badge,
+.msg-content-container:has(> .msg-story-reply-preview) > .msg-pinned-badge {
+  top: -11px;
+  right: -11px;
+}
+
+.msg-content-container > .msg-reply-preview.msg-pin-anchor,
+.msg-content-container > .msg-post-share-preview.msg-pin-anchor,
+.msg-content-container > .msg-story-reply-preview.msg-pin-anchor {
+  --msg-pin-offset-top: -11px;
+  --msg-pin-offset-right: -11px;
 }
 
 /* --- Author name for Group Chat --- */
@@ -1526,6 +1561,8 @@ body.light-mode {
   position: relative;
   display: inline-flex;
   align-items: center;
+  animation: seenAvatarEnter 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: 50% 100%;
 }
 
 .seen-avatar {
@@ -1610,6 +1647,23 @@ body.light-mode {
 
 .sent .seen-avatar-wrapper:hover .seen-avatar-name {
   transform: translateX(0) translateY(0);
+}
+
+@keyframes seenAvatarEnter {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.84);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seen-avatar-wrapper {
+    animation: none;
+  }
 }
 
 /* --- Custom Message Time Tooltip --- */
@@ -2794,6 +2848,13 @@ body.light-mode .msg-post-share-snippet {
     var(--chat-theme-accent, var(--accent-primary, #6366f1));
   max-width: 260px;
   overflow: hidden;
+}
+
+/* when pinned badge is anchored on preview cards, allow badge to protrude */
+.msg-content-container > .msg-reply-preview.msg-pin-anchor,
+.msg-content-container > .msg-post-share-preview.msg-pin-anchor,
+.msg-content-container > .msg-story-reply-preview.msg-pin-anchor {
+  overflow: visible;
 }
 
 body.light-mode .msg-story-reply-preview {

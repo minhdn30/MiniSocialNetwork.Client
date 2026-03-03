@@ -19,6 +19,8 @@ const ChatActions = {
   ],
   _reactInFlight: new Set(),
   _hiddenMessageIds: new Set(),
+  _menuAutoCloseHandler: null,
+  _menuAutoCloseBound: false,
 
   /**
    * Find previous/next real message bubble (skip separators, typing indicator, etc.).
@@ -221,6 +223,29 @@ const ChatActions = {
     }
 
     this._isThemeSyncBound = true;
+  },
+
+  bindCurrentMenuAutoClose() {
+    if (this._menuAutoCloseBound) return;
+    if (!this._menuAutoCloseHandler) {
+      this._menuAutoCloseHandler = () => {
+        if (!ChatActions.currentMenu) return;
+        ChatActions.closeAllMenus();
+      };
+    }
+
+    window.addEventListener("scroll", this._menuAutoCloseHandler, true);
+    window.addEventListener("resize", this._menuAutoCloseHandler);
+    window.addEventListener("blur", this._menuAutoCloseHandler);
+    this._menuAutoCloseBound = true;
+  },
+
+  unbindCurrentMenuAutoClose() {
+    if (!this._menuAutoCloseBound || !this._menuAutoCloseHandler) return;
+    window.removeEventListener("scroll", this._menuAutoCloseHandler, true);
+    window.removeEventListener("resize", this._menuAutoCloseHandler);
+    window.removeEventListener("blur", this._menuAutoCloseHandler);
+    this._menuAutoCloseBound = false;
   },
 
   normalizeReactState(payload, fallbackMessageId = "") {
@@ -519,6 +544,7 @@ const ChatActions = {
       });
 
     this.currentMenu = menu;
+    this.bindCurrentMenuAutoClose();
 
     setTimeout(() => {
       window.addEventListener("click", this.handleOutsideClick);
@@ -1137,6 +1163,52 @@ const ChatActions = {
     return isAdmin || role === 1;
   },
 
+  resolvePinnedBadgeAnchor(contentContainer) {
+    if (!contentContainer) return null;
+
+    const directChildren = Array.from(contentContainer.children || []);
+    const anchor = directChildren.find((el) => {
+      if (!el || !el.classList) return false;
+      if (el.classList.contains("msg-pinned-badge")) return false;
+      if (el.classList.contains("msg-reactions-summary")) return false;
+      return true;
+    });
+
+    return anchor || contentContainer;
+  },
+
+  syncPinnedBadgesInContainer(containerEl) {
+    if (!containerEl) return;
+
+    const wrappers = Array.from(
+      containerEl.querySelectorAll(".msg-bubble-wrapper[data-message-id]"),
+    );
+    if (!wrappers.length) return;
+
+    const messagePinMap = new Map();
+    wrappers.forEach((wrapper) => {
+      const pinnedAttr =
+        (wrapper.dataset?.isPinned || "").toString().toLowerCase() === "true";
+      const hasPinnedDom =
+        !!wrapper.querySelector(".msg-pinned-badge") ||
+        !!wrapper.querySelector(".msg-pin-anchor");
+      if (!pinnedAttr && !hasPinnedDom) return;
+
+      const messageId = (wrapper.dataset?.messageId || "")
+        .toString()
+        .toLowerCase();
+      if (!messageId) return;
+
+      const isPinned = pinnedAttr;
+      const previous = messagePinMap.get(messageId);
+      messagePinMap.set(messageId, !!(previous || isPinned));
+    });
+
+    messagePinMap.forEach((isPinned, messageId) => {
+      this.setMessagePinnedState(messageId, isPinned);
+    });
+  },
+
   setMessagePinnedState(messageId, isPinned) {
     const normalizedMessageId = (messageId || "").toString().toLowerCase();
     if (!normalizedMessageId) return false;
@@ -1146,19 +1218,6 @@ const ChatActions = {
       `.msg-bubble-wrapper[data-message-id="${normalizedMessageId}"]`,
     );
     if (!bubbles.length) return false;
-
-    const ensurePinHostWrapper = (target, wrapperClass) => {
-      if (!target || !wrapperClass) return target;
-      const parent = target.parentElement;
-      if (!parent) return target;
-      if (parent.classList?.contains(wrapperClass)) return parent;
-
-      const wrapper = document.createElement("div");
-      wrapper.className = wrapperClass;
-      parent.insertBefore(wrapper, target);
-      wrapper.appendChild(target);
-      return wrapper;
-    };
 
     bubbles.forEach((bubble) => {
       if (!bubble.classList?.contains("msg-bubble-wrapper")) return;
@@ -1174,23 +1233,19 @@ const ChatActions = {
       contentContainer
         .querySelectorAll(".msg-pinned-badge")
         .forEach((badge) => badge.remove());
+      contentContainer
+        .querySelectorAll(".msg-pin-anchor")
+        .forEach((el) => el.classList.remove("msg-pin-anchor"));
 
       if (effectivePin) {
-        let pinHost = contentContainer;
-        let isMediaAnchor = false;
-
-        const mediaGrid = contentContainer.querySelector(".msg-media-grid");
-        const fileList = contentContainer.querySelector(".msg-file-list");
-        if (mediaGrid) {
-          pinHost = ensurePinHostWrapper(mediaGrid, "msg-media-anchor");
-          isMediaAnchor = true;
-        } else if (fileList) {
-          pinHost = ensurePinHostWrapper(fileList, "msg-file-anchor");
-          isMediaAnchor = true;
+        const pinHost =
+          this.resolvePinnedBadgeAnchor(contentContainer) || contentContainer;
+        if (pinHost.classList) {
+          pinHost.classList.add("msg-pin-anchor");
         }
 
         const badge = document.createElement("div");
-        badge.className = `msg-pinned-badge${isMediaAnchor ? " msg-pinned-badge-media-anchor" : ""}`;
+        badge.className = "msg-pinned-badge";
         badge.title = "Pinned message";
         badge.innerHTML = '<i data-lucide="pin"></i>';
         pinHost.prepend(badge);
@@ -1551,6 +1606,7 @@ const ChatActions = {
     menu.style.left = `${left}px`;
 
     this.currentMenu = menu;
+    this.bindCurrentMenuAutoClose();
 
     if (window.lucide) lucide.createIcons({ container: menu });
 
@@ -1565,17 +1621,9 @@ const ChatActions = {
       this.unpinMessage(conversationId, messageId);
     };
 
-    const closeHandler = (ev) => {
-      if (
-        this.currentMenu === menu &&
-        !menu.contains(ev.target) &&
-        ev.target !== btn
-      ) {
-        this.closeAllMenus();
-        document.removeEventListener("click", closeHandler);
-      }
-    };
-    setTimeout(() => document.addEventListener("click", closeHandler), 10);
+    setTimeout(() => {
+      window.addEventListener("click", this.handleOutsideClick);
+    }, 10);
   },
 
   renderPinnedLoadMoreState(listEl, state, options = {}) {
@@ -2440,6 +2488,7 @@ const ChatActions = {
     menu.style.left = `${left}px`;
 
     this.currentMenu = menu;
+    this.bindCurrentMenuAutoClose();
 
     // Render icons
     if (window.lucide) lucide.createIcons();
@@ -2455,6 +2504,7 @@ const ChatActions = {
       this.currentMenu.remove();
       this.currentMenu = null;
     }
+    this.unbindCurrentMenuAutoClose();
 
     if (this.currentReactorsModal) {
       this.closeReactorsModal();

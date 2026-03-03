@@ -915,7 +915,7 @@ function renderPostDetail(post, navigateDirection = null) {
              const isSavedByCurrentUser = Boolean(post.isSavedByCurrentUser);
              
              if (window.showPostOptions) {
-                 showPostOptions(post.postId, post.owner.accountId, isOwner, isFollowed, isSavedByCurrentUser);
+                 showPostOptions(post.postId, post.owner.accountId, isOwner, isFollowed, isSavedByCurrentUser, post.postCode || "");
              } else {
                  console.error("showPostOptions not found");
              }

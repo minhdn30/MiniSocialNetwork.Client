@@ -160,7 +160,7 @@
                    </button>`
                 : ""
             }
-            <button class="post-more" onclick="showPostOptions('${post.postId}', '${post.author.accountId}', ${post.isOwner}, ${post.author.isFollowedByCurrentUser}, ${Boolean(post.isSavedByCurrentUser)})">
+            <button class="post-more" onclick="showPostOptions('${post.postId}', '${post.author.accountId}', ${post.isOwner}, ${post.author.isFollowedByCurrentUser}, ${Boolean(post.isSavedByCurrentUser)}, '${post.postCode || ""}')">
               <i data-lucide="more-horizontal"></i>
             </button>
             </div>

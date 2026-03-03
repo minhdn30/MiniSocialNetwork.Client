@@ -136,6 +136,7 @@ function showPostOptions(
   isOwnPost,
   isFollowing,
   isSavedByCurrentUser = false,
+  postCode = "",
 ) {
   if (currentPostOptions) closePostOptions();
 
@@ -164,8 +165,10 @@ function showPostOptions(
       </button>
     `;
   } else {
-    const isSaved = Boolean(isSavedByCurrentUser);
-    const saveLabel = isSaved ? "Remove from saved" : "Save post";
+    const safePostCodeForJs = (postCode || "")
+      .toString()
+      .replace(/\\/g, "\\\\")
+      .replace(/'/g, "\\'");
 
     optionsHTML = `
       <button class="post-option post-option-danger" onclick="reportPost('${postId}')">
@@ -174,14 +177,8 @@ function showPostOptions(
       <button class="post-option" onclick="hidePost('${postId}')">
         <i data-lucide="eye-off"></i><span>Hide</span>
       </button>
-      <button class="post-option" onclick="togglePostSaveFromOptions('${postId}', ${isSaved})">
-        <i data-lucide="bookmark"></i><span>${saveLabel}</span>
-      </button>
-      <button class="post-option" onclick="copyPostLink('${postId}')">
+      <button class="post-option" onclick="copyPostLink('${safePostCodeForJs}')">
         <i data-lucide="link"></i><span>Copy link</span>
-      </button>
-      <button class="post-option" onclick="shareToStory('${postId}')">
-        <i data-lucide="send"></i><span>Share to story</span>
       </button>
       <button class="post-option" onclick="aboutThisAccount('${accountId}')">
         <i data-lucide="info"></i><span>About this account</span>
@@ -392,9 +389,34 @@ function addToFavorites(postId) {
   togglePostSaveFromOptions(postId, resolvePostSaveState(postId, false));
 }
 
-function copyPostLink(postId) {
+function buildPostDetailPathForCopy(postCode) {
+  const normalizedPostCode = (postCode || "").toString().trim();
+  if (normalizedPostCode) {
+    if (window.RouteHelper?.buildPostDetailPath) {
+      return window.RouteHelper.buildPostDetailPath(normalizedPostCode);
+    }
+    return `/posts/${encodeURIComponent(normalizedPostCode)}`;
+  }
+  return "";
+}
+
+function buildAbsoluteHashLink(path) {
+  const normalizedPath = (path || "").toString().trim() || "/posts";
+  const hash = window.RouteHelper?.buildHash
+    ? window.RouteHelper.buildHash(normalizedPath)
+    : `#${normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`}`;
+  const base = `${location.origin}${location.pathname}${location.search}`;
+  return `${base}${hash}`;
+}
+
+function copyPostLink(postCode = "") {
   closePostOptions();
-  const link = `${location.origin}/post/${postId}`;
+  const path = buildPostDetailPathForCopy(postCode);
+  if (!path) {
+    toastError("Unable to copy post link.");
+    return;
+  }
+  const link = buildAbsoluteHashLink(path);
 
   navigator.clipboard
     .writeText(link)
