@@ -177,10 +177,46 @@
                                 >
                                     <i data-lucide="smile-plus"></i>
                                 </button>
-                                <div id="editEmojiPickerContainer" class="post-emoji-picker-container edit-emoji-picker-container"></div>
+                                <div id="editEmojiPickerContainer" class="post-emoji-picker-container"></div>
                             </div>
                         </div>
     
+                        <!-- Tag People Section -->
+                        <div class="post-section">
+                            <div class="section-header" id="editPeopleHeader" onclick="toggleEditSection('people')">
+                                <div class="section-left">
+                                    <i data-lucide="users" class="section-icon"></i>
+                                    <span class="section-title">Tag People</span>
+                                </div>
+                                <i data-lucide="chevron-right" class="chevron-icon" id="editPeopleChevron"></i>
+                            </div>
+                            <div class="section-content" id="editPeopleContent">
+                                <div class="post-tag-picker" id="editPostTagPicker">
+                                    <div class="post-tag-search-wrap">
+                                        <input
+                                            type="text"
+                                            id="editPostTagSearchInput"
+                                            class="collaborator-input"
+                                            placeholder="Search users..."
+                                            autocomplete="off"
+                                        />
+                                        <div
+                                            class="post-tag-search-results"
+                                            id="editPostTagSearchResults"
+                                            style="display: none"
+                                        ></div>
+                                    </div>
+                                    <div
+                                        class="post-tag-selected-chips hidden"
+                                        id="editPostTagSelectedChips"
+                                    ></div>
+                                    <div class="post-tag-meta">
+                                        <span id="editPostTagSelectedCount">0 selected</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Location Section -->
                         <div class="post-section">
                             <div class="section-header" id="editLocationHeader" onclick="toggleEditSection('location')">
@@ -192,20 +228,6 @@
                             </div>
                             <div class="section-content" id="editLocationContent">
                                 <div class="location-placeholder">Add location feature coming soon...</div>
-                            </div>
-                        </div>
-    
-                        <!-- Tag People Section -->
-                        <div class="post-section">
-                            <div class="section-header" id="editPeopleHeader" onclick="toggleEditSection('people')">
-                                <div class="section-left">
-                                    <i data-lucide="users" class="section-icon"></i>
-                                    <span class="section-title">Tag People / Collaborators</span>
-                                </div>
-                                <i data-lucide="chevron-right" class="chevron-icon" id="editPeopleChevron"></i>
-                            </div>
-                            <div class="section-content" id="editPeopleContent">
-                                <div class="tag-people-placeholder">Tag people feature coming soon...</div>
                             </div>
                         </div>
     

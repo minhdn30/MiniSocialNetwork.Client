@@ -130,6 +130,9 @@
     MAX_UPLOAD_FILES: 7, // Số lượng file tối đa khi upload post mới
     MAX_UPLOAD_SIZE_MB: 5, // Dung lượng file tối đa (MB) cho mỗi ảnh/video
     MAX_POST_CONTENT_LENGTH: 3000, // Số ký tự tối đa cho caption của post
+    MAX_POST_TAGS: 20, // Max tagged people per post
+    POST_TAG_SEARCH_LIMIT: 5, // Max accounts returned per post-tag search request
+    POST_TAG_SEARCH_DEBOUNCE_MS: 300, // Debounce delay for post-tag search input
     MAX_STORY_TEXT_LENGTH: 500, // Số ký tự tối đa cho text story
     MAX_NAME_DISPLAY_LENGTH: 25, // Độ dài tối đa của tên user khi hiển thị (được cắt thông minh theo từ)
     COMMENTS_PAGE_SIZE: 5, // Số lượng comment load mỗi lần

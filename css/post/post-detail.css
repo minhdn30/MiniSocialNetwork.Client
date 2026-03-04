@@ -799,9 +799,9 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--border-primary) 50%, transparent);
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -810,7 +810,6 @@
 }
 
 #postDetailModal #detailEditPanel .post-caption-emoji-btn:hover {
-  border-color: var(--border-primary);
   background: var(--bg-hover);
   color: var(--accent-primary);
 }
@@ -823,34 +822,33 @@
 }
 
 /* Emoji Picker in Edit Mode (align with create post caption tools) */
-#postDetailModal #detailEditPanel .edit-emoji-picker-container {
+#postDetailModal #detailEditPanel .post-emoji-picker-container {
   display: none;
   position: absolute;
   right: 0;
-  top: 0;
-  margin-top: 0;
-  width: 290px;
-  height: 310px;
+  top: 100%;
+  margin-top: 2px;
+  width: 260px;
+  height: 260px;
   border: 1px solid var(--border-primary);
   border-radius: 12px;
   overflow: hidden;
   background: var(--bg-secondary);
-  z-index: 20;
+  z-index: 10;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
-#postDetailModal #detailEditPanel .edit-emoji-picker-container.show {
+#postDetailModal #detailEditPanel .post-emoji-picker-container.show {
   display: block;
 }
 
-#postDetailModal #detailEditPanel .edit-emoji-picker-container emoji-picker {
+#postDetailModal #detailEditPanel .post-emoji-picker-container emoji-picker {
   width: 100%;
-  max-width: none;
   height: 100%;
-  border: none;
-  box-shadow: none;
-  --emoji-size: 1.15rem;
+  max-width: none;
+  --border-size: 0;
   --num-columns: 8;
+  background: transparent;
 }
 
 /* Restored Section Styles (Scoped) */
@@ -907,6 +905,10 @@
   padding: 0 20px 16px 52px;
   display: none;
   animation: slideDown 0.2s ease;
+}
+
+#postDetailModal #editPeopleContent {
+  padding: 12px 20px 16px 20px;
 }
 
 #postDetailModal .location-placeholder,

@@ -42,6 +42,22 @@ let isProcessingCrop = false;
 // Post privacy state (0 = Public, 1 = FollowOnly, 2 = Private)
 let selectedPrivacy = 0;
 
+// Post tag picker state
+let cpTagSelectedAccounts = [];
+let cpTagSearchResults = [];
+let cpTagSearchDebounceTimer = null;
+let cpTagSearchRequestSequence = 0;
+let cpTagActiveResultIndex = -1;
+let cpTagEventsBound = false;
+
+const cpGetPostTagMaxCount = () => window.APP_CONFIG?.MAX_POST_TAGS || 20;
+const cpGetPostTagSearchLimit = () =>
+  window.APP_CONFIG?.POST_TAG_SEARCH_LIMIT || 10;
+const cpGetPostTagSearchDebounceMs = () =>
+  window.APP_CONFIG?.POST_TAG_SEARCH_DEBOUNCE_MS || 300;
+const cpGetDefaultAvatar = () =>
+  window.APP_CONFIG?.DEFAULT_AVATAR || "assets/images/default-avatar.jpg";
+
 // Emoji picker instance
 
 // File size formatting moved to js/shared/file-utils.js
@@ -94,6 +110,8 @@ function openCreatePostModal() {
   loadCreatePostUserInfo();
   resetPrivacySelector();
   showMediaPlaceholder();
+  cpEnsurePostTagBindings();
+  cpResetPostTagPicker();
 
   // Init caption limit
   const captionInput = document.getElementById("postCaption");
@@ -110,7 +128,11 @@ function hasModalContent() {
   const captionInput = document.getElementById("postCaption");
   const caption = captionInput ? captionInput.value.trim() : "";
 
-  return mediaFiles.length > 0 || caption.length > 0;
+  return (
+    mediaFiles.length > 0 ||
+    caption.length > 0 ||
+    cpTagSelectedAccounts.length > 0
+  );
 }
 
 // Show discard confirmation popup
@@ -161,7 +183,7 @@ function confirmDiscardPost() {
   if (!modal) return;
 
   modal.classList.remove("show");
-        if (window.unlockScroll) unlockScroll();
+  if (window.unlockScroll) unlockScroll();
 
   resetPostForm();
   currentStep = 1;
@@ -189,7 +211,7 @@ function closeCreatePostModal() {
   if (!modal) return;
 
   modal.classList.remove("show");
-        if (window.unlockScroll) unlockScroll();
+  if (window.unlockScroll) unlockScroll();
 
   resetPostForm();
   currentStep = 1;
@@ -814,6 +836,7 @@ function resetPostForm() {
 
   // 7. Reset UI state
   showMediaPlaceholder();
+  cpResetPostTagPicker();
 
   const sections = ["location", "collaborators", "accessibility", "advanced"];
   sections.forEach((section) => {
@@ -821,9 +844,9 @@ function resetPostForm() {
     if (content) content.style.display = "none";
 
     const header = document.querySelector(
-      `[onclick*="toggleSection('${section}')"]`,
+      `[onclick*="toggleSection('${section}'"]`,
     );
-    
+    if (header) header.classList.remove("expanded");
   });
 }
 
@@ -933,19 +956,460 @@ function updateCharCount() {
   }
 }
 
+function cpEnsurePostTagBindings() {
+  if (cpTagEventsBound) return;
+
+  const input = document.getElementById("postTagSearchInput");
+  const results = document.getElementById("postTagSearchResults");
+  const chips = document.getElementById("postTagSelectedChips");
+  if (!input || !results || !chips) return;
+
+  input.addEventListener("input", () => {
+    const keyword = (input.value || "").trim();
+    cpSchedulePostTagSearch(keyword);
+  });
+
+  input.addEventListener("focus", () => {
+    if (input.disabled) return;
+    const keyword = (input.value || "").trim();
+    if (keyword.length < 1) {
+      cpHidePostTagResults();
+      return;
+    }
+    cpSchedulePostTagSearch(keyword, { immediate: true });
+  });
+
+  input.addEventListener("keydown", (event) => {
+    const resultsEl = document.getElementById("postTagSearchResults");
+    const isVisible =
+      resultsEl &&
+      resultsEl.style.display !== "none" &&
+      cpTagSearchResults.length > 0;
+
+    if (event.key === "Escape") {
+      if (resultsEl && resultsEl.style.display !== "none") {
+        event.preventDefault();
+        cpHidePostTagResults();
+      }
+      return;
+    }
+
+    if (!isVisible) return;
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      if (cpTagActiveResultIndex < 0) {
+        cpTagActiveResultIndex = 0;
+      } else {
+        // Result list is displayed bottom-to-top, so ArrowDown should move
+        // selection toward smaller indexes (visually downward).
+        cpTagActiveResultIndex = Math.max(0, cpTagActiveResultIndex - 1);
+      }
+      cpRenderPostTagResults();
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      if (cpTagActiveResultIndex < 0) {
+        cpTagActiveResultIndex = 0;
+      } else {
+        cpTagActiveResultIndex = Math.min(
+          cpTagSearchResults.length - 1,
+          cpTagActiveResultIndex + 1,
+        );
+      }
+      cpRenderPostTagResults();
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      cpSelectPostTagAccount(cpTagActiveResultIndex);
+    }
+  });
+
+  results.addEventListener("click", (event) => {
+    const item = event.target.closest(".post-tag-result-item");
+    if (!item || !results.contains(item)) return;
+    event.preventDefault();
+    cpSelectPostTagAccount(Number(item.dataset.index || -1));
+  });
+
+  chips.addEventListener("click", (event) => {
+    const removeBtn = event.target.closest(".post-tag-chip-remove");
+    if (!removeBtn || !chips.contains(removeBtn)) return;
+    event.preventDefault();
+    cpRemovePostTagAccount(removeBtn.dataset.accountId || "");
+  });
+
+  cpTagEventsBound = true;
+  cpUpdatePostTagCounter();
+  cpRefreshPostTagInputState();
+}
+
+function cpSchedulePostTagSearch(keyword, { immediate = false } = {}) {
+  if (cpTagSearchDebounceTimer) {
+    clearTimeout(cpTagSearchDebounceTimer);
+    cpTagSearchDebounceTimer = null;
+  }
+
+  const normalizedKeyword = (keyword || "").trim();
+  if (normalizedKeyword.length < 1) {
+    // Invalidate in-flight requests and close suggestion panel when input is empty.
+    cpTagSearchRequestSequence++;
+    cpTagSearchResults = [];
+    cpHidePostTagResults();
+    return;
+  }
+
+  const delay = immediate ? 0 : cpGetPostTagSearchDebounceMs();
+  cpTagSearchDebounceTimer = setTimeout(() => {
+    cpSearchPostTagAccounts(normalizedKeyword);
+  }, delay);
+}
+
+async function cpSearchPostTagAccounts(keyword) {
+  const normalizedKeyword = (keyword || "").trim();
+  if (normalizedKeyword.length < 1) {
+    cpHidePostTagResults();
+    return;
+  }
+
+  if (!window.API?.Accounts?.searchPostTagAccounts) {
+    cpRenderPostTagEmptyState("Search is unavailable");
+    return;
+  }
+
+  if (cpTagSelectedAccounts.length >= cpGetPostTagMaxCount()) {
+    cpHidePostTagResults();
+    return;
+  }
+
+  const requestSequence = ++cpTagSearchRequestSequence;
+  cpRenderPostTagLoading();
+
+  try {
+    const excludeAccountIds = cpTagSelectedAccounts.map(
+      (account) => account.accountId,
+    );
+
+    const res = await window.API.Accounts.searchPostTagAccounts(
+      normalizedKeyword,
+      cpGetPostTagSearchLimit(),
+      excludeAccountIds,
+    );
+
+    if (requestSequence !== cpTagSearchRequestSequence) return;
+
+    if (!res.ok) {
+      let message = "Failed to load users";
+      try {
+        const errorData = await res.json();
+        message = errorData?.message || errorData?.title || message;
+      } catch (_) {}
+      cpRenderPostTagEmptyState(message);
+      return;
+    }
+
+    const data = await res.json();
+    if (requestSequence !== cpTagSearchRequestSequence) return;
+
+    const rawAccounts = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.items)
+        ? data.items
+        : [];
+
+    cpTagSearchResults = rawAccounts
+      .map(cpNormalizePostTagAccount)
+      .filter((account) => account && account.accountId)
+      .filter(
+        (account) =>
+          !cpTagSelectedAccounts.some(
+            (selected) => selected.accountId === account.accountId,
+          ),
+      );
+
+    cpTagActiveResultIndex = cpTagSearchResults.length > 0 ? 0 : -1;
+    cpRenderPostTagResults(normalizedKeyword);
+  } catch (error) {
+    if (requestSequence !== cpTagSearchRequestSequence) return;
+    console.error("Failed to search post tag accounts:", error);
+    cpRenderPostTagEmptyState("Could not connect to server");
+  }
+}
+
+function cpNormalizePostTagAccount(raw) {
+  if (!raw || typeof raw !== "object") return null;
+
+  const accountId = raw.accountId || raw.AccountId || "";
+  if (!accountId) return null;
+
+  return {
+    accountId,
+    username:
+      raw.username || raw.userName || raw.Username || raw.UserName || "",
+    fullName: raw.fullName || raw.FullName || "",
+    avatarUrl: raw.avatarUrl || raw.AvatarUrl || raw.avatar || raw.Avatar || "",
+  };
+}
+
+function cpRenderPostTagLoading() {
+  const container = document.getElementById("postTagSearchResults");
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="post-tag-skeleton-item"></div>
+    <div class="post-tag-skeleton-item"></div>
+    <div class="post-tag-skeleton-item"></div>
+  `;
+  container.style.display = "flex";
+}
+
+function cpRenderPostTagEmptyState(message) {
+  const container = document.getElementById("postTagSearchResults");
+  if (!container) return;
+
+  container.innerHTML = `<div class="post-tag-empty-state">${cpEscapeHtml(message || "No results")}</div>`;
+  container.style.display = "flex";
+}
+
+function cpRenderPostTagResults(keyword = "") {
+  const container = document.getElementById("postTagSearchResults");
+  if (!container) return;
+
+  if (!cpTagSearchResults.length) {
+    cpRenderPostTagEmptyState(
+      keyword ? "No matching users found" : "No users available for tagging",
+    );
+    return;
+  }
+
+  const defaultAvatar = cpEscapeHtmlAttr(cpGetDefaultAvatar());
+  container.innerHTML = cpTagSearchResults
+    .map((account, index) => {
+      const username = account.username || "unknown";
+      const displayName =
+        account.fullName || account.username || "Unknown user";
+      const avatarUrl = account.avatarUrl || cpGetDefaultAvatar();
+
+      return `
+        <button
+          type="button"
+          class="post-tag-result-item ${index === cpTagActiveResultIndex ? "active" : ""}"
+          data-index="${index}"
+        >
+          <img src="${cpEscapeHtmlAttr(avatarUrl)}" alt="" onerror="this.src='${defaultAvatar}'" />
+          <div class="post-tag-result-info">
+            <span class="post-tag-result-username">${cpEscapeHtml(username)}</span>
+            <span class="post-tag-result-name">${cpEscapeHtml(displayName)}</span>
+          </div>
+        </button>
+      `;
+    })
+    .join("");
+
+  container.style.display = "flex";
+}
+
+function cpSelectPostTagAccount(index) {
+  if (
+    !Number.isInteger(index) ||
+    index < 0 ||
+    index >= cpTagSearchResults.length
+  ) {
+    return;
+  }
+
+  const account = cpTagSearchResults[index];
+  cpAddPostTagAccount(account);
+}
+
+function cpAddPostTagAccount(account) {
+  if (!account || !account.accountId) return;
+
+  if (
+    cpTagSelectedAccounts.some(
+      (selected) => selected.accountId === account.accountId,
+    )
+  ) {
+    return;
+  }
+
+  if (cpTagSelectedAccounts.length >= cpGetPostTagMaxCount()) {
+    if (window.toastWarning) {
+      window.toastWarning(
+        `You can tag up to ${cpGetPostTagMaxCount()} people in one post`,
+      );
+    }
+    return;
+  }
+
+  cpTagSelectedAccounts.push(account);
+  cpRenderPostTagChips();
+  cpUpdatePostTagCounter();
+  cpRefreshPostTagInputState();
+
+  const input = document.getElementById("postTagSearchInput");
+  if (input) {
+    input.value = "";
+    input.focus();
+  }
+
+  cpSchedulePostTagSearch("", { immediate: true });
+}
+
+function cpRemovePostTagAccount(accountId) {
+  if (!accountId) return;
+
+  const next = cpTagSelectedAccounts.filter(
+    (account) => account.accountId !== accountId,
+  );
+
+  if (next.length === cpTagSelectedAccounts.length) return;
+
+  cpTagSelectedAccounts = next;
+  cpRenderPostTagChips();
+  cpUpdatePostTagCounter();
+  cpRefreshPostTagInputState();
+
+  const input = document.getElementById("postTagSearchInput");
+  if (input && document.activeElement === input) {
+    cpSchedulePostTagSearch((input.value || "").trim(), { immediate: true });
+  }
+}
+
+function cpRenderPostTagChips() {
+  const container = document.getElementById("postTagSelectedChips");
+  if (!container) return;
+
+  if (cpTagSelectedAccounts.length === 0) {
+    container.classList.add("hidden");
+    container.innerHTML = "";
+    return;
+  }
+
+  container.classList.remove("hidden");
+  container.innerHTML = cpTagSelectedAccounts
+    .map((account) => {
+      const chipText = account.username
+        ? account.username
+        : account.fullName || "Unknown user";
+      const avatarUrl = account.avatarUrl || cpGetDefaultAvatar();
+
+      return `
+        <div class="post-tag-chip">
+          <img src="${cpEscapeHtmlAttr(avatarUrl)}" alt="" onerror="this.src='${cpEscapeHtmlAttr(cpGetDefaultAvatar())}'" />
+          <span class="post-tag-chip-text">${cpEscapeHtml(chipText)}</span>
+          <button
+            type="button"
+            class="post-tag-chip-remove"
+            data-account-id="${cpEscapeHtmlAttr(account.accountId)}"
+            aria-label="Remove tag"
+          >
+            &times;
+          </button>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function cpHidePostTagResults() {
+  const container = document.getElementById("postTagSearchResults");
+  if (!container) return;
+  container.style.display = "none";
+  container.innerHTML = "";
+  cpTagActiveResultIndex = -1;
+}
+
+function cpUpdatePostTagCounter() {
+  const countEl = document.getElementById("postTagSelectedCount");
+  const selectedCount = cpTagSelectedAccounts.length;
+
+  if (countEl) countEl.textContent = `${selectedCount} selected`;
+}
+
+function cpRefreshPostTagInputState() {
+  const input = document.getElementById("postTagSearchInput");
+  if (!input) return;
+
+  if (!input.dataset.defaultPlaceholder) {
+    input.dataset.defaultPlaceholder = input.placeholder || "Search users...";
+  }
+
+  const isAtLimit = cpTagSelectedAccounts.length >= cpGetPostTagMaxCount();
+  input.disabled = isAtLimit;
+  input.placeholder = isAtLimit
+    ? "Tag limit reached"
+    : input.dataset.defaultPlaceholder;
+
+  if (isAtLimit) {
+    cpHidePostTagResults();
+  }
+}
+
+function cpGetSelectedPostTagAccountIds() {
+  return Array.from(
+    new Set(
+      cpTagSelectedAccounts.map((account) => account.accountId).filter(Boolean),
+    ),
+  );
+}
+
+function cpResetPostTagPicker() {
+  cpTagSelectedAccounts = [];
+  cpTagSearchResults = [];
+  cpTagActiveResultIndex = -1;
+  cpTagSearchRequestSequence++;
+
+  if (cpTagSearchDebounceTimer) {
+    clearTimeout(cpTagSearchDebounceTimer);
+    cpTagSearchDebounceTimer = null;
+  }
+
+  const input = document.getElementById("postTagSearchInput");
+  if (input) {
+    input.value = "";
+    input.disabled = false;
+    if (input.dataset.defaultPlaceholder) {
+      input.placeholder = input.dataset.defaultPlaceholder;
+    }
+  }
+
+  cpRenderPostTagChips();
+  cpUpdatePostTagCounter();
+  cpHidePostTagResults();
+  cpRefreshPostTagInputState();
+}
+
+function cpEscapeHtml(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function cpEscapeHtmlAttr(text) {
+  return cpEscapeHtml(text).replace(/`/g, "&#96;");
+}
+
 // Toggle section
-function toggleSection(sectionName) {
+function toggleSection(sectionName, evt) {
   const content = document.getElementById(`${sectionName}Content`);
-  const header = event.currentTarget;
+  const header = evt?.currentTarget || null;
 
   if (!content) return;
 
   if (content.style.display === "none" || content.style.display === "") {
     content.style.display = "block";
-    
+    if (header) header.classList.add("expanded");
   } else {
     content.style.display = "none";
-    
+    if (header) header.classList.remove("expanded");
   }
 }
 
@@ -970,7 +1434,6 @@ async function toggleEmojiPicker(event) {
       container.classList.remove("show");
       container.innerHTML = "";
     }
-    
   } else {
     // Opening
     if (window.EmojiUtils) {
@@ -978,7 +1441,6 @@ async function toggleEmojiPicker(event) {
         EmojiUtils.insertAtCursor(captionInput, emoji.native);
         updateCharCount(); // App specific logic
       });
-      
     } else {
       console.error("EmojiUtils not found");
     }
@@ -1024,7 +1486,6 @@ function togglePrivacyDropdown(event) {
     const chevron = document.getElementById("emojiChevron");
     if (chevron) {
       const header = chevron.closest(".section-header");
-      
     }
   }
 
@@ -1114,6 +1575,11 @@ async function submitPost() {
     formData.append("Privacy", String(selectedPrivacy));
   }
 
+  const taggedAccountIds = cpGetSelectedPostTagAccountIds();
+  taggedAccountIds.forEach((accountId) => {
+    formData.append("TaggedAccountIds", accountId);
+  });
+
   // FeedAspectRatio mapping
   const aspectMap = { original: 0, "1:1": 1, "4:5": 2, "16:9": 3 };
   if (globalCropRatio && aspectMap.hasOwnProperty(globalCropRatio)) {
@@ -1173,6 +1639,7 @@ async function submitPost() {
       FeedAspectRatio: aspectMap.hasOwnProperty(globalCropRatio)
         ? Number(aspectMap[globalCropRatio])
         : null,
+      TaggedAccountIdsCount: taggedAccountIds.length,
       MediaFilesCount: mediaFiles.length,
     };
     console.log("submitPost FormData preview:", serverPreview);
@@ -1956,6 +2423,11 @@ document.addEventListener("click", (e) => {
     privacyDropdown.classList.remove("show");
   }
 
+  const isInsidePostTagPicker = e.target.closest("#postTagPicker");
+  if (!isInsidePostTagPicker) {
+    cpHidePostTagResults();
+  }
+
   // Close emoji picker if clicking outside
   // Close emoji picker if clicking outside
   const emojiContainer = document.getElementById("emojiPickerContainer");
@@ -1981,7 +2453,6 @@ document.addEventListener("click", (e) => {
     const chevron = document.getElementById("emojiChevron");
     if (chevron) {
       const header = chevron.closest(".section-header");
-      
     }
   }
 });
@@ -2002,6 +2473,12 @@ document.addEventListener("keydown", (e) => {
         return;
       }
 
+      const postTagResults = document.getElementById("postTagSearchResults");
+      if (postTagResults && postTagResults.style.display !== "none") {
+        cpHidePostTagResults();
+        return;
+      }
+
       // Close emoji picker if open
       const emojiContainer = document.getElementById("emojiPickerContainer");
       if (emojiContainer && emojiContainer.classList.contains("show")) {
@@ -2018,7 +2495,6 @@ document.addEventListener("keydown", (e) => {
         const chevron = document.getElementById("emojiChevron");
         if (chevron) {
           const header = chevron.closest(".section-header");
-          
         }
         return;
       }
@@ -2052,5 +2528,3 @@ document.addEventListener("click", (e) => {
     toggleSwitch.classList.toggle("active");
   }
 });
-
-

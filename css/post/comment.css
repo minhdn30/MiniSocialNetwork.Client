@@ -391,7 +391,7 @@
     position: absolute;
     bottom: 100%;
     left: 0;
-    margin-bottom: 10px;
+    margin-bottom: 2px;
     z-index: 100;
 }
 
@@ -399,7 +399,7 @@
     bottom: auto;
     top: 100%;
     margin-bottom: 0;
-    margin-top: 10px;
+    margin-top: 2px;
 }
 
 
@@ -597,22 +597,22 @@
     cursor: default;
 }
 
-.edit-emoji-picker-container {
+.comment-edit-form .edit-emoji-picker-container {
     position: absolute;
     bottom: 100%;
     left: 0;
-    margin-bottom: 10px;
+    margin-bottom: 2px;
     z-index: 100;
 }
 
-.edit-emoji-picker-container.show-below {
+.comment-edit-form .edit-emoji-picker-container.show-below {
     bottom: auto;
     top: 100%;
     margin-bottom: 0;
-    margin-top: 10px;
+    margin-top: 2px;
 }
 
-.edit-emoji-picker-container.align-right {
+.comment-edit-form .edit-emoji-picker-container.align-right {
     left: auto;
     right: 0;
 }

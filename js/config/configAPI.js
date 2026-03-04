@@ -648,6 +648,19 @@
       getProfile: (accountId) => apiFetch(`/Accounts/profile/${accountId}`),
       getProfileByUsername: (username) =>
         apiFetch(`/Accounts/profile/username/${username}`),
+      searchPostTagAccounts: (
+        keyword = "",
+        limit = window.APP_CONFIG?.POST_TAG_SEARCH_LIMIT || 10,
+        excludeAccountIds = [],
+      ) => {
+        const safeKeyword =
+          keyword === null || keyword === undefined ? "" : String(keyword);
+        const safeLimit = Number.isFinite(limit) ? limit : 10;
+        const baseUrl = `/Accounts/search/post-tag?keyword=${encodeURIComponent(safeKeyword)}&limit=${safeLimit}`;
+        return apiFetch(
+          appendArrayQuery(baseUrl, "excludeAccountIds", excludeAccountIds),
+        );
+      },
       updateProfile: (formData) =>
         uploadFormDataWithProgress(
           "/Accounts/profile",

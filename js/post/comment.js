@@ -1198,13 +1198,8 @@ const CommentModule = (function () {
         if (spaceAbove < 320) emojiPickerContainer.classList.add("show-below");
         else emojiPickerContainer.classList.remove("show-below");
 
-        const pickerWidth = Math.min(352, window.innerWidth - 24);
-        const spaceRight = bodyRect.right - btnRect.right;
-        if (spaceRight < pickerWidth) {
-          emojiPickerContainer.classList.add("align-right");
-        } else {
-          emojiPickerContainer.classList.remove("align-right");
-        }
+        // Keep edit-comment behavior consistent with add-reply/add-comment.
+        emojiPickerContainer.classList.remove("align-right");
 
         EmojiUtils.togglePicker(emojiPickerContainer, (emoji) => {
           EmojiUtils.insertAtCursor(input, emoji.native);
