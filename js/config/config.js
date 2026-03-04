@@ -140,6 +140,7 @@
     POST_TAG_NAME_MAX_LENGTH: 18, // Max display length for a tagged account name in post header summary
     POST_TAG_SUMMARY_MAX_LENGTH: 48, // Max display length for the whole "with ..." summary text in post header
     POST_TAG_PREVIEW_LIMIT: 2, // Max tagged accounts previewed in post header
+    POST_TAG_ERROR_TOAST_MAX_LENGTH: 220, // Max length for post-tag related error messages displayed in toast
     POST_TAG_CACHE_TTL_MS: 10 * 60 * 1000, // TTL for in-memory tagged-accounts cache
     POST_TAG_CACHE_MAX_ENTRIES: 200, // Max tagged-accounts cache entries
     MAX_STORY_TEXT_LENGTH: 500, // Số ký tự tối đa cho text story

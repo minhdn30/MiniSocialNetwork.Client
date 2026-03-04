@@ -36,8 +36,7 @@
 
     const TAG_PERMISSION_LEVELS = {
         0: { name: 'No One', icon: 'lock', class: 'private' },
-        1: { name: 'Followers', icon: 'users', class: 'follow' },
-        2: { name: 'Anyone', icon: 'globe', class: 'public' }
+        1: { name: 'Anyone', icon: 'globe', class: 'public' }
     };
 
     const SETTING_KEYS = {
@@ -101,7 +100,7 @@
                     storyHighlightPrivacy: 0, // Public
                     onlineStatusVisibility: 1, // Contacts Only
                     groupChatInvitePermission: 2, // Anyone
-                    tagPermission: 1 // Followers
+                    tagPermission: 1 // Anyone
                 };
             }
             
@@ -297,7 +296,23 @@
 
     window.saveAccountSettings = async function() {
         const btn = document.getElementById("save-settings-btn");
-        if (!btn) return;
+        if (!btn || btn.disabled) return;
+
+        // bật loading thủ công — giữ xoay cho đến khi redirect
+        const defaultHTML = btn.dataset.defaultHtml || btn.innerHTML;
+        btn.dataset.defaultHtml = defaultHTML;
+        btn.disabled = true;
+        btn.classList.add("is-loading");
+        btn.setAttribute("aria-busy", "true");
+        btn.innerHTML = `<span>Saving...</span><span class="spinner spinner-tiny" aria-hidden="true"></span>`;
+
+        function resetSaveButton() {
+            btn.disabled = false;
+            btn.classList.remove("is-loading");
+            btn.removeAttribute("aria-busy");
+            btn.innerHTML = btn.dataset.defaultHtml || defaultHTML;
+            if (window.lucide) lucide.createIcons();
+        }
 
         // Check for changes before proceeding
         if (!hasAccountSettingsChanges()) {
@@ -308,7 +323,7 @@
             return;
         }
 
-        await runWithPendingButton(btn, "Saving...", async () => {
+        try {
             const data = getUICurrentValues();
             // API expects PascalCase keys
             const apiData = {};
@@ -348,11 +363,13 @@
             } else {
                 const errorData = await res.json();
                 if (window.toastError) toastError(errorData.title || "Failed to save settings.");
+                resetSaveButton();
             }
-        }).catch((err) => {
+        } catch (err) {
             console.error(err);
             if (window.toastError) toastError("An error occurred while saving.");
-        });
+            resetSaveButton();
+        }
     };
 
     window.initAccountSettings = initAccountSettings;
