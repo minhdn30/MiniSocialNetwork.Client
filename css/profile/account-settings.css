@@ -128,6 +128,10 @@
   min-width: 140px;
 }
 
+#label-tag-permission-privacy {
+  min-width: 110px;
+}
+
 /* Description below */
 .acc-setting-description {
   font-size: 0.85rem;

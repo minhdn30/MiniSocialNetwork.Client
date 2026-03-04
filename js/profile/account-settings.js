@@ -34,6 +34,12 @@
         1: { name: 'Contacts Only', icon: 'users', class: 'follow' }
     };
 
+    const TAG_PERMISSION_LEVELS = {
+        0: { name: 'No One', icon: 'lock', class: 'private' },
+        1: { name: 'Followers', icon: 'users', class: 'follow' },
+        2: { name: 'Anyone', icon: 'globe', class: 'public' }
+    };
+
     const SETTING_KEYS = {
         phone: 'phonePrivacy',
         address: 'addressPrivacy',
@@ -42,7 +48,8 @@
         following: 'followingPrivacy',
         'story-highlight': 'storyHighlightPrivacy',
         'online-status': 'onlineStatusVisibility',
-        'group-chat-invite': 'groupChatInvitePermission'
+        'group-chat-invite': 'groupChatInvitePermission',
+        'tag-permission': 'tagPermission'
     };
 
     const SETTING_LEVEL_MAP = {
@@ -53,7 +60,8 @@
         following: PRIVACY_LEVELS,
         'story-highlight': PRIVACY_LEVELS,
         'online-status': ONLINE_STATUS_VISIBILITY_LEVELS,
-        'group-chat-invite': GROUP_CHAT_INVITE_LEVELS
+        'group-chat-invite': GROUP_CHAT_INVITE_LEVELS,
+        'tag-permission': TAG_PERMISSION_LEVELS
     };
 
     let originalSettings = null; // To track changes accurately
@@ -92,7 +100,8 @@
                     followingPrivacy: 0, // Public
                     storyHighlightPrivacy: 0, // Public
                     onlineStatusVisibility: 1, // Contacts Only
-                    groupChatInvitePermission: 2 // Anyone
+                    groupChatInvitePermission: 2, // Anyone
+                    tagPermission: 1 // Followers
                 };
             }
             
@@ -105,7 +114,8 @@
                 followingPrivacy: currentSettings.followingPrivacy ?? currentSettings.FollowingPrivacy,
                 storyHighlightPrivacy: currentSettings.storyHighlightPrivacy ?? currentSettings.StoryHighlightPrivacy ?? 0,
                 onlineStatusVisibility: currentSettings.onlineStatusVisibility ?? currentSettings.OnlineStatusVisibility ?? 1,
-                groupChatInvitePermission: currentSettings.groupChatInvitePermission ?? currentSettings.GroupChatInvitePermission
+                groupChatInvitePermission: currentSettings.groupChatInvitePermission ?? currentSettings.GroupChatInvitePermission,
+                tagPermission: currentSettings.tagPermission ?? currentSettings.TagPermission ?? 1
             };
 
             populateSettings(currentSettings);
@@ -126,6 +136,7 @@
         updatePrivacyButton('story-highlight', settings.storyHighlightPrivacy ?? settings.StoryHighlightPrivacy ?? 0);
         updatePrivacyButton('online-status', settings.onlineStatusVisibility ?? settings.OnlineStatusVisibility ?? 1);
         updatePrivacyButton('group-chat-invite', settings.groupChatInvitePermission ?? settings.GroupChatInvitePermission ?? 2);
+        updatePrivacyButton('tag-permission', settings.tagPermission ?? settings.TagPermission ?? 1);
         
         hasUnsavedChanges = false;
     }
@@ -323,7 +334,8 @@
                     followingPrivacy: newSettings.followingPrivacy ?? newSettings.FollowingPrivacy,
                     storyHighlightPrivacy: newSettings.storyHighlightPrivacy ?? newSettings.StoryHighlightPrivacy ?? 0,
                     onlineStatusVisibility: newSettings.onlineStatusVisibility ?? newSettings.OnlineStatusVisibility ?? 1,
-                    groupChatInvitePermission: newSettings.groupChatInvitePermission ?? newSettings.GroupChatInvitePermission
+                    groupChatInvitePermission: newSettings.groupChatInvitePermission ?? newSettings.GroupChatInvitePermission,
+                    tagPermission: newSettings.tagPermission ?? newSettings.TagPermission ?? 1
                 };
                 
                 hasUnsavedChanges = false;
