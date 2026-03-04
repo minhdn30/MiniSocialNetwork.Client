@@ -307,9 +307,55 @@
           </div>
         </div>
 
+        <!-- Collaborators Section -->
+        <div class="post-section">
+          <div
+            class="section-header"
+            onclick="toggleSection('collaborators', event)"
+          >
+            <div class="section-left">
+              <i data-lucide="users" class="section-icon"></i>
+              <span class="section-title">Tag People</span>
+            </div>
+            <i data-lucide="chevron-right" class="chevron-icon"></i>
+          </div>
+          <div
+            class="section-content"
+            id="collaboratorsContent"
+            style="display: none"
+          >
+            <div class="post-tag-picker" id="postTagPicker">
+              <div class="post-tag-search-wrap">
+                <input
+                  type="text"
+                  id="postTagSearchInput"
+                  class="collaborator-input"
+                  placeholder="Search users..."
+                  autocomplete="off"
+                />
+                <div
+                  class="post-tag-search-results"
+                  id="postTagSearchResults"
+                  style="display: none"
+                ></div>
+              </div>
+              <div
+                class="post-tag-selected-chips hidden"
+                id="postTagSelectedChips"
+              ></div>
+              <div class="post-tag-meta">
+                <span id="postTagSelectedCount">0 selected</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Location Section -->
         <div class="post-section">
-          <div class="section-header" onclick="toggleSection('location')">
+          <div
+            class="section-header"
+            onclick="toggleSection('location', event)"
+          >
             <div class="section-left">
               <i data-lucide="map-pin" class="section-icon"></i>
               <span class="section-title">Add Location</span>
@@ -329,31 +375,12 @@
           </div>
         </div>
 
-        <!-- Collaborators Section -->
-        <div class="post-section">
-          <div class="section-header" onclick="toggleSection('collaborators')">
-            <div class="section-left">
-              <i data-lucide="users" class="section-icon"></i>
-              <span class="section-title">Tag People / Collaborators</span>
-            </div>
-            <i data-lucide="chevron-right" class="chevron-icon"></i>
-          </div>
-          <div
-            class="section-content"
-            id="collaboratorsContent"
-            style="display: none"
-          >
-            <input
-              type="text"
-              class="collaborator-input"
-              placeholder="Search users..."
-            />
-          </div>
-        </div>
-
         <!-- Accessibility Section -->
         <div class="post-section">
-          <div class="section-header" onclick="toggleSection('accessibility')">
+          <div
+            class="section-header"
+            onclick="toggleSection('accessibility', event)"
+          >
             <div class="section-left">
               <i data-lucide="accessibility" class="section-icon"></i>
               <span class="section-title">Accessibility</span>
@@ -378,7 +405,10 @@
 
         <!-- Advanced Settings -->
         <div class="post-section">
-          <div class="section-header" onclick="toggleSection('advanced')">
+          <div
+            class="section-header"
+            onclick="toggleSection('advanced', event)"
+          >
             <div class="section-left">
               <i data-lucide="sliders" class="section-icon"></i>
               <span class="section-title">Advanced Settings</span>

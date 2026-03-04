@@ -3,13 +3,37 @@
  * Handles editing post content and privacy with UI matching create-post-modal.
  */
 (function(global) {
+    const epGetPostTagMaxCount = () => window.APP_CONFIG?.MAX_POST_TAGS || 20;
+    const epGetPostTagSearchLimit = () =>
+        window.APP_CONFIG?.POST_TAG_SEARCH_LIMIT || 10;
+    const epGetPostTagSearchDebounceMs = () =>
+        window.APP_CONFIG?.POST_TAG_SEARCH_DEBOUNCE_MS || 300;
+    const epGetDefaultAvatar = () =>
+        window.APP_CONFIG?.DEFAULT_AVATAR || "assets/images/default-avatar.jpg";
+
+    const epEscapeHtml = (text) =>
+        String(text || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+
+    const epEscapeHtmlAttr = (text) => epEscapeHtml(text).replace(/`/g, "&#96;");
+
     const PostEdit = {
         currentEditingPostId: null,
         selectedPrivacy: 0,
         originalContent: "",
         originalPrivacy: 0,
         hasMedia: false,
-        isInitialized: false
+        isInitialized: false,
+        tagSelectedAccounts: [],
+        tagSearchResults: [],
+        tagSearchDebounceTimer: null,
+        tagSearchRequestSequence: 0,
+        tagActiveResultIndex: -1,
+        tagEventsBound: false
     };
 
     /**
@@ -88,6 +112,8 @@
         
         // Setup listeners if not already done
         this.setupListeners();
+        this.ensurePostTagBindings();
+        this.resetPostTagPicker();
         
         this.updateCharCount();
         this.selectPrivacy(this.selectedPrivacy);
@@ -138,7 +164,7 @@
                 const dropdown = document.getElementById("editPrivacyDropdown");
                 const selector = document.querySelector(".edit-privacy-selector-trigger");
                 if (dropdown && dropdown.classList.contains("show")) {
-                    if (!dropdown.contains(e.target) && !selector.contains(e.target)) {
+                    if (!dropdown.contains(e.target) && !(selector && selector.contains(e.target))) {
                         dropdown.classList.remove("show");
                     }
                 }
@@ -153,6 +179,12 @@
                     ) {
                         this.toggleEmojiPicker(); // Close it
                     }
+                }
+
+                // Post Tag Search Results
+                const isInsideTagPicker = e.target.closest("#editPostTagPicker");
+                if (!isInsideTagPicker) {
+                    this.hidePostTagResults();
                 }
             });
             this.isInitialized = true;
@@ -181,6 +213,7 @@
         const dropdown = document.getElementById("editPrivacyDropdown");
         if (dropdown) dropdown.classList.remove("show");
 
+        this.resetPostTagPicker();
         this.currentEditingPostId = null;
     };
 
@@ -358,6 +391,424 @@
                 console.error("EmojiUtils not found");
             }
         }
+    };
+
+    /**
+     * Post Tag Picker (Edit Post)
+     */
+    PostEdit.ensurePostTagBindings = function() {
+        if (this.tagEventsBound) return;
+
+        const input = document.getElementById("editPostTagSearchInput");
+        const results = document.getElementById("editPostTagSearchResults");
+        const chips = document.getElementById("editPostTagSelectedChips");
+        if (!input || !results || !chips) return;
+
+        input.addEventListener("input", () => {
+            const keyword = (input.value || "").trim();
+            this.schedulePostTagSearch(keyword);
+        });
+
+        input.addEventListener("focus", () => {
+            if (input.disabled) return;
+            const keyword = (input.value || "").trim();
+            if (keyword.length < 1) {
+                this.hidePostTagResults();
+                return;
+            }
+            this.schedulePostTagSearch(keyword, { immediate: true });
+        });
+
+        input.addEventListener("keydown", (event) => {
+            const resultsEl = document.getElementById("editPostTagSearchResults");
+            const isVisible =
+                resultsEl &&
+                resultsEl.style.display !== "none" &&
+                this.tagSearchResults.length > 0;
+
+            if (event.key === "Escape") {
+                if (resultsEl && resultsEl.style.display !== "none") {
+                    event.preventDefault();
+                    this.hidePostTagResults();
+                }
+                return;
+            }
+
+            if (!isVisible) return;
+
+            if (event.key === "ArrowDown") {
+                event.preventDefault();
+                if (this.tagActiveResultIndex < 0) {
+                    this.tagActiveResultIndex = 0;
+                } else {
+                    this.tagActiveResultIndex = Math.max(0, this.tagActiveResultIndex - 1);
+                }
+                this.renderPostTagResults();
+                return;
+            }
+
+            if (event.key === "ArrowUp") {
+                event.preventDefault();
+                if (this.tagActiveResultIndex < 0) {
+                    this.tagActiveResultIndex = 0;
+                } else {
+                    this.tagActiveResultIndex = Math.min(
+                        this.tagSearchResults.length - 1,
+                        this.tagActiveResultIndex + 1,
+                    );
+                }
+                this.renderPostTagResults();
+                return;
+            }
+
+            if (event.key === "Enter") {
+                event.preventDefault();
+                this.selectPostTagAccount(this.tagActiveResultIndex);
+            }
+        });
+
+        results.addEventListener("click", (event) => {
+            const item = event.target.closest(".post-tag-result-item");
+            if (!item || !results.contains(item)) return;
+            event.preventDefault();
+            this.selectPostTagAccount(Number(item.dataset.index || -1));
+        });
+
+        chips.addEventListener("click", (event) => {
+            const removeBtn = event.target.closest(".post-tag-chip-remove");
+            if (!removeBtn || !chips.contains(removeBtn)) return;
+            event.preventDefault();
+            this.removePostTagAccount(removeBtn.dataset.accountId || "");
+        });
+
+        this.tagEventsBound = true;
+        this.updatePostTagCounter();
+        this.refreshPostTagInputState();
+    };
+
+    PostEdit.schedulePostTagSearch = function(keyword, { immediate = false } = {}) {
+        if (this.tagSearchDebounceTimer) {
+            clearTimeout(this.tagSearchDebounceTimer);
+            this.tagSearchDebounceTimer = null;
+        }
+
+        const normalizedKeyword = (keyword || "").trim();
+        if (normalizedKeyword.length < 1) {
+            this.tagSearchRequestSequence++;
+            this.tagSearchResults = [];
+            this.hidePostTagResults();
+            return;
+        }
+
+        const delay = immediate ? 0 : epGetPostTagSearchDebounceMs();
+        this.tagSearchDebounceTimer = setTimeout(() => {
+            this.searchPostTagAccounts(normalizedKeyword);
+        }, delay);
+    };
+
+    PostEdit.searchPostTagAccounts = async function(keyword) {
+        const normalizedKeyword = (keyword || "").trim();
+        if (normalizedKeyword.length < 1) {
+            this.hidePostTagResults();
+            return;
+        }
+
+        if (!window.API?.Accounts?.searchPostTagAccounts) {
+            this.renderPostTagEmptyState("Search is unavailable");
+            return;
+        }
+
+        if (this.tagSelectedAccounts.length >= epGetPostTagMaxCount()) {
+            this.hidePostTagResults();
+            return;
+        }
+
+        const requestSequence = ++this.tagSearchRequestSequence;
+        this.renderPostTagLoading();
+
+        try {
+            const excludeAccountIds = this.tagSelectedAccounts.map(
+                (account) => account.accountId,
+            );
+
+            const res = await window.API.Accounts.searchPostTagAccounts(
+                normalizedKeyword,
+                epGetPostTagSearchLimit(),
+                excludeAccountIds,
+            );
+
+            if (requestSequence !== this.tagSearchRequestSequence) return;
+
+            if (!res.ok) {
+                let message = "Failed to load users";
+                try {
+                    const errorData = await res.json();
+                    message = errorData?.message || errorData?.title || message;
+                } catch (_) {}
+                this.renderPostTagEmptyState(message);
+                return;
+            }
+
+            const data = await res.json();
+            if (requestSequence !== this.tagSearchRequestSequence) return;
+
+            const rawAccounts = Array.isArray(data)
+                ? data
+                : Array.isArray(data?.items)
+                    ? data.items
+                    : [];
+
+            this.tagSearchResults = rawAccounts
+                .map((raw) => this.normalizePostTagAccount(raw))
+                .filter((account) => account && account.accountId)
+                .filter(
+                    (account) =>
+                        !this.tagSelectedAccounts.some(
+                            (selected) => selected.accountId === account.accountId,
+                        ),
+                );
+
+            this.tagActiveResultIndex = this.tagSearchResults.length > 0 ? 0 : -1;
+            this.renderPostTagResults(normalizedKeyword);
+        } catch (error) {
+            if (requestSequence !== this.tagSearchRequestSequence) return;
+            console.error("Failed to search edit-post tag accounts:", error);
+            this.renderPostTagEmptyState("Could not connect to server");
+        }
+    };
+
+    PostEdit.normalizePostTagAccount = function(raw) {
+        if (!raw || typeof raw !== "object") return null;
+
+        const accountId = raw.accountId || raw.AccountId || "";
+        if (!accountId) return null;
+
+        return {
+            accountId,
+            username: raw.username || raw.userName || raw.Username || raw.UserName || "",
+            fullName: raw.fullName || raw.FullName || "",
+            avatarUrl: raw.avatarUrl || raw.AvatarUrl || raw.avatar || raw.Avatar || "",
+        };
+    };
+
+    PostEdit.renderPostTagLoading = function() {
+        const container = document.getElementById("editPostTagSearchResults");
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="post-tag-skeleton-item"></div>
+            <div class="post-tag-skeleton-item"></div>
+            <div class="post-tag-skeleton-item"></div>
+        `;
+        container.style.display = "flex";
+    };
+
+    PostEdit.renderPostTagEmptyState = function(message) {
+        const container = document.getElementById("editPostTagSearchResults");
+        if (!container) return;
+
+        container.innerHTML = `<div class="post-tag-empty-state">${epEscapeHtml(message || "No results")}</div>`;
+        container.style.display = "flex";
+    };
+
+    PostEdit.renderPostTagResults = function(keyword = "") {
+        const container = document.getElementById("editPostTagSearchResults");
+        if (!container) return;
+
+        if (!this.tagSearchResults.length) {
+            this.renderPostTagEmptyState(
+                keyword ? "No matching users found" : "No users available for tagging",
+            );
+            return;
+        }
+
+        const defaultAvatar = epEscapeHtmlAttr(epGetDefaultAvatar());
+        container.innerHTML = this.tagSearchResults
+            .map((account, index) => {
+                const username = account.username || "unknown";
+                const displayName = account.fullName || account.username || "Unknown user";
+                const avatarUrl = account.avatarUrl || epGetDefaultAvatar();
+
+                return `
+                    <button
+                        type="button"
+                        class="post-tag-result-item ${index === this.tagActiveResultIndex ? "active" : ""}"
+                        data-index="${index}"
+                    >
+                        <img src="${epEscapeHtmlAttr(avatarUrl)}" alt="" onerror="this.src='${defaultAvatar}'" />
+                        <div class="post-tag-result-info">
+                            <span class="post-tag-result-username">${epEscapeHtml(username)}</span>
+                            <span class="post-tag-result-name">${epEscapeHtml(displayName)}</span>
+                        </div>
+                    </button>
+                `;
+            })
+            .join("");
+
+        container.style.display = "flex";
+    };
+
+    PostEdit.selectPostTagAccount = function(index) {
+        if (
+            !Number.isInteger(index) ||
+            index < 0 ||
+            index >= this.tagSearchResults.length
+        ) {
+            return;
+        }
+
+        const account = this.tagSearchResults[index];
+        this.addPostTagAccount(account);
+    };
+
+    PostEdit.addPostTagAccount = function(account) {
+        if (!account || !account.accountId) return;
+
+        if (
+            this.tagSelectedAccounts.some(
+                (selected) => selected.accountId === account.accountId,
+            )
+        ) {
+            return;
+        }
+
+        if (this.tagSelectedAccounts.length >= epGetPostTagMaxCount()) {
+            if (window.toastWarning) {
+                window.toastWarning(
+                    `You can tag up to ${epGetPostTagMaxCount()} people in one post`,
+                );
+            }
+            return;
+        }
+
+        this.tagSelectedAccounts.push(account);
+        this.renderPostTagChips();
+        this.updatePostTagCounter();
+        this.refreshPostTagInputState();
+
+        const input = document.getElementById("editPostTagSearchInput");
+        if (input) {
+            input.value = "";
+            input.focus();
+        }
+
+        this.schedulePostTagSearch("", { immediate: true });
+    };
+
+    PostEdit.removePostTagAccount = function(accountId) {
+        if (!accountId) return;
+
+        const next = this.tagSelectedAccounts.filter(
+            (account) => account.accountId !== accountId,
+        );
+
+        if (next.length === this.tagSelectedAccounts.length) return;
+
+        this.tagSelectedAccounts = next;
+        this.renderPostTagChips();
+        this.updatePostTagCounter();
+        this.refreshPostTagInputState();
+
+        const input = document.getElementById("editPostTagSearchInput");
+        if (input && document.activeElement === input) {
+            this.schedulePostTagSearch((input.value || "").trim(), { immediate: true });
+        }
+    };
+
+    PostEdit.renderPostTagChips = function() {
+        const container = document.getElementById("editPostTagSelectedChips");
+        if (!container) return;
+
+        if (this.tagSelectedAccounts.length === 0) {
+            container.classList.add("hidden");
+            container.innerHTML = "";
+            return;
+        }
+
+        container.classList.remove("hidden");
+        container.innerHTML = this.tagSelectedAccounts
+            .map((account) => {
+                const chipText = account.username
+                    ? account.username
+                    : account.fullName || "Unknown user";
+                const avatarUrl = account.avatarUrl || epGetDefaultAvatar();
+
+                return `
+                    <div class="post-tag-chip">
+                        <img src="${epEscapeHtmlAttr(avatarUrl)}" alt="" onerror="this.src='${epEscapeHtmlAttr(epGetDefaultAvatar())}'" />
+                        <span class="post-tag-chip-text">${epEscapeHtml(chipText)}</span>
+                        <button
+                            type="button"
+                            class="post-tag-chip-remove"
+                            data-account-id="${epEscapeHtmlAttr(account.accountId)}"
+                            aria-label="Remove tag"
+                        >
+                            &times;
+                        </button>
+                    </div>
+                `;
+            })
+            .join("");
+    };
+
+    PostEdit.hidePostTagResults = function() {
+        const container = document.getElementById("editPostTagSearchResults");
+        if (!container) return;
+        container.style.display = "none";
+        container.innerHTML = "";
+        this.tagActiveResultIndex = -1;
+    };
+
+    PostEdit.updatePostTagCounter = function() {
+        const countEl = document.getElementById("editPostTagSelectedCount");
+        const selectedCount = this.tagSelectedAccounts.length;
+
+        if (countEl) countEl.textContent = `${selectedCount} selected`;
+    };
+
+    PostEdit.refreshPostTagInputState = function() {
+        const input = document.getElementById("editPostTagSearchInput");
+        if (!input) return;
+
+        if (!input.dataset.defaultPlaceholder) {
+            input.dataset.defaultPlaceholder = input.placeholder || "Search users...";
+        }
+
+        const isAtLimit = this.tagSelectedAccounts.length >= epGetPostTagMaxCount();
+        input.disabled = isAtLimit;
+        input.placeholder = isAtLimit
+            ? "Tag limit reached"
+            : input.dataset.defaultPlaceholder;
+
+        if (isAtLimit) {
+            this.hidePostTagResults();
+        }
+    };
+
+    PostEdit.resetPostTagPicker = function() {
+        this.tagSelectedAccounts = [];
+        this.tagSearchResults = [];
+        this.tagActiveResultIndex = -1;
+        this.tagSearchRequestSequence++;
+
+        if (this.tagSearchDebounceTimer) {
+            clearTimeout(this.tagSearchDebounceTimer);
+            this.tagSearchDebounceTimer = null;
+        }
+
+        const input = document.getElementById("editPostTagSearchInput");
+        if (input) {
+            input.value = "";
+            input.disabled = false;
+            if (input.dataset.defaultPlaceholder) {
+                input.placeholder = input.dataset.defaultPlaceholder;
+            }
+        }
+
+        this.renderPostTagChips();
+        this.updatePostTagCounter();
+        this.hidePostTagResults();
+        this.refreshPostTagInputState();
     };
 
     /**
