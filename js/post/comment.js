@@ -71,6 +71,23 @@ const CommentModule = (function () {
     return `#/${encodeURIComponent(safe)}`;
   }
 
+  function attachMentionPicker(input) {
+    if (!input || !window.MentionPicker) return;
+
+    window.MentionPicker.attach(input, {
+      getSearchContext: () => {
+        const postDetailData = window.currentPostDetailData || {};
+        return {
+          privacy:
+            postDetailData.privacy === null || postDetailData.privacy === undefined
+              ? null
+              : Number(postDetailData.privacy),
+          ownerId: postDetailData.owner?.accountId || currentPostOwnerId || "",
+        };
+      },
+    });
+  }
+
   function buildCommentAvatarHtml(owner, ringSizeClass = "") {
     const avatarUrl = owner?.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
     const ringClass = isCurrentViewerAccount(owner?.accountId)
@@ -498,6 +515,10 @@ const CommentModule = (function () {
     };
 
     input.onkeydown = (e) => {
+      if (e.key === "Enter" && window.MentionPicker?.isOpenFor?.(input)) {
+        return;
+      }
+      if (e.defaultPrevented) return;
       if (e.key === "Enter" && !e.shiftKey && !btn.disabled) {
         e.preventDefault();
         submitReply(commentId, input.value.trim(), container);
@@ -533,6 +554,8 @@ const CommentModule = (function () {
         });
       }
     };
+
+    attachMentionPicker(input);
   }
 
   /**
@@ -1121,6 +1144,8 @@ const CommentModule = (function () {
     const textEl = commentEl.querySelector(".comment-text");
     if (!textEl) return;
 
+    const originalRawContent =
+      textEl.dataset.rawContent || textEl.dataset.fullContent || textEl.textContent;
     const originalContent = textEl.dataset.fullContent || textEl.textContent;
     const body = commentEl.querySelector(".comment-body");
     const originalDisplay = body.innerHTML;
@@ -1180,6 +1205,10 @@ const CommentModule = (function () {
     };
 
     input.onkeydown = (e) => {
+      if (e.key === "Enter" && window.MentionPicker?.isOpenFor?.(input)) {
+        return;
+      }
+      if (e.defaultPrevented) return;
       if (e.key === "Enter" && !e.shiftKey && !saveBtn.disabled) {
         e.preventDefault();
         saveBtn.click();
@@ -1218,7 +1247,7 @@ const CommentModule = (function () {
       if (newTextEl)
         PostUtils.setupCommentContent(
           newTextEl,
-          originalContent,
+          originalRawContent,
           undefined,
           true,
         );
@@ -1258,6 +1287,8 @@ const CommentModule = (function () {
         input.disabled = false;
       }
     };
+
+    attachMentionPicker(input);
   }
 
   function reportComment(commentId, isReply) {

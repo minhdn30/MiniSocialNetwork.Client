@@ -1383,6 +1383,10 @@ function setupCommentInput() {
     
     // Handle Enter key (Shift+Enter for new line, Enter to submit)
     input.onkeydown = (e) => {
+        if (e.key === "Enter" && window.MentionPicker?.isOpenFor?.(input)) {
+            return;
+        }
+        if (e.defaultPrevented) return;
         if (e.key === "Enter" && !e.shiftKey && !btn.disabled) {
             e.preventDefault();
             submitComment();
@@ -1393,6 +1397,19 @@ function setupCommentInput() {
     btn.onclick = () => {
         submitComment();
     };
+
+    if (window.MentionPicker) {
+        window.MentionPicker.attach(input, {
+            getSearchContext: () => ({
+                privacy:
+                    window.currentPostDetailData?.privacy === null ||
+                    window.currentPostDetailData?.privacy === undefined
+                        ? null
+                        : Number(window.currentPostDetailData.privacy),
+                ownerId: window.currentPostDetailData?.owner?.accountId || "",
+            }),
+        });
+    }
 }
 
 

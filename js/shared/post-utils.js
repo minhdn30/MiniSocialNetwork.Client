@@ -16,6 +16,7 @@
     puEscapeHtml(value).replace(/`/g, "&#96;");
   const postTagSummaryContextMap = new WeakMap();
   const postTaggedAccountsCache = new Map();
+  const commentMentionRegex = /@\[(?<username>[A-Za-z0-9._]{1,30})\]\((?<accountId>[0-9a-fA-F-]{36})\)/g;
   const postTaggedAccountsModalState = {
     modalId: "postTaggedAccountsModal",
     listId: "postTaggedAccountsList",
@@ -29,6 +30,112 @@
     const parsedLimit = Number(window.APP_CONFIG?.POST_TAG_PREVIEW_LIMIT);
     if (!Number.isFinite(parsedLimit) || parsedLimit <= 0) return 2;
     return Math.floor(parsedLimit);
+  }
+
+  function parseCommentMentionSegments(rawContent) {
+    const safeContent = (rawContent ?? "").toString();
+    if (!safeContent) {
+      return [];
+    }
+
+    const segments = [];
+    let lastIndex = 0;
+    commentMentionRegex.lastIndex = 0;
+    let match = commentMentionRegex.exec(safeContent);
+
+    while (match) {
+      const startIndex = match.index;
+      const matchText = match[0] || "";
+      const endIndex = startIndex + matchText.length;
+
+      if (startIndex > lastIndex) {
+        segments.push({
+          type: "text",
+          text: safeContent.slice(lastIndex, startIndex),
+        });
+      }
+
+      const mentionUsername = (match.groups?.username || "").toString().trim();
+      const mentionAccountId = (match.groups?.accountId || "")
+        .toString()
+        .trim();
+
+      if (mentionUsername && mentionAccountId) {
+        segments.push({
+          type: "mention",
+          username: mentionUsername,
+          accountId: mentionAccountId,
+          text: `@${mentionUsername}`,
+        });
+      } else {
+        segments.push({
+          type: "text",
+          text: matchText,
+        });
+      }
+
+      lastIndex = endIndex;
+      match = commentMentionRegex.exec(safeContent);
+    }
+
+    if (lastIndex < safeContent.length) {
+      segments.push({
+        type: "text",
+        text: safeContent.slice(lastIndex),
+      });
+    }
+
+    return segments;
+  }
+
+  function getCommentDisplayContent(rawContent) {
+    const segments = parseCommentMentionSegments(rawContent);
+    if (segments.length === 0) {
+      return (rawContent ?? "").toString();
+    }
+
+    return segments
+      .map((segment) => {
+        if (segment.type === "mention") {
+          return segment.text || "";
+        }
+        return segment.text || "";
+      })
+      .join("");
+  }
+
+  function renderCommentRichContent(targetElement, rawContent) {
+    if (!targetElement) return;
+
+    const segments = parseCommentMentionSegments(rawContent);
+    if (segments.length === 0) {
+      targetElement.textContent = (rawContent ?? "").toString();
+      return;
+    }
+
+    targetElement.innerHTML = "";
+    const fragment = document.createDocumentFragment();
+
+    segments.forEach((segment) => {
+      if (segment.type !== "mention") {
+        fragment.appendChild(document.createTextNode(segment.text || ""));
+        return;
+      }
+
+      const profileTarget = segment.username || segment.accountId || "";
+      const mentionAnchor = document.createElement("a");
+      mentionAnchor.className = "comment-mention-link";
+      mentionAnchor.textContent = segment.text || "";
+      mentionAnchor.href = PostUtils.buildProfileHash(profileTarget);
+      mentionAnchor.dataset.accountId = segment.accountId || "";
+      mentionAnchor.dataset.username = segment.username || "";
+      mentionAnchor.addEventListener("click", (event) => {
+        event.stopPropagation();
+      });
+      fragment.appendChild(mentionAnchor);
+    });
+
+    targetElement.appendChild(fragment);
   }
 
   function getPostTagCacheTtlMs() {
@@ -91,29 +198,35 @@
   ) {
     if (!fullContent) {
       el.textContent = "";
+      delete el.dataset.fullContent;
+      delete el.dataset.rawContent;
       return;
     }
 
-    // Always store full content for easier retrieval (e.g., when editing)
-    el.dataset.fullContent = fullContent;
+    const rawContent = (fullContent ?? "").toString();
+    const displayContent = getCommentDisplayContent(rawContent);
 
-    if (fullContent.length <= maxLen) {
-      el.textContent = fullContent;
+    // Keep both raw content (for rendering links) and display content (for editing textarea).
+    el.dataset.rawContent = rawContent;
+    el.dataset.fullContent = displayContent;
+
+    if (displayContent.length <= maxLen) {
+      renderCommentRichContent(el, rawContent);
       return;
     }
 
     // Use truncateSmart to avoid cutting words
     const truncatedContent =
       typeof truncateSmart === "function"
-        ? truncateSmart(fullContent, maxLen)
-        : fullContent.substring(0, maxLen) + "...";
+        ? truncateSmart(displayContent, maxLen)
+        : displayContent.substring(0, maxLen) + "...";
 
     el.innerHTML = "";
-
-    // If forceExpand, show full content immediately
-    const initialText = forceExpand ? fullContent : truncatedContent;
-    const textNode = document.createTextNode(initialText);
-    el.appendChild(textNode);
+    if (forceExpand) {
+      renderCommentRichContent(el, rawContent);
+    } else {
+      el.appendChild(document.createTextNode(truncatedContent));
+    }
 
     const btn = document.createElement("span");
     btn.className = "caption-toggle comment-toggle";
@@ -124,10 +237,13 @@
       e.stopPropagation();
       const isMore = btn.textContent === "more";
       if (isMore) {
-        textNode.textContent = fullContent;
+        renderCommentRichContent(el, rawContent);
+        el.appendChild(btn);
         btn.textContent = " less";
       } else {
-        textNode.textContent = truncatedContent;
+        el.innerHTML = "";
+        el.appendChild(document.createTextNode(truncatedContent));
+        el.appendChild(btn);
         btn.textContent = "more";
       }
     };

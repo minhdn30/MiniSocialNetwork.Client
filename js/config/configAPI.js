@@ -667,6 +667,7 @@
         limit = window.APP_CONFIG?.POST_TAG_SEARCH_LIMIT || 10,
         excludeAccountIds = [],
         privacy = null,
+        ownerId = null,
       ) => {
         const safeKeyword =
           keyword === null || keyword === undefined ? "" : String(keyword);
@@ -677,6 +678,10 @@
         const safePrivacy = hasPrivacy ? Number(privacy) : NaN;
         if (Number.isInteger(safePrivacy) && safePrivacy >= 0) {
           baseUrl += `&privacy=${safePrivacy}`;
+        }
+        const safeOwnerId = (ownerId || "").toString().trim();
+        if (safeOwnerId) {
+          baseUrl += `&ownerId=${encodeURIComponent(safeOwnerId)}`;
         }
         return apiFetch(
           appendArrayQuery(baseUrl, "excludeAccountIds", excludeAccountIds),
