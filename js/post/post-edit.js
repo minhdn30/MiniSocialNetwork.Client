@@ -10,6 +10,22 @@
         window.APP_CONFIG?.POST_TAG_SEARCH_DEBOUNCE_MS || 300;
     const epGetDefaultAvatar = () =>
         window.APP_CONFIG?.DEFAULT_AVATAR || "assets/images/default-avatar.jpg";
+    const epGetPostTagErrorToastMaxLength = () =>
+        window.APP_CONFIG?.POST_TAG_ERROR_TOAST_MAX_LENGTH || 220;
+
+    const epFormatPostTagErrorMessage = (message) => {
+        const normalized = String(message || "").trim();
+        if (!normalized) {
+            return "Something went wrong while updating post";
+        }
+
+        const maxLength = epGetPostTagErrorToastMaxLength();
+        if (!Number.isFinite(maxLength) || maxLength <= 0 || normalized.length <= maxLength) {
+            return normalized;
+        }
+
+        return `${normalized.slice(0, Math.max(1, maxLength - 1)).trimEnd()}…`;
+    };
 
     const epEscapeHtml = (text) =>
         String(text || "")
@@ -250,6 +266,11 @@
                 (id) => !currentTagAccountIds.includes(id),
             );
 
+            if (Number(this.selectedPrivacy) === 2 && addNewTagIds.length > 0) {
+                toastWarning("You cannot tag people on a private post.");
+                return;
+            }
+
             const data = {
                 content: content,
                 privacy: parseInt(this.selectedPrivacy)
@@ -269,7 +290,7 @@
                     const errorData = await res.json();
                     errorMessage = errorData?.message || errorData?.title || errorMessage;
                 } catch (_) {}
-                throw new Error(errorMessage);
+                throw new Error(epFormatPostTagErrorMessage(errorMessage));
             }
 
             const updatedPost = await res.json();
@@ -297,7 +318,7 @@
 
         } catch (err) {
             console.error("Edit post error:", err);
-            toastError(err.message || "Something went wrong while updating post");
+            toastError(epFormatPostTagErrorMessage(err.message || "Something went wrong while updating post"));
         } finally {
             if (window.LoadingUtils) LoadingUtils.setButtonLoading(saveBtn, false);
         }
@@ -375,9 +396,17 @@
     PostEdit.selectPrivacy = function(privacy) {
         this.selectedPrivacy = parseInt(privacy);
 
-        if (this.selectedPrivacy === 2 && this.tagSelectedAccounts.length > 0) {
+        const currentTagIds = this.getSelectedPostTagAccountIds();
+        const originalTagIdSet = new Set(
+            (this.originalTagAccountIds || []).filter(Boolean),
+        );
+        const hasNewTagIdsInDraft = currentTagIds.some(
+            (tagId) => !originalTagIdSet.has(tagId),
+        );
+
+        if (this.selectedPrivacy === 2 && hasNewTagIdsInDraft) {
             if (window.toastWarning) {
-                toastWarning("Private posts cannot include tagged people.");
+                toastWarning("You cannot tag people on a private post.");
             }
         }
         
@@ -567,6 +596,11 @@
         const normalizedKeyword = (keyword || "").trim();
         if (normalizedKeyword.length < 1) {
             this.hidePostTagResults();
+            return;
+        }
+
+        if (Number(this.selectedPrivacy) === 2) {
+            this.renderPostTagEmptyState("Tagging is unavailable for private posts");
             return;
         }
 

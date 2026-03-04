@@ -57,6 +57,22 @@ const cpGetPostTagSearchDebounceMs = () =>
   window.APP_CONFIG?.POST_TAG_SEARCH_DEBOUNCE_MS || 300;
 const cpGetDefaultAvatar = () =>
   window.APP_CONFIG?.DEFAULT_AVATAR || "assets/images/default-avatar.jpg";
+const cpGetPostTagErrorToastMaxLength = () =>
+  window.APP_CONFIG?.POST_TAG_ERROR_TOAST_MAX_LENGTH || 220;
+
+function cpFormatPostTagErrorMessage(message) {
+  const normalized = String(message || "").trim();
+  if (!normalized) {
+    return "Failed to create post. Please try again.";
+  }
+
+  const maxLength = cpGetPostTagErrorToastMaxLength();
+  if (!Number.isFinite(maxLength) || maxLength <= 0 || normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, Math.max(1, maxLength - 1)).trimEnd()}…`;
+}
 
 // Emoji picker instance
 
@@ -1076,6 +1092,11 @@ async function cpSearchPostTagAccounts(keyword) {
     return;
   }
 
+  if (Number(selectedPrivacy) === 2) {
+    cpRenderPostTagEmptyState("Tagging is unavailable for private posts");
+    return;
+  }
+
   if (!window.API?.Accounts?.searchPostTagAccounts) {
     cpRenderPostTagEmptyState("Search is unavailable");
     return;
@@ -1513,7 +1534,7 @@ function selectPrivacy(privacy) {
 
   if (selectedPrivacy === 2 && cpTagSelectedAccounts.length > 0) {
     if (window.toastWarning) {
-      toastWarning("Private posts cannot include tagged people.");
+      toastWarning("You cannot tag people on a private post.");
     }
   }
 
@@ -1588,6 +1609,13 @@ async function submitPost() {
   }
 
   const taggedAccountIds = cpGetSelectedPostTagAccountIds();
+  if (Number(selectedPrivacy) === 2 && taggedAccountIds.length > 0) {
+    if (window.toastWarning) {
+      toastWarning("You cannot tag people on a private post.");
+    }
+    return;
+  }
+
   taggedAccountIds.forEach((accountId) => {
     formData.append("TaggedAccountIds", accountId);
   });
@@ -1733,12 +1761,17 @@ async function submitPost() {
           errText = errJson.message || errJson.title;
         }
       } catch (_) {}
-      if (window.toastError) toastError(errText);
+      if (window.toastError) toastError(cpFormatPostTagErrorMessage(errText));
     }
   } catch (err) {
     console.error("submitPost error:", err);
-    if (window.toastError)
-      toastError("Failed to create post. Please try again.");
+    if (window.toastError) {
+      toastError(
+        cpFormatPostTagErrorMessage(
+          err?.message || "Failed to create post. Please try again.",
+        ),
+      );
+    }
   } finally {
     hideGlobalLoader();
     setLoadingState(false);
