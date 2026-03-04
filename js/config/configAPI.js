@@ -652,11 +652,18 @@
         keyword = "",
         limit = window.APP_CONFIG?.POST_TAG_SEARCH_LIMIT || 10,
         excludeAccountIds = [],
+        privacy = null,
       ) => {
         const safeKeyword =
           keyword === null || keyword === undefined ? "" : String(keyword);
         const safeLimit = Number.isFinite(limit) ? limit : 10;
-        const baseUrl = `/Accounts/search/post-tag?keyword=${encodeURIComponent(safeKeyword)}&limit=${safeLimit}`;
+        let baseUrl = `/Accounts/search/post-tag?keyword=${encodeURIComponent(safeKeyword)}&limit=${safeLimit}`;
+        const hasPrivacy =
+          privacy !== null && privacy !== undefined && String(privacy).trim() !== "";
+        const safePrivacy = hasPrivacy ? Number(privacy) : NaN;
+        if (Number.isInteger(safePrivacy) && safePrivacy >= 0) {
+          baseUrl += `&privacy=${safePrivacy}`;
+        }
         return apiFetch(
           appendArrayQuery(baseUrl, "excludeAccountIds", excludeAccountIds),
         );

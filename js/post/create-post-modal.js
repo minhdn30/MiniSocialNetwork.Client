@@ -1098,6 +1098,7 @@ async function cpSearchPostTagAccounts(keyword) {
       normalizedKeyword,
       cpGetPostTagSearchLimit(),
       excludeAccountIds,
+      selectedPrivacy,
     );
 
     if (requestSequence !== cpTagSearchRequestSequence) return;
@@ -1510,6 +1511,12 @@ function selectPrivacy(privacy) {
   selectedPrivacy = privacy;
   updatePrivacyUI(privacy);
 
+  if (selectedPrivacy === 2 && cpTagSelectedAccounts.length > 0) {
+    if (window.toastWarning) {
+      toastWarning("Private posts cannot include tagged people.");
+    }
+  }
+
   const dropdown = document.getElementById("privacyDropdown");
   if (dropdown) {
     dropdown.classList.remove("show");
@@ -1517,6 +1524,11 @@ function selectPrivacy(privacy) {
 
   if (window.lucide) {
     lucide.createIcons();
+  }
+
+  const input = document.getElementById("postTagSearchInput");
+  if (input && document.activeElement === input) {
+    cpSchedulePostTagSearch((input.value || "").trim(), { immediate: true });
   }
 }
 
@@ -1714,10 +1726,12 @@ async function submitPost() {
     } else if (res.status === 401) {
       if (window.toastError) toastError("Unauthorized. Please login again.");
     } else {
-      let errText = `Failed to create post (status ${res.status})`;
+      let errText = "Failed to create post. Please try again.";
       try {
         const errJson = await res.json();
-        if (errJson && errJson.message) errText = errJson.message;
+        if (errJson?.message || errJson?.title) {
+          errText = errJson.message || errJson.title;
+        }
       } catch (_) {}
       if (window.toastError) toastError(errText);
     }

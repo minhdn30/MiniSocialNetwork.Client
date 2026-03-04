@@ -88,6 +88,7 @@ window.EmojiUtils = {
     const allPickers = document.querySelectorAll(`
             .detail-emoji-picker.show, 
             .reply-emoji-picker-container.show, 
+            .post-emoji-picker-container.show,
             .edit-emoji-picker-container.show, 
             .chat-emoji-picker-container.show,
             .chat-window-emoji-container.show,

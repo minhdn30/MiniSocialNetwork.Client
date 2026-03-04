@@ -633,6 +633,7 @@ function performClosePostDetail() {
     const postIdToClean = currentPostId;
     currentPostId = null;
     window.currentPostId = null;
+    window.currentPostDetailData = null;
 
     // Leave SignalR post group (experimental feature)
     if (postIdToClean && window.PostHub) {
@@ -810,6 +811,8 @@ window.navigateToPost = navigateToPost;
 
 // Reset View
 function resetPostDetailView() {
+    window.currentPostDetailData = null;
+
     // Hide navigation buttons on reset
     const prevBtn = document.getElementById('postNavPrev');
     const nextBtn = document.getElementById('postNavNext');
@@ -957,6 +960,7 @@ function renderPostDetail(post, navigateDirection = null) {
     
     // Store createdAt for sync
     currentPostCreatedAt = post.createdAt;
+    window.currentPostDetailData = post;
     
     // Store privacy info for realtime checks
     window.currentPostOwnerId = post.owner.accountId;
@@ -1299,7 +1303,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.EmojiUtils) {
         // Broaden selectors to cover both main post detail and inline replies
         window.EmojiUtils.setupClickOutsideHandler(
-            '.detail-emoji-picker, .reply-emoji-picker-container, .edit-emoji-picker-container', 
+            '.detail-emoji-picker, .reply-emoji-picker-container, .post-emoji-picker-container, .edit-emoji-picker-container', 
             '.emoji-trigger, #editPostEmojiBtn'
         );
     }

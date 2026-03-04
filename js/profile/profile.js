@@ -1668,34 +1668,13 @@
       loadArchivedStories();
     } else {
       // Show placeholder
-      const iconMap = {
-        reels: "clapperboard",
-        tagged: "user-square",
-        saved: "bookmark",
-      };
-      const labels = {
-        reels: "Reels",
-        tagged: "Tagged",
-        saved: "Saved",
-      };
-
-      grid.classList.add("placeholder-mode");
-      grid.innerHTML = `
-                <div class="profile-tab-placeholder">
-                    <div class="placeholder-icon-circle">
-                        <i data-lucide="${iconMap[normalizedTab]}"></i>
-                    </div>
-                    <h2>${labels[normalizedTab]} coming soon</h2>
-                    <p>We're working on ${labels[normalizedTab].toLowerCase()} feature. It will be available in a future update.</p>
-                </div>
-            `;
+      renderTabPlaceholder(normalizedTab);
       if (loader) loader.style.display = "none";
       isLoading = false;
       isSavedPostsLoading = false;
       isArchivedStoriesLoading = false;
       unlockGridHeightAfterTabRender(grid);
       applyPendingTabScrollRestore();
-      if (window.lucide) lucide.createIcons();
     }
   }
 
@@ -1765,15 +1744,19 @@
       )
         .toString()
         .trim();
-      const nextCursorPostId = (
-        nextCursor?.postId ||
-        nextCursor?.PostId ||
-        ""
-      )
+      const nextCursorPostId = (nextCursor?.postId || nextCursor?.PostId || "")
         .toString()
         .trim();
 
       // console.log(`[Profile] Rendering ${items.length} posts for ${fetchForId}`);
+      if (isFirstCursorRequest && items.length === 0) {
+        hasMore = false;
+        postsCursorCreatedAt = null;
+        postsCursorPostId = null;
+        renderTabPlaceholder(PROFILE_POSTS_TAB);
+        return;
+      }
+
       renderPosts(items, { replace: isFirstCursorRequest });
 
       hasMore = Boolean(nextCursorCreatedAt && nextCursorPostId);
@@ -1795,22 +1778,81 @@
     }
   }
 
-  function renderSavedPostsEmptyState() {
+  function renderTabPlaceholder(tabName) {
     const grid = document.getElementById("profile-posts-grid");
     if (!grid) return;
+
+    const isOwner = isCurrentUserProfile();
+
+    const ownerConfig = {
+      [PROFILE_POSTS_TAB]: {
+        icon: "grid",
+        title: "No posts yet",
+        desc: "When you share photos, they will appear on your profile.",
+      },
+      [PROFILE_TAGGED_TAB]: {
+        icon: "user-square",
+        title: "No tagged posts",
+        desc: "When people tag you in posts, they'll appear here.",
+      },
+      [PROFILE_SAVED_TAB]: {
+        icon: "bookmark",
+        title: "No saved posts yet",
+        desc: "Posts you save will appear here.",
+      },
+      [PROFILE_ARCHIVED_STORIES_TAB]: {
+        icon: "archive",
+        title: "No archived stories",
+        desc: "Your expired stories will appear here.",
+      },
+      [PROFILE_REELS_TAB]: {
+        icon: "clapperboard",
+        title: "Reels coming soon",
+        desc: "We're working on reels feature. It will be available in a future update.",
+      },
+    };
+
+    const visitorConfig = {
+      [PROFILE_POSTS_TAB]: {
+        icon: "grid",
+        title: "No posts yet",
+        desc: "This user hasn't shared any posts.",
+      },
+      [PROFILE_TAGGED_TAB]: {
+        icon: "user-square",
+        title: "No tagged posts",
+        desc: "No posts with this user tagged.",
+      },
+      [PROFILE_REELS_TAB]: {
+        icon: "clapperboard",
+        title: "Reels coming soon",
+        desc: "We're working on reels feature. It will be available in a future update.",
+      },
+    };
+
+    const configMap = isOwner ? ownerConfig : visitorConfig;
+    const config = configMap[tabName] || {
+      icon: "info",
+      title: "Nothing here yet",
+      desc: "Content will appear here when available.",
+    };
 
     grid.classList.add("placeholder-mode");
     grid.innerHTML = `
       <div class="profile-tab-placeholder">
         <div class="placeholder-icon-circle">
-          <i data-lucide="bookmark"></i>
+          <i data-lucide="${config.icon}"></i>
         </div>
-        <h2>No saved posts yet</h2>
-        <p>Posts you save will appear here.</p>
+        <h2>${config.title}</h2>
+        <p>${config.desc}</p>
       </div>
     `;
 
     if (window.lucide) lucide.createIcons();
+  }
+
+  function renderSavedPostsEmptyState() {
+    renderTabPlaceholder(PROFILE_SAVED_TAB);
   }
 
   async function loadSavedPosts() {
@@ -1844,7 +1886,8 @@
         throw new Error("Saved posts API is unavailable");
       }
 
-      const isFirstCursorRequest = !savedPostsCursorCreatedAt || !savedPostsCursorPostId;
+      const isFirstCursorRequest =
+        !savedPostsCursorCreatedAt || !savedPostsCursorPostId;
       const res = await API.Posts.getSaved(
         SAVED_POSTS_PAGE_SIZE,
         savedPostsCursorCreatedAt,
@@ -1871,11 +1914,7 @@
       )
         .toString()
         .trim();
-      const nextCursorPostId = (
-        nextCursor?.postId ||
-        nextCursor?.PostId ||
-        ""
-      )
+      const nextCursorPostId = (nextCursor?.postId || nextCursor?.PostId || "")
         .toString()
         .trim();
 
@@ -1894,7 +1933,9 @@
       renderPosts(items, { replace: isFirstCursorRequest });
 
       hasMoreSavedPosts = Boolean(nextCursorCreatedAt && nextCursorPostId);
-      savedPostsCursorCreatedAt = hasMoreSavedPosts ? nextCursorCreatedAt : null;
+      savedPostsCursorCreatedAt = hasMoreSavedPosts
+        ? nextCursorCreatedAt
+        : null;
       savedPostsCursorPostId = hasMoreSavedPosts ? nextCursorPostId : null;
 
       return items;
@@ -1966,6 +2007,12 @@
         grid.innerHTML = "";
         archivedStoryItems = [];
         archivedStoryIdSet.clear();
+      }
+
+      if (archivedStoriesPage === 1 && items.length === 0) {
+        hasMoreArchivedStories = false;
+        renderTabPlaceholder(PROFILE_ARCHIVED_STORIES_TAB);
+        return [];
       }
 
       const appendedItems = mergeArchivedStories(items);
@@ -2140,10 +2187,12 @@
     const normalizedPostId = (postId || "").toString().trim().toLowerCase();
     if (!normalizedPostId) return;
 
-    const targetItem = Array.from(grid.querySelectorAll(".profile-grid-item")).find(
+    const targetItem = Array.from(
+      grid.querySelectorAll(".profile-grid-item"),
+    ).find(
       (item) =>
-        ((item.dataset.postId || "").toString().trim().toLowerCase() ===
-        normalizedPostId),
+        (item.dataset.postId || "").toString().trim().toLowerCase() ===
+        normalizedPostId,
     );
 
     if (targetItem) {
@@ -2152,8 +2201,8 @@
 
     profilePostIds = profilePostIds.filter(
       (item) =>
-        ((item.postId || "").toString().trim().toLowerCase() !==
-        normalizedPostId),
+        (item.postId || "").toString().trim().toLowerCase() !==
+        normalizedPostId,
     );
 
     if (activeTab !== PROFILE_SAVED_TAB) return;
@@ -3239,7 +3288,10 @@
     const isMe =
       accountId.toLowerCase() === myId?.toLowerCase() ||
       accountId.toLowerCase() === myUsername?.toLowerCase();
-    const normalizedAccountId = (accountId || "").toString().trim().toLowerCase();
+    const normalizedAccountId = (accountId || "")
+      .toString()
+      .trim()
+      .toLowerCase();
 
     if (window.PageCache && !isMe) {
       // Clear all possible profile keys for this account

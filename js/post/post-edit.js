@@ -29,6 +29,7 @@
         hasMedia: false,
         isInitialized: false,
         tagSelectedAccounts: [],
+        originalTagAccountIds: [],
         tagSearchResults: [],
         tagSearchDebounceTimer: null,
         tagSearchRequestSequence: 0,
@@ -114,6 +115,7 @@
         this.setupListeners();
         this.ensurePostTagBindings();
         this.resetPostTagPicker();
+        this.seedPostTagPicker(this.getInitialPostTagAccounts());
         
         this.updateCharCount();
         this.selectPrivacy(this.selectedPrivacy);
@@ -236,16 +238,37 @@
         if (window.LoadingUtils) LoadingUtils.setButtonLoading(saveBtn, true);
 
         try {
+            const currentTagAccountIds = this.getSelectedPostTagAccountIds();
+            const originalTagAccountIds = Array.from(
+                new Set((this.originalTagAccountIds || []).filter(Boolean)),
+            );
+            const addNewTagIds = currentTagAccountIds.filter(
+                (id) => !originalTagAccountIds.includes(id),
+            );
+            const removeTagIds = originalTagAccountIds.filter(
+                (id) => !currentTagAccountIds.includes(id),
+            );
+
             const data = {
                 content: content,
                 privacy: parseInt(this.selectedPrivacy)
             };
+            if (addNewTagIds.length > 0) {
+                data.addNewTagIds = addNewTagIds;
+            }
+            if (removeTagIds.length > 0) {
+                data.removeTagIds = removeTagIds;
+            }
 
             const res = await API.Posts.updateContent(this.currentEditingPostId, data);
             
             if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.message || "Failed to update post");
+                let errorMessage = "Failed to update post";
+                try {
+                    const errorData = await res.json();
+                    errorMessage = errorData?.message || errorData?.title || errorMessage;
+                } catch (_) {}
+                throw new Error(errorMessage);
             }
 
             const updatedPost = await res.json();
@@ -254,6 +277,18 @@
             
             // Update UI immediately
             this.updateUI(updatedPost);
+
+            this.originalTagAccountIds = currentTagAccountIds;
+            if (window.currentPostDetailData) {
+                window.currentPostDetailData.taggedAccounts = this.tagSelectedAccounts.map(
+                    (account) => ({
+                        accountId: account.accountId,
+                        username: account.username || "",
+                        fullName: account.fullName || "",
+                        avatarUrl: account.avatarUrl || "",
+                    }),
+                );
+            }
             
             // Return to view mode
             this.cancelEditPost();
@@ -328,6 +363,12 @@
 
     PostEdit.selectPrivacy = function(privacy) {
         this.selectedPrivacy = parseInt(privacy);
+
+        if (this.selectedPrivacy === 2 && this.tagSelectedAccounts.length > 0) {
+            if (window.toastWarning) {
+                toastWarning("Private posts cannot include tagged people.");
+            }
+        }
         
         const iconEl = document.getElementById("editPrivacyIcon");
         const textEl = document.getElementById("editPrivacyText");
@@ -354,6 +395,11 @@
         // Close dropdown
         const dropdown = document.getElementById("editPrivacyDropdown");
         if (dropdown) dropdown.classList.remove("show");
+
+        const input = document.getElementById("editPostTagSearchInput");
+        if (input && document.activeElement === input) {
+            this.schedulePostTagSearch((input.value || "").trim(), { immediate: true });
+        }
     };
 
     /**
@@ -535,6 +581,7 @@
                 normalizedKeyword,
                 epGetPostTagSearchLimit(),
                 excludeAccountIds,
+                this.selectedPrivacy,
             );
 
             if (requestSequence !== this.tagSearchRequestSequence) return;
@@ -787,6 +834,7 @@
 
     PostEdit.resetPostTagPicker = function() {
         this.tagSelectedAccounts = [];
+        this.originalTagAccountIds = [];
         this.tagSearchResults = [];
         this.tagActiveResultIndex = -1;
         this.tagSearchRequestSequence++;
@@ -809,6 +857,45 @@
         this.updatePostTagCounter();
         this.hidePostTagResults();
         this.refreshPostTagInputState();
+    };
+
+    PostEdit.getInitialPostTagAccounts = function() {
+        const rawTaggedAccounts = Array.isArray(window.currentPostDetailData?.taggedAccounts)
+            ? window.currentPostDetailData.taggedAccounts
+            : [];
+
+        return rawTaggedAccounts
+            .map((raw) => this.normalizePostTagAccount(raw))
+            .filter((account) => account && account.accountId)
+            .slice(0, epGetPostTagMaxCount());
+    };
+
+    PostEdit.seedPostTagPicker = function(accounts) {
+        const normalizedAccounts = Array.isArray(accounts)
+            ? accounts
+                .map((raw) => this.normalizePostTagAccount(raw))
+                .filter((account) => account && account.accountId)
+            : [];
+
+        this.tagSelectedAccounts = normalizedAccounts;
+        this.originalTagAccountIds = normalizedAccounts
+            .map((account) => account.accountId)
+            .filter(Boolean);
+
+        this.renderPostTagChips();
+        this.updatePostTagCounter();
+        this.hidePostTagResults();
+        this.refreshPostTagInputState();
+    };
+
+    PostEdit.getSelectedPostTagAccountIds = function() {
+        return Array.from(
+            new Set(
+                this.tagSelectedAccounts
+                    .map((account) => account.accountId)
+                    .filter(Boolean),
+            ),
+        );
     };
 
     /**
@@ -864,8 +951,19 @@
         if (!this.currentEditingPostId) return false;
         const textarea = document.getElementById("editPostTextarea");
         const currentContent = textarea ? textarea.value : "";
-        
-        return currentContent !== this.originalContent || this.selectedPrivacy !== this.originalPrivacy;
+        if (currentContent !== this.originalContent || this.selectedPrivacy !== this.originalPrivacy) {
+            return true;
+        }
+
+        const currentTagIds = this.getSelectedPostTagAccountIds();
+        const originalTagIds = Array.from(
+            new Set((this.originalTagAccountIds || []).filter(Boolean)),
+        );
+        if (currentTagIds.length !== originalTagIds.length) {
+            return true;
+        }
+
+        return currentTagIds.some((id) => !originalTagIds.includes(id));
     };
 
     // Global Exposure
