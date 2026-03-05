@@ -151,6 +151,7 @@
     MAX_COMMENT_INPUT_LENGTH: 500, // Số ký tự tối đa khi nhập comment/reply
     MENTION_SEARCH_LIMIT: 5, // Max accounts returned per mention search request in comment/reply
     MENTION_SEARCH_DEBOUNCE_MS: 250, // Debounce delay for mention search popup in comment/reply
+    CHAT_GROUP_ALL_MENTION_KEYWORD: "all", // Keyword for group-wide mention in chat (without @)
     INTERACTIONS_PAGE_SIZE: 10, // Số lượng người react load mỗi lần
     PROFILE_POSTS_PAGE_SIZE: 12, // Số lượng post load mỗi lần ở trang cá nhân (nên là bội số của 3)
     PROFILE_TAGGED_POSTS_PAGE_SIZE: 12, // Số lượng tagged posts load mỗi lần ở tab Tagged

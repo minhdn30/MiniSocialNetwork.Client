@@ -4476,7 +4476,7 @@ const ChatWindow = {
         ? Math.floor(Number(limit))
         : Number(window.APP_CONFIG?.MENTION_SEARCH_LIMIT) || 5;
 
-    return members
+    const rankedMembers = members
       .map((member) => ({
         ...member,
         _matchScore: this.buildMentionMatchScore(member, normalizedKeyword),
@@ -4488,6 +4488,43 @@ const ChatWindow = {
       })
       .slice(0, safeLimit)
       .map(({ _matchScore, ...member }) => member);
+
+    if (this.shouldIncludeAllMentionOption(normalizedKeyword)) {
+      return [this.buildAllMentionOption(), ...rankedMembers].slice(0, safeLimit);
+    }
+
+    return rankedMembers;
+  },
+
+  shouldIncludeAllMentionOption(keyword) {
+    const normalizedKeyword = this.normalizeMentionText(keyword);
+    const allKeyword = this.resolveGroupAllMentionKeyword();
+    if (!normalizedKeyword || !allKeyword) return false;
+    return (
+      normalizedKeyword === allKeyword ||
+      (normalizedKeyword.length >= 2 && allKeyword.startsWith(normalizedKeyword))
+    );
+  },
+
+  buildAllMentionOption() {
+    const allKeyword = this.resolveGroupAllMentionKeyword();
+    return {
+      accountId: "mention-all",
+      username: allKeyword || "all",
+      fullName: "Mention everyone",
+      nickname: "",
+      avatarUrl: window.APP_CONFIG?.DEFAULT_AVATAR || "",
+      isAllMention: true,
+    };
+  },
+
+  resolveGroupAllMentionKeyword() {
+    const rawKeyword = (window.APP_CONFIG?.CHAT_GROUP_ALL_MENTION_KEYWORD || "all")
+      .toString()
+      .trim()
+      .replace(/^@+/, "")
+      .toLowerCase();
+    return rawKeyword || "all";
   },
 
   getWindowGroupMentionMembers(conversationId) {
@@ -4686,7 +4723,10 @@ const ChatWindow = {
         ? event.currentTarget
         : document.querySelector(`#chat-box-${id} .chat-input-field`);
 
-    if (event.key === "Enter" && window.MentionPicker?.isOpenFor?.(inputField)) {
+    const shouldHandleMentionEnter =
+      window.MentionPicker?.hasSelectableItemFor?.(inputField) ??
+      window.MentionPicker?.isOpenFor?.(inputField);
+    if (event.key === "Enter" && shouldHandleMentionEnter) {
       return;
     }
 

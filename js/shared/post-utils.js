@@ -125,10 +125,22 @@
       const profileTarget = segment.username || segment.accountId || "";
       const mentionAnchor = document.createElement("a");
       mentionAnchor.className = "comment-mention-link";
-      mentionAnchor.textContent = segment.text || "";
       mentionAnchor.href = PostUtils.buildProfileHash(profileTarget);
       mentionAnchor.dataset.accountId = segment.accountId || "";
       mentionAnchor.dataset.username = segment.username || "";
+
+      const mentionPrefix = document.createElement("span");
+      mentionPrefix.className = "comment-mention-prefix";
+      mentionPrefix.textContent = "@";
+
+      const mentionName = document.createElement("span");
+      mentionName.className = "comment-mention-name";
+      mentionName.textContent =
+        (segment.username || "").toString().trim() ||
+        (segment.text || "").toString().replace(/^@+/, "");
+
+      mentionAnchor.appendChild(mentionPrefix);
+      mentionAnchor.appendChild(mentionName);
       mentionAnchor.addEventListener("click", (event) => {
         event.stopPropagation();
       });
