@@ -487,11 +487,6 @@ body.is-dragging-chat .chat-box * {
   transform: scale(1.1);
 }
 
-.chat-bubble-close:hover i,
-.chat-bubble-close:hover svg {
-  color: white !important;
-}
-
 .chat-bubble-unread {
   position: absolute;
   top: -2px;
@@ -500,14 +495,16 @@ body.is-dragging-chat .chat-box * {
   color: white;
   font-size: 10px;
   font-weight: 700;
-  min-width: 18px;
-  height: 18px;
-  border-radius: 9px;
-  display: flex;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 20px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 4px;
+  padding: 0 5px 1px 5px;
+  line-height: 1;
   border: 2px solid var(--bg-primary);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
   z-index: 1;
 }
 

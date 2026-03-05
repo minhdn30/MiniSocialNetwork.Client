@@ -1523,7 +1523,7 @@ const ChatWindow = {
       badge.className = "chat-bubble-unread";
       chat.bubbleElement.appendChild(badge);
     }
-    badge.textContent = chat.unreadCount > 9 ? "9+" : chat.unreadCount;
+    badge.textContent = chat.unreadCount > 99 ? "99+" : chat.unreadCount;
   },
 
   markInactiveUnread(conversationId, chatObj = null) {
@@ -2853,7 +2853,7 @@ const ChatWindow = {
     if (unreadCount > 0) {
       const badge = document.createElement("div");
       badge.className = "chat-bubble-unread";
-      badge.textContent = unreadCount > 9 ? "9+" : unreadCount;
+      badge.textContent = unreadCount > 99 ? "99+" : unreadCount;
       bubble.appendChild(badge);
     }
 

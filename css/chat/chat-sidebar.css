@@ -766,14 +766,16 @@ body.chat-sidebar-open #sidebar.expanded ~ .main-content {
   color: white;
   font-size: 11px;
   font-weight: 700;
-  min-width: 18px;
-  height: 18px;
-  border-radius: 10px;
-  display: flex;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 20px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 4px;
+  padding: 0 6px 1px 6px;
+  line-height: 1;
   flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(var(--accent-primary-rgb, 0, 0, 0), 0.2);
 }
 
 .chat-item.unread .chat-name {

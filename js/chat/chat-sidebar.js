@@ -1479,7 +1479,7 @@ const ChatSidebar = {
                         </div>
                     </div>
                     <div class="chat-item-end">
-                        ${unread ? `<div class="chat-unread-badge">${conv.unreadCount > 9 ? "9+" : conv.unreadCount}</div>` : seenHtml}
+                        ${unread ? `<div class="chat-unread-badge">${conv.unreadCount > 99 ? "99+" : conv.unreadCount}</div>` : seenHtml}
                     </div>
                 </div>
             `;
@@ -1939,11 +1939,11 @@ const ChatSidebar = {
       const newCount = conv ? conv.unreadCount : 0;
       if (newCount > 0) {
         if (badge) {
-          badge.textContent = newCount > 9 ? "9+" : newCount;
+          badge.textContent = newCount > 99 ? "99+" : newCount;
         } else {
           badge = document.createElement("div");
           badge.className = "chat-unread-badge";
-          badge.textContent = newCount > 9 ? "9+" : newCount;
+          badge.textContent = newCount > 99 ? "99+" : newCount;
           item.appendChild(badge);
         }
       } else if (badge && !isMe) {

@@ -223,15 +223,19 @@
   background: var(--accent-primary);
   color: #ffffff;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   min-width: 20px;
   height: 20px;
-  padding: 0 5px;
-  border-radius: 50%;
-  display: flex;
+  padding: 0 6px 1px 6px; /* Added 1px bottom padding to lift text */
+  border-radius: 20px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  line-height: 1;
+  box-shadow: 0 2px 5px rgba(var(--accent-primary-rgb, 0, 0, 0), 0.3);
   transition: all var(--transition-fast);
+  z-index: 2;
+  pointer-events: none;
 }
 
 /* When sidebar is collapsed: shrink badge to a small dot at top-right of icon */

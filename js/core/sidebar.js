@@ -206,7 +206,7 @@ function setGlobalMessageBadge(count) {
   const badge = document.getElementById("messages-badge");
   if (!badge) return;
   if (count > 0) {
-    badge.textContent = count > 9 ? "9+" : count;
+    badge.textContent = count > 99 ? "99+" : count;
     badge.style.display = "";
   } else {
     badge.textContent = "";
