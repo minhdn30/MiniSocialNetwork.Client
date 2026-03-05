@@ -4,7 +4,21 @@
   const mentionDropdownClass = "mention-picker-dropdown";
   const mentionDropdownShowClass = "show";
   const mentionDropdownBelowClass = "show-below";
+  const mentionDropdownChatThemeClass = "mention-picker-chat-theme";
   const mentionInputHandlerFlag = "mentionPickerBound";
+  const mentionChatThemeVars = [
+    "--chat-theme-surface",
+    "--chat-theme-surface-alt",
+    "--chat-theme-border",
+    "--chat-theme-action-color",
+    "--chat-theme-action-hover-bg",
+    "--chat-theme-system-text",
+    "--chat-theme-scrollbar-thumb",
+    "--chat-theme-scrollbar-hover",
+    "--chat-theme-input-wrapper-bg",
+    "--chat-theme-input-border",
+    "--chat-theme-accent",
+  ];
   let mentionCleanupTimerId = 0;
 
   function normalizeUsername(value) {
@@ -93,18 +107,36 @@
     return `${safeQuery}|${safePrivacy}|${safeOwnerId}`;
   }
 
-  function buildMentionItemHtml(item) {
+  function buildMentionItemHtml(item, state) {
+    const customRenderItem = state?.options?.renderItem;
+    if (typeof customRenderItem === "function") {
+      try {
+        const customHtml = customRenderItem(item, {
+          escapeHtml,
+          normalizeUsername,
+          normalizeAccountId,
+        });
+        if (typeof customHtml === "string" && customHtml.trim().length > 0) {
+          return customHtml;
+        }
+      } catch (_) {
+        // fallback to default renderer
+      }
+    }
+
     const username = normalizeUsername(item?.username || item?.userName || "");
     const fullName = (item?.fullName || item?.FullName || "").toString().trim();
+    const nickname = (item?.nickname || item?.Nickname || "").toString().trim();
     const avatarUrl =
       (item?.avatarUrl || item?.AvatarUrl || global.APP_CONFIG?.DEFAULT_AVATAR || "")
         .toString()
         .trim();
 
-    const nameForDisplay = username || fullName || "unknown";
+    const nameForDisplay = username || "unknown";
+    const secondaryLabel = nickname || fullName || username || "";
     const safeAvatar = escapeHtml(avatarUrl);
     const safePrimary = escapeHtml(nameForDisplay);
-    const safeSecondary = escapeHtml(fullName || username || "");
+    const safeSecondary = escapeHtml(secondaryLabel);
 
     return `
       <div class="mention-picker-item-main">
@@ -117,6 +149,40 @@
     `;
   }
 
+  function normalizeSearchItems(payload) {
+    const source = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.items)
+        ? payload.items
+        : Array.isArray(payload?.Items)
+          ? payload.Items
+          : [];
+
+    const normalized = source
+      .map((item) => ({
+        accountId: normalizeAccountId(item?.accountId || item?.AccountId),
+        username: normalizeUsername(item?.username || item?.userName || ""),
+        fullName: (item?.fullName || item?.FullName || "").toString().trim(),
+        nickname: (item?.nickname || item?.Nickname || "").toString().trim(),
+        avatarUrl:
+          (item?.avatarUrl || item?.AvatarUrl || global.APP_CONFIG?.DEFAULT_AVATAR || "")
+            .toString()
+            .trim(),
+      }))
+      .filter((item) => item.accountId && item.username);
+
+    const deduped = [];
+    const seenAccountIds = new Set();
+    normalized.forEach((item) => {
+      const key = item.accountId.toLowerCase();
+      if (seenAccountIds.has(key)) return;
+      seenAccountIds.add(key);
+      deduped.push(item);
+    });
+
+    return deduped;
+  }
+
   function escapeHtml(value) {
     return (value || "")
       .toString()
@@ -127,9 +193,74 @@
       .replace(/'/g, "&#39;");
   }
 
+  function resolveThemeTarget(state) {
+    if (!state || !state.input) return null;
+
+    const customResolver = state.options?.getThemeTarget;
+    if (typeof customResolver === "function") {
+      try {
+        const customTarget = customResolver({
+          input: state.input,
+          mountElement: state.mountElement,
+          state,
+        });
+        if (customTarget instanceof Element) {
+          return customTarget;
+        }
+      } catch (_) {
+        // fall back to auto resolver
+      }
+    }
+
+    const mount = state.mountElement || state.input;
+    if (!(mount instanceof Element) || !mount.closest) return null;
+
+    return (
+      mount.closest(".chat-box, .chat-view, .chat-panel-container") ||
+      mount.closest(".main-content") ||
+      null
+    );
+  }
+
+  function syncDropdownTheme(state, dropdown = null) {
+    if (!state) return;
+    const targetDropdown = dropdown || state.dropdown;
+    if (!targetDropdown) return;
+
+    mentionChatThemeVars.forEach((varName) => {
+      targetDropdown.style.removeProperty(varName);
+    });
+    [...targetDropdown.classList]
+      .filter((className) => className.startsWith("chat-theme-"))
+      .forEach((className) => targetDropdown.classList.remove(className));
+
+    const themeTarget = resolveThemeTarget(state);
+    if (!themeTarget) {
+      targetDropdown.classList.remove(mentionDropdownChatThemeClass);
+      return;
+    }
+
+    targetDropdown.classList.add(mentionDropdownChatThemeClass);
+    const computed = getComputedStyle(themeTarget);
+    mentionChatThemeVars.forEach((varName) => {
+      const value = computed.getPropertyValue(varName);
+      if (value && value.trim()) {
+        targetDropdown.style.setProperty(varName, value.trim());
+      }
+    });
+
+    const themeClass = [...themeTarget.classList].find((className) =>
+      className.startsWith("chat-theme-"),
+    );
+    if (themeClass) {
+      targetDropdown.classList.add(themeClass);
+    }
+  }
+
   function ensureDropdownElement(state) {
     if (!state) return null;
     if (state.dropdown && document.body.contains(state.dropdown)) {
+      syncDropdownTheme(state, state.dropdown);
       return state.dropdown;
     }
 
@@ -148,6 +279,7 @@
 
     document.body.appendChild(dropdown);
     state.dropdown = dropdown;
+    syncDropdownTheme(state, dropdown);
     return dropdown;
   }
 
@@ -191,6 +323,127 @@
 
     mentionPickerStateMap.set(input, state);
     return state;
+  }
+
+  function readInputValue(state) {
+    if (!state || !state.input) return "";
+
+    const customGetter = state.options?.getValue;
+    if (typeof customGetter === "function") {
+      try {
+        return (customGetter(state.input, state) ?? "").toString();
+      } catch (_) {
+        // fallback to default getter
+      }
+    }
+
+    const input = state.input;
+    if (typeof input.value === "string") {
+      return input.value;
+    }
+    if (input.isContentEditable) {
+      return (input.innerText || input.textContent || "").toString();
+    }
+    return "";
+  }
+
+  function writeInputValue(state, nextValue) {
+    if (!state || !state.input) return;
+    const value = (nextValue ?? "").toString();
+
+    const customSetter = state.options?.setValue;
+    if (typeof customSetter === "function") {
+      try {
+        customSetter(state.input, value, state);
+        return;
+      } catch (_) {
+        // fallback to default setter
+      }
+    }
+
+    const input = state.input;
+    if (typeof input.value === "string") {
+      input.value = value;
+      return;
+    }
+    if (input.isContentEditable) {
+      input.textContent = value;
+    }
+  }
+
+  function readCursorIndex(state) {
+    if (!state || !state.input) return 0;
+
+    const customGetter = state.options?.getCursor;
+    if (typeof customGetter === "function") {
+      try {
+        const cursorIndex = customGetter(state.input, state);
+        if (Number.isFinite(cursorIndex)) {
+          return Math.max(0, Number(cursorIndex));
+        }
+      } catch (_) {
+        // fallback to default getter
+      }
+    }
+
+    const input = state.input;
+    if (Number.isFinite(input.selectionStart)) {
+      return Math.max(0, Number(input.selectionStart));
+    }
+    return readInputValue(state).length;
+  }
+
+  function writeCursorIndex(state, cursorIndex) {
+    if (!state || !state.input) return;
+
+    const valueLength = readInputValue(state).length;
+    const safeCursor = Math.max(0, Math.min(Number(cursorIndex) || 0, valueLength));
+
+    const customSetter = state.options?.setCursor;
+    if (typeof customSetter === "function") {
+      try {
+        customSetter(state.input, safeCursor, state);
+        return;
+      } catch (_) {
+        // fallback to default setter
+      }
+    }
+
+    const input = state.input;
+    if (typeof input.setSelectionRange === "function") {
+      input.setSelectionRange(safeCursor, safeCursor);
+      return;
+    }
+
+    if (input.isContentEditable && window.getSelection) {
+      const selection = window.getSelection();
+      if (!selection) return;
+      const range = document.createRange();
+      range.selectNodeContents(input);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  }
+
+  function focusInput(state) {
+    if (!state?.input) return;
+
+    const customFocus = state.options?.focus;
+    if (typeof customFocus === "function") {
+      try {
+        customFocus(state.input, state);
+        return;
+      } catch (_) {
+        // fallback to default focus
+      }
+    }
+
+    try {
+      state.input.focus({ preventScroll: true });
+    } catch (_) {
+      state.input.focus();
+    }
   }
 
   function destroyState(state) {
@@ -245,6 +498,7 @@
     if (!state || !state.input || !state.input.isConnected) return;
     const dropdown = ensureDropdownElement(state);
     if (!dropdown) return;
+    syncDropdownTheme(state, dropdown);
     dropdown.classList.add(mentionDropdownShowClass);
     state.isOpen = true;
     mentionOpenStateSet.add(state);
@@ -338,6 +592,7 @@
     if (!state || !placement) return;
     const dropdown = ensureDropdownElement(state);
     if (!dropdown) return;
+    syncDropdownTheme(state, dropdown);
 
     state.isDropdownAbove = !!placement.isAbove;
     dropdown.classList.toggle(mentionDropdownBelowClass, !state.isDropdownAbove);
@@ -451,7 +706,7 @@
       if (index === state.activeIndex) {
         row.classList.add("active");
       }
-      row.innerHTML = buildMentionItemHtml(item);
+      row.innerHTML = buildMentionItemHtml(item, state);
       row.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -494,20 +749,22 @@
 
     const input = state.input;
     const mentionText = `@${username} `;
-    const before = input.value.slice(0, state.mentionContext.start);
-    const after = input.value.slice(state.mentionContext.end);
+    const inputValue = readInputValue(state);
+    const before = inputValue.slice(0, state.mentionContext.start);
+    const after = inputValue.slice(state.mentionContext.end);
     const nextValue = `${before}${mentionText}${after}`;
 
     state.isSelecting = true;
-    input.value = nextValue;
+    writeInputValue(state, nextValue);
 
     const cursor = before.length + mentionText.length;
-    input.setSelectionRange(cursor, cursor);
+    writeCursorIndex(state, cursor);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
     closeDropdown(state);
     window.setTimeout(() => {
       state.isSelecting = false;
     }, 0);
-    input.focus({ preventScroll: true });
+    focusInput(state);
   }
 
   function shouldSuspendByInputEventRate(state) {
@@ -531,10 +788,8 @@
   }
 
   function shouldSkipDuplicateInputSnapshot(state, mentionContext) {
-    const currentValue = (state.input?.value || "").toString();
-    const currentCursor = Number.isFinite(state.input?.selectionStart)
-      ? state.input.selectionStart
-      : currentValue.length;
+    const currentValue = readInputValue(state);
+    const currentCursor = readCursorIndex(state);
     const mentionStart = Number.isFinite(mentionContext?.start)
       ? mentionContext.start
       : -1;
@@ -559,7 +814,7 @@
 
     const mentionContext =
       nextMentionContext ||
-      getMentionCandidates(state.input.value, state.input.selectionStart);
+      getMentionCandidates(readInputValue(state), readCursorIndex(state));
     state.mentionContext = mentionContext;
 
     if (!mentionContext || mentionContext.query.length < 1) {
@@ -598,13 +853,50 @@
       return;
     }
 
+    const requestId = ++state.requestId;
+
+    const customSearchFn = state.options?.searchFn;
+    if (typeof customSearchFn === "function") {
+      let customPayload = null;
+      try {
+        customPayload = await customSearchFn({
+          query,
+          limit: getSearchLimit(),
+          searchContext,
+          mentionContext: state.mentionContext,
+          input: state.input,
+        });
+      } catch (_) {
+        closeDropdown(state);
+        return;
+      }
+
+      if (requestId !== state.requestId || !state.input.isConnected) {
+        return;
+      }
+
+      if (customPayload === null) {
+        closeDropdown(state);
+        return;
+      }
+
+      const normalizedCustomItems = normalizeSearchItems(customPayload).slice(
+        0,
+        getSearchLimit(),
+      );
+      state.lastSearchSignature = searchSignature;
+      state.lastResultItems = [...normalizedCustomItems];
+      state.rawItems = normalizedCustomItems;
+      renderItems(state, true);
+      return;
+    }
+
     const searchFn = global.API?.Accounts?.searchPostTagAccounts;
     if (typeof searchFn !== "function") {
       closeDropdown(state);
       return;
     }
 
-    const requestId = ++state.requestId;
     let response = null;
     try {
       response = await searchFn(
@@ -639,18 +931,7 @@
       return;
     }
 
-    const normalizedItems = (Array.isArray(payload) ? payload : [])
-      .map((item) => ({
-        accountId: normalizeAccountId(item?.accountId || item?.AccountId),
-        username: normalizeUsername(item?.username || item?.userName || ""),
-        fullName: (item?.fullName || item?.FullName || "").toString().trim(),
-        avatarUrl:
-          (item?.avatarUrl || item?.AvatarUrl || global.APP_CONFIG?.DEFAULT_AVATAR || "")
-            .toString()
-            .trim(),
-      }))
-      .filter((item) => item.accountId && item.username)
-      .slice(0, getSearchLimit());
+    const normalizedItems = normalizeSearchItems(payload).slice(0, getSearchLimit());
 
     state.lastSearchSignature = searchSignature;
     state.lastResultItems = [...normalizedItems];
@@ -677,8 +958,8 @@
       }
 
       const mentionContext = getMentionCandidates(
-        state.input.value,
-        state.input.selectionStart,
+        readInputValue(state),
+        readCursorIndex(state),
       );
       if (!mentionContext || mentionContext.query.length < 1) {
         closeDropdown(state);
@@ -701,8 +982,8 @@
 
     input.addEventListener("click", () => {
       const mentionContext = getMentionCandidates(
-        state.input.value,
-        state.input.selectionStart,
+        readInputValue(state),
+        readCursorIndex(state),
       );
       if (!mentionContext || mentionContext.query.length < 1) {
         closeDropdown(state);

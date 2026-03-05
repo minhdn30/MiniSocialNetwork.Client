@@ -1131,6 +1131,11 @@ const ChatWindow = {
       sendBtn.onclick = () => this.sendMessage(realId);
     }
 
+    const inputField = root.querySelector(".chat-input-field");
+    if (inputField) {
+      this.attachWindowMentionPicker(inputField);
+    }
+
     this.initScrollListener(realId);
 
     if (chatObj.bubbleElement) {
@@ -2716,6 +2721,11 @@ const ChatWindow = {
     this.openChats.set(conv.conversationId, chatObj);
     this.getRuntimeCtx(conv.conversationId, chatObj);
 
+    const chatInputField = chatBox.querySelector(".chat-input-field");
+    if (chatInputField) {
+      this.attachWindowMentionPicker(chatInputField);
+    }
+
     const fileInput = chatBox.querySelector(
       `#chat-file-input-${conv.conversationId}`,
     );
@@ -4290,6 +4300,326 @@ const ChatWindow = {
     return true;
   },
 
+  attachWindowMentionPicker(inputField) {
+    if (!inputField || !window.MentionPicker) return;
+
+    window.MentionPicker.attach(inputField, {
+      searchFn: ({ query, limit, input }) => {
+        const conversationId = this.resolveWindowMentionConversationId(input);
+        if (!conversationId) return null;
+        return this.searchWindowGroupMentionMembers(conversationId, query, limit);
+      },
+      renderItem: (item, tools = {}) => {
+        const escape =
+          typeof tools.escapeHtml === "function"
+            ? tools.escapeHtml
+            : (value) =>
+                (value || "")
+                  .toString()
+                  .replace(/&/g, "&amp;")
+                  .replace(/</g, "&lt;")
+                  .replace(/>/g, "&gt;")
+                  .replace(/"/g, "&quot;")
+                  .replace(/'/g, "&#39;");
+
+        const username = (item?.username || "").toString().trim();
+        if (!username) return "";
+
+        const nickname = (item?.nickname || "").toString().trim();
+        const fullName = (item?.fullName || item?.FullName || "")
+          .toString()
+          .trim();
+        const avatarUrl = (
+          item?.avatarUrl ||
+          item?.AvatarUrl ||
+          window.APP_CONFIG?.DEFAULT_AVATAR ||
+          ""
+        )
+          .toString()
+          .trim();
+        const secondary = nickname || fullName || username;
+
+        return `
+          <div class="mention-picker-item-main">
+            <img class="mention-picker-avatar" src="${escape(avatarUrl)}" alt="avatar" />
+            <div class="mention-picker-meta">
+              <span class="mention-picker-primary">${escape(username)}</span>
+              <span class="mention-picker-secondary">${escape(secondary)}</span>
+            </div>
+          </div>
+        `;
+      },
+      getValue: (input) => this.getContentEditableText(input),
+      setValue: (input, value) => this.setContentEditableText(input, value),
+      getCursor: (input) => this.getContentEditableCursor(input),
+      setCursor: (input, cursorIndex) =>
+        this.setContentEditableCursor(input, cursorIndex),
+      focus: (input) => {
+        if (!input) return;
+        try {
+          input.focus({ preventScroll: true });
+        } catch (_) {
+          input.focus();
+        }
+      },
+    });
+  },
+
+  resolveWindowMentionConversationId(inputField) {
+    if (!inputField || !inputField.closest) return "";
+    const chatBox = inputField.closest(".chat-box");
+    if (!chatBox) return "";
+
+    const fromDataset = this.normalizeConversationId(chatBox.dataset?.id || "");
+    if (fromDataset) return fromDataset;
+
+    const fromId = (chatBox.id || "").toString().trim().toLowerCase();
+    if (fromId.startsWith("chat-box-")) {
+      return fromId.substring("chat-box-".length);
+    }
+
+    return "";
+  },
+
+  getContentEditableText(inputField) {
+    if (!inputField) return "";
+    return (inputField.innerText || inputField.textContent || "")
+      .toString()
+      .replace(/\r/g, "");
+  },
+
+  setContentEditableText(inputField, value) {
+    if (!inputField) return;
+    inputField.textContent = (value ?? "").toString();
+  },
+
+  getContentEditableCursor(inputField) {
+    if (!inputField || !window.getSelection) {
+      return 0;
+    }
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount <= 0) {
+      return this.getContentEditableText(inputField).length;
+    }
+
+    const range = selection.getRangeAt(0);
+    if (!range || !inputField.contains(range.startContainer)) {
+      return this.getContentEditableText(inputField).length;
+    }
+
+    const preRange = range.cloneRange();
+    preRange.selectNodeContents(inputField);
+    preRange.setEnd(range.startContainer, range.startOffset);
+    return preRange.toString().length;
+  },
+
+  setContentEditableCursor(inputField, cursorIndex) {
+    if (!inputField || !window.getSelection) return;
+
+    const safeTextLength = this.getContentEditableText(inputField).length;
+    let remaining = Math.max(
+      0,
+      Math.min(Number(cursorIndex) || 0, safeTextLength),
+    );
+
+    const selection = window.getSelection();
+    if (!selection) return;
+
+    const range = document.createRange();
+    let targetNode = null;
+    let targetOffset = 0;
+
+    const walker = document.createTreeWalker(
+      inputField,
+      NodeFilter.SHOW_TEXT,
+      null,
+    );
+    let node = walker.nextNode();
+    while (node) {
+      const textLength = (node.textContent || "").length;
+      if (remaining <= textLength) {
+        targetNode = node;
+        targetOffset = remaining;
+        break;
+      }
+      remaining -= textLength;
+      node = walker.nextNode();
+    }
+
+    if (targetNode) {
+      range.setStart(targetNode, targetOffset);
+      range.collapse(true);
+    } else {
+      range.selectNodeContents(inputField);
+      range.collapse(false);
+    }
+
+    selection.removeAllRanges();
+    selection.addRange(range);
+  },
+
+  searchWindowGroupMentionMembers(conversationId, query, limit) {
+    const normalizedConversationId = this.normalizeConversationId(conversationId);
+    const openId =
+      this.getOpenChatId(normalizedConversationId) || normalizedConversationId;
+    const chat = this.openChats.get(openId);
+    const isGroup = !!(chat?.data?.isGroup ?? chat?.data?.IsGroup);
+    if (!isGroup) return null;
+
+    const members = this.getWindowGroupMentionMembers(openId);
+    if (!members.length) return [];
+
+    const normalizedKeyword = this.normalizeMentionText(query);
+    const safeLimit =
+      Number.isFinite(limit) && Number(limit) > 0
+        ? Math.floor(Number(limit))
+        : Number(window.APP_CONFIG?.MENTION_SEARCH_LIMIT) || 5;
+
+    return members
+      .map((member) => ({
+        ...member,
+        _matchScore: this.buildMentionMatchScore(member, normalizedKeyword),
+      }))
+      .filter((member) => member._matchScore > 0)
+      .sort((a, b) => {
+        if (b._matchScore !== a._matchScore) return b._matchScore - a._matchScore;
+        return (a.username || "").localeCompare(b.username || "");
+      })
+      .slice(0, safeLimit)
+      .map(({ _matchScore, ...member }) => member);
+  },
+
+  getWindowGroupMentionMembers(conversationId) {
+    const normalizedConversationId = this.normalizeConversationId(conversationId);
+    const openId =
+      this.getOpenChatId(normalizedConversationId) || normalizedConversationId;
+    const chat = this.openChats.get(openId);
+    const rawMembers = Array.isArray(chat?.data?.members)
+      ? chat.data.members
+      : Array.isArray(chat?.data?.Members)
+        ? chat.data.Members
+        : [];
+    if (!rawMembers.length) return [];
+
+    const currentAccountId = (
+      localStorage.getItem("accountId") ||
+      sessionStorage.getItem("accountId") ||
+      window.APP_CONFIG?.CURRENT_USER_ID ||
+      ""
+    )
+      .toString()
+      .trim()
+      .toLowerCase();
+
+    const normalizeMember = (raw) => {
+      const normalized =
+        window.ChatCommon &&
+        typeof window.ChatCommon.normalizeConversationMember === "function"
+          ? window.ChatCommon.normalizeConversationMember(raw)
+          : raw || {};
+
+      const accountId = (
+        normalized?.accountId ||
+        normalized?.AccountId ||
+        raw?.accountId ||
+        raw?.AccountId ||
+        ""
+      )
+        .toString()
+        .trim()
+        .toLowerCase();
+      const username = (
+        normalized?.username ||
+        normalized?.userName ||
+        normalized?.Username ||
+        normalized?.UserName ||
+        raw?.username ||
+        raw?.userName ||
+        raw?.Username ||
+        raw?.UserName ||
+        ""
+      )
+        .toString()
+        .trim();
+      const fullName = (
+        normalized?.fullName ||
+        normalized?.FullName ||
+        raw?.fullName ||
+        raw?.FullName ||
+        ""
+      )
+        .toString()
+        .trim();
+      const nickname = (
+        normalized?.nickname ??
+        normalized?.Nickname ??
+        raw?.nickname ??
+        raw?.Nickname ??
+        ""
+      )
+        .toString()
+        .trim();
+      const avatarUrl = (
+        normalized?.avatarUrl ||
+        normalized?.AvatarUrl ||
+        raw?.avatarUrl ||
+        raw?.AvatarUrl ||
+        window.APP_CONFIG?.DEFAULT_AVATAR ||
+        ""
+      )
+        .toString()
+        .trim();
+
+      if (!accountId || !username) return null;
+      return {
+        accountId,
+        username,
+        fullName,
+        nickname,
+        avatarUrl,
+      };
+    };
+
+    const dedupedMembers = [];
+    const seenAccountIds = new Set();
+    rawMembers.forEach((rawMember) => {
+      const member = normalizeMember(rawMember);
+      if (!member) return;
+      if (currentAccountId && member.accountId === currentAccountId) return;
+      if (seenAccountIds.has(member.accountId)) return;
+      seenAccountIds.add(member.accountId);
+      dedupedMembers.push(member);
+    });
+
+    return dedupedMembers;
+  },
+
+  normalizeMentionText(value) {
+    return (value || "").toString().trim().toLowerCase();
+  },
+
+  buildMentionMatchScore(member, keyword) {
+    const username = this.normalizeMentionText(member?.username);
+    const fullName = this.normalizeMentionText(member?.fullName);
+    const nickname = this.normalizeMentionText(member?.nickname);
+
+    if (!username) return 0;
+    if (!keyword) return 1;
+
+    let score = 0;
+    if (username.startsWith(keyword)) score = Math.max(score, 600);
+    else if (username.includes(keyword)) score = Math.max(score, 500);
+
+    if (nickname.startsWith(keyword)) score = Math.max(score, 450);
+    else if (nickname.includes(keyword)) score = Math.max(score, 350);
+
+    if (fullName.startsWith(keyword)) score = Math.max(score, 300);
+    else if (fullName.includes(keyword)) score = Math.max(score, 200);
+
+    return score;
+  },
+
   handleInput(field, id) {
     this.updateSendButtonState(id);
     this.updatePlaceholderState(field);
@@ -4351,6 +4681,15 @@ const ChatWindow = {
   },
 
   handleKeyDown(event, id) {
+    const inputField =
+      event?.currentTarget instanceof Element
+        ? event.currentTarget
+        : document.querySelector(`#chat-box-${id} .chat-input-field`);
+
+    if (event.key === "Enter" && window.MentionPicker?.isOpenFor?.(inputField)) {
+      return;
+    }
+
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       this.sendMessage(id);

@@ -119,6 +119,35 @@
   color: var(--chat-theme-other-bubble-text, var(--text-primary));
 }
 
+.chat-mention-link,
+.chat-mention-link:link,
+.chat-mention-link:visited,
+.chat-mention-link:active {
+  text-decoration: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chat-mention-link:hover {
+  text-decoration: underline;
+}
+
+.received .msg-bubble .chat-mention-link,
+.received .msg-bubble .chat-mention-link:link,
+.received .msg-bubble .chat-mention-link:visited,
+.received .msg-bubble .chat-mention-link:hover,
+.received .msg-bubble .chat-mention-link:active {
+  color: var(--chat-theme-accent, var(--accent-primary, #6366f1));
+}
+
+.sent .msg-bubble .chat-mention-link,
+.sent .msg-bubble .chat-mention-link:link,
+.sent .msg-bubble .chat-mention-link:visited,
+.sent .msg-bubble .chat-mention-link:hover,
+.sent .msg-bubble .chat-mention-link:active {
+  color: rgba(255, 255, 255, 0.96);
+}
+
 /* --- Grouping Gap --- */
 .msg-bubble-wrapper.msg-group-single,
 .msg-bubble-wrapper.msg-group-first {
@@ -2653,11 +2682,15 @@ body.light-mode .chat-reply-bar-close:hover {
   min-width: 0;
 }
 
-body.is-chat-page .msg-bubble-wrapper[data-message-type="5"] .msg-content-container,
+body.is-chat-page
+  .msg-bubble-wrapper[data-message-type="5"]
+  .msg-content-container,
 body.is-chat-page
   .msg-bubble-wrapper[data-message-type="postshare"]
   .msg-content-container,
-.chat-page-container .msg-bubble-wrapper[data-message-type="5"] .msg-content-container,
+.chat-page-container
+  .msg-bubble-wrapper[data-message-type="5"]
+  .msg-content-container,
 .chat-page-container
   .msg-bubble-wrapper[data-message-type="postshare"]
   .msg-content-container {

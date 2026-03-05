@@ -1518,7 +1518,11 @@ const ChatCommon = {
         return `${actor} reset the chat theme.`;
       }
 
-      return content;
+      const normalizedContent =
+        typeof this.normalizeMessageContentForPreview === "function"
+          ? this.normalizeMessageContentForPreview(content)
+          : content;
+      return normalizedContent;
     }
 
     return "System message";
@@ -2035,11 +2039,13 @@ const ChatCommon = {
     const accountId = (normalized.accountId || normalized.AccountId || "")
       .toString()
       .toLowerCase();
+    const fullName = (normalized.fullName || normalized.FullName || "")
+      .toString()
+      .trim();
     const displayName =
       normalized.displayName ||
       normalized.DisplayName ||
-      normalized.fullName ||
-      normalized.FullName ||
+      fullName ||
       "";
     const nickname = this.normalizeNickname(
       normalized.nickname ?? normalized.Nickname ?? null,
@@ -2064,6 +2070,7 @@ const ChatCommon = {
       accountId,
       displayName,
       username,
+      fullName,
       avatarUrl,
       storyRingState:
         normalized.storyRingState ?? normalized.StoryRingState ?? null,
@@ -3442,10 +3449,12 @@ const ChatCommon = {
                             rtPreview = "<em>Message was recalled</em>";
                           } else if (rt.content) {
                             const maxLen = 60;
+                            const replyPreviewText =
+                              this.normalizeMessageContentForPreview(rt.content);
                             const trimmed =
-                              rt.content.length > maxLen
-                                ? rt.content.substring(0, maxLen) + "…"
-                                : rt.content;
+                              replyPreviewText.length > maxLen
+                                ? replyPreviewText.substring(0, maxLen) + "..."
+                                : replyPreviewText;
                             rtPreview = escapeHtml(trimmed);
                           } else {
                             const replyMessageType = this.getMessageType(rt);
@@ -3469,7 +3478,7 @@ const ChatCommon = {
                         ${(() => {
                           const textBubbleHtml =
                             isRecalled || msg.content
-                              ? `<div class="msg-bubble${isRecalled ? " msg-bubble-recalled" : ""}">${isRecalled ? escapeHtml(recalledText) : linkify(escapeHtml(msg.content))}</div>`
+                              ? `<div class="msg-bubble${isRecalled ? " msg-bubble-recalled" : ""}">${isRecalled ? escapeHtml(recalledText) : this.renderMessageRichContent(msg.content)}</div>`
                               : "";
 
                           // --- Post Share Preview ---
@@ -3973,6 +3982,91 @@ const ChatCommon = {
     window.location.hash = this.buildProfileHash(profileParam);
   },
 
+  parseMentionSegments(rawContent) {
+    const safeContent = (rawContent ?? "").toString();
+    if (!safeContent) return [];
+
+    const mentionRegex =
+      /@\[(?<username>[A-Za-z0-9._]{1,30})\]\((?<accountId>[0-9a-fA-F-]{36})\)/g;
+    const segments = [];
+    let lastIndex = 0;
+    mentionRegex.lastIndex = 0;
+    let match = mentionRegex.exec(safeContent);
+
+    while (match) {
+      const startIndex = match.index;
+      const matchText = match[0] || "";
+      const endIndex = startIndex + matchText.length;
+
+      if (startIndex > lastIndex) {
+        segments.push({
+          type: "text",
+          text: safeContent.slice(lastIndex, startIndex),
+        });
+      }
+
+      const mentionUsername = (match.groups?.username || "").toString().trim();
+      const mentionAccountId = (match.groups?.accountId || "").toString().trim();
+
+      if (mentionUsername && mentionAccountId) {
+        segments.push({
+          type: "mention",
+          username: mentionUsername,
+          accountId: mentionAccountId,
+          text: `@${mentionUsername}`,
+        });
+      } else {
+        segments.push({
+          type: "text",
+          text: matchText,
+        });
+      }
+
+      lastIndex = endIndex;
+      match = mentionRegex.exec(safeContent);
+    }
+
+    if (lastIndex < safeContent.length) {
+      segments.push({
+        type: "text",
+        text: safeContent.slice(lastIndex),
+      });
+    }
+
+    return segments;
+  },
+
+  renderMessageRichContent(rawContent) {
+    const segments = this.parseMentionSegments(rawContent);
+    if (segments.length === 0) {
+      return linkify(escapeHtml(rawContent));
+    }
+
+    return segments
+      .map((segment) => {
+        if (segment.type !== "mention") {
+          return linkify(escapeHtml(segment.text || ""));
+        }
+
+        const profileTarget = segment.username || segment.accountId || "";
+        const mentionHref = this.buildProfileHash(profileTarget);
+        return `<a class="chat-mention-link" href="${escapeHtml(mentionHref)}" data-account-id="${escapeHtml(segment.accountId || "")}" data-username="${escapeHtml(segment.username || "")}" onclick="event.stopPropagation()">${escapeHtml(segment.text || "")}</a>`;
+      })
+      .join("");
+  },
+
+  normalizeMessageContentForPreview(rawContent) {
+    const segments = this.parseMentionSegments(rawContent);
+    if (segments.length === 0) {
+      return (rawContent ?? "").toString().trim();
+    }
+
+    return segments
+      .map((segment) => segment.text || "")
+      .join("")
+      .trim();
+  },
+
   buildLastMsgMediaSummary(medias) {
     const items = Array.isArray(medias) ? medias : [];
     if (!items.length) {
@@ -4047,16 +4141,17 @@ const ChatCommon = {
       : "";
     const serverPreview =
       typeof rawServerPreview === "string" ? rawServerPreview.trim() : "";
+    const normalizedServerPreview =
+      this.normalizeMessageContentForPreview(serverPreview);
     const messageType = this.getMessageType(lastMessage);
     const hasReplyFromPayload = !!(lastMessage?.replyTo || lastMessage?.ReplyTo);
     const hasReplyFromFlag = !!(lastMessage?.hasReply ?? lastMessage?.HasReply);
     const hasReplyFromServerPreview =
-      !messageOverride && /^replied\b/i.test(serverPreview);
+      !messageOverride && /^replied\b/i.test(normalizedServerPreview);
     const hasReply =
       hasReplyFromPayload || hasReplyFromFlag || hasReplyFromServerPreview;
     const rawContent = lastMessage?.content ?? lastMessage?.Content ?? "";
-    const contentText =
-      typeof rawContent === "string" ? rawContent.trim() : "";
+    const contentText = this.normalizeMessageContentForPreview(rawContent);
 
     if (lastMessage?.isRecalled || lastMessage?.IsRecalled) {
       return { text: "Message recalled", isDerived: true };
@@ -4069,20 +4164,22 @@ const ChatCommon = {
       };
     }
 
-    if (!messageOverride && serverPreview.length > 0) {
+    if (!messageOverride && normalizedServerPreview.length > 0) {
       const isLegacyReplyPreviewMissingPrefix =
-        hasReply && contentText.length > 0 && serverPreview === contentText;
+        hasReply &&
+        contentText.length > 0 &&
+        normalizedServerPreview === contentText;
       if (isLegacyReplyPreviewMissingPrefix) {
         // Skip stale server preview and rebuild from current message + reply flag
       } else {
-      const isRawContentText =
-        (messageType === 1 || messageType === 2 || messageType === null) &&
-        !hasReply &&
-        contentText.length > 0 &&
-        serverPreview === contentText;
+        const isRawContentText =
+          (messageType === 1 || messageType === 2 || messageType === null) &&
+          !hasReply &&
+          contentText.length > 0 &&
+          normalizedServerPreview === contentText;
 
         return {
-          text: serverPreview,
+          text: normalizedServerPreview,
           isDerived: !isRawContentText,
         };
       }
@@ -5272,3 +5369,4 @@ const ChatCommon = {
 };
 
 window.ChatCommon = ChatCommon;
+

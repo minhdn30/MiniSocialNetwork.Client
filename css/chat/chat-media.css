@@ -257,30 +257,30 @@
 }
 
 /* Chat Link Styles */
-.msg-bubble a {
+.msg-bubble a:not(.chat-mention-link) {
   cursor: pointer;
   word-break: break-all;
   transition: opacity 0.2s;
 }
 
 /* Link in sent bubble (usually blue background) */
-.sent .msg-bubble a {
+.sent .msg-bubble a:not(.chat-mention-link) {
   color: #fff;
   text-decoration: underline;
   font-weight: 500;
 }
 
-.sent .msg-bubble a:hover {
+.sent .msg-bubble a:not(.chat-mention-link):hover {
   opacity: 0.8;
 }
 
 /* Link in received bubble (usually gray background) */
-.received .msg-bubble a {
+.received .msg-bubble a:not(.chat-mention-link) {
   color: var(--accent-primary);
   text-decoration: none;
   font-weight: 500;
 }
 
-.received .msg-bubble a:hover {
+.received .msg-bubble a:not(.chat-mention-link):hover {
   text-decoration: underline;
 }

@@ -248,6 +248,38 @@
         return replaced;
     }
 
+    function escapeHtml(value) {
+        return (value || '')
+            .toString()
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function replaceOptimisticTextContent(bubble, messagePayload) {
+        if (!bubble || !messagePayload) return false;
+
+        const textBubble = bubble.querySelector('.msg-bubble');
+        if (!textBubble) return false;
+
+        const rawContent = messagePayload.Content ?? messagePayload.content;
+        if (typeof rawContent !== 'string') return false;
+
+        if (global.ChatCommon && typeof global.ChatCommon.renderMessageRichContent === 'function') {
+            textBubble.innerHTML = global.ChatCommon.renderMessageRichContent(rawContent);
+            return true;
+        }
+
+        const normalizedRawContent = rawContent.replace(
+            /@\[(?<username>[A-Za-z0-9._]{1,30})\]\((?<accountId>[0-9a-fA-F-]{36})\)/g,
+            (_, username) => `@${username}`
+        );
+        textBubble.innerHTML = escapeHtml(normalizedRawContent);
+        return true;
+    }
+
     function buildRetryFormData({ content, tempId, files, receiverId, replyToMessageId }) {
         const formData = new FormData();
         const safeContent = typeof content === 'string' ? content.trim() : '';
@@ -300,6 +332,7 @@
         if (status === 'sent') {
             const hadBlobMedia = !!bubble.querySelector('img[src^="blob:"], video[src^="blob:"], .msg-file-link[href^="blob:"]');
             const replaced = replaceOptimisticMediaUrls(ctx, bubble, messagePayload, tempId);
+            replaceOptimisticTextContent(bubble, messagePayload);
             ctx.retryFiles.delete(tempId);
             if (!hadBlobMedia || replaced) {
                 revokeMediaUrlsForTemp(ctx, tempId);

@@ -214,6 +214,7 @@
         const convId = (data.ConversationId || data.conversationId || '').toLowerCase();
         const message = data.Message || data.message;
         const isMuted = data.IsMuted ?? data.isMuted ?? false;
+        const isMentioned = !!(data.IsMentioned ?? data.isMentioned);
         const targetAccountId = (data.TargetAccountId || data.targetAccountId || '').toLowerCase();
         const myId = (localStorage.getItem("accountId") || '').toLowerCase();
         const senderId = (message?.sender?.accountId || message?.Sender?.AccountId || '').toLowerCase();
@@ -276,7 +277,7 @@
             });
         }
 
-        const shouldAutoOpenWindow = !isMuted && !isChatPage && !isOpenInWindow && !isSystemMessage(message);
+        const shouldAutoOpenWindow = (!isMuted || isMentioned) && !isChatPage && !isOpenInWindow && !isSystemMessage(message);
         if (shouldAutoOpenWindow) {
             console.log(`💬 [UserHub] Auto-opening chat window for conversation: ${convId}`);
             // priorityLeft=true (leftmost position), shouldFocus=false (don't steal focus)
@@ -741,3 +742,4 @@
     });
 
 })(window);
+

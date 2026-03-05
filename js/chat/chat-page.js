@@ -727,6 +727,9 @@ const ChatPage = {
       });
 
       const onKeyDown = (e) => {
+        if (e.key === "Enter" && window.MentionPicker?.isOpenFor?.(input)) {
+          return;
+        }
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
           if (this.currentChatId && this.currentMetaData) {
@@ -743,6 +746,8 @@ const ChatPage = {
         type: "keydown",
         handler: onKeyDown,
       });
+
+      this.attachChatMentionPicker(input);
     }
 
     const sendBtn = document.getElementById("chat-page-send-btn");
@@ -3873,6 +3878,7 @@ const ChatPage = {
       .toString()
       .toLowerCase();
     const username = (raw?.username || raw?.Username || "").toString().trim();
+    const fullName = (raw?.fullName || raw?.FullName || "").toString().trim();
     const nicknameRaw = (raw?.nickname || raw?.Nickname || "").toString();
     const nickname = nicknameRaw.trim();
     const displayNameRaw = (raw?.displayName || raw?.DisplayName || "")
@@ -3882,8 +3888,9 @@ const ChatPage = {
     return {
       accountId,
       username: username || displayNameRaw || "unknown",
+      fullName,
       nickname: nickname || "",
-      displayName: nickname || displayNameRaw || username || "User",
+      displayName: nickname || displayNameRaw || username || fullName || "User",
       avatarUrl:
         raw?.avatarUrl || raw?.AvatarUrl || window.APP_CONFIG?.DEFAULT_AVATAR,
       role: Number(raw?.role ?? raw?.Role ?? 0) === 1 ? 1 : 0,
@@ -5120,8 +5127,14 @@ const ChatPage = {
    * Returns HTML with keyword highlighted.
    */
   _buildSearchSnippet(rawContent, keyword, maxLen = 100) {
-    if (!rawContent) return "";
-    const escaped = escapeHtml(rawContent);
+    const contentText =
+      window.ChatCommon &&
+      typeof window.ChatCommon.normalizeMessageContentForPreview === "function"
+        ? window.ChatCommon.normalizeMessageContentForPreview(rawContent)
+        : (rawContent ?? "").toString();
+    if (!contentText) return "";
+
+    const escaped = escapeHtml(contentText);
     if (!keyword || keyword.length < 2) return escaped;
 
     // Escape regex special characters
@@ -5130,7 +5143,7 @@ const ChatPage = {
     if (words.length === 0) return escaped;
 
     // Find the earliest position of any keyword word (case-insensitive, in original text)
-    const lowerContent = rawContent.toLowerCase();
+    const lowerContent = contentText.toLowerCase();
     let earliestPos = -1;
     let matchedWord = "";
     for (const word of words) {
@@ -5144,15 +5157,15 @@ const ChatPage = {
     let snippet;
     if (earliestPos === -1) {
       // No match found in text, show beginning
-      snippet =
-        rawContent.length > maxLen
-          ? rawContent.substring(0, maxLen) + "..."
-          : rawContent;
+        snippet =
+        contentText.length > maxLen
+          ? contentText.substring(0, maxLen) + "..."
+          : contentText;
     } else {
       // Build a window around the keyword
       const contextBefore = 20;
       let start = Math.max(0, earliestPos - contextBefore);
-      let end = Math.min(rawContent.length, start + maxLen);
+      let end = Math.min(contentText.length, start + maxLen);
 
       // Adjust end if content is shorter
       if (end - start < maxLen && start > 0) {
@@ -5161,8 +5174,8 @@ const ChatPage = {
 
       snippet = "";
       if (start > 0) snippet += "...";
-      snippet += rawContent.substring(start, end);
-      if (end < rawContent.length) snippet += "...";
+      snippet += contentText.substring(start, end);
+      if (end < contentText.length) snippet += "...";
     }
 
     // Now escape and highlight
@@ -7153,6 +7166,210 @@ const ChatPage = {
       console.error("Failed to send message:", error);
       this.updateMessageStatus(tempId, "failed", content);
     }
+  },
+
+  attachChatMentionPicker(input) {
+    if (!input || !window.MentionPicker) return;
+
+    window.MentionPicker.attach(input, {
+      searchFn: ({ query, limit }) => this.searchGroupMentionMembers(query, limit),
+      renderItem: (item, tools = {}) => {
+        const escape =
+          typeof tools.escapeHtml === "function"
+            ? tools.escapeHtml
+            : (value) =>
+                (value || "")
+                  .toString()
+                  .replace(/&/g, "&amp;")
+                  .replace(/</g, "&lt;")
+                  .replace(/>/g, "&gt;")
+                  .replace(/"/g, "&quot;")
+                  .replace(/'/g, "&#39;");
+
+        const username = (item?.username || "").toString().trim();
+        if (!username) return "";
+
+        const nickname = (item?.nickname || "").toString().trim();
+        const fullName = (item?.fullName || item?.FullName || "")
+          .toString()
+          .trim();
+        const avatarUrl = (
+          item?.avatarUrl ||
+          item?.AvatarUrl ||
+          window.APP_CONFIG?.DEFAULT_AVATAR ||
+          ""
+        )
+          .toString()
+          .trim();
+        const secondary = nickname || fullName || username;
+
+        return `
+          <div class="mention-picker-item-main">
+            <img class="mention-picker-avatar" src="${escape(avatarUrl)}" alt="avatar" />
+            <div class="mention-picker-meta">
+              <span class="mention-picker-primary">${escape(username)}</span>
+              <span class="mention-picker-secondary">${escape(secondary)}</span>
+            </div>
+          </div>
+        `;
+      },
+    });
+  },
+
+  searchGroupMentionMembers(query, limit) {
+    const isGroup = !!(
+      this.currentMetaData?.isGroup ?? this.currentMetaData?.IsGroup
+    );
+    if (!isGroup) return null;
+
+    const members = this.getGroupMentionMembers();
+    if (!members.length) return [];
+
+    const normalizedKeyword = this.normalizeMentionText(query);
+    const safeLimit =
+      Number.isFinite(limit) && Number(limit) > 0
+        ? Math.floor(Number(limit))
+        : Number(window.APP_CONFIG?.MENTION_SEARCH_LIMIT) || 5;
+
+    return members
+      .map((member) => ({
+        ...member,
+        _matchScore: this.buildMentionMatchScore(member, normalizedKeyword),
+      }))
+      .filter((member) => member._matchScore > 0)
+      .sort((a, b) => {
+        if (b._matchScore !== a._matchScore) return b._matchScore - a._matchScore;
+        return (a.username || "").localeCompare(b.username || "");
+      })
+      .slice(0, safeLimit)
+      .map(({ _matchScore, ...member }) => member);
+  },
+
+  getGroupMentionMembers() {
+    const rawMembers = Array.isArray(this.currentMetaData?.members)
+      ? this.currentMetaData.members
+      : Array.isArray(this.currentMetaData?.Members)
+        ? this.currentMetaData.Members
+        : [];
+
+    if (!rawMembers.length) return [];
+    const currentAccountId = (
+      localStorage.getItem("accountId") ||
+      sessionStorage.getItem("accountId") ||
+      window.APP_CONFIG?.CURRENT_USER_ID ||
+      ""
+    )
+      .toString()
+      .trim()
+      .toLowerCase();
+
+    const normalizeMember = (raw) => {
+      const normalized =
+        window.ChatCommon &&
+        typeof window.ChatCommon.normalizeConversationMember === "function"
+          ? window.ChatCommon.normalizeConversationMember(raw)
+          : raw || {};
+
+      const accountId = (
+        normalized?.accountId ||
+        normalized?.AccountId ||
+        raw?.accountId ||
+        raw?.AccountId ||
+        ""
+      )
+        .toString()
+        .trim()
+        .toLowerCase();
+      const username = (
+        normalized?.username ||
+        normalized?.userName ||
+        normalized?.Username ||
+        normalized?.UserName ||
+        raw?.username ||
+        raw?.userName ||
+        raw?.Username ||
+        raw?.UserName ||
+        ""
+      )
+        .toString()
+        .trim();
+      const fullName = (
+        normalized?.fullName ||
+        normalized?.FullName ||
+        raw?.fullName ||
+        raw?.FullName ||
+        ""
+      )
+        .toString()
+        .trim();
+      const nickname = (
+        normalized?.nickname ??
+        normalized?.Nickname ??
+        raw?.nickname ??
+        raw?.Nickname ??
+        ""
+      )
+        .toString()
+        .trim();
+      const avatarUrl = (
+        normalized?.avatarUrl ||
+        normalized?.AvatarUrl ||
+        raw?.avatarUrl ||
+        raw?.AvatarUrl ||
+        window.APP_CONFIG?.DEFAULT_AVATAR ||
+        ""
+      )
+        .toString()
+        .trim();
+
+      if (!accountId || !username) return null;
+
+      return {
+        accountId,
+        username,
+        fullName,
+        nickname,
+        avatarUrl,
+      };
+    };
+
+    const dedupedMembers = [];
+    const seenAccountIds = new Set();
+    rawMembers.forEach((rawMember) => {
+      const member = normalizeMember(rawMember);
+      if (!member) return;
+      if (currentAccountId && member.accountId === currentAccountId) return;
+      if (seenAccountIds.has(member.accountId)) return;
+      seenAccountIds.add(member.accountId);
+      dedupedMembers.push(member);
+    });
+
+    return dedupedMembers;
+  },
+
+  normalizeMentionText(value) {
+    return (value || "").toString().trim().toLowerCase();
+  },
+
+  buildMentionMatchScore(member, keyword) {
+    const username = this.normalizeMentionText(member?.username);
+    const fullName = this.normalizeMentionText(member?.fullName);
+    const nickname = this.normalizeMentionText(member?.nickname);
+
+    if (!username) return 0;
+    if (!keyword) return 1;
+
+    let score = 0;
+    if (username.startsWith(keyword)) score = Math.max(score, 600);
+    else if (username.includes(keyword)) score = Math.max(score, 500);
+
+    if (nickname.startsWith(keyword)) score = Math.max(score, 450);
+    else if (nickname.includes(keyword)) score = Math.max(score, 350);
+
+    if (fullName.startsWith(keyword)) score = Math.max(score, 300);
+    else if (fullName.includes(keyword)) score = Math.max(score, 200);
+
+    return score;
   },
 
   updateInputState() {

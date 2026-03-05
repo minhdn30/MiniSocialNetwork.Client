@@ -387,14 +387,32 @@
   position: fixed;
   left: 0;
   top: 0;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-secondary);
+  background: var(--chat-theme-surface, var(--bg-secondary));
+  border: 1px solid var(--chat-theme-border, var(--border-secondary));
   border-radius: 12px;
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24);
   max-height: 260px;
   overflow-y: auto;
+  scrollbar-color: var(--chat-theme-scrollbar-thumb, var(--border-secondary))
+    transparent;
   z-index: 32010;
   display: none;
+}
+
+.mention-picker-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.mention-picker-dropdown::-webkit-scrollbar-thumb {
+  background: var(--chat-theme-scrollbar-thumb, var(--border-secondary));
+  border-radius: 999px;
+}
+
+.mention-picker-dropdown::-webkit-scrollbar-thumb:hover {
+  background: var(
+    --chat-theme-scrollbar-hover,
+    var(--chat-theme-accent, var(--accent-primary))
+  );
 }
 
 .mention-picker-dropdown.show {
@@ -409,7 +427,7 @@
   width: 100%;
   border: none;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--chat-theme-action-color, var(--text-primary));
   text-align: left;
   padding: 8px 10px;
   display: flex;
@@ -420,7 +438,7 @@
 
 .mention-picker-item:hover,
 .mention-picker-item.active {
-  background: var(--bg-active);
+  background: var(--chat-theme-action-hover-bg, var(--bg-active));
 }
 
 .mention-picker-item-main {
@@ -450,7 +468,7 @@
   font-size: 13px;
   font-weight: 700;
   line-height: 1.2;
-  color: var(--text-primary);
+  color: var(--chat-theme-action-color, var(--text-primary));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -459,7 +477,7 @@
 .mention-picker-secondary {
   font-size: 12px;
   line-height: 1.2;
-  color: var(--text-secondary);
+  color: var(--chat-theme-system-text, var(--text-secondary));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -468,7 +486,7 @@
 .mention-picker-empty {
   padding: 10px 12px;
   font-size: 12px;
-  color: var(--text-tertiary);
+  color: var(--chat-theme-system-text, var(--text-tertiary));
 }
 
 .emoji-trigger,

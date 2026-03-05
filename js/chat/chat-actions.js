@@ -839,6 +839,18 @@ const ChatActions = {
       .replace(/'/g, "&#39;");
   },
 
+  normalizeMessagePreviewText(value) {
+    const raw = (value ?? "").toString();
+    if (!raw) return "";
+    if (
+      window.ChatCommon &&
+      typeof window.ChatCommon.normalizeMessageContentForPreview === "function"
+    ) {
+      return window.ChatCommon.normalizeMessageContentForPreview(raw);
+    }
+    return raw.trim();
+  },
+
   getCurrentAccountId() {
     return (
       localStorage.getItem("accountId") ||
@@ -1709,8 +1721,7 @@ const ChatActions = {
       previewHtml = `<em>${this.escapeHtml(this.getRecalledMessageText())}</em>`;
     } else {
       const replyContent = replyTo?.content ?? replyTo?.Content ?? "";
-      const trimmed =
-        typeof replyContent === "string" ? replyContent.trim() : String(replyContent || "").trim();
+      const trimmed = this.normalizeMessagePreviewText(replyContent);
       if (trimmed.length > 0) {
         const maxLen = 80;
         const shortText =
@@ -1762,7 +1773,9 @@ const ChatActions = {
 
     const contentType = Number(info?.contentType ?? info?.ContentType ?? 0);
     const mediaUrl = info?.mediaUrl || info?.MediaUrl || "";
-    const textContent = info?.textContent || info?.TextContent || "";
+    const textContent = this.normalizeMessagePreviewText(
+      info?.textContent ?? info?.TextContent ?? "",
+    );
     let thumbHtml = "";
 
     if (contentType === 2 && textContent) {
@@ -1829,8 +1842,7 @@ const ChatActions = {
 
   buildPinnedContentHtml(message = {}) {
     const contentRaw = message?.content ?? message?.Content ?? "";
-    const contentText =
-      typeof contentRaw === "string" ? contentRaw.trim() : String(contentRaw || "").trim();
+    const contentText = this.normalizeMessagePreviewText(contentRaw);
     const hasContent = contentText.length > 0;
     const messageType =
       Number(message?.messageType ?? message?.MessageType ?? "") || 0;
