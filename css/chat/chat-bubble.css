@@ -128,8 +128,22 @@
   cursor: pointer;
 }
 
-.chat-mention-link:hover {
+.chat-mention-link .chat-mention-name {
+  text-decoration: none;
+}
+
+.chat-mention-link:hover .chat-mention-name,
+.chat-mention-link:focus-visible .chat-mention-name {
   text-decoration: underline;
+}
+
+.chat-mention-link-static {
+  cursor: default;
+}
+
+.chat-mention-link-static:hover .chat-mention-name,
+.chat-mention-link-static:focus-visible .chat-mention-name {
+  text-decoration: none;
 }
 
 .received .msg-bubble .chat-mention-link,

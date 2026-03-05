@@ -3982,6 +3982,67 @@ const ChatCommon = {
     window.location.hash = this.buildProfileHash(profileParam);
   },
 
+  resolveGroupAllMentionKeyword() {
+    const normalized = (window.APP_CONFIG?.CHAT_GROUP_ALL_MENTION_KEYWORD || "all")
+      .toString()
+      .trim()
+      .replace(/^@+/, "")
+      .toLowerCase();
+    return normalized || "all";
+  },
+
+  escapeRegex(value) {
+    return (value || "").toString().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  },
+
+  buildMentionLabel(username) {
+    const safeUsername = (username || "")
+      .toString()
+      .trim()
+      .replace(/^@+/, "");
+    return `<span class="chat-mention-prefix">@</span><span class="chat-mention-name">${escapeHtml(safeUsername)}</span>`;
+  },
+
+  renderTextWithSpecialMentions(rawText) {
+    const text = (rawText ?? "").toString();
+    if (!text) return "";
+
+    const groupAllKeyword = this.resolveGroupAllMentionKeyword();
+    if (!groupAllKeyword) {
+      return linkify(escapeHtml(text));
+    }
+
+    const allMentionRegex = new RegExp(
+      `(^|[^A-Za-z0-9._])@(${this.escapeRegex(groupAllKeyword)})(?![A-Za-z0-9._-])`,
+      "gi",
+    );
+
+    let output = "";
+    let lastIndex = 0;
+    let match = allMentionRegex.exec(text);
+
+    while (match) {
+      const prefix = match[1] || "";
+      const mentionBody = match[2] || "";
+      const mentionStart = match.index + prefix.length;
+      const mentionText = `@${mentionBody}`;
+
+      if (mentionStart > lastIndex) {
+        output += linkify(escapeHtml(text.slice(lastIndex, mentionStart)));
+      }
+
+      output += `<span class="chat-mention-link chat-mention-link-static" data-mention-type="all">${this.buildMentionLabel(mentionBody)}</span>`;
+      lastIndex = mentionStart + mentionText.length;
+      match = allMentionRegex.exec(text);
+    }
+
+    if (lastIndex < text.length) {
+      output += linkify(escapeHtml(text.slice(lastIndex)));
+    }
+
+    return output || linkify(escapeHtml(text));
+  },
+
   parseMentionSegments(rawContent) {
     const safeContent = (rawContent ?? "").toString();
     if (!safeContent) return [];
@@ -4039,18 +4100,18 @@ const ChatCommon = {
   renderMessageRichContent(rawContent) {
     const segments = this.parseMentionSegments(rawContent);
     if (segments.length === 0) {
-      return linkify(escapeHtml(rawContent));
+      return this.renderTextWithSpecialMentions(rawContent);
     }
 
     return segments
       .map((segment) => {
         if (segment.type !== "mention") {
-          return linkify(escapeHtml(segment.text || ""));
+          return this.renderTextWithSpecialMentions(segment.text || "");
         }
 
         const profileTarget = segment.username || segment.accountId || "";
         const mentionHref = this.buildProfileHash(profileTarget);
-        return `<a class="chat-mention-link" href="${escapeHtml(mentionHref)}" data-account-id="${escapeHtml(segment.accountId || "")}" data-username="${escapeHtml(segment.username || "")}" onclick="event.stopPropagation()">${escapeHtml(segment.text || "")}</a>`;
+        return `<a class="chat-mention-link" href="${escapeHtml(mentionHref)}" data-account-id="${escapeHtml(segment.accountId || "")}" data-username="${escapeHtml(segment.username || "")}" onclick="event.stopPropagation()">${this.buildMentionLabel(segment.username || "")}</a>`;
       })
       .join("");
   },

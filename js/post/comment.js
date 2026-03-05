@@ -85,6 +85,7 @@ const CommentModule = (function () {
           ownerId: postDetailData.owner?.accountId || currentPostOwnerId || "",
         };
       },
+      strictQueryMatch: true,
     });
   }
 
@@ -515,7 +516,10 @@ const CommentModule = (function () {
     };
 
     input.onkeydown = (e) => {
-      if (e.key === "Enter" && window.MentionPicker?.isOpenFor?.(input)) {
+      const shouldHandleMentionEnter =
+        window.MentionPicker?.hasSelectableItemFor?.(input) ??
+        window.MentionPicker?.isOpenFor?.(input);
+      if (e.key === "Enter" && shouldHandleMentionEnter) {
         return;
       }
       if (e.defaultPrevented) return;
@@ -1205,7 +1209,10 @@ const CommentModule = (function () {
     };
 
     input.onkeydown = (e) => {
-      if (e.key === "Enter" && window.MentionPicker?.isOpenFor?.(input)) {
+      const shouldHandleMentionEnter =
+        window.MentionPicker?.hasSelectableItemFor?.(input) ??
+        window.MentionPicker?.isOpenFor?.(input);
+      if (e.key === "Enter" && shouldHandleMentionEnter) {
         return;
       }
       if (e.defaultPrevented) return;

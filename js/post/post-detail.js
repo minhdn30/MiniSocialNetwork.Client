@@ -1383,7 +1383,10 @@ function setupCommentInput() {
     
     // Handle Enter key (Shift+Enter for new line, Enter to submit)
     input.onkeydown = (e) => {
-        if (e.key === "Enter" && window.MentionPicker?.isOpenFor?.(input)) {
+        const shouldHandleMentionEnter =
+            window.MentionPicker?.hasSelectableItemFor?.(input) ??
+            window.MentionPicker?.isOpenFor?.(input);
+        if (e.key === "Enter" && shouldHandleMentionEnter) {
             return;
         }
         if (e.defaultPrevented) return;
@@ -1400,6 +1403,7 @@ function setupCommentInput() {
 
     if (window.MentionPicker) {
         window.MentionPicker.attach(input, {
+            strictQueryMatch: true,
             getSearchContext: () => ({
                 privacy:
                     window.currentPostDetailData?.privacy === null ||

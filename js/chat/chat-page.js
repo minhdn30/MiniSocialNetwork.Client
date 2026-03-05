@@ -727,7 +727,10 @@ const ChatPage = {
       });
 
       const onKeyDown = (e) => {
-        if (e.key === "Enter" && window.MentionPicker?.isOpenFor?.(input)) {
+        const shouldHandleMentionEnter =
+          window.MentionPicker?.hasSelectableItemFor?.(input) ??
+          window.MentionPicker?.isOpenFor?.(input);
+        if (e.key === "Enter" && shouldHandleMentionEnter) {
           return;
         }
         if (e.key === "Enter" && !e.shiftKey) {
@@ -7231,7 +7234,7 @@ const ChatPage = {
         ? Math.floor(Number(limit))
         : Number(window.APP_CONFIG?.MENTION_SEARCH_LIMIT) || 5;
 
-    return members
+    const rankedMembers = members
       .map((member) => ({
         ...member,
         _matchScore: this.buildMentionMatchScore(member, normalizedKeyword),
@@ -7243,6 +7246,43 @@ const ChatPage = {
       })
       .slice(0, safeLimit)
       .map(({ _matchScore, ...member }) => member);
+
+    if (this.shouldIncludeAllMentionOption(normalizedKeyword)) {
+      return [this.buildAllMentionOption(), ...rankedMembers].slice(0, safeLimit);
+    }
+
+    return rankedMembers;
+  },
+
+  shouldIncludeAllMentionOption(keyword) {
+    const normalizedKeyword = this.normalizeMentionText(keyword);
+    const allKeyword = this.resolveGroupAllMentionKeyword();
+    if (!normalizedKeyword || !allKeyword) return false;
+    return (
+      normalizedKeyword === allKeyword ||
+      (normalizedKeyword.length >= 2 && allKeyword.startsWith(normalizedKeyword))
+    );
+  },
+
+  buildAllMentionOption() {
+    const allKeyword = this.resolveGroupAllMentionKeyword();
+    return {
+      accountId: "mention-all",
+      username: allKeyword || "all",
+      fullName: "Mention everyone",
+      nickname: "",
+      avatarUrl: window.APP_CONFIG?.DEFAULT_AVATAR || "",
+      isAllMention: true,
+    };
+  },
+
+  resolveGroupAllMentionKeyword() {
+    const rawKeyword = (window.APP_CONFIG?.CHAT_GROUP_ALL_MENTION_KEYWORD || "all")
+      .toString()
+      .trim()
+      .replace(/^@+/, "")
+      .toLowerCase();
+    return rawKeyword || "all";
   },
 
   getGroupMentionMembers() {

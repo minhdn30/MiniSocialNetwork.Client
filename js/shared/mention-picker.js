@@ -183,6 +183,59 @@
     return deduped;
   }
 
+  function normalizeMatchText(value) {
+    return (value || "").toString().trim().toLowerCase();
+  }
+
+  function itemMatchesQuery(item, query, state) {
+    const customMatcher = state?.options?.isItemMatch;
+    if (typeof customMatcher === "function") {
+      try {
+        const customResult = customMatcher(item, {
+          query,
+          normalizeText: normalizeMatchText,
+        });
+        if (typeof customResult === "boolean") {
+          return customResult;
+        }
+      } catch (_) {
+        // fallback to default matcher
+      }
+    }
+
+    if (!state?.options?.strictQueryMatch) {
+      return true;
+    }
+
+    const keyword = normalizeMatchText(query);
+    if (!keyword) {
+      return true;
+    }
+
+    const username = normalizeMatchText(item?.username || item?.userName || "");
+    const nickname = normalizeMatchText(item?.nickname || item?.Nickname || "");
+    const fullName = normalizeMatchText(item?.fullName || item?.FullName || "");
+
+    return [username, nickname, fullName].some(
+      (fieldValue) => fieldValue && fieldValue.includes(keyword),
+    );
+  }
+
+  function filterSearchItemsByQuery(items, query, state) {
+    const source = Array.isArray(items) ? items : [];
+    if (source.length === 0) {
+      return [];
+    }
+
+    const hasCustomMatcher = typeof state?.options?.isItemMatch === "function";
+    const strictQueryMatch = !!state?.options?.strictQueryMatch;
+    if (!hasCustomMatcher && !strictQueryMatch) {
+      return source;
+    }
+
+    return source.filter((item) => itemMatchesQuery(item, query, state));
+  }
+
   function escapeHtml(value) {
     return (value || "")
       .toString()
@@ -693,8 +746,8 @@
     refreshDisplayItems(state, resetActiveIndex);
 
     if (!state.items.length) {
-      dropdown.innerHTML = '<div class="mention-picker-empty">No matching users found</div>';
-      openDropdown(state);
+      dropdown.innerHTML = "";
+      closeDropdown(state);
       return;
     }
 
@@ -880,10 +933,11 @@
         return;
       }
 
-      const normalizedCustomItems = normalizeSearchItems(customPayload).slice(
-        0,
-        getSearchLimit(),
-      );
+      const normalizedCustomItems = filterSearchItemsByQuery(
+        normalizeSearchItems(customPayload),
+        query,
+        state,
+      ).slice(0, getSearchLimit());
       state.lastSearchSignature = searchSignature;
       state.lastResultItems = [...normalizedCustomItems];
       state.rawItems = normalizedCustomItems;
@@ -931,7 +985,11 @@
       return;
     }
 
-    const normalizedItems = normalizeSearchItems(payload).slice(0, getSearchLimit());
+    const normalizedItems = filterSearchItemsByQuery(
+      normalizeSearchItems(payload),
+      query,
+      state,
+    ).slice(0, getSearchLimit());
 
     state.lastSearchSignature = searchSignature;
     state.lastResultItems = [...normalizedItems];
@@ -1082,6 +1140,13 @@
       if (!input) return false;
       const state = mentionPickerStateMap.get(input);
       return !!state?.isOpen;
+    },
+    hasSelectableItemFor(input) {
+      if (!input) return false;
+      const state = mentionPickerStateMap.get(input);
+      if (!state?.isOpen) return false;
+      if (!Array.isArray(state.items) || state.items.length === 0) return false;
+      return state.activeIndex >= 0 && state.activeIndex < state.items.length;
     },
   };
 })(window);

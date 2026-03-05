@@ -127,7 +127,12 @@
   overflow-wrap: anywhere;
 }
 
-.comment-mention-link:hover {
+.comment-mention-link .comment-mention-name {
+  text-decoration: none;
+}
+
+.comment-mention-link:hover .comment-mention-name,
+.comment-mention-link:focus-visible .comment-mention-name {
   text-decoration: underline;
 }
 
