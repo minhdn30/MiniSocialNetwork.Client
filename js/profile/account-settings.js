@@ -3,233 +3,294 @@
  * Handles account settings page functionality with isolated selectors
  */
 
-(function() {
-    let currentSettings = null;
-    let hasUnsavedChanges = false;
+(function () {
+  let currentSettings = null;
+  let hasUnsavedChanges = false;
 
-    function getMyProfileHash() {
-        if (window.RouteHelper?.buildProfileHash) {
-            return window.RouteHelper.buildProfileHash("");
-        }
-        const me = (localStorage.getItem("username") || "").toString().trim();
-        if (me) return `#/${encodeURIComponent(me)}`;
-        return "#/";
+  function getMyProfileHash() {
+    if (window.RouteHelper?.buildProfileHash) {
+      return window.RouteHelper.buildProfileHash("");
     }
+    const me = (localStorage.getItem("username") || "").toString().trim();
+    if (me) return `#/${encodeURIComponent(me)}`;
+    return "#/";
+  }
 
-    // Privacy level mappings
-    const PRIVACY_LEVELS = {
-        0: { name: 'Public', icon: 'globe', class: 'public' },
-        1: { name: 'Followers Only', icon: 'users', class: 'follow' },
-        2: { name: 'Private', icon: 'lock', class: 'private' }
-    };
+  // Privacy level mappings
+  const PRIVACY_LEVELS = {
+    0: { name: "Public", icon: "globe", class: "public" },
+    1: { name: "Followers Only", icon: "users", class: "follow" },
+    2: { name: "Private", icon: "lock", class: "private" },
+  };
 
-    const GROUP_CHAT_INVITE_LEVELS = {
-        0: { name: 'No One', icon: 'lock', class: 'private' },
-        1: { name: 'Followers or Following', icon: 'users', class: 'follow' },
-        2: { name: 'Anyone', icon: 'globe', class: 'public' }
-    };
+  const GROUP_CHAT_INVITE_LEVELS = {
+    0: { name: "No One", icon: "lock", class: "private" },
+    1: { name: "Followers or Following", icon: "users", class: "follow" },
+    2: { name: "Anyone", icon: "globe", class: "public" },
+  };
 
-    const ONLINE_STATUS_VISIBILITY_LEVELS = {
-        0: { name: 'No One', icon: 'lock', class: 'private' },
-        1: { name: 'Contacts Only', icon: 'users', class: 'follow' }
-    };
+  const ONLINE_STATUS_VISIBILITY_LEVELS = {
+    0: { name: "No One", icon: "lock", class: "private" },
+    1: { name: "Contacts Only", icon: "users", class: "follow" },
+  };
 
-    const TAG_PERMISSION_LEVELS = {
-        0: { name: 'No One', icon: 'lock', class: 'private' },
-        1: { name: 'Anyone', icon: 'globe', class: 'public' }
-    };
+  const FOLLOW_PRIVACY_LEVELS = {
+    0: { name: "Anyone", icon: "globe", class: "public" },
+    1: { name: "Private", icon: "lock", class: "private" },
+  };
 
-    const SETTING_KEYS = {
-        phone: 'phonePrivacy',
-        address: 'addressPrivacy',
-        post: 'defaultPostPrivacy',
-        followers: 'followerPrivacy',
-        following: 'followingPrivacy',
-        'story-highlight': 'storyHighlightPrivacy',
-        'online-status': 'onlineStatusVisibility',
-        'group-chat-invite': 'groupChatInvitePermission',
-        'tag-permission': 'tagPermission'
-    };
+  const TAG_PERMISSION_LEVELS = {
+    0: { name: "No One", icon: "lock", class: "private" },
+    1: { name: "Anyone", icon: "globe", class: "public" },
+  };
 
-    const SETTING_LEVEL_MAP = {
-        phone: PRIVACY_LEVELS,
-        address: PRIVACY_LEVELS,
-        post: PRIVACY_LEVELS,
-        followers: PRIVACY_LEVELS,
-        following: PRIVACY_LEVELS,
-        'story-highlight': PRIVACY_LEVELS,
-        'online-status': ONLINE_STATUS_VISIBILITY_LEVELS,
-        'group-chat-invite': GROUP_CHAT_INVITE_LEVELS,
-        'tag-permission': TAG_PERMISSION_LEVELS
-    };
+  const SETTING_KEYS = {
+    phone: "phonePrivacy",
+    address: "addressPrivacy",
+    post: "defaultPostPrivacy",
+    follow: "followPrivacy",
+    followers: "followerPrivacy",
+    following: "followingPrivacy",
+    "story-highlight": "storyHighlightPrivacy",
+    "online-status": "onlineStatusVisibility",
+    "group-chat-invite": "groupChatInvitePermission",
+    "tag-permission": "tagPermission",
+  };
 
-    let originalSettings = null; // To track changes accurately
+  const SETTING_LEVEL_MAP = {
+    phone: PRIVACY_LEVELS,
+    address: PRIVACY_LEVELS,
+    post: PRIVACY_LEVELS,
+    follow: FOLLOW_PRIVACY_LEVELS,
+    followers: PRIVACY_LEVELS,
+    following: PRIVACY_LEVELS,
+    "story-highlight": PRIVACY_LEVELS,
+    "online-status": ONLINE_STATUS_VISIBILITY_LEVELS,
+    "group-chat-invite": GROUP_CHAT_INVITE_LEVELS,
+    "tag-permission": TAG_PERMISSION_LEVELS,
+  };
 
-    async function initAccountSettings() {
-        // Reset state on entry
-        hasUnsavedChanges = false;
-        originalSettings = null;
-        
-        const mc = document.querySelector('.main-content');
-        if (mc) mc.scrollTop = 0; // Reset scroll position for this page only
-        
-        await loadCurrentSettings();
-        setupToggleButtons();
-        
-        if (window.lucide) lucide.createIcons();
-    }
+  let originalSettings = null; // To track changes accurately
 
-    async function loadCurrentSettings() {
-        try {
-            const res = await API.Accounts.getSettings();
-            if (!res.ok) {
-                if (window.toastError) toastError("Failed to load settings.");
-                return;
-            }
+  async function initAccountSettings() {
+    // Reset state on entry
+    hasUnsavedChanges = false;
+    originalSettings = null;
 
-            currentSettings = await res.json();
-            
-            // Handle null or missing data with defaults
-            if (!currentSettings) {
-                currentSettings = {
-                    phonePrivacy: 2, // Private
-                    addressPrivacy: 2, // Private
-                    defaultPostPrivacy: 0, // Public
-                    followerPrivacy: 0, // Public
-                    followingPrivacy: 0, // Public
-                    storyHighlightPrivacy: 0, // Public
-                    onlineStatusVisibility: 1, // Contacts Only
-                    groupChatInvitePermission: 2, // Anyone
-                    tagPermission: 1 // Anyone
-                };
-            }
-            
-            // Initialize originalSettings for change detection
-            originalSettings = {
-                phonePrivacy: currentSettings.phonePrivacy ?? currentSettings.PhonePrivacy,
-                addressPrivacy: currentSettings.addressPrivacy ?? currentSettings.AddressPrivacy,
-                defaultPostPrivacy: currentSettings.defaultPostPrivacy ?? currentSettings.DefaultPostPrivacy,
-                followerPrivacy: currentSettings.followerPrivacy ?? currentSettings.FollowerPrivacy,
-                followingPrivacy: currentSettings.followingPrivacy ?? currentSettings.FollowingPrivacy,
-                storyHighlightPrivacy: currentSettings.storyHighlightPrivacy ?? currentSettings.StoryHighlightPrivacy ?? 0,
-                onlineStatusVisibility: currentSettings.onlineStatusVisibility ?? currentSettings.OnlineStatusVisibility ?? 1,
-                groupChatInvitePermission: currentSettings.groupChatInvitePermission ?? currentSettings.GroupChatInvitePermission,
-                tagPermission: currentSettings.tagPermission ?? currentSettings.TagPermission ?? 1
-            };
+    const mc = document.querySelector(".main-content");
+    if (mc) mc.scrollTop = 0; // Reset scroll position for this page only
 
-            populateSettings(currentSettings);
-        } catch (err) {
-            console.error(err);
-            if (window.toastError) toastError("An error occurred while loading settings.");
-        }
-    }
+    await loadCurrentSettings();
+    setupToggleButtons();
 
-    function populateSettings(settings) {
-        if (!settings) return;
+    if (window.lucide) lucide.createIcons();
+  }
 
-        updatePrivacyButton('phone', settings.phonePrivacy ?? settings.PhonePrivacy ?? 2);
-        updatePrivacyButton('address', settings.addressPrivacy ?? settings.AddressPrivacy ?? 2);
-        updatePrivacyButton('post', settings.defaultPostPrivacy ?? settings.DefaultPostPrivacy ?? 0);
-        updatePrivacyButton('followers', settings.followerPrivacy ?? settings.FollowerPrivacy ?? 0);
-        updatePrivacyButton('following', settings.followingPrivacy ?? settings.FollowingPrivacy ?? 0);
-        updatePrivacyButton('story-highlight', settings.storyHighlightPrivacy ?? settings.StoryHighlightPrivacy ?? 0);
-        updatePrivacyButton('online-status', settings.onlineStatusVisibility ?? settings.OnlineStatusVisibility ?? 1);
-        updatePrivacyButton('group-chat-invite', settings.groupChatInvitePermission ?? settings.GroupChatInvitePermission ?? 2);
-        updatePrivacyButton('tag-permission', settings.tagPermission ?? settings.TagPermission ?? 1);
-        
-        hasUnsavedChanges = false;
-    }
+  async function loadCurrentSettings() {
+    try {
+      const res = await API.Accounts.getSettings();
+      if (!res.ok) {
+        if (window.toastError) toastError("Failed to load settings.");
+        return;
+      }
 
-    function updatePrivacyButton(settingKey, value) {
-        const btn = document.getElementById(`btn-${settingKey}-privacy`);
-        const label = document.getElementById(`label-${settingKey}-privacy`);
-        
-        if (!btn || !label) return;
+      currentSettings = await res.json();
 
-        const settingLevelMap = SETTING_LEVEL_MAP[settingKey] || PRIVACY_LEVELS;
-        const config = settingLevelMap[value];
-        if (!config) return;
-
-        // Use ONLY the isolated class name
-        btn.className = 'acc-privacy-toggle-btn ' + config.class;
-        btn.innerHTML = `<i data-lucide="${config.icon}"></i>`;
-        btn.dataset.value = value;
-
-        label.textContent = config.name;
-
-        if (window.lucide) lucide.createIcons();
-    }
-
-    function getNextSettingValue(settingKey, currentValue) {
-        const settingLevelMap = SETTING_LEVEL_MAP[settingKey] || PRIVACY_LEVELS;
-        const values = Object.keys(settingLevelMap)
-            .map(Number)
-            .filter((v) => Number.isFinite(v))
-            .sort((a, b) => a - b);
-
-        if (!values.length) return currentValue;
-
-        const currentIndex = values.indexOf(currentValue);
-        if (currentIndex < 0) return values[0];
-
-        return values[(currentIndex + 1) % values.length];
-    }
-
-    function setupToggleButtons() {
-        Object.keys(SETTING_KEYS).forEach(key => {
-            const btn = document.getElementById(`btn-${key}-privacy`);
-            if (!btn) return;
-
-            // Proper event cleanup
-            const newBtn = btn.cloneNode(true);
-            btn.parentNode.replaceChild(newBtn, btn);
-
-            newBtn.addEventListener('click', () => {
-                const currentValue = parseInt(newBtn.dataset.value || 0);
-                const nextValue = getNextSettingValue(key, currentValue);
-                
-                updatePrivacyButton(key, nextValue);
-                hasUnsavedChanges = hasAccountSettingsChanges();
-            });
-        });
-
-        // Form leave guarding (External: Close tab/Refresh)
-        window.onbeforeunload = function() {
-            if (hasAccountSettingsChanges()) {
-                return "Unsaved changes detected.";
-            }
+      // Handle null or missing data with defaults
+      if (!currentSettings) {
+        currentSettings = {
+          phonePrivacy: 2, // Private
+          addressPrivacy: 2, // Private
+          defaultPostPrivacy: 0, // Public
+          followPrivacy: 0, // Anyone
+          followerPrivacy: 0, // Public
+          followingPrivacy: 0, // Public
+          storyHighlightPrivacy: 0, // Public
+          onlineStatusVisibility: 1, // Contacts Only
+          groupChatInvitePermission: 2, // Anyone
+          tagPermission: 1, // Anyone
         };
-    }
+      }
 
-    function getUICurrentValues() {
-        const data = {};
-        Object.keys(SETTING_KEYS).forEach(key => {
-            const btn = document.getElementById(`btn-${key}-privacy`);
-            if (btn) {
-                data[SETTING_KEYS[key]] = parseInt(btn.dataset.value || 0);
-            }
-        });
-        return data;
-    }
+      // Initialize originalSettings for change detection
+      originalSettings = {
+        phonePrivacy:
+          currentSettings.phonePrivacy ?? currentSettings.PhonePrivacy,
+        addressPrivacy:
+          currentSettings.addressPrivacy ?? currentSettings.AddressPrivacy,
+        defaultPostPrivacy:
+          currentSettings.defaultPostPrivacy ??
+          currentSettings.DefaultPostPrivacy,
+        followPrivacy:
+          currentSettings.followPrivacy ?? currentSettings.FollowPrivacy ?? 0,
+        followerPrivacy:
+          currentSettings.followerPrivacy ?? currentSettings.FollowerPrivacy,
+        followingPrivacy:
+          currentSettings.followingPrivacy ?? currentSettings.FollowingPrivacy,
+        storyHighlightPrivacy:
+          currentSettings.storyHighlightPrivacy ??
+          currentSettings.StoryHighlightPrivacy ??
+          0,
+        onlineStatusVisibility:
+          currentSettings.onlineStatusVisibility ??
+          currentSettings.OnlineStatusVisibility ??
+          1,
+        groupChatInvitePermission:
+          currentSettings.groupChatInvitePermission ??
+          currentSettings.GroupChatInvitePermission,
+        tagPermission:
+          currentSettings.tagPermission ?? currentSettings.TagPermission ?? 1,
+      };
 
-    function hasAccountSettingsChanges() {
-        if (!originalSettings) return false;
-        const current = getUICurrentValues();
-        return Object.keys(current).some(key => current[key] !== originalSettings[key]);
+      populateSettings(currentSettings);
+    } catch (err) {
+      console.error(err);
+      if (window.toastError)
+        toastError("An error occurred while loading settings.");
     }
+  }
 
-    window.getAccountSettingsModified = function() {
-        return hasAccountSettingsChanges();
+  function populateSettings(settings) {
+    if (!settings) return;
+
+    updatePrivacyButton(
+      "phone",
+      settings.phonePrivacy ?? settings.PhonePrivacy ?? 2,
+    );
+    updatePrivacyButton(
+      "address",
+      settings.addressPrivacy ?? settings.AddressPrivacy ?? 2,
+    );
+    updatePrivacyButton(
+      "post",
+      settings.defaultPostPrivacy ?? settings.DefaultPostPrivacy ?? 0,
+    );
+    updatePrivacyButton(
+      "follow",
+      settings.followPrivacy ?? settings.FollowPrivacy ?? 0,
+    );
+    updatePrivacyButton(
+      "followers",
+      settings.followerPrivacy ?? settings.FollowerPrivacy ?? 0,
+    );
+    updatePrivacyButton(
+      "following",
+      settings.followingPrivacy ?? settings.FollowingPrivacy ?? 0,
+    );
+    updatePrivacyButton(
+      "story-highlight",
+      settings.storyHighlightPrivacy ?? settings.StoryHighlightPrivacy ?? 0,
+    );
+    updatePrivacyButton(
+      "online-status",
+      settings.onlineStatusVisibility ?? settings.OnlineStatusVisibility ?? 1,
+    );
+    updatePrivacyButton(
+      "group-chat-invite",
+      settings.groupChatInvitePermission ??
+        settings.GroupChatInvitePermission ??
+        2,
+    );
+    updatePrivacyButton(
+      "tag-permission",
+      settings.tagPermission ?? settings.TagPermission ?? 1,
+    );
+
+    hasUnsavedChanges = false;
+  }
+
+  function updatePrivacyButton(settingKey, value) {
+    const btn = document.getElementById(`btn-${settingKey}-privacy`);
+    const label = document.getElementById(`label-${settingKey}-privacy`);
+
+    if (!btn || !label) return;
+
+    const settingLevelMap = SETTING_LEVEL_MAP[settingKey] || PRIVACY_LEVELS;
+    const config = settingLevelMap[value];
+    if (!config) return;
+
+    // Use ONLY the isolated class name
+    btn.className = "acc-privacy-toggle-btn " + config.class;
+    btn.innerHTML = `<i data-lucide="${config.icon}"></i>`;
+    btn.dataset.value = value;
+
+    label.textContent = config.name;
+
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function getNextSettingValue(settingKey, currentValue) {
+    const settingLevelMap = SETTING_LEVEL_MAP[settingKey] || PRIVACY_LEVELS;
+    const values = Object.keys(settingLevelMap)
+      .map(Number)
+      .filter((v) => Number.isFinite(v))
+      .sort((a, b) => a - b);
+
+    if (!values.length) return currentValue;
+
+    const currentIndex = values.indexOf(currentValue);
+    if (currentIndex < 0) return values[0];
+
+    return values[(currentIndex + 1) % values.length];
+  }
+
+  function setupToggleButtons() {
+    Object.keys(SETTING_KEYS).forEach((key) => {
+      const btn = document.getElementById(`btn-${key}-privacy`);
+      if (!btn) return;
+
+      // Proper event cleanup
+      const newBtn = btn.cloneNode(true);
+      btn.parentNode.replaceChild(newBtn, btn);
+
+      newBtn.addEventListener("click", () => {
+        const currentValue = parseInt(newBtn.dataset.value || 0);
+        const nextValue = getNextSettingValue(key, currentValue);
+
+        updatePrivacyButton(key, nextValue);
+        hasUnsavedChanges = hasAccountSettingsChanges();
+      });
+    });
+
+    // Form leave guarding (External: Close tab/Refresh)
+    window.onbeforeunload = function () {
+      if (hasAccountSettingsChanges()) {
+        return "Unsaved changes detected.";
+      }
     };
+  }
 
-    window.showDiscardAccountSettingsConfirmation = function(onDiscard, onKeep) {
-        // Reuse the same style as unfollow confirmation in profile-preview.css
-        const overlay = document.createElement("div");
-        overlay.className = "unfollow-overlay show";
+  function getUICurrentValues() {
+    const data = {};
+    Object.keys(SETTING_KEYS).forEach((key) => {
+      const btn = document.getElementById(`btn-${key}-privacy`);
+      if (btn) {
+        data[SETTING_KEYS[key]] = parseInt(btn.dataset.value || 0);
+      }
+    });
+    return data;
+  }
 
-        const popup = document.createElement("div");
-        popup.className = "unfollow-popup";
-        popup.innerHTML = `
+  function hasAccountSettingsChanges() {
+    if (!originalSettings) return false;
+    const current = getUICurrentValues();
+    return Object.keys(current).some(
+      (key) => current[key] !== originalSettings[key],
+    );
+  }
+
+  window.getAccountSettingsModified = function () {
+    return hasAccountSettingsChanges();
+  };
+
+  window.showDiscardAccountSettingsConfirmation = function (onDiscard, onKeep) {
+    // Reuse the same style as unfollow confirmation in profile-preview.css
+    const overlay = document.createElement("div");
+    overlay.className = "unfollow-overlay show";
+
+    const popup = document.createElement("div");
+    popup.className = "unfollow-popup";
+    popup.innerHTML = `
             <div class="unfollow-content">
                 <h3>Discard changes?</h3>
                 <p>You have unsaved changes. Are you sure you want to discard them?</p>
@@ -240,137 +301,157 @@
             </div>
         `;
 
-        overlay.appendChild(popup);
-        document.body.appendChild(overlay);
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
 
-        const closePopup = () => {
-            overlay.classList.remove("show");
-            setTimeout(() => overlay.remove(), 200);
-        };
-
-        popup.querySelector('[data-action="discard"]').onclick = () => {
-            closePopup();
-            if (onDiscard) onDiscard();
-        };
-
-        popup.querySelector('[data-action="keep"]').onclick = () => {
-            closePopup();
-            if (onKeep) onKeep();
-        };
-
-        overlay.onclick = (e) => { if (e.target === overlay) closePopup(); };
+    const closePopup = () => {
+      overlay.classList.remove("show");
+      setTimeout(() => overlay.remove(), 200);
     };
 
-    async function runWithPendingButton(button, pendingText, action) {
-        if (typeof action !== "function") {
-            return false;
-        }
+    popup.querySelector('[data-action="discard"]').onclick = () => {
+      closePopup();
+      if (onDiscard) onDiscard();
+    };
 
-        if (!button) {
-            return action();
-        }
+    popup.querySelector('[data-action="keep"]').onclick = () => {
+      closePopup();
+      if (onKeep) onKeep();
+    };
 
-        if (button.disabled) {
-            return false;
-        }
+    overlay.onclick = (e) => {
+      if (e.target === overlay) closePopup();
+    };
+  };
 
-        const defaultHTML = button.dataset.defaultHtml || button.innerHTML;
-        button.dataset.defaultHtml = defaultHTML;
-        button.disabled = true;
-        button.classList.add("is-loading");
-        button.setAttribute("aria-busy", "true");
-        button.innerHTML = `<span class="spinner spinner-tiny" aria-hidden="true"></span><span>${pendingText}</span>`;
-
-        try {
-            return await action();
-        } finally {
-            button.disabled = false;
-            button.classList.remove("is-loading");
-            button.removeAttribute("aria-busy");
-            button.innerHTML = button.dataset.defaultHtml || defaultHTML;
-            if (window.lucide) {
-                lucide.createIcons();
-            }
-        }
+  async function runWithPendingButton(button, pendingText, action) {
+    if (typeof action !== "function") {
+      return false;
     }
 
-    window.saveAccountSettings = async function() {
-        const btn = document.getElementById("save-settings-btn");
-        if (!btn || btn.disabled) return;
+    if (!button) {
+      return action();
+    }
 
-        // bật loading thủ công — giữ xoay cho đến khi redirect
-        const defaultHTML = btn.dataset.defaultHtml || btn.innerHTML;
-        btn.dataset.defaultHtml = defaultHTML;
-        btn.disabled = true;
-        btn.classList.add("is-loading");
-        btn.setAttribute("aria-busy", "true");
-        btn.innerHTML = `<span>Saving...</span><span class="spinner spinner-tiny" aria-hidden="true"></span>`;
+    if (button.disabled) {
+      return false;
+    }
 
-        function resetSaveButton() {
-            btn.disabled = false;
-            btn.classList.remove("is-loading");
-            btn.removeAttribute("aria-busy");
-            btn.innerHTML = btn.dataset.defaultHtml || defaultHTML;
-            if (window.lucide) lucide.createIcons();
-        }
+    const defaultHTML = button.dataset.defaultHtml || button.innerHTML;
+    button.dataset.defaultHtml = defaultHTML;
+    button.disabled = true;
+    button.classList.add("is-loading");
+    button.setAttribute("aria-busy", "true");
+    button.innerHTML = `<span class="spinner spinner-tiny" aria-hidden="true"></span><span>${pendingText}</span>`;
 
-        // Check for changes before proceeding
-        if (!hasAccountSettingsChanges()) {
-            if (window.toastInfo) toastInfo("No changes were made.");
-            setTimeout(() => {
-                window.location.hash = getMyProfileHash();
-            }, 600);
-            return;
-        }
+    try {
+      return await action();
+    } finally {
+      button.disabled = false;
+      button.classList.remove("is-loading");
+      button.removeAttribute("aria-busy");
+      button.innerHTML = button.dataset.defaultHtml || defaultHTML;
+      if (window.lucide) {
+        lucide.createIcons();
+      }
+    }
+  }
 
-        try {
-            const data = getUICurrentValues();
-            // API expects PascalCase keys
-            const apiData = {};
-            Object.entries(data).forEach(([key, val]) => {
-                const apiK = key.charAt(0).toUpperCase() + key.slice(1);
-                apiData[apiK] = val;
-            });
+  window.saveAccountSettings = async function () {
+    const btn = document.getElementById("save-settings-btn");
+    if (!btn || btn.disabled) return;
 
-            const res = await API.Accounts.updateSettings(apiData);
-            if (res.ok) {
-                const newSettings = await res.json();
-                
-                // Update local storage for immediate effect in newsfeed/create-post
-                const postP = newSettings.defaultPostPrivacy ?? newSettings.DefaultPostPrivacy;
-                if (postP !== undefined) localStorage.setItem("defaultPostPrivacy", postP);
+    // bật loading thủ công — giữ xoay cho đến khi redirect
+    const defaultHTML = btn.dataset.defaultHtml || btn.innerHTML;
+    btn.dataset.defaultHtml = defaultHTML;
+    btn.disabled = true;
+    btn.classList.add("is-loading");
+    btn.setAttribute("aria-busy", "true");
+    btn.innerHTML = `<span>Saving...</span><span class="spinner spinner-tiny" aria-hidden="true"></span>`;
 
-                // Update original state to match saved data (handling case differences)
-                originalSettings = {
-                    phonePrivacy: newSettings.phonePrivacy ?? newSettings.PhonePrivacy,
-                    addressPrivacy: newSettings.addressPrivacy ?? newSettings.AddressPrivacy,
-                    defaultPostPrivacy: newSettings.defaultPostPrivacy ?? newSettings.DefaultPostPrivacy,
-                    followerPrivacy: newSettings.followerPrivacy ?? newSettings.FollowerPrivacy,
-                    followingPrivacy: newSettings.followingPrivacy ?? newSettings.FollowingPrivacy,
-                    storyHighlightPrivacy: newSettings.storyHighlightPrivacy ?? newSettings.StoryHighlightPrivacy ?? 0,
-                    onlineStatusVisibility: newSettings.onlineStatusVisibility ?? newSettings.OnlineStatusVisibility ?? 1,
-                    groupChatInvitePermission: newSettings.groupChatInvitePermission ?? newSettings.GroupChatInvitePermission,
-                    tagPermission: newSettings.tagPermission ?? newSettings.TagPermission ?? 1
-                };
-                
-                hasUnsavedChanges = false;
-                if (window.toastSuccess) toastSuccess("Settings saved successfully!");
+    function resetSaveButton() {
+      btn.disabled = false;
+      btn.classList.remove("is-loading");
+      btn.removeAttribute("aria-busy");
+      btn.innerHTML = btn.dataset.defaultHtml || defaultHTML;
+      if (window.lucide) lucide.createIcons();
+    }
 
-                // Redirect to profile after a short delay
-                setTimeout(() => {
-                    window.location.hash = getMyProfileHash();
-                }, 1000);
-            } else {
-                const errorData = await res.json();
-                if (window.toastError) toastError(errorData.title || "Failed to save settings.");
-                resetSaveButton();
-            }
-        } catch (err) {
-            console.error(err);
-            if (window.toastError) toastError("An error occurred while saving.");
-            resetSaveButton();
-        }
-    };
+    // Check for changes before proceeding
+    if (!hasAccountSettingsChanges()) {
+      if (window.toastInfo) toastInfo("No changes were made.");
+      setTimeout(() => {
+        window.location.hash = getMyProfileHash();
+      }, 600);
+      return;
+    }
 
-    window.initAccountSettings = initAccountSettings;
+    try {
+      const data = getUICurrentValues();
+      // API expects PascalCase keys
+      const apiData = {};
+      Object.entries(data).forEach(([key, val]) => {
+        const apiK = key.charAt(0).toUpperCase() + key.slice(1);
+        apiData[apiK] = val;
+      });
+
+      const res = await API.Accounts.updateSettings(apiData);
+      if (res.ok) {
+        const newSettings = await res.json();
+
+        // Update local storage for immediate effect in newsfeed/create-post
+        const postP =
+          newSettings.defaultPostPrivacy ?? newSettings.DefaultPostPrivacy;
+        if (postP !== undefined)
+          localStorage.setItem("defaultPostPrivacy", postP);
+
+        // Update original state to match saved data (handling case differences)
+        originalSettings = {
+          phonePrivacy: newSettings.phonePrivacy ?? newSettings.PhonePrivacy,
+          addressPrivacy:
+            newSettings.addressPrivacy ?? newSettings.AddressPrivacy,
+          defaultPostPrivacy:
+            newSettings.defaultPostPrivacy ?? newSettings.DefaultPostPrivacy,
+          followPrivacy:
+            newSettings.followPrivacy ?? newSettings.FollowPrivacy ?? 0,
+          followerPrivacy:
+            newSettings.followerPrivacy ?? newSettings.FollowerPrivacy,
+          followingPrivacy:
+            newSettings.followingPrivacy ?? newSettings.FollowingPrivacy,
+          storyHighlightPrivacy:
+            newSettings.storyHighlightPrivacy ??
+            newSettings.StoryHighlightPrivacy ??
+            0,
+          onlineStatusVisibility:
+            newSettings.onlineStatusVisibility ??
+            newSettings.OnlineStatusVisibility ??
+            1,
+          groupChatInvitePermission:
+            newSettings.groupChatInvitePermission ??
+            newSettings.GroupChatInvitePermission,
+          tagPermission:
+            newSettings.tagPermission ?? newSettings.TagPermission ?? 1,
+        };
+
+        hasUnsavedChanges = false;
+        if (window.toastSuccess) toastSuccess("Settings saved successfully!");
+
+        // Redirect to profile after a short delay
+        setTimeout(() => {
+          window.location.hash = getMyProfileHash();
+        }, 1000);
+      } else {
+        const errorData = await res.json();
+        if (window.toastError)
+          toastError(errorData.title || "Failed to save settings.");
+        resetSaveButton();
+      }
+    } catch (err) {
+      console.error(err);
+      if (window.toastError) toastError("An error occurred while saving.");
+      resetSaveButton();
+    }
+  };
+
+  window.initAccountSettings = initAccountSettings;
 })();
