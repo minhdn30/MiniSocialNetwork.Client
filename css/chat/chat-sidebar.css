@@ -76,6 +76,7 @@ body.chat-sidebar-open #sidebar.expanded ~ .main-content {
 .chat-sidebar-close-btn {
   color: var(--text-secondary);
   transition: all 0.2s ease;
+  border-radius: 8px !important;
 }
 
 .chat-sidebar-settings-btn {
@@ -110,6 +111,10 @@ body.chat-sidebar-open #sidebar.expanded ~ .main-content {
 .chat-header-actions {
   display: flex;
   gap: 12px;
+}
+
+body.is-chat-page #chat-panel .chat-header-actions {
+  display: none;
 }
 
 .chat-icon-btn {

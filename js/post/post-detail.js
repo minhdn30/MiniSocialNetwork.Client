@@ -336,7 +336,7 @@ async function openPostDetailByCode(postCode, options = null) {
                 }
                 if (typeof window.forceClosePostDetail === "function") forceClosePostDetail();
                 else closePostDetailModal();
-                return;
+                return false;
             }
 
             if (res.status === 403) {
@@ -352,7 +352,7 @@ async function openPostDetailByCode(postCode, options = null) {
 
                 if (typeof window.forceClosePostDetail === "function") forceClosePostDetail();
                 else closePostDetailModal();
-                return;
+                return false;
             }
 
             if (window.toastError) toastError("Failed to open this post.");
@@ -363,7 +363,7 @@ async function openPostDetailByCode(postCode, options = null) {
             }
             if (typeof window.forceClosePostDetail === "function") forceClosePostDetail();
             else closePostDetailModal();
-            return;
+            return false;
         }
         
         const data = await res.json();
@@ -383,6 +383,7 @@ async function openPostDetailByCode(postCode, options = null) {
         }
 
         if (window.PostHub) await window.PostHub.joinPostGroup(data.postId);
+        return true;
     } catch (err) {
         if (mainLoader) mainLoader.style.display = "none";
         console.error(err);
@@ -395,6 +396,7 @@ async function openPostDetailByCode(postCode, options = null) {
         }
         if (typeof window.forceClosePostDetail === "function") forceClosePostDetail();
         else closePostDetailModal();
+        return false;
     }
 }
 // Dynamic HTML Loader

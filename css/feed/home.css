@@ -40,3 +40,12 @@ body.chat-sidebar-open .home-container {
 body.chat-sidebar-open #feed-section {
   margin-left: 0;
 }
+
+/* Khi Notifications Panel mở, áp dụng cùng quy tắc với Chat Sidebar */
+body.notifications-panel-open .home-container {
+  padding-left: 20px;
+}
+
+body.notifications-panel-open #feed-section {
+  margin-left: 0;
+}

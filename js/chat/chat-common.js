@@ -100,10 +100,7 @@ const ChatCommon = {
   },
 
   resolveStoryTextBackgroundCss(cssValue) {
-    if (
-      typeof cssValue !== "string" ||
-      !cssValue.includes("var(--accent-")
-    ) {
+    if (typeof cssValue !== "string" || !cssValue.includes("var(--accent-")) {
       return cssValue;
     }
 
@@ -2043,10 +2040,7 @@ const ChatCommon = {
       .toString()
       .trim();
     const displayName =
-      normalized.displayName ||
-      normalized.DisplayName ||
-      fullName ||
-      "";
+      normalized.displayName || normalized.DisplayName || fullName || "";
     const nickname = this.normalizeNickname(
       normalized.nickname ?? normalized.Nickname ?? null,
     );
@@ -2909,7 +2903,8 @@ const ChatCommon = {
 
     const parseBoolean = (value) => {
       if (typeof value === "boolean") return value;
-      if (typeof value === "string") return value.trim().toLowerCase() === "true";
+      if (typeof value === "string")
+        return value.trim().toLowerCase() === "true";
       return !!value;
     };
 
@@ -2919,25 +2914,9 @@ const ChatCommon = {
       return Number.isFinite(parsed) ? parsed : null;
     };
 
-    const postId = (
-      info.postId ??
-      info.PostId ??
-      ""
-    )
-      .toString()
-      .trim();
-    const postCode = (
-      info.postCode ??
-      info.PostCode ??
-      ""
-    )
-      .toString()
-      .trim();
-    const ownerUsername = (
-      info.ownerUsername ??
-      info.OwnerUsername ??
-      ""
-    )
+    const postId = (info.postId ?? info.PostId ?? "").toString().trim();
+    const postCode = (info.postCode ?? info.PostCode ?? "").toString().trim();
+    const ownerUsername = (info.ownerUsername ?? info.OwnerUsername ?? "")
       .toString()
       .trim();
     const ownerDisplayName = (
@@ -2947,18 +2926,10 @@ const ChatCommon = {
     )
       .toString()
       .trim();
-    const thumbnailUrl = (
-      info.thumbnailUrl ??
-      info.ThumbnailUrl ??
-      ""
-    )
+    const thumbnailUrl = (info.thumbnailUrl ?? info.ThumbnailUrl ?? "")
       .toString()
       .trim();
-    const contentSnippet = (
-      info.contentSnippet ??
-      info.ContentSnippet ??
-      ""
-    )
+    const contentSnippet = (info.contentSnippet ?? info.ContentSnippet ?? "")
       .toString()
       .trim();
 
@@ -2988,12 +2959,16 @@ const ChatCommon = {
     if (!info) return "";
 
     const safeOwnerUsername = this.truncateTextSafe(info.ownerUsername, 40);
-    const safeOwnerDisplayName = this.truncateTextSafe(info.ownerDisplayName, 52);
+    const safeOwnerDisplayName = this.truncateTextSafe(
+      info.ownerDisplayName,
+      52,
+    );
     const safeSnippet = this.truncateTextSafe(info.contentSnippet, 140);
     const ownerPrimary = safeOwnerUsername
       ? `@${safeOwnerUsername}`
       : safeOwnerDisplayName || "Post";
-    const canOpenPost = !info.isPostUnavailable && (!!info.postCode || !!info.postId);
+    const canOpenPost =
+      !info.isPostUnavailable && (!!info.postCode || !!info.postId);
     const rootAttrs = canOpenPost
       ? ` data-post-code="${escapeHtml(info.postCode)}" data-post-id="${escapeHtml(info.postId)}" onclick="ChatCommon.handlePostSharePreviewClick(this)" style="cursor: pointer;"`
       : "";
@@ -3450,7 +3425,9 @@ const ChatCommon = {
                           } else if (rt.content) {
                             const maxLen = 60;
                             const replyPreviewText =
-                              this.normalizeMessageContentForPreview(rt.content);
+                              this.normalizeMessageContentForPreview(
+                                rt.content,
+                              );
                             const trimmed =
                               replyPreviewText.length > maxLen
                                 ? replyPreviewText.substring(0, maxLen) + "..."
@@ -3983,7 +3960,9 @@ const ChatCommon = {
   },
 
   resolveGroupAllMentionKeyword() {
-    const normalized = (window.APP_CONFIG?.CHAT_GROUP_ALL_MENTION_KEYWORD || "all")
+    const normalized = (
+      window.APP_CONFIG?.CHAT_GROUP_ALL_MENTION_KEYWORD || "all"
+    )
       .toString()
       .trim()
       .replace(/^@+/, "")
@@ -3996,10 +3975,7 @@ const ChatCommon = {
   },
 
   buildMentionLabel(username) {
-    const safeUsername = (username || "")
-      .toString()
-      .trim()
-      .replace(/^@+/, "");
+    const safeUsername = (username || "").toString().trim().replace(/^@+/, "");
     return `<span class="chat-mention-prefix">@</span><span class="chat-mention-name">${escapeHtml(safeUsername)}</span>`;
   },
 
@@ -4067,7 +4043,9 @@ const ChatCommon = {
       }
 
       const mentionUsername = (match.groups?.username || "").toString().trim();
-      const mentionAccountId = (match.groups?.accountId || "").toString().trim();
+      const mentionAccountId = (match.groups?.accountId || "")
+        .toString()
+        .trim();
 
       if (mentionUsername && mentionAccountId) {
         segments.push({
@@ -4198,14 +4176,16 @@ const ChatCommon = {
     const lastMessage =
       messageOverride || conv?.lastMessage || conv?.LastMessage || null;
     const rawServerPreview = !messageOverride
-      ? conv?.lastMessagePreview ?? conv?.LastMessagePreview ?? ""
+      ? (conv?.lastMessagePreview ?? conv?.LastMessagePreview ?? "")
       : "";
     const serverPreview =
       typeof rawServerPreview === "string" ? rawServerPreview.trim() : "";
     const normalizedServerPreview =
       this.normalizeMessageContentForPreview(serverPreview);
     const messageType = this.getMessageType(lastMessage);
-    const hasReplyFromPayload = !!(lastMessage?.replyTo || lastMessage?.ReplyTo);
+    const hasReplyFromPayload = !!(
+      lastMessage?.replyTo || lastMessage?.ReplyTo
+    );
     const hasReplyFromFlag = !!(lastMessage?.hasReply ?? lastMessage?.HasReply);
     const hasReplyFromServerPreview =
       !messageOverride && /^replied\b/i.test(normalizedServerPreview);
@@ -4256,11 +4236,11 @@ const ChatCommon = {
     if (messageType === 4) {
       if (contentText.length > 0) {
         return {
-          text: `Replied to a story: ${contentText}`,
+          text: `Replied to your story: ${contentText}`,
           isDerived: true,
         };
       }
-      return { text: "Replied to a story", isDerived: true };
+      return { text: "Replied to your story", isDerived: true };
     }
 
     if (messageType === 2) {
@@ -4983,7 +4963,10 @@ const ChatCommon = {
     let target = null;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      target = this.contextFindMessageElement(msgContainer, normalizedMessageId);
+      target = this.contextFindMessageElement(
+        msgContainer,
+        normalizedMessageId,
+      );
       if (target) break;
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
@@ -5430,4 +5413,3 @@ const ChatCommon = {
 };
 
 window.ChatCommon = ChatCommon;
-

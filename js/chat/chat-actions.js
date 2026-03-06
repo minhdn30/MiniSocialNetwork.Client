@@ -1736,7 +1736,7 @@ const ChatActions = {
               "",
           ) || 0;
         if (replyMessageType === 5) previewHtml = "<em>Shared a post</em>";
-        else if (replyMessageType === 4) previewHtml = "<em>Replied to a story</em>";
+        else if (replyMessageType === 4) previewHtml = "<em>Replied to your story</em>";
         else previewHtml = "<em>Media</em>";
       }
     }
@@ -1854,7 +1854,7 @@ const ChatActions = {
 
     const storyReplyTypeHtml =
       messageType === 4
-        ? `<div class="chat-pinned-item-message"><em>Replied to a story</em></div>`
+        ? `<div class="chat-pinned-item-message"><em>Replied to your story</em></div>`
         : "";
 
     const messageTextHtml = hasContent
