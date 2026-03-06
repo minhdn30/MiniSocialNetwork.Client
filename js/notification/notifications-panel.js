@@ -739,6 +739,30 @@
       : "Could not remove this follow request. Please try again.";
   }
 
+  async function readFollowRequestActionResponseMessage(res) {
+    if (!res || typeof res.clone !== "function") return "";
+    try {
+      const data = await res.clone().json();
+      return readString(data, "message", "Message", "error", "Error");
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function shouldSilentlyRefreshResolvedFollowRequest(status, message) {
+    if (status === 404 || status === 410) return true;
+    if (status !== 400) return false;
+
+    const normalizedMessage = (message || "").toString().trim().toLowerCase();
+    if (!normalizedMessage) return false;
+
+    return (
+      normalizedMessage.includes("already processed") ||
+      normalizedMessage.includes("not found") ||
+      normalizedMessage.includes("no longer available")
+    );
+  }
+
   async function handleFollowRequestAction(itemEl, item, action) {
     if (!itemEl || !item) return;
     if (itemEl.dataset.requestPending === "1") return;
@@ -773,6 +797,23 @@
     try {
       const res = await actionApi(requesterId);
       if (!res?.ok) {
+        const responseMessage = await readFollowRequestActionResponseMessage(res);
+        if (
+          shouldSilentlyRefreshResolvedFollowRequest(
+            res.status,
+            responseMessage,
+          )
+        ) {
+          await loadNotifications(false, {
+            showLoader: false,
+            patchDom: true,
+            animateNewItems: true,
+            silent: true,
+          });
+          refreshUnreadBadge(40);
+          return;
+        }
+
         throw new Error(
           resolveFollowRequestActionErrorMessage(res.status, isAccept),
         );
