@@ -3,6 +3,8 @@ node_modules/
 
 # Editor
 
+.certs/
+
 # Logs and system files
 *.log
 .DS_Store
@@ -10,6 +12,11 @@ dist/
 build/
 coverage/
 .env*
+*.pem
+*.key
+*.pfx
+*.crt
+*.cer
+*.http
 status_fe.txt
 Test/
-!README.md
