@@ -1,7 +1,7 @@
 let previewEl;
 let hoverTimer;
 let hideTimer;
-let isFollowing = false;
+let followRelation = { isFollowing: false, isRequested: false };
 let currentUserId = null;
 let lastMouseEvent = null;
 let currentAccountId = null;
@@ -187,35 +187,86 @@ async function loadProfilePreview(accountId) {
 function renderProfilePreview(data) {
   if (!data) return;
 
-  currentUserId = data.account.accountId;
-  isFollowing = data.isFollowedByCurrentUser ?? false;
+  const account = data.account || data.Account || {};
+  const recentPosts = data.recentPosts || data.RecentPosts || [];
+  const profileUsername = account.username || account.Username || "";
+  const profileFullName = account.fullName || account.FullName || "";
+  const profileCoverUrl = account.coverUrl || account.CoverUrl || "";
+  const profileStatus = account.status ?? account.Status;
+  const postCountValue =
+    data.postCount ?? data.PostCount ?? data.totalPosts ?? data.TotalPosts ?? 0;
+  const followerCountValue =
+    data.followerCount ??
+    data.FollowerCount ??
+    data.followInfo?.followers ??
+    data.followInfo?.Followers ??
+    data.FollowInfo?.followers ??
+    data.FollowInfo?.Followers ??
+    0;
+  const followingCountValue =
+    data.followingCount ??
+    data.FollowingCount ??
+    data.followInfo?.following ??
+    data.followInfo?.Following ??
+    data.FollowInfo?.following ??
+    data.FollowInfo?.Following ??
+    0;
 
-  const avatarUrl = data.account.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
-  const storyRingClass = getStoryRingClass(data.account?.storyRingState);
+  currentUserId =
+    account.accountId || account.AccountId || account.id || account.Id;
+  const relation = window.FollowModule?.resolveEffectiveFollowRelation
+    ? window.FollowModule.resolveEffectiveFollowRelation(currentUserId, {
+        ...data,
+        followers: followerCountValue,
+        following: followingCountValue,
+      })
+    : {
+        isFollowing: !!(
+          data.isFollowedByCurrentUser ?? data.IsFollowedByCurrentUser ?? false
+        ),
+        isRequested: !!(
+          data.isFollowRequestPendingByCurrentUser ??
+          data.IsFollowRequestPendingByCurrentUser ??
+          false
+        ),
+      };
+  followRelation = relation;
+
+  const avatarUrl = account.avatarUrl || account.AvatarUrl || APP_CONFIG.DEFAULT_AVATAR;
+  const storyRingClass = getStoryRingClass(
+    account.storyRingState ?? account.StoryRingState,
+  );
   const avatarWrapperClass = storyRingClass
     ? "profile-preview-avatar-wrapper with-story-ring"
     : "profile-preview-avatar-wrapper";
   const avatarMarkup = renderProfilePreviewAvatar(
     avatarUrl,
     storyRingClass,
-    data.account?.accountId,
+    currentUserId,
   );
 
   // Actions buttons
   let actionsHTML = "";
-  if (data.isCurrentUser) {
+  if (data.isCurrentUser ?? data.IsCurrentUser) {
     actionsHTML = `
-      <button class="profile-preview-btn profile-preview-btn-view-profile" onclick="viewProfile('${data.account.username}')">
+      <button class="profile-preview-btn profile-preview-btn-view-profile" onclick="viewProfile('${profileUsername}')">
         <i data-lucide="user"></i>
         <span>View Profile</span>
       </button>
     `;
   } else {
-    const followBtnHTML = data.isFollowedByCurrentUser
+    const followBtnHTML = relation.isFollowing
       ? `
         <button class="profile-preview-btn profile-preview-btn-following" id="followBtn" onclick="toggleFollowMenu(event, '${currentUserId}')">
           <i data-lucide="check"></i>
           <span>Following</span>
+        </button>
+      `
+      : relation.isRequested
+        ? `
+        <button class="profile-preview-btn profile-preview-btn-requested" id="followBtn" onclick="toggleFollowMenu(event, '${currentUserId}')">
+          <i data-lucide="clock-3"></i>
+          <span>Request Sent</span>
         </button>
       `
       : `
@@ -225,7 +276,10 @@ function renderProfilePreview(data) {
         </button>
       `;
 
-    const isTargetActive = data.account.status === 0;
+    const isTargetActive =
+      profileStatus === undefined ||
+      profileStatus === null ||
+      Number(profileStatus) === 0;
     const statusClass = isTargetActive ? "" : "disabled-action";
     const disabledAttr = isTargetActive ? "" : "disabled";
 
@@ -240,8 +294,8 @@ function renderProfilePreview(data) {
 
   // Cover & Dynamic Background
   const coverAreaId = `pp-cover-${currentUserId}`;
-  const coverImgHtml = data.account.coverUrl
-    ? `<img src="${data.account.coverUrl}" alt="cover" onerror="this.style.display='none'">`
+  const coverImgHtml = profileCoverUrl
+    ? `<img src="${profileCoverUrl}" alt="cover" onerror="this.style.display='none'">`
     : "";
 
   previewEl.innerHTML = `
@@ -249,40 +303,40 @@ function renderProfilePreview(data) {
         ${coverImgHtml}
     </div>
     <div class="profile-preview-content">
-        <div class="profile-preview-header" onclick="viewProfile('${data.account.username}')">
+        <div class="profile-preview-header" onclick="viewProfile('${profileUsername}')">
             <div class="${avatarWrapperClass}">
                 ${avatarMarkup}
             </div>
             <div class="profile-preview-info">
-                <div class="profile-preview-name" id="pp-username">${data.account.username}</div>
-                <div class="profile-preview-fullname-small">${data.account.fullName}</div>
+                <div class="profile-preview-name" id="pp-username">${profileUsername}</div>
+                <div class="profile-preview-fullname-small">${profileFullName}</div>
             </div>
         </div>
 
         <div class="profile-preview-stats">
             <div>
-                <b>${data.postCount}</b>
+                <b>${postCountValue}</b>
                 <span>Posts</span>
             </div>
             <div>
-                <b>${data.followerCount}</b>
+                <b>${followerCountValue}</b>
                 <span>Followers</span>
             </div>
             <div>
-                <b>${data.followingCount}</b>
+                <b>${followingCountValue}</b>
                 <span>Following</span>
             </div>
         </div>
 
         ${
-          data.recentPosts && data.recentPosts.length > 0
+          recentPosts.length > 0
             ? `
             <div class="profile-preview-medias">
-                ${data.recentPosts
+                ${recentPosts
                   .map(
                     (p) => `
-                    <div class="profile-preview-media-item" onclick="if(window.InteractionModule) window.InteractionModule.closeReactList(); if(window.openPostDetail) window.openPostDetail('${p.postId}', '${p.postCode || ""}'); hidePreview();">
-                      <img src="${p.mediaUrl}" alt="post">
+                    <div class="profile-preview-media-item" onclick="if(window.InteractionModule) window.InteractionModule.closeReactList(); if(window.openPostDetail) window.openPostDetail('${p.postId || p.PostId}', '${p.postCode || p.PostCode || ""}'); hidePreview();">
+                      <img src="${p.mediaUrl || p.MediaUrl}" alt="post">
                     </div>
                   `,
                   )
@@ -725,40 +779,23 @@ if (document.readyState === "loading") {
 /* ===== Follow/Unfollow ===== */
 /* ===== Follow/Unfollow ===== */
 async function toggleFollow(userId) {
-  isFollowing = !isFollowing;
-
   const btn = document.getElementById("followBtn");
   if (!btn) return;
+  if (!window.FollowModule) return;
 
-  // Optimistic UI update for the preview button itself
-  if (isFollowing) {
-    btn.innerHTML = `
-      <i data-lucide="check"></i>
-      <span>Following</span>
-    `;
-    btn.className = "profile-preview-btn profile-preview-btn-following";
-    btn.onclick = (e) => toggleFollowMenu(e, userId);
-  } else {
-    btn.innerHTML = `
-      <i data-lucide="user-plus"></i>
-      <span>Follow</span>
-    `;
-    btn.className = "profile-preview-btn profile-preview-btn-follow";
-    btn.onclick = () => toggleFollow(userId);
+  const isFollowingNow = btn.classList.contains("profile-preview-btn-following");
+  const isRequestedNow = btn.classList.contains("profile-preview-btn-requested");
+  followRelation = {
+    isFollowing: isFollowingNow,
+    isRequested: isRequestedNow,
+  };
+
+  if (isFollowingNow || isRequestedNow) {
+    FollowModule.showUnfollowConfirm(userId, btn);
+    return;
   }
 
-  // Re-initialize lucide icons
-  if (window.lucide) {
-    lucide.createIcons();
-  }
-
-  // Call FollowModule to handle API and sync other UI
-  // Note: We already updated local button optimistically, but FollowModule also syncs feed
-  if (isFollowing) {
-    if (window.FollowModule) await FollowModule.followUser(userId);
-  } else {
-    if (window.FollowModule) await FollowModule.unfollowUser(userId);
-  }
+  await FollowModule.followUser(userId, btn);
 }
 
 /* ===== Toggle follow menu (dropdown) ===== */

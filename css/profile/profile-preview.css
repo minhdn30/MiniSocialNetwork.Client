@@ -310,6 +310,26 @@
   opacity: 0.8;
 }
 
+/* Request Sent */
+.profile-preview-btn-requested {
+  background: var(--border-primary);
+}
+
+.profile-preview-btn-requested,
+.profile-preview-btn-requested i,
+.profile-preview-btn-requested svg {
+  color: var(--text-primary);
+}
+
+.profile-preview-btn-requested:hover {
+  background: var(--border-secondary);
+}
+
+.profile-preview-btn-requested:active {
+  background: var(--bg-hover);
+  opacity: 0.8;
+}
+
 /* View Profile */
 .profile-preview-btn-view-profile {
   background: var(--accent-secondary);

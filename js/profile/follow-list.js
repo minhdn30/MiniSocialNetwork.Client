@@ -14,6 +14,19 @@ const FollowListModule = (function () {
   let sortState = null; // null: default, false: DESC, true: ASC
   const PAGE_SIZE = window.APP_CONFIG?.FOLLOW_LIST_PAGE_SIZE || 15;
 
+  function normalizeAccountId(value) {
+    return (value || "").toString().trim().toLowerCase();
+  }
+
+  function isCurrentViewerAccount(accountId) {
+    const targetId = normalizeAccountId(accountId);
+    if (!targetId) return false;
+    const currentId = normalizeAccountId(
+      APP_CONFIG.CURRENT_USER_ID || localStorage.getItem("accountId"),
+    );
+    return !!currentId && targetId === currentId;
+  }
+
   const MODAL_ID = "followListModal";
 
   function normalizeListType(type) {
@@ -298,7 +311,7 @@ const FollowListModule = (function () {
       const avatarUrl = item.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
 
       let actionBtnHtml = "";
-      if (item.accountId === APP_CONFIG.CURRENT_USER_ID) {
+      if (isCurrentViewerAccount(item.accountId)) {
         actionBtnHtml = `
                     <button class="follow-btn view-profile-btn" onclick="viewProfile('${item.username}')">
                         <i data-lucide="user"></i>
@@ -310,6 +323,12 @@ const FollowListModule = (function () {
                         <button class="follow-btn following" onclick="FollowListModule.handleFollow('${item.accountId}', this)">
                             <i data-lucide="check"></i>
                             <span>Following</span>
+                        </button>`;
+        } else if (item.isFollowRequested) {
+          actionBtnHtml = `
+                        <button class="follow-btn requested" onclick="FollowListModule.handleFollow('${item.accountId}', this)">
+                            <i data-lucide="clock-3"></i>
+                            <span>Request Sent</span>
                         </button>`;
         } else {
           actionBtnHtml = `
@@ -342,8 +361,9 @@ const FollowListModule = (function () {
   async function handleFollow(accountId, btn) {
     if (!window.FollowModule) return;
     const isFollowing = btn.classList.contains("following");
+    const isRequested = btn.classList.contains("requested");
 
-    if (isFollowing) {
+    if (isFollowing || isRequested) {
       FollowModule.showUnfollowConfirm(accountId, btn);
     } else {
       await FollowModule.followUser(accountId, btn);

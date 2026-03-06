@@ -322,6 +322,7 @@ body.is-profile-page .main-content::-webkit-scrollbar:horizontal {
 }
 
 .profile-btn-following:hover,
+.profile-btn-requested:hover,
 .profile-btn-secondary:hover,
 .profile-btn-more:hover {
   background: var(--bg-active) !important;
@@ -333,6 +334,7 @@ body.is-profile-page .main-content::-webkit-scrollbar:horizontal {
 .profile-btn-message,
 .profile-btn-follow,
 .profile-btn-following,
+.profile-btn-requested,
 .profile-btn-secondary,
 .profile-btn-more {
   background: transparent !important;

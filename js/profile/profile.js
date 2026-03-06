@@ -498,6 +498,28 @@
     return (value || "").toString().trim().toLowerCase();
   }
 
+  function getProfileDataAccountId(data = currentProfileData) {
+    if (!data || typeof data !== "object") return "";
+    const info =
+      data.accountInfo || data.AccountInfo || data.account || data.Account || {};
+    return (info.accountId || info.AccountId || info.id || info.Id || "")
+      .toString()
+      .trim();
+  }
+
+  function isViewingProfileAccountId(accountId) {
+    const targetId = normalizeProfileCacheKey(accountId);
+    if (!targetId) return false;
+
+    const routeTargetId = normalizeProfileCacheKey(currentProfileId);
+    if (routeTargetId && routeTargetId === targetId) {
+      return true;
+    }
+
+    const dataTargetId = normalizeProfileCacheKey(getProfileDataAccountId());
+    return !!dataTargetId && dataTargetId === targetId;
+  }
+
   function isCurrentUserProfile() {
     if (currentProfileData?.isCurrentUser === true) return true;
     if (currentProfileData?.IsCurrentUser === true) return true;
@@ -1196,38 +1218,110 @@
     // This function is intended to update only the dynamic parts of the profile header
     // without re-rendering the entire header or triggering post loads.
     // Useful for silent updates from cache or real-time events.
-    const followInfo = data.followInfo || {};
+    const followInfo = data.followInfo || data.FollowInfo || {};
     const postCount = document.getElementById("profile-posts-count");
     const followersCount = document.getElementById("profile-followers-count");
     const followingCount = document.getElementById("profile-following-count");
     const actionBtn = document.getElementById("profile-action-btn");
 
-    if (postCount)
-      postCount.textContent = data.totalPosts ?? data.postCount ?? 0;
-    if (followersCount)
-      followersCount.textContent =
-        followInfo.followers ?? data.followerCount ?? 0;
-    if (followingCount)
-      followingCount.textContent =
-        followInfo.following ?? data.followingCount ?? 0;
+    const totalPostsValue =
+      data.totalPosts ?? data.TotalPosts ?? data.postCount ?? data.PostCount;
+    const followersValue =
+      followInfo.followers ??
+      followInfo.Followers ??
+      data.followerCount ??
+      data.FollowerCount;
+    const followingValue =
+      followInfo.following ??
+      followInfo.Following ??
+      data.followingCount ??
+      data.FollowingCount;
+
+    if (postCount && totalPostsValue !== undefined && totalPostsValue !== null) {
+      postCount.textContent = totalPostsValue;
+    }
+    if (followersCount && followersValue !== undefined && followersValue !== null) {
+      followersCount.textContent = followersValue;
+    }
+    if (followingCount && followingValue !== undefined && followingValue !== null) {
+      followingCount.textContent = followingValue;
+    }
 
     // Update follow button state if necessary
-    const isOwner = data.isCurrentUser;
-    const isFollowed =
-      followInfo.isFollowedByCurrentUser ?? data.isFollowedByCurrentUser;
+    const isOwner = data.isCurrentUser ?? data.IsCurrentUser;
+    const info = data.accountInfo || data.AccountInfo || data.account || data.Account || {};
+    const profileId =
+      info.accountId ||
+      info.AccountId ||
+      info.id ||
+      info.Id ||
+      getProfileDataAccountId(data);
+    const relation = window.FollowModule?.resolveEffectiveFollowRelation
+      ? window.FollowModule.resolveEffectiveFollowRelation(profileId, {
+          isFollowedByCurrentUser:
+            followInfo.isFollowedByCurrentUser ??
+            followInfo.IsFollowedByCurrentUser ??
+            data.isFollowedByCurrentUser ??
+            data.IsFollowedByCurrentUser,
+          isFollowRequestPendingByCurrentUser:
+            followInfo.isFollowRequestPendingByCurrentUser ??
+            followInfo.IsFollowRequestPendingByCurrentUser ??
+            data.isFollowRequestPendingByCurrentUser ??
+            data.IsFollowRequestPendingByCurrentUser,
+          relationStatus:
+            followInfo.relationStatus ??
+            followInfo.RelationStatus ??
+            data.relationStatus ??
+            data.RelationStatus,
+          targetFollowPrivacy:
+            followInfo.targetFollowPrivacy ??
+            followInfo.TargetFollowPrivacy ??
+            data.targetFollowPrivacy ??
+            data.TargetFollowPrivacy,
+        })
+      : {
+          isFollowing:
+            followInfo.isFollowedByCurrentUser ??
+            followInfo.IsFollowedByCurrentUser ??
+            data.isFollowedByCurrentUser ??
+            data.IsFollowedByCurrentUser,
+          isRequested:
+            followInfo.isFollowRequestPendingByCurrentUser ??
+            followInfo.IsFollowRequestPendingByCurrentUser ??
+            data.isFollowRequestPendingByCurrentUser ??
+            data.IsFollowRequestPendingByCurrentUser,
+        };
     if (actionBtn && !isOwner) {
       const followBtn = actionBtn.querySelector(
-        ".profile-btn-follow, .profile-btn-following",
+        ".profile-btn-follow, .profile-btn-following, .profile-btn-requested",
       );
       if (followBtn) {
-        const followBtnClass = isFollowed
+        const followBtnClass = relation.isFollowing
           ? "profile-btn-following"
-          : "profile-btn-follow";
-        const followIcon = isFollowed ? "check" : "user-plus";
-        const followText = isFollowed ? "Following" : "Follow";
+          : relation.isRequested
+            ? "profile-btn-requested"
+            : "profile-btn-follow";
+        const followIcon = relation.isFollowing
+          ? "check"
+          : relation.isRequested
+            ? "clock-3"
+            : "user-plus";
+        const followText = relation.isFollowing
+          ? "Following"
+          : relation.isRequested
+            ? "Request Sent"
+            : "Follow";
 
         followBtn.className = `profile-btn ${followBtnClass}`;
         followBtn.innerHTML = `<i data-lucide="${followIcon}"></i><span>${followText}</span>`;
+        if (window.FollowModule && profileId) {
+          if (relation.isFollowing || relation.isRequested) {
+            followBtn.onclick = (e) =>
+              FollowModule.showUnfollowConfirm(profileId, e.currentTarget);
+          } else {
+            followBtn.onclick = () => FollowModule.followUser(profileId, followBtn);
+          }
+        }
         if (window.lucide) lucide.createIcons();
       }
     }
@@ -1247,11 +1341,50 @@
 
     if (!data) return;
 
-    const info = data.accountInfo || data.account || {};
-    const followInfo = data.followInfo || {};
-    const isOwner = data.isCurrentUser;
-    const isFollowed =
-      followInfo.isFollowedByCurrentUser ?? data.isFollowedByCurrentUser;
+    const info = data.accountInfo || data.AccountInfo || data.account || data.Account || {};
+    const followInfo = data.followInfo || data.FollowInfo || {};
+    const isOwner = data.isCurrentUser ?? data.IsCurrentUser;
+    const profileAccountId =
+      info.accountId ||
+      info.AccountId ||
+      info.id ||
+      info.Id ||
+      currentProfileId;
+    const followRelation = window.FollowModule?.resolveEffectiveFollowRelation
+      ? window.FollowModule.resolveEffectiveFollowRelation(profileAccountId, {
+          isFollowedByCurrentUser:
+            followInfo.isFollowedByCurrentUser ??
+            followInfo.IsFollowedByCurrentUser ??
+            data.isFollowedByCurrentUser ??
+            data.IsFollowedByCurrentUser,
+          isFollowRequestPendingByCurrentUser:
+            followInfo.isFollowRequestPendingByCurrentUser ??
+            followInfo.IsFollowRequestPendingByCurrentUser ??
+            data.isFollowRequestPendingByCurrentUser ??
+            data.IsFollowRequestPendingByCurrentUser,
+          relationStatus:
+            followInfo.relationStatus ??
+            followInfo.RelationStatus ??
+            data.relationStatus ??
+            data.RelationStatus,
+          targetFollowPrivacy:
+            followInfo.targetFollowPrivacy ??
+            followInfo.TargetFollowPrivacy ??
+            data.targetFollowPrivacy ??
+            data.TargetFollowPrivacy,
+        })
+      : {
+          isFollowing:
+            followInfo.isFollowedByCurrentUser ??
+            followInfo.IsFollowedByCurrentUser ??
+            data.isFollowedByCurrentUser ??
+            data.IsFollowedByCurrentUser,
+          isRequested:
+            followInfo.isFollowRequestPendingByCurrentUser ??
+            followInfo.IsFollowRequestPendingByCurrentUser ??
+            data.isFollowRequestPendingByCurrentUser ??
+            data.IsFollowRequestPendingByCurrentUser,
+        };
 
     // Cover & Avatar
     const avatarUrl = info.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
@@ -1259,7 +1392,12 @@
     const profileCover = document.querySelector(".profile-cover");
 
     if (avatarWrapper) {
-      const profileAccountId = info.accountId || info.id || currentProfileId;
+      const profileAccountId =
+        info.accountId ||
+        info.AccountId ||
+        info.id ||
+        info.Id ||
+        currentProfileId;
       renderProfileAvatar(
         avatarWrapper,
         avatarUrl,
@@ -1327,14 +1465,28 @@
       }
     }
 
-    if (postCount)
-      postCount.textContent = data.totalPosts ?? data.postCount ?? 0;
-    if (followersCount)
-      followersCount.textContent =
-        followInfo.followers ?? data.followerCount ?? 0;
-    if (followingCount)
-      followingCount.textContent =
-        followInfo.following ?? data.followingCount ?? 0;
+    const totalPostsValue =
+      data.totalPosts ?? data.TotalPosts ?? data.postCount ?? data.PostCount;
+    const followersValue =
+      followInfo.followers ??
+      followInfo.Followers ??
+      data.followerCount ??
+      data.FollowerCount;
+    const followingValue =
+      followInfo.following ??
+      followInfo.Following ??
+      data.followingCount ??
+      data.FollowingCount;
+
+    if (postCount && totalPostsValue !== undefined && totalPostsValue !== null) {
+      postCount.textContent = totalPostsValue;
+    }
+    if (followersCount && followersValue !== undefined && followersValue !== null) {
+      followersCount.textContent = followersValue;
+    }
+    if (followingCount && followingValue !== undefined && followingValue !== null) {
+      followingCount.textContent = followingValue;
+    }
 
     // Details: Phone, Address
     const phoneEl = document.getElementById("profile-detail-phone");
@@ -1384,20 +1536,28 @@
                     </button>
                 `;
       } else {
-        const followBtnClass = isFollowed
+        const followBtnClass = followRelation.isFollowing
           ? "profile-btn-following"
-          : "profile-btn-follow";
-        const followIcon = isFollowed ? "check" : "user-plus";
-        const followText = isFollowed ? "Following" : "Follow";
-
-        const profileId = info.accountId || info.id || currentProfileId;
+          : followRelation.isRequested
+            ? "profile-btn-requested"
+            : "profile-btn-follow";
+        const followIcon = followRelation.isFollowing
+          ? "check"
+          : followRelation.isRequested
+            ? "clock-3"
+            : "user-plus";
+        const followText = followRelation.isFollowing
+          ? "Following"
+          : followRelation.isRequested
+            ? "Request Sent"
+            : "Follow";
 
         actionBtn.innerHTML = `
-                    <button class="profile-btn ${followBtnClass}" onclick="toggleFollowProfile('${profileId}')">
+                    <button class="profile-btn ${followBtnClass}" onclick="toggleFollowProfile('${profileAccountId}')">
                         <i data-lucide="${followIcon}"></i>
                         <span>${followText}</span>
                     </button>
-                    <button class="profile-btn profile-btn-message" onclick="openMessage('${profileId}')">
+                    <button class="profile-btn profile-btn-message" onclick="openMessage('${profileAccountId}')">
                         <i data-lucide="send"></i>
                         <span>Message</span>
                     </button>
@@ -3475,9 +3635,8 @@
         closeEditProfile();
         loadProfileData();
       } else {
-        const data = await res.json();
-        if (window.toastError)
-          toastError(data.message || "Failed to update profile.");
+        await res.json().catch(() => null);
+        if (window.toastError) toastError("Failed to update profile.");
       }
     } catch (err) {
       console.error(err);
@@ -3491,13 +3650,14 @@
 
   global.toggleFollowProfile = async function (accountId) {
     const btn = document.querySelector(
-      "#profile-action-btn .profile-btn-follow, #profile-action-btn .profile-btn-following",
+      "#profile-action-btn .profile-btn-follow, #profile-action-btn .profile-btn-following, #profile-action-btn .profile-btn-requested",
     );
     if (!btn) return;
 
     const isFollowed = btn.classList.contains("profile-btn-following");
+    const isRequested = btn.classList.contains("profile-btn-requested");
 
-    if (isFollowed) {
+    if (isFollowed || isRequested) {
       if (window.FollowModule) {
         FollowModule.showUnfollowConfirm(accountId, btn);
       } else {
@@ -3540,21 +3700,20 @@
     isFollowing,
     followers,
     following,
+    isRequested,
+    targetFollowPrivacy,
   ) {
     // 1. Invalidate cache logic REVISED
     // ONLY clear cache if it is NOT my own profile.
     // If it is my profile, keep cache to preserve scroll position when I return.
     // The 'silent update' in initProfile will handle the data refresh.
-    const myId = localStorage.getItem("accountId");
-    const myUsername = localStorage.getItem("username");
-    // Case-insensitive check
+    const normalizedAccountId = normalizeProfileCacheKey(accountId);
+    if (!normalizedAccountId) return;
+    const myId = normalizeProfileCacheKey(localStorage.getItem("accountId"));
+    const myUsername = normalizeProfileCacheKey(localStorage.getItem("username"));
     const isMe =
-      accountId.toLowerCase() === myId?.toLowerCase() ||
-      accountId.toLowerCase() === myUsername?.toLowerCase();
-    const normalizedAccountId = (accountId || "")
-      .toString()
-      .trim()
-      .toLowerCase();
+      (myId && normalizedAccountId === myId) ||
+      (myUsername && normalizedAccountId === myUsername);
 
     if (window.PageCache && !isMe) {
       // Clear all possible profile keys for this account
@@ -3566,28 +3725,103 @@
     }
 
     // 2. If the user is CURRENTLY viewing this profile, update the live DOM and state
-    if (currentProfileId == accountId && currentProfileData) {
-      // Update internal state
-      if (isFollowing !== undefined) {
-        currentProfileData.isFollowedByCurrentUser = isFollowing;
-
-        if (currentProfileData.followInfo) {
-          currentProfileData.followInfo.isFollowedByCurrentUser = isFollowing;
-        } else {
-          currentProfileData.followInfo = {
-            isFollowedByCurrentUser: isFollowing,
-            followers: followers ?? 0,
-            following: following ?? 0,
+    if (isViewingProfileAccountId(normalizedAccountId) && currentProfileData) {
+      const currentFollowInfo =
+        currentProfileData.followInfo || currentProfileData.FollowInfo || {};
+      currentProfileData.followInfo = currentFollowInfo;
+      currentProfileData.FollowInfo = currentFollowInfo;
+      const profileAccountId = getProfileDataAccountId() || accountId;
+      const normalizedRelation = window.FollowModule?.resolveEffectiveFollowRelation
+        ? window.FollowModule.resolveEffectiveFollowRelation(
+            profileAccountId,
+            {
+              isFollowedByCurrentUser:
+                isFollowing ??
+                currentFollowInfo.isFollowedByCurrentUser ??
+                currentFollowInfo.IsFollowedByCurrentUser ??
+                currentProfileData.isFollowedByCurrentUser ??
+                currentProfileData.IsFollowedByCurrentUser,
+              isFollowRequestPendingByCurrentUser:
+                isRequested ??
+                currentFollowInfo.isFollowRequestPendingByCurrentUser ??
+                currentFollowInfo.IsFollowRequestPendingByCurrentUser ??
+                currentProfileData.isFollowRequestPendingByCurrentUser ??
+                currentProfileData.IsFollowRequestPendingByCurrentUser,
+              relationStatus:
+                currentFollowInfo.relationStatus ??
+                currentFollowInfo.RelationStatus,
+              targetFollowPrivacy:
+                targetFollowPrivacy ??
+                currentFollowInfo.targetFollowPrivacy ??
+                currentFollowInfo.TargetFollowPrivacy ??
+                currentProfileData.targetFollowPrivacy ??
+                currentProfileData.TargetFollowPrivacy,
+            },
+            isFollowing,
+          )
+        : {
+            isFollowing: !!(
+              isFollowing ??
+              currentFollowInfo.isFollowedByCurrentUser ??
+              currentFollowInfo.IsFollowedByCurrentUser
+            ),
+            isRequested: !!(
+              isRequested ??
+              currentFollowInfo.isFollowRequestPendingByCurrentUser ??
+              currentFollowInfo.IsFollowRequestPendingByCurrentUser
+            ),
           };
+
+      if (isFollowing !== undefined || isRequested !== undefined) {
+        currentProfileData.isFollowedByCurrentUser =
+          normalizedRelation.isFollowing;
+        currentProfileData.IsFollowedByCurrentUser =
+          normalizedRelation.isFollowing;
+        currentProfileData.isFollowRequestPendingByCurrentUser =
+          normalizedRelation.isRequested;
+        currentProfileData.IsFollowRequestPendingByCurrentUser =
+          normalizedRelation.isRequested;
+
+        currentProfileData.followInfo.isFollowedByCurrentUser =
+          normalizedRelation.isFollowing;
+        currentProfileData.followInfo.IsFollowedByCurrentUser =
+          normalizedRelation.isFollowing;
+        currentProfileData.followInfo.isFollowRequestPendingByCurrentUser =
+          normalizedRelation.isRequested;
+        currentProfileData.followInfo.IsFollowRequestPendingByCurrentUser =
+          normalizedRelation.isRequested;
+        if (window.FollowModule?.RELATION_STATUS) {
+          currentProfileData.followInfo.relationStatus =
+            normalizedRelation.isFollowing
+              ? window.FollowModule.RELATION_STATUS.FOLLOWING
+              : normalizedRelation.isRequested
+                ? window.FollowModule.RELATION_STATUS.REQUESTED
+                : window.FollowModule.RELATION_STATUS.NONE;
+          currentProfileData.followInfo.RelationStatus =
+            currentProfileData.followInfo.relationStatus;
+        }
+        if (targetFollowPrivacy !== undefined) {
+          currentProfileData.followInfo.targetFollowPrivacy =
+            targetFollowPrivacy;
+          currentProfileData.followInfo.TargetFollowPrivacy =
+            targetFollowPrivacy;
+          currentProfileData.targetFollowPrivacy = targetFollowPrivacy;
+          currentProfileData.TargetFollowPrivacy = targetFollowPrivacy;
         }
       }
 
       // Always update counts if provided
-      if (currentProfileData.followInfo) {
-        if (followers !== undefined)
-          currentProfileData.followInfo.followers = followers;
-        if (following !== undefined)
-          currentProfileData.followInfo.following = following;
+      if (followers !== undefined) {
+        currentProfileData.followInfo.followers = followers;
+        currentProfileData.followInfo.Followers = followers;
+        currentProfileData.followerCount = followers;
+        currentProfileData.FollowerCount = followers;
+      }
+      if (following !== undefined) {
+        currentProfileData.followInfo.following = following;
+        currentProfileData.followInfo.Following = following;
+        currentProfileData.followingCount = following;
+        currentProfileData.FollowingCount = following;
       }
 
       // Animate Stats directly
@@ -3621,32 +3855,34 @@
 
       // Update Action Button
       const actionBtn = document.getElementById("profile-action-btn");
-      if (actionBtn && isFollowing !== undefined) {
+      if (
+        actionBtn &&
+        (isFollowing !== undefined || isRequested !== undefined)
+      ) {
         const followBtn = actionBtn.querySelector(
-          ".profile-btn-follow, .profile-btn-following",
+          ".profile-btn-follow, .profile-btn-following, .profile-btn-requested",
         );
         if (followBtn) {
-          // Check if state actually matches 'isFollowing'
-          const btnIsFollowing = followBtn.classList.contains(
-            "profile-btn-following",
-          );
-          if (btnIsFollowing !== isFollowing) {
-            // Swap state
-            if (isFollowing) {
-              followBtn.innerHTML =
-                '<i data-lucide="check"></i><span>Following</span>';
-              followBtn.className = "profile-btn profile-btn-following";
-              followBtn.onclick = (e) =>
-                FollowModule.showUnfollowConfirm(accountId, e.currentTarget);
-            } else {
-              followBtn.innerHTML =
-                '<i data-lucide="user-plus"></i><span>Follow</span>';
-              followBtn.className = "profile-btn profile-btn-follow";
-              followBtn.onclick = () =>
-                FollowModule.followUser(accountId, followBtn);
-            }
-            if (window.lucide) lucide.createIcons();
+          if (normalizedRelation.isFollowing) {
+            followBtn.innerHTML =
+              '<i data-lucide="check"></i><span>Following</span>';
+            followBtn.className = "profile-btn profile-btn-following";
+            followBtn.onclick = (e) =>
+              FollowModule.showUnfollowConfirm(profileAccountId, e.currentTarget);
+          } else if (normalizedRelation.isRequested) {
+            followBtn.innerHTML =
+              '<i data-lucide="clock-3"></i><span>Request Sent</span>';
+            followBtn.className = "profile-btn profile-btn-requested";
+            followBtn.onclick = (e) =>
+              FollowModule.showUnfollowConfirm(profileAccountId, e.currentTarget);
+          } else {
+            followBtn.innerHTML =
+              '<i data-lucide="user-plus"></i><span>Follow</span>';
+            followBtn.className = "profile-btn profile-btn-follow";
+            followBtn.onclick = () =>
+              FollowModule.followUser(profileAccountId, followBtn);
           }
+          if (window.lucide) lucide.createIcons();
         }
       }
     }
