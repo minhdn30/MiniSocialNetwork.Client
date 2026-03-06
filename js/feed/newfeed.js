@@ -133,6 +133,9 @@
       const authorProfileHash = buildProfileHash(authorProfileTarget);
       const commentCount = Number.isFinite(Number(post.commentCount)) ? Number(post.commentCount) : 0;
       const ownerDisplayName = PostUtils.getPostOwnerDisplayName(post, true);
+      const isAuthorRequested = Boolean(
+        post.author?.isFollowRequestPendingByCurrentUser,
+      );
 
       postEl.innerHTML = `
           <div class="post-header">
@@ -159,7 +162,12 @@
             <div class="post-actions">
             ${
               !post.isOwner && !post.author.isFollowedByCurrentUser
-                ? `<button class="follow-btn" onclick="FollowModule.followUser('${post.author.accountId}', this)">
+                ? isAuthorRequested
+                  ? `<button class="follow-btn requested" onclick="FollowModule.showUnfollowConfirm('${post.author.accountId}', this)">
+                    <i data-lucide="clock-3"></i>
+                    <span>Request Sent</span>
+                   </button>`
+                  : `<button class="follow-btn" onclick="FollowModule.followUser('${post.author.accountId}', this)">
                     <i data-lucide="user-plus"></i>
                     <span>Follow</span>
                    </button>`

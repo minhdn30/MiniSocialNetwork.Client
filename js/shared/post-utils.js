@@ -482,6 +482,9 @@
       account.avatarUrl || account.AvatarUrl || APP_CONFIG.DEFAULT_AVATAR;
 
     const isFollowing = Boolean(account.isFollowing ?? account.IsFollowing);
+    const isFollowRequested = Boolean(
+      account.isFollowRequested ?? account.IsFollowRequested,
+    );
     const isFollower = Boolean(account.isFollower ?? account.IsFollower);
 
     return {
@@ -490,6 +493,7 @@
       fullName,
       avatarUrl,
       isFollowing,
+      isFollowRequested,
       isFollower,
     };
   }
@@ -891,6 +895,16 @@
           event.stopPropagation();
           handleTaggedAccountFollow(account.accountId, actionBtn);
         });
+      } else if (account.isFollowRequested) {
+        actionBtn.className = "follow-btn requested";
+        actionBtn.innerHTML = `
+          <i data-lucide="clock-3"></i>
+          <span>Request Sent</span>
+        `;
+        actionBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          handleTaggedAccountFollow(account.accountId, actionBtn);
+        });
       } else {
         actionBtn.className = "follow-btn";
         actionBtn.innerHTML = `
@@ -917,7 +931,8 @@
     if (!targetId || !actionBtn || !window.FollowModule) return;
 
     const isFollowing = actionBtn.classList.contains("following");
-    if (isFollowing) {
+    const isRequested = actionBtn.classList.contains("requested");
+    if (isFollowing || isRequested) {
       window.FollowModule.showUnfollowConfirm(targetId, actionBtn);
       return;
     }
@@ -1092,7 +1107,10 @@
       if (!btn || btn.classList.contains("view-profile-btn")) return;
       followStateMap.set(
         normalizeAccountId(accountId),
-        btn.classList.contains("following"),
+        {
+          isFollowing: btn.classList.contains("following"),
+          isFollowRequested: btn.classList.contains("requested"),
+        },
       );
     });
 
@@ -1101,9 +1119,11 @@
       updatedList = cachedList.map((item) => {
         const normalizedId = normalizeAccountId(item?.accountId);
         if (!normalizedId || !followStateMap.has(normalizedId)) return item;
+        const relation = followStateMap.get(normalizedId);
         return {
           ...item,
-          isFollowing: followStateMap.get(normalizedId) === true,
+          isFollowing: relation?.isFollowing === true,
+          isFollowRequested: relation?.isFollowRequested === true,
         };
       });
       setTaggedAccountsCacheEntry(cacheKey, updatedList);

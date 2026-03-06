@@ -1060,6 +1060,9 @@ async function router() {
       }
       
       PageCache.restore(nextKey, app);
+      if (window.lucide && typeof lucide.createIcons === "function") {
+          lucide.createIcons();
+      }
       
       if (appIsChatPath(path) && window.ChatPage && typeof window.ChatPage.handleUrlNavigation === 'function') {
           window.ChatPage.handleUrlNavigation();
