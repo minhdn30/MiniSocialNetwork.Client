@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+# Editor
+.vscode/
+
 # AI Agent & Skills
 .agent/
 .gemini/
@@ -17,4 +20,6 @@ dist/
 build/
 coverage/
 .env*
+status_fe.txt
+Test/
 !README.md
