@@ -1,6 +1,8 @@
 # Dependencies
 node_modules/
 
+# Editor
+
 # Logs and system files
 *.log
 .DS_Store
@@ -8,4 +10,6 @@ dist/
 build/
 coverage/
 .env*
+status_fe.txt
+Test/
 !README.md
