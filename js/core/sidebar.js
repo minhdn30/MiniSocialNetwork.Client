@@ -172,6 +172,14 @@ async function loadSidebar() {
 
   // Load unread message count for global badge
   loadGlobalMessageBadge();
+  loadGlobalNotificationBadge();
+
+  if (
+    window.NotificationsPanel &&
+    typeof window.NotificationsPanel.init === "function"
+  ) {
+    window.NotificationsPanel.init();
+  }
 }
 
 /**
@@ -222,6 +230,57 @@ function updateGlobalMessageBadge(delta) {
   // Deprecated: use server-backed refresh for correctness
   scheduleGlobalUnreadRefresh();
 }
+
+function getNotificationsBadgeCap() {
+  const rawCap = Number(window.APP_CONFIG?.NOTIFICATIONS_BADGE_CAP);
+  if (Number.isFinite(rawCap) && rawCap > 0) {
+    return Math.floor(rawCap);
+  }
+  return 99;
+}
+
+async function loadGlobalNotificationBadge() {
+  if (!window.API?.Notifications?.getUnreadCount) return;
+  try {
+    const res = await window.API.Notifications.getUnreadCount();
+    if (res.ok) {
+      const data = await res.json();
+      setGlobalNotificationBadge(data?.count ?? 0);
+    }
+  } catch (err) {
+    console.error("Failed to load global notification badge:", err);
+  }
+}
+
+let globalNotificationUnreadRefreshTimer = null;
+function scheduleGlobalNotificationUnreadRefresh(delay = 1000) {
+  clearTimeout(globalNotificationUnreadRefreshTimer);
+  globalNotificationUnreadRefreshTimer = setTimeout(() => {
+    loadGlobalNotificationBadge();
+  }, Math.max(0, Number(delay) || 0));
+}
+window.scheduleGlobalNotificationUnreadRefresh =
+  scheduleGlobalNotificationUnreadRefresh;
+
+function setGlobalNotificationBadge(count) {
+  const badge = document.getElementById("notifications-badge");
+  if (!badge) return;
+
+  const safeCount = Number.isFinite(Number(count))
+    ? Math.max(0, Math.floor(Number(count)))
+    : 0;
+  if (safeCount > 0) {
+    const cap = getNotificationsBadgeCap();
+    badge.textContent = safeCount > cap ? `${cap}+` : `${safeCount}`;
+    badge.style.display = "";
+  } else {
+    badge.textContent = "";
+    badge.style.display = "none";
+  }
+  badge.dataset.count = safeCount;
+}
+window.setGlobalNotificationBadge = setGlobalNotificationBadge;
+window.loadGlobalNotificationBadge = loadGlobalNotificationBadge;
 
 // THÊM MỚI: Tự động collapse sidebar khi chuột rời khỏi
 function setupAutoClose() {
@@ -500,6 +559,13 @@ function setActiveSidebar(route) {
       isActive = isChatRoute(targetRoute);
     }
 
+    if (
+      dataRoute === SIDEBAR_ROUTE_PATHS.NOTIFICATIONS &&
+      window.NotificationsPanel?.isOpen
+    ) {
+      isActive = true;
+    }
+
     // Special case: Profile button only active if it's our OWN profile (no params)
     if (dataRoute === selfProfilePath && isViewingOtherProfile) {
       isActive = false;
@@ -539,7 +605,19 @@ function navigate(e, route, clickedEl = null) {
 
   if (finalRoute === "/messages") {
     e.preventDefault();
+    if (window.closeNotificationsPanel) {
+      window.closeNotificationsPanel();
+    }
     if (window.toggleChatSidebar) window.toggleChatSidebar();
+    closeAllDropdowns();
+    return;
+  }
+
+  if (finalRoute === SIDEBAR_ROUTE_PATHS.NOTIFICATIONS) {
+    e.preventDefault();
+    if (window.toggleNotificationsPanel) {
+      window.toggleNotificationsPanel();
+    }
     closeAllDropdowns();
     return;
   }

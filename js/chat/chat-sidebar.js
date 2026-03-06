@@ -1230,6 +1230,9 @@ const ChatSidebar = {
 
   async open() {
     const panel = document.getElementById("chat-panel");
+    if (window.closeNotificationsPanel) {
+      window.closeNotificationsPanel();
+    }
     panel.classList.add("show");
     this.isOpen = true;
     document.body.classList.add("chat-sidebar-open");
@@ -1242,8 +1245,8 @@ const ChatSidebar = {
     await this.loadConversations();
   },
 
-  close() {
-    if (this.isChatRouteFromHash()) return;
+  close(force = false) {
+    if (!force && this.isChatRouteFromHash()) return;
 
     this.closeSettingsPopup();
     const panel = document.getElementById("chat-panel");
@@ -2140,7 +2143,7 @@ const ChatSidebar = {
 document.addEventListener("DOMContentLoaded", () => ChatSidebar.init());
 
 window.toggleChatSidebar = () => ChatSidebar.toggle();
-window.closeChatSidebar = () => ChatSidebar.close();
+window.closeChatSidebar = (force = false) => ChatSidebar.close(force);
 window.ChatSidebar = ChatSidebar;
 
 // For backward compatibility during migration

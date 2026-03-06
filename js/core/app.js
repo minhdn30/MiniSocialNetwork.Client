@@ -451,6 +451,49 @@ function appTryRedirectLegacyPost(hash, path, params) {
   return false;
 }
 
+function appTryOpenNotificationsPanelRoute(hash, path) {
+  const normalizedPath = (path || "").toString().trim();
+  if (normalizedPath !== APP_ROUTE_PATHS.NOTIFICATIONS) {
+    return false;
+  }
+
+  const candidateHashes = [
+    window._lastAcceptedHashForRouter,
+    window._lastSafeHash,
+    appBuildHash(APP_ROUTE_PATHS.ROOT),
+  ];
+
+  let fallbackHash = appBuildHash(APP_ROUTE_PATHS.ROOT);
+  for (let i = 0; i < candidateHashes.length; i += 1) {
+    const candidate = (candidateHashes[i] || "").toString().trim();
+    if (!candidate) continue;
+    const parsedCandidate = appParseHash(candidate);
+    if (parsedCandidate.path === APP_ROUTE_PATHS.NOTIFICATIONS) continue;
+    fallbackHash = appBuildHash(parsedCandidate.path, parsedCandidate.params);
+    break;
+  }
+
+  const openNotificationsPanel = () => {
+    if (
+      window.NotificationsPanel &&
+      typeof window.NotificationsPanel.open === "function"
+    ) {
+      Promise.resolve(window.NotificationsPanel.open()).catch(() => {});
+    }
+  };
+
+  if (AppRouteHelper?.replaceHash) {
+    const parsedFallback = appParseHash(fallbackHash);
+    AppRouteHelper.replaceHash(parsedFallback.path, parsedFallback.params);
+  } else {
+    const base = `${window.location.pathname || ""}${window.location.search || ""}`;
+    window.history.replaceState(window.history.state, "", `${base}${fallbackHash}`);
+  }
+
+  setTimeout(openNotificationsPanel, 0);
+  return true;
+}
+
 async function appReadApiMessage(res, fallbackMessage) {
   if (!res) return fallbackMessage;
   try {
@@ -716,6 +759,10 @@ function closeAllOverlayModals(options = {}) {
       window.closeChatSidebar();
   }
 
+  if (window.closeNotificationsPanel) {
+      window.closeNotificationsPanel();
+  }
+
   // Chat Windows (Floating) logic is now handled in router() via CSS hiding
   // and ChatWindow.minimizeAll().
 
@@ -806,6 +853,10 @@ async function router() {
   }
 
   if (appTryRedirectLegacyPost(hash, path, parsed.params)) {
+    return;
+  }
+
+  if (appTryOpenNotificationsPanelRoute(hash, path)) {
     return;
   }
 
