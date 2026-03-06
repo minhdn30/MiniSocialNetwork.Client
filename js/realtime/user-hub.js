@@ -478,43 +478,257 @@
         connection.on("ReceiveFollowNotification", (data) => {
           console.log("🔔 [UserHub] Received follow notification:", data);
 
-          const myId = localStorage.getItem("accountId");
-          const targetId = data.targetId ?? data.TargetId;
+          const myId = (localStorage.getItem("accountId") || "").toLowerCase();
+          const targetId = (data.targetId ?? data.TargetId ?? "")
+            .toString()
+            .trim();
+          const normalizedTargetId = targetId.toLowerCase();
+          const relatedTargetId = (
+            data.relatedTargetId ??
+            data.RelatedTargetId ??
+            data.relationTargetId ??
+            data.RelationTargetId ??
+            ""
+          )
+            .toString()
+            .trim();
+          const normalizedRelatedTargetId = relatedTargetId.toLowerCase();
+          const msgCurrentId = (data.currentId ?? data.CurrentId ?? "")
+            .toString()
+            .trim()
+            .toLowerCase();
+          const msgAction = (data.action ?? data.Action ?? "")
+            .toString()
+            .trim()
+            .toLowerCase();
+
+          const canSyncFollowStatus =
+            window.FollowModule &&
+            typeof FollowModule.syncFollowStatus === "function";
+          const canFetchRelationStatus =
+            canSyncFollowStatus &&
+            typeof FollowModule.fetchRelationStatus === "function";
 
           if (
             window.getProfileAccountId &&
             typeof window.getProfileAccountId === "function"
           ) {
-            const currentViewingProfileId = window.getProfileAccountId();
+            const currentViewingProfileId = (
+              window.getProfileAccountId() || ""
+            )
+              .toString()
+              .trim();
+            const normalizedCurrentViewingProfileId =
+              currentViewingProfileId.toLowerCase();
 
             if (
-              currentViewingProfileId &&
-              targetId &&
-              currentViewingProfileId.toLowerCase() === targetId.toLowerCase()
+              normalizedCurrentViewingProfileId &&
+              canSyncFollowStatus &&
+              normalizedTargetId === normalizedCurrentViewingProfileId
             ) {
-              if (
-                window.FollowModule &&
-                typeof FollowModule.syncFollowStatus === "function"
-              ) {
-                const updateData = {
-                  followers: data.followers ?? data.Followers,
-                  following: data.following ?? data.Following,
-                };
-                FollowModule.syncFollowStatus(targetId, undefined, updateData);
+              const updateData = {
+                followers: data.followers ?? data.Followers,
+                following: data.following ?? data.Following,
+              };
+              const shouldFetchViewedRelation =
+                normalizedTargetId !== myId &&
+                msgCurrentId === myId &&
+                canFetchRelationStatus;
 
-                const msgCurrentId = data.currentId ?? data.CurrentId;
-                const msgAction = data.action ?? data.Action;
+              if (shouldFetchViewedRelation) {
+                Promise.resolve(FollowModule.fetchRelationStatus(targetId))
+                  .then((relation) => {
+                    if (relation) {
+                      updateData.isFollowedByCurrentUser = relation.isFollowing;
+                      updateData.isFollowRequestPendingByCurrentUser =
+                        relation.isRequested;
+                      updateData.relationStatus = relation.relationStatus;
+                      updateData.targetFollowPrivacy =
+                        relation.targetFollowPrivacy;
+                      if (relation.followers !== undefined) {
+                        updateData.followers = relation.followers;
+                      }
+                      if (relation.following !== undefined) {
+                        updateData.following = relation.following;
+                      }
+                    }
 
-                if (
-                  targetId === myId &&
-                  msgCurrentId !== myId &&
-                  window.toastInfo &&
-                  msgAction === "follow"
-                ) {
-                  toastInfo("You have a new follower!");
+                    FollowModule.syncFollowStatus(
+                      targetId,
+                      relation?.isFollowing,
+                      updateData,
+                    );
+                  })
+                  .catch(() => {
+                    FollowModule.syncFollowStatus(targetId, undefined, updateData);
+                  });
+              } else {
+                const currentProfileData =
+                  window.ProfilePage &&
+                  typeof window.ProfilePage.getData === "function"
+                    ? window.ProfilePage.getData()
+                    : null;
+                const followInfo =
+                  currentProfileData?.followInfo ||
+                  currentProfileData?.FollowInfo ||
+                  {};
+                const relationOverride =
+                  typeof FollowModule.getRelationOverride === "function"
+                    ? FollowModule.getRelationOverride(targetId)
+                    : null;
+                const preservedIsFollowing =
+                  relationOverride?.isFollowing ??
+                  followInfo?.isFollowedByCurrentUser ??
+                  followInfo?.IsFollowedByCurrentUser;
+                const preservedIsRequested =
+                  relationOverride?.isRequested ??
+                  followInfo?.isFollowRequestPendingByCurrentUser ??
+                  followInfo?.IsFollowRequestPendingByCurrentUser;
+                const preservedRelationStatus =
+                  relationOverride?.relationStatus ??
+                  followInfo?.relationStatus ?? followInfo?.RelationStatus;
+                const preservedTargetFollowPrivacy =
+                  relationOverride?.targetFollowPrivacy ??
+                  followInfo?.targetFollowPrivacy ??
+                  followInfo?.TargetFollowPrivacy;
+
+                if (typeof preservedIsFollowing === "boolean") {
+                  updateData.isFollowedByCurrentUser = preservedIsFollowing;
                 }
+                if (typeof preservedIsRequested === "boolean") {
+                  updateData.isFollowRequestPendingByCurrentUser =
+                    preservedIsRequested;
+                }
+                if (
+                  preservedRelationStatus !== undefined &&
+                  preservedRelationStatus !== null
+                ) {
+                  updateData.relationStatus = preservedRelationStatus;
+                }
+                if (
+                  preservedTargetFollowPrivacy !== undefined &&
+                  preservedTargetFollowPrivacy !== null
+                ) {
+                  updateData.targetFollowPrivacy = preservedTargetFollowPrivacy;
+                }
+
+                FollowModule.syncFollowStatus(targetId, undefined, updateData);
               }
             }
+          }
+
+          if (
+            canFetchRelationStatus &&
+            normalizedTargetId === myId &&
+            normalizedRelatedTargetId &&
+            normalizedRelatedTargetId !== myId &&
+            msgCurrentId === myId
+          ) {
+            const fallbackData = (() => {
+              const relationStatus = FollowModule.RELATION_STATUS || {};
+              if (
+                msgAction === "follow" ||
+                msgAction === "follow_sent" ||
+                msgAction === "follow_request_accepted"
+              ) {
+                return {
+                  isFollowedByCurrentUser: true,
+                  isFollowRequestPendingByCurrentUser: false,
+                  relationStatus: relationStatus.FOLLOWING,
+                };
+              }
+
+              if (
+                msgAction === "follow_request" ||
+                msgAction === "follow_request_sent"
+              ) {
+                return {
+                  isFollowedByCurrentUser: false,
+                  isFollowRequestPendingByCurrentUser: true,
+                  relationStatus: relationStatus.REQUESTED,
+                };
+              }
+
+              if (
+                msgAction === "unfollow" ||
+                msgAction === "unfollow_sent" ||
+                msgAction === "follow_request_removed" ||
+                msgAction === "follow_request_discarded" ||
+                msgAction === "follow_request_rejected"
+              ) {
+                return {
+                  isFollowedByCurrentUser: false,
+                  isFollowRequestPendingByCurrentUser: false,
+                  relationStatus: relationStatus.NONE,
+                };
+              }
+
+              return null;
+            })();
+
+            Promise.resolve(FollowModule.fetchRelationStatus(relatedTargetId))
+              .then((relation) => {
+                if (relation) {
+                  FollowModule.syncFollowStatus(
+                    relatedTargetId,
+                    relation.isFollowing,
+                    relation,
+                  );
+                  return;
+                }
+
+                if (fallbackData) {
+                  FollowModule.syncFollowStatus(
+                    relatedTargetId,
+                    fallbackData.isFollowedByCurrentUser,
+                    fallbackData,
+                  );
+                }
+              })
+              .catch(() => {
+                if (fallbackData) {
+                  FollowModule.syncFollowStatus(
+                    relatedTargetId,
+                    fallbackData.isFollowedByCurrentUser,
+                    fallbackData,
+                  );
+                }
+              });
+          }
+
+          if (normalizedTargetId !== myId) {
+            return;
+          }
+
+          if (msgAction === "follow" && msgCurrentId && msgCurrentId !== myId) {
+            if (window.toastInfo) {
+              toastInfo("You have a new follower!");
+            }
+            return;
+          }
+
+          if (
+            msgAction === "follow_request" &&
+            msgCurrentId &&
+            msgCurrentId !== myId
+          ) {
+            if (window.toastInfo) {
+              toastInfo("You have a new follow request.");
+            }
+            return;
+          }
+
+          if (msgAction === "follow_request_accepted") {
+            if (window.toastSuccess) {
+              toastSuccess("Your follow request was accepted.");
+            } else if (window.toastInfo) {
+              toastInfo("Your follow request was accepted.");
+            }
+            return;
+          }
+
+          if (msgAction === "follow_request_rejected") {
+            return;
           }
         });
 
