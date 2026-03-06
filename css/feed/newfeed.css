@@ -290,6 +290,20 @@
   opacity: 0.8;
 }
 
+.follow-btn.requested {
+  background: var(--border-primary);
+  color: var(--text-primary);
+}
+
+.follow-btn.requested i,
+.follow-btn.requested svg {
+  color: var(--text-primary);
+}
+
+.follow-btn.requested:hover {
+  background: var(--border-secondary);
+}
+
 /* ===============================
    📱 Responsive – Mobile First
 ================================ */

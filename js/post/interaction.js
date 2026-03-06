@@ -170,6 +170,12 @@ const InteractionModule = (function () {
                             <i data-lucide="check"></i>
                             <span>Following</span>
                         </button>`;
+        } else if (item.isFollowRequested) {
+          actionBtnHtml = `
+                        <button class="follow-btn requested" onclick="InteractionModule.handleFollow('${item.accountId}', this)">
+                            <i data-lucide="clock-3"></i>
+                            <span>Request Sent</span>
+                        </button>`;
         } else {
           actionBtnHtml = `
                         <button class="follow-btn" onclick="InteractionModule.handleFollow('${item.accountId}', this)">
@@ -221,14 +227,16 @@ const InteractionModule = (function () {
    * Handle follow/unfollow from within the list
    */
   async function handleFollow(accountId, btn) {
+    if (!window.FollowModule) return;
     const isFollowing = btn.classList.contains("following");
+    const isRequested = btn.classList.contains("requested");
 
-    if (isFollowing) {
-      showUnfollowConfirm(accountId, btn);
+    if (isFollowing || isRequested) {
+      FollowModule.showUnfollowConfirm(accountId, btn);
       return;
     }
 
-    performFollowAction(accountId, btn, false);
+    await FollowModule.followUser(accountId, btn);
   }
 
   /**
