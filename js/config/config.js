@@ -171,6 +171,13 @@
     CONVERSATIONS_PAGE_SIZE: 20, // Số lượng cuộc trò chuyện load mỗi lần
     CHATPAGE_MESSAGES_PAGE_SIZE: 15, // Số lượng tin nhắn load mỗi lần tại trang Chat Page
     CHATWINDOW_MESSAGES_PAGE_SIZE: 10, // Số lượng tin nhắn load mỗi lần tại cửa sổ Chat nhỏ (Floating)
+    NOTIFICATIONS_PAGE_SIZE: 20, // Number of notifications loaded per request
+    NOTIFICATIONS_BADGE_CAP: 99, // Max unread number shown on sidebar badge (99+ when exceeded)
+    NOTIFICATION_PANEL_WIDTH: 380, // Notifications panel width in px (slightly wider than chat sidebar)
+    NOTIFICATION_RT_DEDUPE_TTL_MS: 6000, // Dedupe TTL for realtime notification update events
+    NOTIFICATION_RT_DEDUPE_MAX_ENTRIES: 1000, // Max entries in realtime dedupe map
+    NOTIFICATION_TOAST_RATE_LIMIT_WINDOW_MS: 5000, // Rate-limit window for stale notification toasts
+    NOTIFICATION_TOAST_RATE_LIMIT_MAX: 2, // Max stale notification toasts shown per window
     MAX_CHAT_MESSAGE_LENGTH: 1000, // Số ký tự tối đa cho mỗi tin nhắn chat
     MAX_CHAT_NICKNAME_LENGTH: 50, // Số ký tự tối đa cho nickname trong chat
     MAX_CHAT_ATTACHMENT_SIZE_MB: 10, // Max size per chat attachment (image/video/file) in MB

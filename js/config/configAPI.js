@@ -940,6 +940,39 @@
         ),
     },
 
+    Notifications: {
+      getNotifications: ({
+        limit = window.APP_CONFIG?.NOTIFICATIONS_PAGE_SIZE || 20,
+        cursorLastEventAt = null,
+        cursorNotificationId = null,
+        filter = "all",
+      } = {}) => {
+        const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 100));
+        const safeFilter =
+          (filter || "").toString().trim().toLowerCase() === "unread"
+            ? "unread"
+            : "all";
+
+        let url = `/Notifications?limit=${encodeURIComponent(safeLimit)}&filter=${encodeURIComponent(safeFilter)}`;
+        const safeCursorLastEventAt = (cursorLastEventAt || "")
+          .toString()
+          .trim();
+        const safeCursorNotificationId = (cursorNotificationId || "")
+          .toString()
+          .trim();
+        if (safeCursorLastEventAt && safeCursorNotificationId) {
+          url += `&cursorLastEventAt=${encodeURIComponent(safeCursorLastEventAt)}&cursorNotificationId=${encodeURIComponent(safeCursorNotificationId)}`;
+        }
+
+        return apiFetch(url);
+      },
+      getUnreadCount: () => apiFetch("/Notifications/unread-count"),
+      markAllRead: () =>
+        apiFetch("/Notifications/mark-all-read", {
+          method: "POST",
+        }),
+    },
+
     Messages: {
       // send message in private chat (1:1) - lazy creates conversation if needed
       sendPrivate: (formData, onProgress) =>
