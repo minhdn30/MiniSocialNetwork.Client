@@ -18,6 +18,8 @@
     STORY_REPLY: 5,
     POST_REACT: 6,
     STORY_REACT: 7,
+    FOLLOW_REQUEST: 8,
+    FOLLOW_REQUEST_ACCEPTED: 9,
   });
 
   const NOTIFICATION_TARGET_KIND = Object.freeze({
@@ -125,7 +127,9 @@
   }
 
   function resolveDefaultAvatarUrl() {
-    const configured = (global.APP_CONFIG?.DEFAULT_AVATAR || "").toString().trim();
+    const configured = (global.APP_CONFIG?.DEFAULT_AVATAR || "")
+      .toString()
+      .trim();
     return configured || "assets/images/default-avatar.jpg";
   }
 
@@ -303,8 +307,58 @@
     if (state.dom.list && !state.dom.list.dataset.clickBound) {
       state.dom.list.dataset.clickBound = "1";
       state.dom.list.addEventListener("click", async (event) => {
+        const actionBtn = event.target.closest(
+          ".notifications-request-btn[data-request-action]",
+        );
+        if (actionBtn && state.dom.list.contains(actionBtn)) {
+          event.preventDefault();
+          event.stopPropagation();
+
+          const itemEl = actionBtn.closest(".notifications-item");
+          if (!itemEl) return;
+          const notificationId = normalizeId(itemEl.dataset.notificationId);
+          if (!notificationId) return;
+          const item = state.itemMap.get(notificationId);
+          if (!item) return;
+
+          const action = (actionBtn.dataset.requestAction || "")
+            .toString()
+            .trim()
+            .toLowerCase();
+          if (!action) return;
+
+          await handleFollowRequestAction(itemEl, item, action);
+          return;
+        }
+
         const itemEl = event.target.closest(".notifications-item");
         if (!itemEl || !state.dom.list.contains(itemEl)) return;
+        const notificationId = normalizeId(itemEl.dataset.notificationId);
+        if (!notificationId) return;
+        const item = state.itemMap.get(notificationId);
+        if (!item) return;
+        await handleItemNavigation(item);
+      });
+    }
+
+    if (state.dom.list && !state.dom.list.dataset.keydownBound) {
+      state.dom.list.dataset.keydownBound = "1";
+      state.dom.list.addEventListener("keydown", async (event) => {
+        const key = (event.key || "").toLowerCase();
+        if (key !== "enter" && key !== " ") return;
+
+        const actionBtn = event.target.closest(
+          ".notifications-request-btn[data-request-action]",
+        );
+        if (actionBtn && state.dom.list.contains(actionBtn)) {
+          event.preventDefault();
+          actionBtn.click();
+          return;
+        }
+
+        const itemEl = event.target.closest(".notifications-item");
+        if (!itemEl || !state.dom.list.contains(itemEl)) return;
+        event.preventDefault();
         const notificationId = normalizeId(itemEl.dataset.notificationId);
         if (!notificationId) return;
         const item = state.itemMap.get(notificationId);
@@ -537,7 +591,7 @@
 
     // remove duplicated actor phrase; keep only action sentence
     const actionMatch = rawText.match(
-      /\b(followed|commented|replied|tagged|mentioned|reacted|shared)\b/i,
+      /\b(followed|commented|replied|tagged|mentioned|reacted|shared|wants|accepted)\b/i,
     );
     if (
       actionMatch &&
@@ -606,6 +660,10 @@
         return "reacted to your post";
       case NOTIFICATION_TYPE.STORY_REACT:
         return "reacted to your story";
+      case NOTIFICATION_TYPE.FOLLOW_REQUEST:
+        return "wants to follow you";
+      case NOTIFICATION_TYPE.FOLLOW_REQUEST_ACCEPTED:
+        return "accepted your follow request";
       default:
         return "sent a notification";
     }
@@ -620,7 +678,10 @@
       return buildActionTextFromType(item?.type);
     }
 
-    const normalizedParsed = (parsedAction || "").toString().trim().toLowerCase();
+    const normalizedParsed = (parsedAction || "")
+      .toString()
+      .trim()
+      .toLowerCase();
     if (
       !normalizedParsed ||
       normalizedParsed.includes("no longer available") ||
@@ -637,6 +698,119 @@
     if (!raw) return raw;
     if (/[.!?]$/.test(raw)) return raw;
     return `${raw}.`;
+  }
+
+  function getFollowRequestActorId(item) {
+    const actor = item?.actor || {};
+    const actorId = readString(actor, "accountId", "AccountId");
+    return isGuidLike(actorId) ? actorId : "";
+  }
+
+  function canRenderFollowRequestActions(item) {
+    if (!item || typeof item !== "object") return false;
+    if (parseIntSafe(item.type, -1) !== NOTIFICATION_TYPE.FOLLOW_REQUEST) {
+      return false;
+    }
+    if (isItemUnavailable(item)) return false;
+    if (parseIntSafe(item.actorCount, 0) !== 1) return false;
+    return !!getFollowRequestActorId(item);
+  }
+
+  function resolveFollowRequestActionErrorMessage(status, isAccept) {
+    if (status === 401) return "Your session has expired. Please sign in again.";
+    if (status === 403) {
+      return isAccept
+        ? "You do not have permission to accept this follow request."
+        : "You do not have permission to remove this follow request.";
+    }
+    if (status === 404 || status === 410) {
+      return "This follow request is no longer available.";
+    }
+    if (status === 409) {
+      return "Follow request state changed. Please refresh and try again.";
+    }
+    if (status === 400) {
+      return isAccept
+        ? "Could not accept this follow request right now."
+        : "Could not remove this follow request right now.";
+    }
+    return isAccept
+      ? "Could not accept this follow request. Please try again."
+      : "Could not remove this follow request. Please try again.";
+  }
+
+  async function handleFollowRequestAction(itemEl, item, action) {
+    if (!itemEl || !item) return;
+    if (itemEl.dataset.requestPending === "1") return;
+
+    const requesterId = getFollowRequestActorId(item);
+    if (!requesterId) {
+      if (global.toastError) global.toastError("Invalid follow request.");
+      return;
+    }
+
+    const normalizedAction = (action || "").toString().trim().toLowerCase();
+    const isAccept = normalizedAction === "accept";
+    const isRemove = normalizedAction === "remove";
+    if (!isAccept && !isRemove) return;
+
+    const actionApi = isAccept
+      ? global.API?.Follows?.acceptRequest
+      : global.API?.Follows?.removeRequest;
+    if (typeof actionApi !== "function") {
+      if (global.toastError) global.toastError("Follow request API is unavailable.");
+      return;
+    }
+
+    itemEl.dataset.requestPending = "1";
+    const actionButtons = itemEl.querySelectorAll(".notifications-request-btn");
+    actionButtons.forEach((btn) => {
+      btn.disabled = true;
+      btn.classList.add("is-disabled");
+      btn.setAttribute("aria-disabled", "true");
+    });
+
+    try {
+      const res = await actionApi(requesterId);
+      if (!res?.ok) {
+        throw new Error(
+          resolveFollowRequestActionErrorMessage(res.status, isAccept),
+        );
+      }
+
+      if (isAccept) {
+        if (global.toastSuccess) {
+          global.toastSuccess("Follow request accepted.");
+        } else if (global.toastInfo) {
+          global.toastInfo("Follow request accepted.");
+        }
+      } else if (global.toastInfo) {
+        global.toastInfo("Follow request removed.");
+      }
+
+      await loadNotifications(false, {
+        showLoader: false,
+        patchDom: true,
+        animateNewItems: true,
+        silent: true,
+      });
+      refreshUnreadBadge(40);
+    } catch (error) {
+      if (global.toastError) {
+        const message =
+          error instanceof Error && error.message
+            ? error.message
+            : resolveFollowRequestActionErrorMessage(0, isAccept);
+        global.toastError(message);
+      }
+    } finally {
+      delete itemEl.dataset.requestPending;
+      actionButtons.forEach((btn) => {
+        btn.disabled = false;
+        btn.classList.remove("is-disabled");
+        btn.removeAttribute("aria-disabled");
+      });
+    }
   }
 
   function isLikelyVideoUrl(url) {
@@ -705,32 +879,40 @@
     if (!state.dom.list) return;
     const defaultAvatar = resolveDefaultAvatarUrl();
 
-    state.dom.list.querySelectorAll(".notifications-item-avatar").forEach((img) => {
-      if (!img.dataset.fallbackBound) {
-        img.dataset.fallbackBound = "1";
-        img.addEventListener("error", () => {
-          if (img.dataset.avatarFallbackApplied === "1") return;
+    state.dom.list
+      .querySelectorAll(".notifications-item-avatar")
+      .forEach((img) => {
+        if (!img.dataset.fallbackBound) {
+          img.dataset.fallbackBound = "1";
+          img.addEventListener("error", () => {
+            if (img.dataset.avatarFallbackApplied === "1") return;
+            img.dataset.avatarFallbackApplied = "1";
+            img.src = defaultAvatar;
+          });
+        }
+
+        if (
+          img.complete &&
+          img.naturalWidth === 0 &&
+          img.dataset.avatarFallbackApplied !== "1"
+        ) {
           img.dataset.avatarFallbackApplied = "1";
           img.src = defaultAvatar;
-        });
-      }
+        }
+      });
 
-      if (img.complete && img.naturalWidth === 0 && img.dataset.avatarFallbackApplied !== "1") {
-        img.dataset.avatarFallbackApplied = "1";
-        img.src = defaultAvatar;
-      }
-    });
+    state.dom.list
+      .querySelectorAll(".notifications-item-thumbnail")
+      .forEach((img) => {
+        if (!img.dataset.fallbackBound) {
+          img.dataset.fallbackBound = "1";
+          img.addEventListener("error", () => removeBrokenThumbnail(img));
+        }
 
-    state.dom.list.querySelectorAll(".notifications-item-thumbnail").forEach((img) => {
-      if (!img.dataset.fallbackBound) {
-        img.dataset.fallbackBound = "1";
-        img.addEventListener("error", () => removeBrokenThumbnail(img));
-      }
-
-      if (img.complete && img.naturalWidth === 0) {
-        removeBrokenThumbnail(img);
-      }
-    });
+        if (img.complete && img.naturalWidth === 0) {
+          removeBrokenThumbnail(img);
+        }
+      });
   }
 
   function buildNotificationItemHtml(item, enterIdSet = null) {
@@ -741,8 +923,7 @@
       (item.targetKind === NOTIFICATION_TARGET_KIND.POST ||
         item.targetKind === NOTIFICATION_TARGET_KIND.STORY);
 
-    const actorAvatar =
-      item.actor.avatarUrl || resolveDefaultAvatarUrl();
+    const actorAvatar = item.actor.avatarUrl || resolveDefaultAvatarUrl();
     const actorUsername = getActorDisplayUsername(item);
     const actorTitle = getActorTitleParts(item);
     const actionText = ensureSentencePunctuation(
@@ -757,10 +938,20 @@
         ? " notifications-item-enter"
         : "";
     const typeClass = `type-${item.type}`;
+    const showFollowRequestActions = canRenderFollowRequestActions(item);
+    const followRequestActionsHtml = showFollowRequestActions
+      ? `
+        <div class="notifications-item-actions">
+          <button type="button" class="notifications-request-btn accept" data-request-action="accept">Accept</button>
+          <button type="button" class="notifications-request-btn remove" data-request-action="remove">Remove</button>
+        </div>
+      `
+      : "";
 
     return `
-      <button
-        type="button"
+      <div
+        role="button"
+        tabindex="0"
         class="notifications-item${unreadClass}${unavailableClass}${enterClass} ${typeClass}"
         data-notification-id="${escapeHtml(item.notificationId)}"
       >
@@ -784,16 +975,16 @@
             }
             <span class="notifications-item-time">${escapeHtml(timeLabel)}</span>
           </div>
+          ${followRequestActionsHtml}
         </div>
-      </button>
+      </div>
     `;
   }
 
   function renderItems(options = {}) {
     if (!state.dom.list) return;
-    const enterIdSet = options.enterIdSet instanceof Set
-      ? options.enterIdSet
-      : null;
+    const enterIdSet =
+      options.enterIdSet instanceof Set ? options.enterIdSet : null;
     state.itemMap.clear();
     state.items.forEach((item) => {
       state.itemMap.set(normalizeId(item.notificationId), item);
@@ -832,7 +1023,9 @@
     const enterIdSet =
       options.enterIdSet instanceof Set ? options.enterIdSet : null;
     const previousItemsById =
-      options.previousItemsById instanceof Map ? options.previousItemsById : null;
+      options.previousItemsById instanceof Map
+        ? options.previousItemsById
+        : null;
 
     state.itemMap.clear();
     state.items.forEach((item) => {
@@ -1110,7 +1303,9 @@
   }
 
   function readAccountUsername(accountInfo) {
-    return (accountInfo.username ?? accountInfo.Username ?? "").toString().trim();
+    return (accountInfo.username ?? accountInfo.Username ?? "")
+      .toString()
+      .trim();
   }
 
   async function resolveProfileNavigationTarget(item) {
@@ -1141,7 +1336,8 @@
         if (res?.ok) {
           const payload = await res.json().catch(() => null);
           const accountInfo = readAccountInfoFromPayload(payload);
-          const username = readAccountUsername(accountInfo) || usernameCandidate;
+          const username =
+            readAccountUsername(accountInfo) || usernameCandidate;
           const accountId = readAccountId(accountInfo) || accountIdCandidate;
           const profileTarget = username || accountId;
           if (profileTarget) {
@@ -1172,7 +1368,8 @@
         if (res?.ok) {
           const payload = await res.json().catch(() => null);
           const accountInfo = readAccountInfoFromPayload(payload);
-          const username = readAccountUsername(accountInfo) || usernameCandidate;
+          const username =
+            readAccountUsername(accountInfo) || usernameCandidate;
           const accountId = readAccountId(accountInfo) || accountIdCandidate;
           const profileTarget = username || accountId;
           if (profileTarget) {

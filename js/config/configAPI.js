@@ -724,6 +724,11 @@
         apiFetch(`/Follows/${targetId}`, { method: "POST" }),
       unfollow: (targetId) =>
         apiFetch(`/Follows/${targetId}`, { method: "DELETE" }),
+      status: (targetId) => apiFetch(`/Follows/status/${targetId}`),
+      acceptRequest: (requesterId) =>
+        apiFetch(`/Follows/requests/${requesterId}/accept`, { method: "POST" }),
+      removeRequest: (requesterId) =>
+        apiFetch(`/Follows/requests/${requesterId}`, { method: "DELETE" }),
       getFollowers: (accountId, request) => {
         let url = `/Follows/followers?accountId=${accountId}&page=${request.page}&pageSize=${request.pageSize}`;
         if (request.keyword)

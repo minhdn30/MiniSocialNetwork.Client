@@ -233,6 +233,11 @@ body.notifications-panel-open #sidebar.expanded ~ .main-content {
   background: var(--bg-hover);
 }
 
+.notifications-item:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: -2px;
+}
+
 .notifications-item.unread {
   border-left-color: var(--accent-primary);
 }
@@ -303,6 +308,73 @@ body.notifications-panel-open #sidebar.expanded ~ .main-content {
   color: var(--text-tertiary);
   white-space: nowrap;
   text-align: right;
+}
+
+.notifications-item-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+}
+
+.notifications-request-btn {
+  appearance: none;
+  font-family: inherit;
+  min-width: 76px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.notifications-request-btn.accept {
+  background: var(--accent-primary);
+  color: var(--text-white);
+}
+
+.notifications-request-btn.accept:hover {
+  background: var(--accent-hover);
+}
+
+.notifications-request-btn.accept:active {
+  background: var(--accent-active);
+}
+
+.notifications-request-btn.remove {
+  background: var(--bg-hover);
+  border-color: var(--border-primary);
+  color: var(--text-primary);
+}
+
+.notifications-request-btn.remove:hover {
+  background: var(--border-primary);
+}
+
+.notifications-request-btn.remove:active {
+  background: var(--border-secondary);
+}
+
+.notifications-request-btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.notifications-request-btn.is-disabled,
+.notifications-request-btn[aria-disabled="true"] {
+  pointer-events: none;
+  opacity: 0.55;
 }
 
 .notifications-item-thumbnail {
