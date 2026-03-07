@@ -8,6 +8,7 @@ const FollowListModule = (function () {
   let currentPage = 1;
   let targetId = null;
   let listType = "followers"; // 'followers' or 'following'
+  let isRouteBound = false;
   let hasNextPage = false;
   let isLoading = false;
   let searchKeyword = "";
@@ -30,15 +31,42 @@ const FollowListModule = (function () {
   const MODAL_ID = "followListModal";
 
   function normalizeListType(type) {
-    if (FollowRouteHelper?.normalizeProfileFollowListType) {
-      return FollowRouteHelper.normalizeProfileFollowListType(type);
-    }
     const normalized = (type || "").toString().trim().toLowerCase();
+    if (normalized === "sent-requests" || normalized === "sentrequests") {
+      return "sent-requests";
+    }
+    if (FollowRouteHelper?.normalizeProfileFollowListType) {
+      return FollowRouteHelper.normalizeProfileFollowListType(normalized);
+    }
     if (normalized === "following") return "following";
     if (normalized === "followers" || normalized === "follower") {
       return "followers";
     }
     return "";
+  }
+
+  function getListTitle(type) {
+    switch (normalizeListType(type)) {
+      case "following":
+        return "Following";
+      case "sent-requests":
+        return "Sent Requests";
+      case "followers":
+      default:
+        return "Followers";
+    }
+  }
+
+  function getEmptyMessage(type) {
+    switch (normalizeListType(type)) {
+      case "following":
+        return "No following found";
+      case "sent-requests":
+        return "No sent requests found";
+      case "followers":
+      default:
+        return "No followers found";
+    }
   }
 
   function getCurrentProfileUsername() {
@@ -133,9 +161,15 @@ const FollowListModule = (function () {
       pageSize: PAGE_SIZE,
     };
 
-    return listType === "followers"
-      ? await API.Follows.getFollowers(accountId, request)
-      : await API.Follows.getFollowing(accountId, request);
+    if (listType === "followers") {
+      return await API.Follows.getFollowers(accountId, request);
+    }
+
+    if (listType === "following") {
+      return await API.Follows.getFollowing(accountId, request);
+    }
+
+    return await API.Follows.getSentRequests(request);
   }
 
   /**
@@ -145,11 +179,12 @@ const FollowListModule = (function () {
    */
   async function openFollowList(accountId, type = "followers", options = {}) {
     const normalizedType = normalizeListType(type) || "followers";
-    const syncRoute = options.syncRoute !== false;
+    const syncRoute = options.syncRoute !== false && normalizedType !== "sent-requests";
     const routeReplace = options.routeReplace === true;
     const profileUsername = (options.profileUsername || getCurrentProfileUsername())
       .toString()
       .trim();
+    const initialData = options.initialData || null;
 
     if (syncRoute && profileUsername) {
       const followHash = buildFollowRouteHash(profileUsername, normalizedType);
@@ -191,6 +226,7 @@ const FollowListModule = (function () {
 
     targetId = accountId;
     listType = normalizedType;
+    isRouteBound = options.routeBound === true;
     currentPage = 1;
     searchKeyword = "";
     sortState = null;
@@ -209,11 +245,14 @@ const FollowListModule = (function () {
 
       const titleEl = modal.querySelector(".modal-header h3 span");
       if (titleEl) {
-        titleEl.textContent =
-          normalizedType.charAt(0).toUpperCase() + normalizedType.slice(1);
+        titleEl.textContent = getListTitle(normalizedType);
       }
 
-      await _loadData(1);
+      if (initialData && typeof initialData === "object") {
+        _handleDataResponse(initialData, false);
+      } else {
+        await _loadData(1);
+      }
     } catch (error) {
       console.error(error);
       if (window.toastError) toastError("Could not load list");
@@ -251,18 +290,31 @@ const FollowListModule = (function () {
       const res = await _fetchPage(targetId, page, searchKeyword, sortState);
 
       if (res.status === 403) {
-        if (window.toastError)
+        if (window.toastError) {
           toastError(
-            "This account is private or you don't have permission to view this list",
+            listType === "sent-requests"
+              ? "You do not have permission to view sent follow requests right now."
+              : "This account is private or you don't have permission to view this list",
           );
+        }
         closeFollowList();
-        redirectToProfileRoot(true);
+        if (listType !== "sent-requests") {
+          redirectToProfileRoot(true);
+        }
         return;
       }
       if (res.status === 404) {
-        if (window.toastError) toastError("Account not found");
+        if (window.toastError) {
+          toastError(
+            listType === "sent-requests"
+              ? "Could not load sent follow requests."
+              : "Account not found",
+          );
+        }
         closeFollowList();
-        redirectToNotFound(true);
+        if (listType !== "sent-requests") {
+          redirectToNotFound(true);
+        }
         return;
       }
       if (!res.ok) throw new Error("Load failed");
@@ -299,7 +351,7 @@ const FollowListModule = (function () {
     if (items.length === 0 && currentPage === 1) {
       const emptyMsg = document.createElement("div");
       emptyMsg.className = "empty-list-msg";
-      emptyMsg.textContent = `No ${listType} found`;
+      emptyMsg.textContent = getEmptyMessage(listType);
       container.appendChild(emptyMsg);
       return;
     }
@@ -325,8 +377,12 @@ const FollowListModule = (function () {
                             <span>Following</span>
                         </button>`;
         } else if (item.isFollowRequested) {
+          const requestActionHandler =
+            listType === "sent-requests"
+              ? "FollowListModule.handleSentRequest"
+              : "FollowListModule.handleFollow";
           actionBtnHtml = `
-                        <button class="follow-btn requested" onclick="FollowListModule.handleFollow('${item.accountId}', this)">
+                        <button class="follow-btn requested" onclick="${requestActionHandler}('${item.accountId}', this)">
                             <i data-lucide="clock-3"></i>
                             <span>Request Sent</span>
                         </button>`;
@@ -368,6 +424,18 @@ const FollowListModule = (function () {
     } else {
       await FollowModule.followUser(accountId, btn);
     }
+  }
+
+  async function handleSentRequest(accountId, btn) {
+    if (!window.FollowModule) return;
+
+    await FollowModule.showUnfollowConfirm(accountId, btn, {
+      onResolved: (relation) => {
+        if (!relation || relation.isRequested) return;
+        currentPage = 1;
+        _loadData(1, false);
+      },
+    });
   }
 
   let searchTimeout = null;
@@ -416,11 +484,58 @@ const FollowListModule = (function () {
       modal.classList.remove("show");
       if (window.unlockScroll) unlockScroll();
     }
+    isRouteBound = false;
   }
 
   function closeFollowListFromUI() {
+    const shouldRedirect = isRouteBound;
     closeFollowList();
-    redirectToProfileRoot(false);
+    if (shouldRedirect) {
+      redirectToProfileRoot(false);
+    }
+  }
+
+  async function openSentFollowRequestList(accountId, options = {}) {
+    const safeAccountId = (accountId || "").toString().trim();
+    if (!safeAccountId) return;
+
+    try {
+      const res = await API.Follows.getSentRequests({
+        page: 1,
+        pageSize: PAGE_SIZE,
+        keyword: "",
+        sortByCreatedASC: null,
+      });
+
+      if (res.status === 401) {
+        if (window.toastError) toastError("Your session has expired. Please sign in again.");
+        return;
+      }
+
+      if (!res.ok) {
+        if (window.toastError) toastError("Could not load sent follow requests.");
+        return;
+      }
+
+      const data = await res.json();
+      const totalItems = Number(data?.totalItems ?? data?.TotalItems ?? 0);
+      if (!Number.isFinite(totalItems) || totalItems <= 0) {
+        if (window.toastInfo) {
+          toastInfo("You don't have any pending follow requests right now.");
+        }
+        return;
+      }
+
+      await openFollowList(accountId, "sent-requests", {
+        syncRoute: false,
+        routeBound: false,
+        profileUsername: options.profileUsername,
+        initialData: data,
+      });
+    } catch (error) {
+      console.error(error);
+      if (window.toastError) toastError("Could not load sent follow requests.");
+    }
   }
 
   async function _loadModalHTML() {
@@ -470,8 +585,10 @@ const FollowListModule = (function () {
     openFollowList,
     closeFollowList,
     closeFollowListFromUI,
+    openSentFollowRequestList,
     toggleSort: _toggleSort,
     handleFollow,
+    handleSentRequest,
     getCurrentTargetId: () => targetId,
     getCurrentListType: () => listType,
     isModalOpen: () => {

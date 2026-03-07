@@ -741,6 +741,17 @@
         }
         return apiFetch(url);
       },
+      getSentRequests: (request) => {
+        let url = `/Follows/requests/sent?page=${request.page}&pageSize=${request.pageSize}`;
+        if (request.keyword)
+          url += `&keyword=${encodeURIComponent(request.keyword)}`;
+        if (
+          request.sortByCreatedASC !== undefined &&
+          request.sortByCreatedASC !== null
+        )
+          url += `&sortByCreatedASC=${request.sortByCreatedASC}`;
+        return apiFetch(url);
+      },
       acceptRequest: (requesterId) =>
         apiFetch(`/Follows/requests/${requesterId}/accept`, { method: "POST" }),
       removeRequest: (requesterId) =>

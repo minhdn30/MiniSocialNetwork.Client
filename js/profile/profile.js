@@ -1517,6 +1517,7 @@
 
     // Action Buttons
     if (actionBtn) {
+      closeProfileMoreMenu();
       if (isOwner) {
         const mySettingsHash = window.RouteHelper?.buildAccountSettingsHash
           ? window.RouteHelper.buildAccountSettingsHash("")
@@ -1530,10 +1531,18 @@
                         <i data-lucide="settings"></i>
                         <span>Settings</span>
                     </button>
-                    <button class="profile-btn profile-btn-more" onclick="openProfileMoreMenu()">
-                        <i data-lucide="more-horizontal"></i>
-                        <span>More</span>
-                    </button>
+                    <div class="profile-more-menu-wrap" id="profile-more-menu-wrap">
+                        <button class="profile-btn profile-btn-more" id="profile-more-menu-trigger" onclick="openProfileMoreMenu(event)">
+                            <i data-lucide="more-horizontal"></i>
+                            <span>More</span>
+                        </button>
+                        <div class="profile-more-menu" id="profile-more-menu" hidden>
+                            <button type="button" onclick="openSentFollowRequestsFromProfileMenu(event)">
+                                <i data-lucide="clock-3"></i>
+                                <span>Sent follow requests</span>
+                            </button>
+                        </div>
+                    </div>
                 `;
       } else {
         const followBtnClass = followRelation.isFollowing
@@ -1561,7 +1570,7 @@
                         <i data-lucide="send"></i>
                         <span>Message</span>
                     </button>
-                    <button class="profile-btn profile-btn-more" onclick="openProfileMoreMenu()">
+                    <button class="profile-btn profile-btn-more" onclick="openProfileMoreMenu(event)">
                         <i data-lucide="more-horizontal"></i>
                         <span>More</span>
                     </button>
@@ -3691,8 +3700,86 @@
     }
   };
 
-  global.openProfileMoreMenu = function () {
-    if (window.toastInfo) toastInfo("More options coming soon!");
+  let isProfileMoreMenuBound = false;
+
+  function getProfileMoreMenuElements() {
+    return {
+      wrap: document.getElementById("profile-more-menu-wrap"),
+      trigger: document.getElementById("profile-more-menu-trigger"),
+      menu: document.getElementById("profile-more-menu"),
+    };
+  }
+
+  function closeProfileMoreMenu() {
+    const { trigger, menu } = getProfileMoreMenuElements();
+    if (menu) {
+      menu.hidden = true;
+      menu.classList.remove("show");
+    }
+    if (trigger) {
+      trigger.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  function bindProfileMoreMenuOnce() {
+    if (isProfileMoreMenuBound) return;
+    isProfileMoreMenuBound = true;
+
+    document.addEventListener("click", (event) => {
+      const { wrap, menu } = getProfileMoreMenuElements();
+      if (!menu || menu.hidden || !wrap) return;
+      if (wrap.contains(event.target)) return;
+      closeProfileMoreMenu();
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeProfileMoreMenu();
+      }
+    });
+  }
+
+  global.openProfileMoreMenu = function (event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+
+    if (!isCurrentUserProfile()) {
+      if (window.toastInfo) {
+        toastInfo("More options are coming soon.");
+      }
+      return;
+    }
+
+    bindProfileMoreMenuOnce();
+    const { trigger, menu } = getProfileMoreMenuElements();
+    if (!menu || !trigger) return;
+
+    const shouldShow = menu.hidden;
+    closeProfileMoreMenu();
+    if (!shouldShow) return;
+
+    menu.hidden = false;
+    menu.classList.add("show");
+    trigger.setAttribute("aria-expanded", "true");
+  };
+
+  global.openSentFollowRequestsFromProfileMenu = async function (event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    closeProfileMoreMenu();
+
+    if (!isCurrentUserProfile() || !currentProfileId) return;
+
+    if (!window.FollowListModule?.openSentFollowRequestList) {
+      if (window.toastError) {
+        toastError("Sent follow requests are not available right now.");
+      }
+      return;
+    }
+
+    await window.FollowListModule.openSentFollowRequestList(currentProfileId, {
+      profileUsername: getCurrentProfileUsername(),
+    });
   };
 
   global.updateFollowStatus = function (
@@ -4038,6 +4125,7 @@
     const username = getCurrentProfileUsername();
     await followListModule.openFollowList(currentProfileId, routeType, {
       syncRoute: false,
+      routeBound: true,
       profileUsername: username,
     });
   }

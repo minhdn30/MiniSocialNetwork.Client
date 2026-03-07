@@ -513,6 +513,24 @@
     applyVisibleProfilePreviewButton(accountId, relation);
   }
 
+  function syncResolvedRelation(accountId, relation, btn = null) {
+    if (!relation) return;
+
+    setRelationOverride(accountId, relation);
+    applyVisibleRelationButtons(accountId, relation, btn);
+    if (global.lucide && typeof global.lucide.createIcons === "function") {
+      global.lucide.createIcons();
+    }
+    FollowModule.syncFollowStatus(accountId, relation.isFollowing, {
+      followers: relation.followers,
+      following: relation.following,
+      isFollowedByCurrentUser: relation.isFollowing,
+      isFollowRequestPendingByCurrentUser: relation.isRequested,
+      relationStatus: relation.relationStatus,
+      targetFollowPrivacy: relation.targetFollowPrivacy,
+    });
+  }
+
   FollowModule.normalizeFollowPayload = normalizeFollowPayload;
   FollowModule.resolveEffectiveFollowRelation = resolveEffectiveFollowRelation;
   FollowModule.getRelationOverride = getRelationOverride;
@@ -615,6 +633,13 @@
       }
 
       if (!res.ok) {
+        if (wasRequested) {
+          const resolvedRelation = await FollowModule.fetchRelationStatus(accountId);
+          if (resolvedRelation && !resolvedRelation.isRequested) {
+            syncResolvedRelation(accountId, resolvedRelation, btn);
+            return resolvedRelation;
+          }
+        }
         throw new Error(
           resolveFollowActionErrorMessage(res.status, "unfollow", wasRequested),
         );
@@ -627,19 +652,7 @@
       }
 
       const relation = normalizeFollowPayload(data, false);
-      setRelationOverride(accountId, relation);
-      applyVisibleRelationButtons(accountId, relation, btn);
-      if (global.lucide && typeof global.lucide.createIcons === "function") {
-        global.lucide.createIcons();
-      }
-      FollowModule.syncFollowStatus(accountId, relation.isFollowing, {
-        followers: relation.followers,
-        following: relation.following,
-        isFollowedByCurrentUser: relation.isFollowing,
-        isFollowRequestPendingByCurrentUser: relation.isRequested,
-        relationStatus: relation.relationStatus,
-        targetFollowPrivacy: relation.targetFollowPrivacy,
-      });
+      syncResolvedRelation(accountId, relation, btn);
       return relation;
     } catch (err) {
       console.error(err);
@@ -661,7 +674,7 @@
    * @param {string} accountId
    * @param {HTMLElement} [btn]
    */
-  FollowModule.showUnfollowConfirm = async function (accountId, btn) {
+  FollowModule.showUnfollowConfirm = async function (accountId, btn, options = null) {
     if (document.querySelector(".unfollow-overlay")) return;
 
     let status = null;
@@ -669,6 +682,19 @@
       status = await FollowModule.fetchRelationStatus(accountId);
     } catch (_) {
       status = null;
+    }
+
+    const staleRequestedButton =
+      isRequestedButton(btn) &&
+      status &&
+      status.isRequested !== true;
+
+    if (staleRequestedButton) {
+      syncResolvedRelation(accountId, status, btn);
+      if (typeof options?.onResolved === "function") {
+        options.onResolved(status);
+      }
+      return;
     }
 
     const isRequested =
@@ -719,8 +745,11 @@
     const confirmBtn = document.getElementById("unfollowConfirm");
     const cancelBtn = document.getElementById("unfollowCancel");
     if (confirmBtn) {
-      confirmBtn.onclick = () => {
-        FollowModule.unfollowUser(accountId, btn);
+      confirmBtn.onclick = async () => {
+        const relation = await FollowModule.unfollowUser(accountId, btn);
+        if (typeof options?.onResolved === "function") {
+          options.onResolved(relation);
+        }
         closePopup();
       };
     }
