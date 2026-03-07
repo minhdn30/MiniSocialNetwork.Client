@@ -1456,6 +1456,8 @@ body.light-mode .sn-story-viewer-more-menu {
   display: flex;
   align-items: center;
   gap: 14px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .sn-story-viewer-viewers-item-avatar {
@@ -1471,19 +1473,34 @@ body.light-mode .sn-story-viewer-more-menu {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .sn-story-viewer-viewers-item-username {
+  display: block;
   font-size: 14.5px;
   font-weight: 700;
   color: var(--snsv-footer-text);
   line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sn-story-viewer-viewers-item-fullname {
+  display: block;
   font-size: 13px;
   color: var(--snsv-footer-text);
   opacity: 0.55;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sn-story-viewer-viewers-item-right {
+  flex: 0 0 auto;
+  padding-left: 12px;
 }
 
 .sn-story-viewer-viewers-item-react {

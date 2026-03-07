@@ -546,8 +546,13 @@
         apiFetch(
           `/Stories/archive?page=${encodeURIComponent(page)}&pageSize=${encodeURIComponent(pageSize)}`,
         ),
-      resolveByStoryId: (storyId) =>
-        apiFetch(`/Stories/${encodeURIComponent(storyId)}/resolve`),
+      resolveByStoryId: (
+        storyId,
+        pageSize = window.APP_CONFIG?.PROFILE_ARCHIVED_STORIES_PAGE_SIZE || 12,
+      ) =>
+        apiFetch(
+          `/Stories/${encodeURIComponent(storyId)}/resolve?pageSize=${encodeURIComponent(pageSize)}`,
+        ),
       getActiveByAuthor: (authorId) =>
         apiFetch(`/Stories/authors/${encodeURIComponent(authorId)}/active`),
       markViewed: (storyIds = []) =>

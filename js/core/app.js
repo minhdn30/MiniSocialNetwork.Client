@@ -674,7 +674,8 @@ function appEnsureChatSidebarOpen() {
 }
 
 function closeAllOverlayModals(options = {}) {
-  const keepChatSurface = options.keepChatSurface === true;
+  const keepChatSidebar =
+    options.keepChatSidebar === true || options.keepChatSurface === true;
   const keepNotificationsPanel =
     options.keepNotificationsPanel === true ||
     !!window.__keepNotificationsPanelOnNextRoute;
@@ -755,10 +756,10 @@ function closeAllOverlayModals(options = {}) {
       }
   }
 
-  const isMessagesRoute = appIsChatPath(currentPath) || keepChatSurface;
+  const isMessagesRoute = appIsChatPath(currentPath);
 
   // Chat Sidebar
-  if (window.closeChatSidebar && !isMessagesRoute) {
+  if (window.closeChatSidebar && !keepChatSidebar && !isMessagesRoute) {
       window.closeChatSidebar();
   }
 
@@ -1007,7 +1008,10 @@ async function router() {
   lastHash = hash;
 
   // IMPORTANT: Close overlays first, which calls unlockScroll()
-  closeAllOverlayModals();
+  closeAllOverlayModals({
+    keepChatSidebar: !!window.ChatSidebar?.isOpen,
+    keepNotificationsPanel: !!window.NotificationsPanel?.isOpen,
+  });
 
   // Keep profile surface stable when switching sub-routes in the same profile
   // (tabs/follow-lists/highlight, etc.) to avoid full page rerender flicker.

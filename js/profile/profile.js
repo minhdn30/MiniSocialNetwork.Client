@@ -362,6 +362,58 @@
     `;
   }
 
+  function resolveProfileAccountInfo(data = currentProfileData) {
+    return (
+      data?.accountInfo ||
+      data?.AccountInfo ||
+      data?.account ||
+      data?.Account ||
+      {}
+    );
+  }
+
+  function clearCurrentProfileStoryRing(authorId) {
+    const normalizedAuthorId = normalizeStoryId(authorId);
+    const normalizedCurrentProfileId = normalizeStoryId(currentProfileId);
+    if (
+      !normalizedAuthorId ||
+      !normalizedCurrentProfileId ||
+      normalizedAuthorId !== normalizedCurrentProfileId
+    ) {
+      return;
+    }
+
+    const avatarWrapper = document.querySelector(".profile-avatar-wrapper");
+    if (!avatarWrapper) return;
+
+    const info = resolveProfileAccountInfo();
+    const profileAccountId =
+      info.accountId || info.AccountId || info.id || info.Id || currentProfileId;
+    const avatarUrl =
+      info.avatarUrl || info.AvatarUrl || APP_CONFIG.DEFAULT_AVATAR;
+
+    if (currentProfileData && typeof currentProfileData === "object") {
+      if (typeof currentProfileData.storyRingState !== "undefined") {
+        currentProfileData.storyRingState = 0;
+      }
+      if (typeof currentProfileData.StoryRingState !== "undefined") {
+        currentProfileData.StoryRingState = 0;
+      }
+    }
+
+    if (info && typeof info === "object") {
+      if (typeof info.storyRingState !== "undefined") {
+        info.storyRingState = 0;
+      }
+      if (typeof info.StoryRingState !== "undefined") {
+        info.StoryRingState = 0;
+      }
+    }
+
+    renderProfileAvatar(avatarWrapper, avatarUrl, null, profileAccountId);
+    applyProfilePresenceDot(profileAccountId);
+  }
+
   function applyProfilePresenceDot(accountId) {
     const avatarWrapper = document.querySelector(".profile-avatar-wrapper");
     if (!avatarWrapper) return;
@@ -2921,6 +2973,15 @@
 
     removeArchivedStoryGridItem(deletedStoryId, { animate: true });
     loadProfileHighlightGroups({ silent: true });
+  });
+
+  window.addEventListener("story:unavailable", (event) => {
+    const detail = event?.detail || {};
+    const unavailableAuthorId =
+      detail.authorId || detail.AuthorId || detail.accountId || detail.AccountId;
+    if (!unavailableAuthorId) return;
+
+    clearCurrentProfileStoryRing(unavailableAuthorId);
   });
 
   function formatArchiveStoryCreatedAt(rawValue) {

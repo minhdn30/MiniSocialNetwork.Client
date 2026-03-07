@@ -3682,6 +3682,9 @@
   async function stResolveStoryAuthorContextByStoryId(storyId) {
     const result = {
       authorId: "",
+      storyMode: STORY_VIEW_MODE.ACTIVE,
+      archivePage: 1,
+      archivePageSize: global.APP_CONFIG?.PROFILE_ARCHIVED_STORIES_PAGE_SIZE || 12,
       notFound: false,
       forbidden: false,
       error: false,
@@ -3697,22 +3700,20 @@
       return result;
     }
 
-    if (viewerState.storyToAuthorCache.has(normalizedStoryId)) {
-      result.authorId =
-        viewerState.storyToAuthorCache.get(normalizedStoryId) || "";
-      if (!result.authorId) {
-        result.notFound = true;
-      }
-      return result;
-    }
     if (!global.API?.Stories?.resolveByStoryId) {
       result.error = true;
       return result;
     }
 
+    const cachedAuthorId = viewerState.storyToAuthorCache.has(normalizedStoryId)
+      ? viewerState.storyToAuthorCache.get(normalizedStoryId) || ""
+      : "";
+
     try {
-      const resolveRes =
-        await global.API.Stories.resolveByStoryId(normalizedStoryId);
+      const resolveRes = await global.API.Stories.resolveByStoryId(
+        normalizedStoryId,
+        result.archivePageSize,
+      );
       if (resolveRes?.status === 404) {
         result.notFound = true;
         return result;
@@ -3733,10 +3734,40 @@
         return result;
       }
 
+      const storyMode = stReadString(
+        payload,
+        "storyMode",
+        "StoryMode",
+        STORY_VIEW_MODE.ACTIVE,
+      )
+        .trim()
+        .toLowerCase();
+      const archivePage = Math.max(
+        1,
+        stParseInt(payload?.archivePage ?? payload?.ArchivePage, 1),
+      );
+      const archivePageSize = Math.max(
+        1,
+        stParseInt(
+          payload?.archivePageSize ?? payload?.ArchivePageSize,
+          result.archivePageSize,
+        ),
+      );
+
       stCacheStoryAuthor(normalizedStoryId, authorId);
       result.authorId = authorId;
+      result.storyMode =
+        storyMode === STORY_VIEW_MODE.ARCHIVE
+          ? STORY_VIEW_MODE.ARCHIVE
+          : STORY_VIEW_MODE.ACTIVE;
+      result.archivePage = archivePage;
+      result.archivePageSize = archivePageSize;
       return result;
     } catch (_) {
+      if (cachedAuthorId) {
+        result.authorId = cachedAuthorId;
+        return result;
+      }
       result.error = true;
       return result;
     }
@@ -3783,6 +3814,61 @@
         global.toastError("Failed to resolve story route.");
       }
       return STORY_OPEN_STATUS.ERROR;
+    }
+
+    if (resolveResult.storyMode === STORY_VIEW_MODE.ARCHIVE) {
+      const { response, payload } = await stFetchArchivePage(
+        resolveResult.archivePage,
+        resolveResult.archivePageSize,
+      );
+
+      if (!response?.ok) {
+        if (response?.status === 404) {
+          if (options.redirectOnNotFound) {
+            stNavigateToNotFoundRoute();
+          } else if (typeof global.toastInfo === "function") {
+            global.toastInfo("This story is no longer available.");
+          }
+          return STORY_OPEN_STATUS.UNAVAILABLE;
+        }
+
+        if (response?.status === 403) {
+          if (typeof global.toastInfo === "function") {
+            global.toastInfo("You no longer have permission to view this story.");
+          }
+          return STORY_OPEN_STATUS.UNAVAILABLE;
+        }
+
+        if (typeof global.toastError === "function") {
+          global.toastError("Failed to load story.");
+        }
+        return STORY_OPEN_STATUS.ERROR;
+      }
+
+      const rawStories = Array.isArray(payload?.items ?? payload?.Items)
+        ? (payload.items ?? payload.Items)
+        : Array.isArray(payload?.stories ?? payload?.Stories)
+          ? (payload.stories ?? payload.Stories)
+          : [];
+      const archiveAuthor = {
+        accountId: resolveResult.authorId,
+        username: localStorage.getItem("username") ?? "",
+        fullName: localStorage.getItem("fullname") ?? "",
+        avatarUrl:
+          localStorage.getItem("avatarUrl") ??
+          global.APP_CONFIG?.DEFAULT_AVATAR ??
+          "",
+      };
+
+      return stOpenArchiveViewerByAuthorId(resolveResult.authorId, {
+        syncUrl: options.syncUrl !== false,
+        page: resolveResult.archivePage,
+        pageSize: resolveResult.archivePageSize,
+        targetStoryId: normalizedStoryId,
+        archiveStories: rawStories,
+        archiveHasMore: Boolean(payload?.hasNextPage ?? payload?.HasNextPage),
+        archiveAuthor,
+      });
     }
 
     const openStatus = await stOpenViewerByAuthorId(resolveResult.authorId, {

@@ -669,6 +669,30 @@
     }
   };
 
+  async function resolveUnfollowConfirmIntent(accountId, btn, fallbackStatus = null) {
+    let latestStatus = fallbackStatus;
+    try {
+      latestStatus = await FollowModule.fetchRelationStatus(accountId);
+    } catch (_) {
+      latestStatus = fallbackStatus;
+    }
+
+    if (latestStatus) {
+      syncResolvedRelation(accountId, latestStatus, btn);
+      if (!latestStatus.isRequested && !latestStatus.isFollowing) {
+        return {
+          shouldExecute: false,
+          relation: latestStatus,
+        };
+      }
+    }
+
+    return {
+      shouldExecute: true,
+      relation: latestStatus,
+    };
+  }
+
   /**
    * Show confirmation popup for unfollow or discard request
    * @param {string} accountId
@@ -707,14 +731,14 @@
       status?.targetFollowPrivacy === FOLLOW_PRIVACY.PRIVATE;
 
     const title = isRequested
-      ? "Discard follow request?"
+      ? "Stop following this account?"
       : "Unfollow this account?";
     const description = isRequested
-      ? "This request will be removed."
+      ? "If your request is still pending, it will be removed. If it was already accepted, you will unfollow this account."
       : isPrivateTarget
         ? "If you follow again later, you will need this account to approve your request."
         : "You can always follow them again later.";
-    const confirmText = isRequested ? "Discard" : "Unfollow";
+    const confirmText = isRequested ? "Confirm" : "Unfollow";
 
     const overlay = document.createElement("div");
     overlay.className = "unfollow-overlay";
@@ -746,9 +770,22 @@
     const cancelBtn = document.getElementById("unfollowCancel");
     if (confirmBtn) {
       confirmBtn.onclick = async () => {
+        const confirmIntent = await resolveUnfollowConfirmIntent(
+          accountId,
+          btn,
+          status,
+        );
+        if (!confirmIntent.shouldExecute) {
+          if (typeof options?.onResolved === "function") {
+            options.onResolved(confirmIntent.relation);
+          }
+          closePopup();
+          return;
+        }
+
         const relation = await FollowModule.unfollowUser(accountId, btn);
         if (typeof options?.onResolved === "function") {
-          options.onResolved(relation);
+          options.onResolved(relation ?? confirmIntent.relation);
         }
         closePopup();
       };
