@@ -2,6 +2,7 @@
   const NOTIFICATION_FILTER = Object.freeze({
     ALL: "all",
     UNREAD: "unread",
+    REQUESTS: "requests",
   });
 
   const NOTIFICATION_STATE = Object.freeze({
@@ -39,6 +40,8 @@
     initialized: false,
     isOpen: false,
     isLoading: false,
+    listLoadSequence: 0,
+    activeListLoadToken: 0,
     hasMore: true,
     filter: NOTIFICATION_FILTER.ALL,
     pageSize: 20,
@@ -56,13 +59,25 @@
     staleToastCount: 0,
     hasRealtimeDirty: false,
     realtimeRefreshTimer: null,
+    hasFollowRequestDirty: false,
+    followRequestRefreshTimer: null,
+    followRequestSyncPlaceholderTimer: null,
+    followRequestSyncToken: 0,
+    isFollowRequestSyncing: false,
+    isFollowRequestSkeletonVisible: false,
+    followRequestCount: 0,
     dedupeCleanupTimer: null,
     listScrollAnimationFrame: null,
+    followRequestLastLoadedAt: 0,
+    cursorRequestCreatedAt: "",
+    cursorRequesterId: "",
     dom: {
       panel: null,
       tabs: null,
       tabsList: null,
       tabsIndicator: null,
+      requestsTab: null,
+      requestsTabBadge: null,
       list: null,
       loader: null,
       settingsBtn: null,
@@ -79,6 +94,19 @@
 
   function normalizeId(value) {
     return (value || "").toString().trim().toLowerCase();
+  }
+
+  function isRequestsFilter(filter = state.filter) {
+    return (filter || "").toString().trim().toLowerCase() === NOTIFICATION_FILTER.REQUESTS;
+  }
+
+  function isSupportedFilter(filter) {
+    const normalized = (filter || "").toString().trim().toLowerCase();
+    return (
+      normalized === NOTIFICATION_FILTER.ALL ||
+      normalized === NOTIFICATION_FILTER.UNREAD ||
+      normalized === NOTIFICATION_FILTER.REQUESTS
+    );
   }
 
   function pickValue(source, ...keys) {
@@ -210,6 +238,10 @@
         <div class="notifications-tabs-list">
           <button type="button" class="notifications-tab active" data-filter="${NOTIFICATION_FILTER.ALL}">All</button>
           <button type="button" class="notifications-tab" data-filter="${NOTIFICATION_FILTER.UNREAD}">Unread</button>
+          <button type="button" class="notifications-tab" data-filter="${NOTIFICATION_FILTER.REQUESTS}">
+            <span class="notifications-tab-label">Requests</span>
+            <span class="notifications-tab-badge" data-tab-badge="requests" hidden></span>
+          </button>
           <div class="notifications-tabs-indicator" id="notifications-tabs-indicator" aria-hidden="true"></div>
         </div>
       </div>
@@ -241,6 +273,12 @@
     state.dom.tabsIndicator = panel.querySelector(
       "#notifications-tabs-indicator",
     );
+    state.dom.requestsTab = panel.querySelector(
+      `.notifications-tab[data-filter="${NOTIFICATION_FILTER.REQUESTS}"]`,
+    );
+    state.dom.requestsTabBadge = panel.querySelector(
+      '.notifications-tab-badge[data-tab-badge="requests"]',
+    );
     state.dom.list = panel.querySelector("#notifications-panel-list");
     state.dom.loader = panel.querySelector("#notifications-panel-more-loader");
     state.dom.settingsBtn = panel.querySelector(
@@ -253,6 +291,8 @@
     if (global.lucide && typeof global.lucide.createIcons === "function") {
       global.lucide.createIcons();
     }
+
+    updateFollowRequestTabBadge();
   }
 
   function bindPanelEvents() {
@@ -276,20 +316,21 @@
         const tabBtn = event.target.closest(".notifications-tab[data-filter]");
         if (!tabBtn) return;
         const nextFilter = tabBtn.dataset.filter;
-        if (
-          nextFilter !== NOTIFICATION_FILTER.ALL &&
-          nextFilter !== NOTIFICATION_FILTER.UNREAD
-        ) {
+        if (!isSupportedFilter(nextFilter)) {
           return;
         }
         if (state.filter === nextFilter) {
           scrollNotificationsListToTop();
           return;
         }
+        const wasRequestsFilter = isRequestsFilter();
         state.filter = nextFilter;
+        if (wasRequestsFilter && !isRequestsFilter(nextFilter)) {
+          cancelFollowRequestSyncVisual();
+        }
         updateTabUi();
         resetCursorAndItems();
-        loadNotifications(false);
+        loadCurrentFilter(false, { forceReplace: true, refreshBadge: false });
       });
     }
 
@@ -299,7 +340,7 @@
         if (!state.isOpen || state.isLoading || !state.hasMore) return;
         const { scrollTop, scrollHeight, clientHeight } = state.dom.list;
         if (scrollTop + clientHeight >= scrollHeight - 80) {
-          loadNotifications(true);
+          loadCurrentFilter(true);
         }
       });
     }
@@ -375,7 +416,38 @@
       .forEach((tab) => {
         tab.classList.toggle("active", tab.dataset.filter === state.filter);
       });
+    updateFollowRequestTabBadge();
     requestAnimationFrame(updateTabsIndicator);
+  }
+
+  function formatFollowRequestCountBadge(count) {
+    const safeCount = Math.max(0, parseIntSafe(count, 0));
+    if (safeCount <= 0) return "";
+    if (safeCount > 99) return "99+";
+    return String(safeCount);
+  }
+
+  function updateFollowRequestTabBadge() {
+    const badgeEl = state.dom.requestsTabBadge;
+    if (!badgeEl) return;
+
+    const label = formatFollowRequestCountBadge(state.followRequestCount);
+    if (!label) {
+      badgeEl.textContent = "";
+      badgeEl.hidden = true;
+      requestAnimationFrame(updateTabsIndicator);
+      return;
+    }
+
+    badgeEl.hidden = false;
+    badgeEl.textContent = label;
+    requestAnimationFrame(updateTabsIndicator);
+  }
+
+  function setFollowRequestCount(count) {
+    const safeCount = Math.max(0, parseIntSafe(count, 0));
+    state.followRequestCount = safeCount;
+    updateFollowRequestTabBadge();
   }
 
   function scrollNotificationsListToTop() {
@@ -471,9 +543,150 @@
   function resetCursorAndItems() {
     state.cursorLastEventAt = "";
     state.cursorNotificationId = "";
+    state.cursorRequestCreatedAt = "";
+    state.cursorRequesterId = "";
     state.hasMore = true;
     state.items = [];
     state.itemMap.clear();
+  }
+
+  function getLoadingLabel() {
+    return isRequestsFilter() ? "Loading follow requests..." : "Loading notifications...";
+  }
+
+  function getEmptyLabel() {
+    if (state.filter === NOTIFICATION_FILTER.UNREAD) {
+      return "No unread notifications.";
+    }
+    if (isRequestsFilter()) {
+      return "No pending follow requests.";
+    }
+    return "No notifications yet.";
+  }
+
+  function loadCurrentFilter(isLoadMore = false, options = {}) {
+    return isRequestsFilter()
+      ? loadFollowRequests(isLoadMore, options)
+      : loadNotifications(isLoadMore, options);
+  }
+
+  function beginListLoad(isLoadMore = false, options = {}) {
+    const forceReplace = !isLoadMore && options.forceReplace === true;
+    if (isLoadMore && !state.hasMore) return null;
+    if (state.isLoading && !forceReplace) return null;
+
+    const requestToken = ++state.listLoadSequence;
+    state.activeListLoadToken = requestToken;
+    state.isLoading = true;
+
+    if (!isLoadMore) {
+      setMoreLoaderVisible(false);
+    }
+
+    return {
+      requestToken,
+      requestFilter: state.filter,
+    };
+  }
+
+  function isActiveListLoad(requestToken, requestFilter) {
+    return (
+      requestToken === state.activeListLoadToken &&
+      requestFilter === state.filter
+    );
+  }
+
+  function clearFollowRequestSyncPlaceholderTimer() {
+    if (state.followRequestSyncPlaceholderTimer) {
+      clearTimeout(state.followRequestSyncPlaceholderTimer);
+      state.followRequestSyncPlaceholderTimer = null;
+    }
+  }
+
+  function setFollowRequestSyncing(active) {
+    state.isFollowRequestSyncing = !!active;
+    if (state.dom.list) {
+      state.dom.list.classList.toggle(
+        "is-follow-requests-syncing",
+        !!active && isRequestsFilter(),
+      );
+    }
+  }
+
+  function buildFollowRequestSkeletonHtml(count = 3) {
+    const safeCount = Math.min(4, Math.max(2, Number(count) || 3));
+    const rows = Array.from({ length: safeCount })
+      .map(
+        () => `
+          <div class="notifications-request-skeleton">
+            <div class="notifications-request-skeleton-avatar"></div>
+            <div class="notifications-request-skeleton-body">
+              <div class="notifications-request-skeleton-line primary"></div>
+              <div class="notifications-request-skeleton-line secondary"></div>
+              <div class="notifications-request-skeleton-actions">
+                <div class="notifications-request-skeleton-pill accent"></div>
+                <div class="notifications-request-skeleton-pill muted"></div>
+              </div>
+            </div>
+          </div>
+        `,
+      )
+      .join("");
+
+    return `
+      <div class="notifications-request-skeleton-list" aria-hidden="true">
+        ${rows}
+      </div>
+    `;
+  }
+
+  function beginFollowRequestSyncVisual(options = {}) {
+    if (!isRequestsFilter() || !state.isOpen || !state.dom.list) return null;
+    if (options.showLoader !== false || !state.items.length) return null;
+
+    const token = ++state.followRequestSyncToken;
+    state.isFollowRequestSkeletonVisible = false;
+    setFollowRequestSyncing(true);
+    clearFollowRequestSyncPlaceholderTimer();
+
+    state.followRequestSyncPlaceholderTimer = setTimeout(() => {
+      if (
+        !state.isFollowRequestSyncing ||
+        !isRequestsFilter() ||
+        !state.isOpen ||
+        state.followRequestSyncToken !== token ||
+        !state.dom.list
+      ) {
+        return;
+      }
+
+      state.isFollowRequestSkeletonVisible = true;
+      state.dom.list.innerHTML = buildFollowRequestSkeletonHtml(state.items.length);
+    }, 220);
+
+    return token;
+  }
+
+  function endFollowRequestSyncVisual(token, shouldRestoreItems = false) {
+    if (token !== null && token !== undefined && token !== state.followRequestSyncToken) {
+      return;
+    }
+
+    clearFollowRequestSyncPlaceholderTimer();
+    const shouldRenderItems = shouldRestoreItems && state.isFollowRequestSkeletonVisible;
+    state.isFollowRequestSkeletonVisible = false;
+    setFollowRequestSyncing(false);
+
+    if (shouldRenderItems) {
+      renderItems();
+    }
+  }
+
+  function cancelFollowRequestSyncVisual() {
+    state.followRequestSyncToken += 1;
+    clearFollowRequestSyncPlaceholderTimer();
+    state.isFollowRequestSkeletonVisible = false;
+    setFollowRequestSyncing(false);
   }
 
   function preservePanelOnNextRouteChange() {
@@ -548,6 +761,36 @@
         username: actorUsername,
         fullName: actorFullName,
         avatarUrl: actorAvatarUrl,
+      },
+    };
+  }
+
+  function normalizeFollowRequestItem(raw = {}) {
+    const requesterId = readString(raw, "requesterId", "RequesterId");
+    if (!isGuidLike(requesterId)) return null;
+
+    return {
+      notificationId: `follow-request:${requesterId}`,
+      type: NOTIFICATION_TYPE.FOLLOW_REQUEST,
+      state: NOTIFICATION_STATE.ACTIVE,
+      isRead: true,
+      actorCount: 1,
+      eventCount: 1,
+      text: "wants to follow you",
+      targetKind: NOTIFICATION_TARGET_KIND.ACCOUNT,
+      targetId: requesterId,
+      targetPostCode: "",
+      thumbnailUrl: "",
+      thumbnailMediaType: -1,
+      thumbnailMediaKind: "",
+      createdAt: readString(raw, "createdAt", "CreatedAt"),
+      lastEventAt: readString(raw, "createdAt", "CreatedAt"),
+      canOpen: true,
+      actor: {
+        accountId: requesterId,
+        username: readString(raw, "username", "Username"),
+        fullName: readString(raw, "fullName", "FullName"),
+        avatarUrl: readString(raw, "avatarUrl", "AvatarUrl"),
       },
     };
   }
@@ -648,6 +891,14 @@
       !item?.canOpen ||
       hasUnavailableMessage(item) ||
       hasMissingTargetAccessInfo(item)
+    );
+  }
+
+  function shouldSilentlyIgnoreUnavailableItem(item) {
+    return (
+      parseIntSafe(item?.type, -1) === NOTIFICATION_TYPE.FOLLOW &&
+      parseIntSafe(item?.actorCount, 0) > 1 &&
+      item?.targetKind === NOTIFICATION_TARGET_KIND.ACCOUNT
     );
   }
 
@@ -817,13 +1068,15 @@
             responseMessage,
           )
         ) {
-          await loadNotifications(false, {
+          await loadCurrentFilter(false, {
             showLoader: false,
             patchDom: true,
             animateNewItems: true,
             silent: true,
           });
-          refreshUnreadBadge(40);
+          if (!isRequestsFilter()) {
+            refreshUnreadBadge(40);
+          }
           return;
         }
 
@@ -842,13 +1095,15 @@
         global.toastInfo("Follow request removed.");
       }
 
-      await loadNotifications(false, {
+      await loadCurrentFilter(false, {
         showLoader: false,
         patchDom: true,
         animateNewItems: true,
         silent: true,
       });
-      refreshUnreadBadge(40);
+      if (!isRequestsFilter()) {
+        refreshUnreadBadge(40);
+      }
     } catch (error) {
       if (global.toastError) {
         const message =
@@ -1045,14 +1300,10 @@
     });
 
     if (!state.items.length) {
-      const emptyText =
-        state.filter === NOTIFICATION_FILTER.UNREAD
-          ? "No unread notifications."
-          : "No notifications yet.";
       state.dom.list.innerHTML = `
         <div class="notifications-panel-empty">
           <i data-lucide="bell"></i>
-          <p>${escapeHtml(emptyText)}</p>
+          <p>${escapeHtml(getEmptyLabel())}</p>
         </div>
       `;
       if (global.lucide && typeof global.lucide.createIcons === "function") {
@@ -1171,8 +1422,9 @@
 
   async function loadNotifications(isLoadMore = false, options = {}) {
     if (!global.API?.Notifications?.getNotifications) return;
-    if (state.isLoading) return;
-    if (isLoadMore && !state.hasMore) return;
+    const loadContext = beginListLoad(isLoadMore, options);
+    if (!loadContext) return;
+    const { requestToken, requestFilter } = loadContext;
 
     const silentMode = options.silent === true;
     const showLoader = !isLoadMore && options.showLoader !== false;
@@ -1187,14 +1439,13 @@
         )
       : null;
 
-    state.isLoading = true;
     if (isLoadMore) {
       setMoreLoaderVisible(true);
     } else if (showLoader && state.dom.list) {
       state.dom.list.innerHTML = `
         <div class="notifications-panel-loader">
           <div class="spinner spinner-medium"></div>
-          <p>Loading notifications...</p>
+          <p>${escapeHtml(getLoadingLabel())}</p>
         </div>
       `;
     }
@@ -1204,8 +1455,9 @@
         limit: state.pageSize,
         cursorLastEventAt: isLoadMore ? state.cursorLastEventAt : null,
         cursorNotificationId: isLoadMore ? state.cursorNotificationId : null,
-        filter: state.filter,
+        filter: requestFilter,
       });
+      if (!isActiveListLoad(requestToken, requestFilter)) return;
 
       if (!res?.ok) {
         if (!isLoadMore && !silentMode && global.toastError) {
@@ -1215,6 +1467,15 @@
       }
 
       const data = await res.json().catch(() => null);
+      if (!isActiveListLoad(requestToken, requestFilter)) return;
+      const followRequestCount = readNumber(
+        data,
+        ["followRequestCount", "FollowRequestCount"],
+        -1,
+      );
+      if (followRequestCount >= 0) {
+        setFollowRequestCount(followRequestCount);
+      }
       const rawItems = Array.isArray(data?.items)
         ? data.items
         : Array.isArray(data?.Items)
@@ -1222,7 +1483,11 @@
           : [];
       const normalizedItems = rawItems
         .map((item) => normalizeNotificationItem(item))
-        .filter(Boolean);
+        .filter(Boolean)
+        .filter(
+          (item) =>
+            parseIntSafe(item?.type, -1) !== NOTIFICATION_TYPE.FOLLOW_REQUEST,
+        );
 
       if (isLoadMore) {
         state.items = mergeUniqueByNotificationId(state.items, normalizedItems);
@@ -1261,13 +1526,134 @@
       }
       state.hasRealtimeDirty = false;
     } catch (_) {
+      if (!isActiveListLoad(requestToken, requestFilter)) return;
       if (!isLoadMore && !silentMode && global.toastError) {
         global.toastError("Failed to load notifications.");
       }
     } finally {
+      if (!isActiveListLoad(requestToken, requestFilter)) return;
       state.isLoading = false;
       setMoreLoaderVisible(false);
-      refreshUnreadBadge(0);
+      if (options.refreshBadge === true) {
+        refreshUnreadBadge(0);
+      }
+    }
+  }
+
+  async function loadFollowRequests(isLoadMore = false, options = {}) {
+    if (!global.API?.Follows?.getRequests) return;
+    const loadContext = beginListLoad(isLoadMore, options);
+    if (!loadContext) return;
+    const { requestToken, requestFilter } = loadContext;
+
+    const silentMode = options.silent === true;
+    const showLoader = !isLoadMore && options.showLoader !== false;
+    const animateNewItems = !isLoadMore && options.animateNewItems === true;
+    const patchDom = !isLoadMore && options.patchDom === true;
+    const previousItemIdSet = animateNewItems
+      ? new Set(state.items.map((item) => normalizeId(item.notificationId)))
+      : null;
+    const previousItemsById = patchDom
+      ? new Map(
+          state.items.map((item) => [normalizeId(item.notificationId), item]),
+        )
+      : null;
+    const syncVisualToken =
+      !isLoadMore && !showLoader ? beginFollowRequestSyncVisual(options) : null;
+    let shouldRestoreItems = false;
+    state.hasFollowRequestDirty = false;
+
+    if (isLoadMore) {
+      setMoreLoaderVisible(true);
+    } else if (showLoader && state.dom.list) {
+      state.dom.list.innerHTML = `
+        <div class="notifications-panel-loader">
+          <div class="spinner spinner-medium"></div>
+          <p>${escapeHtml(getLoadingLabel())}</p>
+        </div>
+      `;
+    }
+
+    try {
+      const res = await global.API.Follows.getRequests({
+        limit: state.pageSize,
+        cursorCreatedAt: isLoadMore ? state.cursorRequestCreatedAt : null,
+        cursorRequesterId: isLoadMore ? state.cursorRequesterId : null,
+      });
+      if (!isActiveListLoad(requestToken, requestFilter)) return;
+
+      if (!res?.ok) {
+        if (!isLoadMore && !silentMode && global.toastError) {
+          global.toastError("Failed to load follow requests.");
+        }
+        return;
+      }
+
+      const data = await res.json().catch(() => null);
+      if (!isActiveListLoad(requestToken, requestFilter)) return;
+      const totalCount = readNumber(data, ["totalCount", "TotalCount"], -1);
+      if (totalCount >= 0) {
+        setFollowRequestCount(totalCount);
+      }
+      const rawItems = Array.isArray(data?.items)
+        ? data.items
+        : Array.isArray(data?.Items)
+          ? data.Items
+          : [];
+      const normalizedItems = rawItems
+        .map((item) => normalizeFollowRequestItem(item))
+        .filter(Boolean);
+
+      if (isLoadMore) {
+        state.items = mergeUniqueByNotificationId(state.items, normalizedItems);
+      } else {
+        state.items = mergeUniqueByNotificationId([], normalizedItems);
+      }
+
+      const nextCursor = data?.nextCursor || data?.NextCursor || null;
+      state.cursorRequestCreatedAt = readString(
+        nextCursor || {},
+        "createdAt",
+        "CreatedAt",
+      );
+      state.cursorRequesterId = readString(
+        nextCursor || {},
+        "requesterId",
+        "RequesterId",
+      );
+      state.hasMore = !!(state.cursorRequestCreatedAt && state.cursorRequesterId);
+      state.followRequestLastLoadedAt = Date.now();
+
+      let enterIdSet = null;
+      if (animateNewItems && previousItemIdSet instanceof Set) {
+        enterIdSet = new Set();
+        state.items.forEach((item) => {
+          const id = normalizeId(item.notificationId);
+          if (!id || previousItemIdSet.has(id)) return;
+          enterIdSet.add(id);
+        });
+      }
+
+      if (patchDom) {
+        renderItemsPatched({ enterIdSet, previousItemsById });
+      } else {
+        renderItems({ enterIdSet });
+      }
+      state.hasFollowRequestDirty = false;
+    } catch (_) {
+      if (!isActiveListLoad(requestToken, requestFilter)) return;
+      shouldRestoreItems = true;
+      if (!isLoadMore && !silentMode && global.toastError) {
+        global.toastError("Failed to load follow requests.");
+      }
+    } finally {
+      if (!isActiveListLoad(requestToken, requestFilter)) return;
+      endFollowRequestSyncVisual(syncVisualToken, shouldRestoreItems);
+      state.isLoading = false;
+      setMoreLoaderVisible(false);
+      if (state.hasFollowRequestDirty && state.isOpen && isRequestsFilter()) {
+        scheduleFollowRequestRefresh();
+      }
     }
   }
 
@@ -1585,6 +1971,9 @@
   async function handleItemNavigation(item) {
     if (!item) return;
     if (isItemUnavailable(item)) {
+      if (shouldSilentlyIgnoreUnavailableItem(item)) {
+        return;
+      }
       const message = hasUnavailableMessage(item)
         ? item.text
         : "This content is no longer available";
@@ -1642,15 +2031,38 @@
 
   function scheduleRealtimeRefresh() {
     if (!state.isOpen) return;
+    if (isRequestsFilter()) return;
     if (state.realtimeRefreshTimer) return;
     state.realtimeRefreshTimer = setTimeout(() => {
       state.realtimeRefreshTimer = null;
       if (!state.isOpen) return;
+      if (isRequestsFilter()) return;
       if (state.isLoading) {
         scheduleRealtimeRefresh();
         return;
       }
       loadNotifications(false, {
+        showLoader: false,
+        animateNewItems: true,
+        patchDom: true,
+        silent: true,
+        refreshBadge: false,
+      });
+    }, 180);
+  }
+
+  function scheduleFollowRequestRefresh() {
+    if (!state.isOpen) return;
+    if (!isRequestsFilter()) return;
+    if (state.followRequestRefreshTimer) return;
+    state.followRequestRefreshTimer = setTimeout(() => {
+      state.followRequestRefreshTimer = null;
+      if (!state.isOpen || !isRequestsFilter()) return;
+      if (state.isLoading) {
+        scheduleFollowRequestRefresh();
+        return;
+      }
+      loadFollowRequests(false, {
         showLoader: false,
         animateNewItems: true,
         patchDom: true,
@@ -1697,6 +2109,34 @@
     refreshUnreadBadge(80);
   }
 
+  function handleFollowRequestQueueChanged(payload = {}) {
+    const myId = normalizeId(localStorage.getItem("accountId"));
+    const targetAccountId = normalizeId(
+      readString(payload, "targetAccountId", "TargetAccountId"),
+    );
+    if (targetAccountId && myId && targetAccountId !== myId) return;
+
+    const action = (
+      readString(payload, "action", "Action") || "refresh"
+    ).toLowerCase();
+    const requesterId = normalizeId(
+      readString(payload, "requesterId", "RequesterId"),
+    );
+    const eventId = normalizeId(readString(payload, "eventId", "EventId"));
+    const occurredAt = readString(payload, "occurredAt", "OccurredAt");
+    const eventKey =
+      eventId ||
+      `requests:${action}:${requesterId || "all"}:${occurredAt || ""}`;
+    if (isDuplicateRealtimeEvent(eventKey)) return;
+
+    state.hasFollowRequestDirty = true;
+    state.hasRealtimeDirty = true;
+    if (state.isOpen && !isRequestsFilter()) {
+      scheduleRealtimeRefresh();
+    }
+    scheduleFollowRequestRefresh();
+  }
+
   async function open() {
     init();
 
@@ -1715,16 +2155,18 @@
 
     updateTabUi();
 
-    const shouldReload =
-      state.hasRealtimeDirty ||
-      !state.lastLoadedAt ||
-      Date.now() - state.lastLoadedAt > 15000;
+    const shouldReload = isRequestsFilter()
+      ? state.hasFollowRequestDirty ||
+        !state.followRequestLastLoadedAt ||
+        Date.now() - state.followRequestLastLoadedAt > 15000
+      : state.hasRealtimeDirty ||
+        !state.lastLoadedAt ||
+        Date.now() - state.lastLoadedAt > 15000;
     if (shouldReload) {
       resetCursorAndItems();
-      await loadNotifications(false);
+      await loadCurrentFilter(false, { refreshBadge: false });
     } else {
       renderItems();
-      refreshUnreadBadge(0);
     }
   }
 
@@ -1769,7 +2211,7 @@
     setupConfigFromApp();
     ensurePanel();
     updateTabUi();
-    refreshUnreadBadge(0);
+    updateFollowRequestTabBadge();
 
     if (!state.onResize) {
       state.onResize = () => updateTabsIndicator();
@@ -1793,9 +2235,10 @@
     toggle,
     reload: () => {
       resetCursorAndItems();
-      return loadNotifications(false);
+      return loadCurrentFilter(false, { refreshBadge: false });
     },
     handleRealtimeChanged,
+    handleFollowRequestQueueChanged,
     get isOpen() {
       return state.isOpen;
     },

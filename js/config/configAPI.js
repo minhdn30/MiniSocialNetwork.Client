@@ -725,6 +725,22 @@
       unfollow: (targetId) =>
         apiFetch(`/Follows/${targetId}`, { method: "DELETE" }),
       status: (targetId) => apiFetch(`/Follows/status/${targetId}`),
+      getRequests: ({
+        limit = window.APP_CONFIG?.NOTIFICATIONS_PAGE_SIZE || 20,
+        cursorCreatedAt = null,
+        cursorRequesterId = null,
+      } = {}) => {
+        const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 100));
+        let url = `/Follows/requests?limit=${encodeURIComponent(safeLimit)}`;
+        const safeCursorCreatedAt = (cursorCreatedAt || "").toString().trim();
+        const safeCursorRequesterId = (cursorRequesterId || "")
+          .toString()
+          .trim();
+        if (safeCursorCreatedAt && safeCursorRequesterId) {
+          url += `&cursorCreatedAt=${encodeURIComponent(safeCursorCreatedAt)}&cursorRequesterId=${encodeURIComponent(safeCursorRequesterId)}`;
+        }
+        return apiFetch(url);
+      },
       acceptRequest: (requesterId) =>
         apiFetch(`/Follows/requests/${requesterId}/accept`, { method: "POST" }),
       removeRequest: (requesterId) =>

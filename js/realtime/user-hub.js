@@ -404,6 +404,27 @@
     }
   }
 
+  function handleFollowRequestQueueChanged(data) {
+    const myId = (localStorage.getItem("accountId") || "").toLowerCase();
+    const targetAccountId = (
+      data?.TargetAccountId ||
+      data?.targetAccountId ||
+      ""
+    )
+      .toString()
+      .toLowerCase();
+
+    if (targetAccountId && myId && targetAccountId !== myId) return;
+
+    if (
+      window.NotificationsPanel &&
+      typeof window.NotificationsPanel.handleFollowRequestQueueChanged ===
+        "function"
+    ) {
+      window.NotificationsPanel.handleFollowRequestQueueChanged(data || {});
+    }
+  }
+
   const UserHub = {
     pendingJoins: new Set(), // Store groups to join once connected
     joinedGroups: new Set(), // Track groups already joined to avoid duplicates
@@ -955,6 +976,10 @@
 
         connection.on("ReceiveNotificationChanged", (data) => {
           handleNotificationChanged(data);
+        });
+
+        connection.on("ReceiveFollowRequestQueueChanged", (data) => {
+          handleFollowRequestQueueChanged(data);
         });
 
         connection.on("ReceiveConversationMuteUpdated", (data) => {
