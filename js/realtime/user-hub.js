@@ -673,6 +673,7 @@
               if (
                 msgAction === "unfollow" ||
                 msgAction === "unfollow_sent" ||
+                msgAction === "remove_follower" ||
                 msgAction === "follow_request_removed" ||
                 msgAction === "follow_request_discarded" ||
                 msgAction === "follow_request_rejected"

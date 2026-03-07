@@ -761,6 +761,61 @@
     };
   };
 
+  FollowModule.showRemoveFollowerConfirm = async function (
+    accountId,
+    btn,
+    options = null,
+  ) {
+    if (document.querySelector(".unfollow-overlay")) return;
+
+    const overlay = document.createElement("div");
+    overlay.className = "unfollow-overlay";
+
+    const popup = document.createElement("div");
+    popup.className = "unfollow-popup";
+    popup.innerHTML = `
+      <div class="unfollow-content">
+        <h3>Remove this follower?</h3>
+        <p>They will no longer follow you, but you can still follow them if you want.</p>
+      </div>
+      <div class="unfollow-actions">
+        <button class="unfollow-btn unfollow-confirm" id="removeFollowerConfirm">Remove</button>
+        <button class="unfollow-btn unfollow-cancel" id="removeFollowerCancel">Cancel</button>
+      </div>
+    `;
+
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
+
+    requestAnimationFrame(() => overlay.classList.add("show"));
+
+    const closePopup = () => {
+      overlay.classList.remove("show");
+      setTimeout(() => overlay.remove(), 200);
+    };
+
+    const confirmBtn = document.getElementById("removeFollowerConfirm");
+    const cancelBtn = document.getElementById("removeFollowerCancel");
+    if (confirmBtn) {
+      confirmBtn.onclick = async () => {
+        const result =
+          typeof options?.execute === "function"
+            ? await options.execute()
+            : null;
+        if (typeof options?.onResolved === "function") {
+          options.onResolved(result);
+        }
+        closePopup();
+      };
+    }
+    if (cancelBtn) {
+      cancelBtn.onclick = closePopup;
+    }
+    overlay.onclick = (event) => {
+      if (event.target === overlay) closePopup();
+    };
+  };
+
   /**
    * Sync follow relation across pages/components
    * @param {string} accountId

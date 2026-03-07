@@ -756,6 +756,8 @@
         apiFetch(`/Follows/requests/${requesterId}/accept`, { method: "POST" }),
       removeRequest: (requesterId) =>
         apiFetch(`/Follows/requests/${requesterId}`, { method: "DELETE" }),
+      removeFollower: (followerId) =>
+        apiFetch(`/Follows/followers/${followerId}`, { method: "DELETE" }),
       getFollowers: (accountId, request) => {
         let url = `/Follows/followers?accountId=${accountId}&page=${request.page}&pageSize=${request.pageSize}`;
         if (request.keyword)

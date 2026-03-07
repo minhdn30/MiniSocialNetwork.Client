@@ -1539,7 +1539,11 @@
                         <div class="profile-more-menu" id="profile-more-menu" hidden>
                             <button type="button" onclick="openSentFollowRequestsFromProfileMenu(event)">
                                 <i data-lucide="clock-3"></i>
-                                <span>Sent follow requests</span>
+                                <span>Pending requests</span>
+                            </button>
+                            <button type="button" onclick="openBlockedAccountsFromProfileMenu(event)">
+                                <i data-lucide="user-x"></i>
+                                <span>Blocked users</span>
                             </button>
                         </div>
                     </div>
@@ -1570,10 +1574,22 @@
                         <i data-lucide="send"></i>
                         <span>Message</span>
                     </button>
-                    <button class="profile-btn profile-btn-more" onclick="openProfileMoreMenu(event)">
-                        <i data-lucide="more-horizontal"></i>
-                        <span>More</span>
-                    </button>
+                    <div class="profile-more-menu-wrap" id="profile-more-menu-wrap">
+                        <button class="profile-btn profile-btn-more" id="profile-more-menu-trigger" onclick="openProfileMoreMenu(event)">
+                            <i data-lucide="more-horizontal"></i>
+                            <span>More</span>
+                        </button>
+                        <div class="profile-more-menu" id="profile-more-menu" hidden>
+                            <button type="button" class="danger" onclick="reportProfileFromMoreMenu(event)">
+                                <i data-lucide="flag"></i>
+                                <span>Report</span>
+                            </button>
+                            <button type="button" class="danger" onclick="blockProfileFromMoreMenu(event)">
+                                <i data-lucide="ban"></i>
+                                <span>Block</span>
+                            </button>
+                        </div>
+                    </div>
                 `;
       }
       lucide.createIcons();
@@ -3743,13 +3759,6 @@
     event?.preventDefault?.();
     event?.stopPropagation?.();
 
-    if (!isCurrentUserProfile()) {
-      if (window.toastInfo) {
-        toastInfo("More options are coming soon.");
-      }
-      return;
-    }
-
     bindProfileMoreMenuOnce();
     const { trigger, menu } = getProfileMoreMenuElements();
     if (!menu || !trigger) return;
@@ -3772,7 +3781,7 @@
 
     if (!window.FollowListModule?.openSentFollowRequestList) {
       if (window.toastError) {
-        toastError("Sent follow requests are not available right now.");
+        toastError("Pending requests are not available right now.");
       }
       return;
     }
@@ -3780,6 +3789,36 @@
     await window.FollowListModule.openSentFollowRequestList(currentProfileId, {
       profileUsername: getCurrentProfileUsername(),
     });
+  };
+
+  global.openBlockedAccountsFromProfileMenu = function (event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    closeProfileMoreMenu();
+
+    if (window.toastInfo) {
+      toastInfo("Blocked users list coming soon!");
+    }
+  };
+
+  global.reportProfileFromMoreMenu = function (event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    closeProfileMoreMenu();
+
+    if (window.toastInfo) {
+      toastInfo("Report feature will be available soon.");
+    }
+  };
+
+  global.blockProfileFromMoreMenu = function (event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    closeProfileMoreMenu();
+
+    if (window.toastInfo) {
+      toastInfo("Block feature will be available soon.");
+    }
   };
 
   global.updateFollowStatus = function (

@@ -250,9 +250,9 @@ body.is-profile-page .main-content::-webkit-scrollbar:horizontal {
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
-  min-width: 220px;
-  padding: 8px;
-  border-radius: 16px;
+  min-width: 208px;
+  padding: 6px;
+  border-radius: 14px;
   border: 1px solid var(--border-secondary, var(--glass-border));
   background: var(--bg-primary);
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
@@ -265,6 +265,29 @@ body.is-profile-page .main-content::-webkit-scrollbar:horizontal {
   z-index: 40;
 }
 
+.profile-more-menu::before,
+.profile-more-menu::after {
+  content: "";
+  position: absolute;
+  right: 18px;
+  width: 12px;
+  height: 12px;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.profile-more-menu::before {
+  top: -7px;
+  background: var(--border-secondary, var(--glass-border));
+  z-index: 0;
+}
+
+.profile-more-menu::after {
+  top: -6px;
+  background: var(--bg-primary);
+  z-index: 1;
+}
+
 .profile-more-menu.show {
   opacity: 1;
   transform: translateY(0) scale(1);
@@ -275,31 +298,47 @@ body.is-profile-page .main-content::-webkit-scrollbar:horizontal {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 11px 12px;
+  gap: 12px;
+  padding: 10px 12px;
   border: none;
-  border-radius: 12px;
-  background: var(--bg-hover);
+  border-radius: 8px;
+  background: transparent;
   color: var(--text-primary);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
   transition:
-    background-color 0.18s ease,
-    color 0.18s ease,
-    transform 0.18s ease;
+    background-color 0.12s ease,
+    color 0.12s ease;
+  min-width: 0;
 }
 
 .profile-more-menu button:hover {
-  background: var(--bg-active);
-  transform: translateY(-1px);
+  background: var(--bg-hover);
 }
 
 .profile-more-menu button i,
 .profile-more-menu button svg {
   width: 18px;
   height: 18px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.profile-more-menu button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-more-menu button.danger {
+  color: var(--danger);
+}
+
+.profile-more-menu button.danger i,
+.profile-more-menu button.danger svg {
   color: inherit;
 }
 
