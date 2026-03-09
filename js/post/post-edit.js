@@ -3,6 +3,25 @@
  * Handles editing post content and privacy with UI matching create-post-modal.
  */
 (function(global) {
+    const epT = (key, params = {}, fallback = "") =>
+        global.I18n?.t ? global.I18n.t(key, params, fallback || key) : (fallback || key);
+
+    const epResolveUiError = (action, status, rawMessage, fallbackKey) => {
+        if (global.UIErrors?.resolveMessage) {
+            return global.UIErrors.resolveMessage(
+                "post",
+                action,
+                status,
+                rawMessage,
+                fallbackKey,
+                epT(fallbackKey, {}, fallbackKey),
+            );
+        }
+
+        const resolved = global.UIErrors?.format?.("post", action, status, rawMessage);
+        return resolved?.message || epT(fallbackKey, {}, fallbackKey);
+    };
+
     const epGetPostTagMaxCount = () => window.APP_CONFIG?.MAX_POST_TAGS || 20;
     const epGetPostTagSearchLimit = () =>
         window.APP_CONFIG?.POST_TAG_SEARCH_LIMIT || 10;
@@ -12,19 +31,40 @@
         window.APP_CONFIG?.DEFAULT_AVATAR || "assets/images/default-avatar.jpg";
     const epGetPostTagErrorToastMaxLength = () =>
         window.APP_CONFIG?.POST_TAG_ERROR_TOAST_MAX_LENGTH || 220;
+    let epLanguageUnsubscribe = null;
 
     const epFormatPostTagErrorMessage = (message) => {
         const normalized = String(message || "").trim();
-        if (!normalized) {
-            return "Something went wrong while updating post";
-        }
+        return epResolveUiError(
+            "edit-tags",
+            0,
+            normalized,
+            "post.editTagging.genericUpdateFailed",
+        );
+    };
 
-        const maxLength = epGetPostTagErrorToastMaxLength();
-        if (!Number.isFinite(maxLength) || maxLength <= 0 || normalized.length <= maxLength) {
-            return normalized;
-        }
+    const epParsePrivacyFromLabel = (label) => {
+        const normalized = String(label || "").trim().toLowerCase();
+        if (!normalized) return 0;
 
-        return `${normalized.slice(0, Math.max(1, maxLength - 1)).trimEnd()}…`;
+        const publicLabels = [
+            "public",
+            epT("common.labels.public", {}, "Public").toLowerCase(),
+        ];
+        const followersLabels = [
+            "followers",
+            "followers only",
+            epT("common.labels.followersOnly", {}, "Followers Only").toLowerCase(),
+        ];
+        const privateLabels = [
+            "private",
+            epT("common.labels.private", {}, "Private").toLowerCase(),
+        ];
+
+        if (followersLabels.includes(normalized)) return 1;
+        if (privateLabels.includes(normalized)) return 2;
+        if (publicLabels.includes(normalized)) return 0;
+        return 0;
     };
 
     const epEscapeHtml = (text) =>
@@ -53,11 +93,34 @@
         tagEventsBound: false
     };
 
+    PostEdit.refreshLocalizedUi = function() {
+        const editPanel = document.getElementById("detailEditPanel");
+        if (!editPanel || editPanel.style.display === "none") {
+            return;
+        }
+
+        global.I18n?.translateDom?.(editPanel);
+        this.selectPrivacy(this.selectedPrivacy);
+        this.updatePostTagCounter();
+        this.refreshPostTagInputState();
+    };
+
+    PostEdit.ensureLanguageSubscription = function() {
+        if (epLanguageUnsubscribe || !global.I18n?.onChange) {
+            return;
+        }
+
+        epLanguageUnsubscribe = global.I18n.onChange(() => {
+            PostEdit.refreshLocalizedUi();
+        });
+    };
+
     /**
      * Start editing a post
      * @param {string} postId 
      */
     PostEdit.startEditPost = async function(postId) {
+        this.ensureLanguageSubscription();
         this.currentEditingPostId = postId;
         
         // 1. Ensure post detail modal is open for the post
@@ -82,6 +145,8 @@
             console.error("Panels not found in DOM");
             return;
         }
+
+        global.I18n?.translateDom?.(editPanel);
 
         // 3. Populate user info in Edit Panel
         const avatarUrl = localStorage.getItem("avatarUrl") || APP_CONFIG.DEFAULT_AVATAR;
@@ -109,9 +174,7 @@
         const privacyBadge = document.querySelector("#detailTime .privacy-selector");
         if (privacyBadge) {
             const title = privacyBadge.getAttribute("title");
-            if (title === "Public") this.originalPrivacy = 0;
-            else if (title === "Followers") this.originalPrivacy = 1;
-            else if (title === "Private") this.originalPrivacy = 2;
+            this.originalPrivacy = epParsePrivacyFromLabel(title);
         } else {
             this.originalPrivacy = 0; // Default
         }
@@ -248,7 +311,7 @@
 
         // Validation: Only error if BOTH content and media are missing
         if (content.length === 0 && !this.hasMedia) {
-            toastError("Post must have content or media files");
+            toastError(epT("post.editTagging.contentOrMediaRequired", {}, "Post must have content or media files."));
             return;
         }
 
@@ -267,7 +330,7 @@
             );
 
             if (Number(this.selectedPrivacy) === 2 && addNewTagIds.length > 0) {
-                toastWarning("You cannot tag people on a private post.");
+                toastWarning(epT("post.editTagging.privateTagRestriction", {}, "You cannot tag people on a private post."));
                 return;
             }
 
@@ -285,12 +348,19 @@
             const res = await API.Posts.updateContent(this.currentEditingPostId, data);
             
             if (!res.ok) {
-                let errorMessage = "Failed to update post";
+                let rawMessage = "";
                 try {
                     const errorData = await res.json();
-                    errorMessage = errorData?.message || errorData?.title || errorMessage;
+                    rawMessage = errorData?.message || errorData?.title || "";
                 } catch (_) {}
-                throw new Error(epFormatPostTagErrorMessage(errorMessage));
+                const error = new Error("post-edit-tagging-failed");
+                error.uiMessage = epResolveUiError(
+                    "edit-tags",
+                    res.status,
+                    rawMessage,
+                    "post.editTagging.updateFailed",
+                );
+                throw error;
             }
 
             const updatedPost = await res.json();
@@ -306,7 +376,7 @@
                 window.currentPostDetailData.totalTaggedAccounts = nextTaggedAccounts.length;
             }
             
-            toastSuccess("Post updated successfully");
+            toastSuccess(epT("post.editTagging.updateSuccess", {}, "Post updated successfully"));
             
             // Update UI immediately
             this.updateUI(updatedPost);
@@ -318,7 +388,11 @@
 
         } catch (err) {
             console.error("Edit post error:", err);
-            toastError(epFormatPostTagErrorMessage(err.message || "Something went wrong while updating post"));
+            const uiMessage =
+                (err && typeof err === "object" && typeof err.uiMessage === "string" && err.uiMessage.trim())
+                    ? err.uiMessage.trim()
+                    : epT("post.editTagging.genericUpdateFailed", {}, "Could not update tagged people right now.");
+            toastError(uiMessage);
         } finally {
             if (window.LoadingUtils) LoadingUtils.setButtonLoading(saveBtn, false);
         }
@@ -349,7 +423,13 @@
             // Add Edited indicator
             if (post.updatedAt) {
                  const editedTime = PostUtils.formatFullDateTime(post.updatedAt);
-                 timeHTML += ` <span>•</span> <span class="post-edited-indicator" title="Edited: ${editedTime}">edited</span>`;
+                 const editedTitle = epT(
+                     "post.comments.editedAt",
+                     { time: editedTime },
+                     `Edited at ${editedTime}`,
+                 );
+                 const editedLabel = epT("post.comments.editedLabel", {}, "edited");
+                 timeHTML += ` <span>•</span> <span class="post-edited-indicator" title="${epEscapeHtmlAttr(editedTitle)}">${epEscapeHtml(editedLabel)}</span>`;
             }
 
             timeEl.innerHTML = timeHTML;
@@ -406,7 +486,7 @@
 
         if (this.selectedPrivacy === 2 && hasNewTagIdsInDraft) {
             if (window.toastWarning) {
-                toastWarning("You cannot tag people on a private post.");
+                toastWarning(epT("post.editTagging.privateTagRestriction", {}, "You cannot tag people on a private post."));
             }
         }
         
@@ -414,9 +494,9 @@
         const textEl = document.getElementById("editPrivacyText");
         
         const iconMap = {
-            0: { icon: "globe", text: "Public" },
-            1: { icon: "users", text: "Followers Only" },
-            2: { icon: "lock", text: "Private" }
+            0: { icon: "globe", text: epT("common.labels.public", {}, "Public") },
+            1: { icon: "users", text: epT("common.labels.followersOnly", {}, "Followers Only") },
+            2: { icon: "lock", text: epT("common.labels.private", {}, "Private") }
         };
 
         const config = iconMap[this.selectedPrivacy];
@@ -600,12 +680,12 @@
         }
 
         if (Number(this.selectedPrivacy) === 2) {
-            this.renderPostTagEmptyState("Tagging is unavailable for private posts");
+            this.renderPostTagEmptyState(epT("post.editTagging.taggingUnavailablePrivate", {}, "Tagging is unavailable for private posts."));
             return;
         }
 
         if (!window.API?.Accounts?.searchPostTagAccounts) {
-            this.renderPostTagEmptyState("Search is unavailable");
+            this.renderPostTagEmptyState(epT("post.editTagging.searchUnavailable", {}, "Search is unavailable."));
             return;
         }
 
@@ -632,12 +712,19 @@
             if (requestSequence !== this.tagSearchRequestSequence) return;
 
             if (!res.ok) {
-                let message = "Failed to load users";
+                let rawMessage = "";
                 try {
                     const errorData = await res.json();
-                    message = errorData?.message || errorData?.title || message;
+                    rawMessage = errorData?.message || errorData?.title || "";
                 } catch (_) {}
-                this.renderPostTagEmptyState(message);
+                this.renderPostTagEmptyState(
+                    epResolveUiError(
+                        "edit-tags",
+                        res.status,
+                        rawMessage,
+                        "post.editTagging.searchLoadFailed",
+                    ),
+                );
                 return;
             }
 
@@ -665,7 +752,7 @@
         } catch (error) {
             if (requestSequence !== this.tagSearchRequestSequence) return;
             console.error("Failed to search edit-post tag accounts:", error);
-            this.renderPostTagEmptyState("Could not connect to server");
+            this.renderPostTagEmptyState(epT("post.editTagging.serverUnavailable", {}, "Could not connect to server."));
         }
     };
 
@@ -699,7 +786,7 @@
         const container = document.getElementById("editPostTagSearchResults");
         if (!container) return;
 
-        container.innerHTML = `<div class="post-tag-empty-state">${epEscapeHtml(message || "No results")}</div>`;
+        container.innerHTML = `<div class="post-tag-empty-state">${epEscapeHtml(message || epT("common.empty.noResults", {}, "No results."))}</div>`;
         container.style.display = "flex";
     };
 
@@ -709,7 +796,9 @@
 
         if (!this.tagSearchResults.length) {
             this.renderPostTagEmptyState(
-                keyword ? "No matching users found" : "No users available for tagging",
+                keyword
+                    ? epT("post.editTagging.noMatchingUsers", {}, "No matching users found.")
+                    : epT("post.editTagging.noUsersAvailable", {}, "No users available for tagging."),
             );
             return;
         }
@@ -717,8 +806,10 @@
         const defaultAvatar = epEscapeHtmlAttr(epGetDefaultAvatar());
         container.innerHTML = this.tagSearchResults
             .map((account, index) => {
-                const username = account.username || "unknown";
-                const displayName = account.fullName || account.username || "Unknown user";
+                const username =
+                    account.username ||
+                    epT("common.labels.unknown", {}, "Unknown").toLowerCase();
+                const displayName = account.fullName || account.username || epT("common.labels.user", {}, "User");
                 const avatarUrl = account.avatarUrl || epGetDefaultAvatar();
 
                 return `
@@ -767,7 +858,11 @@
         if (this.tagSelectedAccounts.length >= epGetPostTagMaxCount()) {
             if (window.toastWarning) {
                 window.toastWarning(
-                    `You can tag up to ${epGetPostTagMaxCount()} people in one post`,
+                    epT(
+                        "post.editTagging.tagLimitWarning",
+                        { count: epGetPostTagMaxCount() },
+                        `You can tag up to ${epGetPostTagMaxCount()} people in one post.`,
+                    ),
                 );
             }
             return;
@@ -822,7 +917,8 @@
             .map((account) => {
                 const chipText = account.username
                     ? account.username
-                    : account.fullName || "Unknown user";
+                    : account.fullName ||
+                      epT("post.share.unknownUser", {}, "Unknown user");
                 const avatarUrl = account.avatarUrl || epGetDefaultAvatar();
 
                 return `
@@ -833,7 +929,7 @@
                             type="button"
                             class="post-tag-chip-remove"
                             data-account-id="${epEscapeHtmlAttr(account.accountId)}"
-                            aria-label="Remove tag"
+                            aria-label="${epEscapeHtmlAttr(epT("post.editTagging.removeTagAria", {}, "Remove tag"))}"
                         >
                             &times;
                         </button>
@@ -855,7 +951,13 @@
         const countEl = document.getElementById("editPostTagSelectedCount");
         const selectedCount = this.tagSelectedAccounts.length;
 
-        if (countEl) countEl.textContent = `${selectedCount} selected`;
+        if (countEl) {
+            countEl.textContent = epT(
+                "post.editTagging.selectedCount",
+                { count: selectedCount },
+                `${selectedCount} selected`,
+            );
+        }
     };
 
     PostEdit.refreshPostTagInputState = function() {
@@ -863,13 +965,15 @@
         if (!input) return;
 
         if (!input.dataset.defaultPlaceholder) {
-            input.dataset.defaultPlaceholder = input.placeholder || "Search users...";
+            input.dataset.defaultPlaceholder =
+                input.placeholder ||
+                epT("post.create.searchUsersPlaceholder", {}, "Search users...");
         }
 
         const isAtLimit = this.tagSelectedAccounts.length >= epGetPostTagMaxCount();
         input.disabled = isAtLimit;
         input.placeholder = isAtLimit
-            ? "Tag limit reached"
+            ? epT("post.editTagging.tagLimitReached", {}, "Tag limit reached")
             : input.dataset.defaultPlaceholder;
 
         if (isAtLimit) {

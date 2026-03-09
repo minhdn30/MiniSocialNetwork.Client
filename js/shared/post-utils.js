@@ -15,7 +15,9 @@
   const puEscapeHtmlAttr = (value) =>
     puEscapeHtml(value).replace(/`/g, "&#96;");
   const postTagSummaryContextMap = new WeakMap();
+  const postTagSummaryElements = new Set();
   const postTaggedAccountsCache = new Map();
+  let postUtilsLanguageBound = false;
   const commentMentionRegex = /@\[(?<username>[A-Za-z0-9._]{1,30})\]\((?<accountId>[0-9a-fA-F-]{36})\)/g;
   const postTaggedAccountsModalState = {
     modalId: "postTaggedAccountsModal",
@@ -25,6 +27,53 @@
     currentPostCode: "",
     didLockScroll: false,
   };
+  const puT = (key, params = {}, fallback = "") =>
+    window.I18n?.t ? window.I18n.t(key, params, fallback) : fallback;
+
+  function getPostTagPrefixText() {
+    return puT("post.tagSummary.with", {}, "with");
+  }
+
+  function getPostTagAndText() {
+    return puT("post.tagSummary.and", {}, "and");
+  }
+
+  function getPostTagOtherLabel(count) {
+    return puT(
+      count === 1 ? "post.tagSummary.oneOther" : "post.tagSummary.manyOthers",
+      { count },
+      count === 1 ? "1 other" : `${count} others`,
+    );
+  }
+
+  function cleanupPostTagSummaryElements() {
+    postTagSummaryElements.forEach((element) => {
+      if (!element?.isConnected) {
+        postTagSummaryElements.delete(element);
+      }
+    });
+  }
+
+  function refreshTrackedPostTagSummaries() {
+    cleanupPostTagSummaryElements();
+    postTagSummaryElements.forEach((element) => {
+      const context = postTagSummaryContextMap.get(element);
+      if (!context?.source) {
+        postTagSummaryElements.delete(element);
+        return;
+      }
+      PostUtils.applyPostTagSummary(element, context.source);
+    });
+  }
+
+  function bindPostUtilsLanguageChange() {
+    if (postUtilsLanguageBound || !window.I18n?.onChange) return;
+    postUtilsLanguageBound = true;
+    window.I18n.onChange(() => {
+      refreshTrackedPostTagSummaries();
+      refreshTaggedAccountsModalLocalization();
+    });
+  }
 
   function getPostTagPreviewLimit() {
     const parsedLimit = Number(window.APP_CONFIG?.POST_TAG_PREVIEW_LIMIT);
@@ -174,26 +223,20 @@
    * @returns {string} Relative time string
    */
   PostUtils.timeAgo = function (dateStr, short = false) {
+    if (window.I18n?.formatRelativeTime) {
+      return window.I18n.formatRelativeTime(dateStr, { short });
+    }
+
     const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
-
     if (diff < 60) return short ? "now" : "just now";
-
     const minutes = Math.floor(diff / 60);
-    if (minutes < 60)
-      return short
-        ? `${minutes}m`
-        : `${minutes} minute${minutes > 1 ? "s" : ""} ago`;
-
+    if (minutes < 60) return short ? `${minutes}m` : `${minutes} minutes ago`;
     const hours = Math.floor(minutes / 60);
-    if (hours < 24)
-      return short ? `${hours}h` : `${hours} hour${hours > 1 ? "s" : ""} ago`;
-
+    if (hours < 24) return short ? `${hours}h` : `${hours} hours ago`;
     const days = Math.floor(hours / 24);
-    if (days < 7)
-      return short ? `${days}d` : `${days} day${days > 1 ? "s" : ""} ago`;
-
+    if (days < 7) return short ? `${days}d` : `${days} days ago`;
     const weeks = Math.floor(days / 7);
-    return short ? `${weeks}w` : `${weeks} week${weeks > 1 ? "s" : ""} ago`;
+    return short ? `${weeks}w` : `${weeks} weeks ago`;
   };
 
   /**
@@ -243,20 +286,23 @@
     const btn = document.createElement("span");
     btn.className = "caption-toggle comment-toggle";
     // If forceExpand, button should be " less"
-    btn.textContent = forceExpand ? " less" : "more";
+    btn.textContent = forceExpand
+      ? ` ${puT("common.buttons.less", {}, "less")}`
+      : puT("common.buttons.more", {}, "more");
 
     btn.onclick = (e) => {
       e.stopPropagation();
-      const isMore = btn.textContent === "more";
+      const isMore =
+        btn.textContent.trim() === puT("common.buttons.more", {}, "more");
       if (isMore) {
         renderCommentRichContent(el, rawContent);
         el.appendChild(btn);
-        btn.textContent = " less";
+        btn.textContent = ` ${puT("common.buttons.less", {}, "less")}`;
       } else {
         el.innerHTML = "";
         el.appendChild(document.createTextNode(truncatedContent));
         el.appendChild(btn);
-        btn.textContent = "more";
+        btn.textContent = puT("common.buttons.more", {}, "more");
       }
     };
 
@@ -764,6 +810,29 @@
     return document.getElementById(postTaggedAccountsModalState.loaderId);
   }
 
+  function refreshTaggedAccountsModalLocalization() {
+    const modal = getModalElement();
+    if (!modal?.classList?.contains("show")) return;
+
+    const titleEl = modal.querySelector(".modal-header h3");
+    if (titleEl) {
+      titleEl.textContent = puT(
+        "post.taggedAccounts.title",
+        {},
+        "Tagged People",
+      );
+    }
+
+    const source = {
+      postId: postTaggedAccountsModalState.currentPostId,
+      postCode: postTaggedAccountsModalState.currentPostCode,
+    };
+    const cachedAccounts = getCachedTaggedAccounts(source);
+    renderTaggedAccountsModalList(
+      sortTaggedAccountsBySystemPriority(cachedAccounts),
+    );
+  }
+
   function ensureTaggedAccountsModalHtml() {
     let modal = getModalElement();
     if (modal) return modal;
@@ -773,7 +842,7 @@
         <div class="modal-backdrop" onclick="PostUtils.closePostTaggedAccountsModal()"></div>
         <div class="modal-content">
           <div class="modal-header">
-            <h3>Tagged People</h3>
+            <h3>${puEscapeHtml(puT("post.taggedAccounts.title", {}, "Tagged People"))}</h3>
             <button class="close-btn" onclick="PostUtils.closePostTaggedAccountsModal()">
               <i data-lucide="x"></i>
             </button>
@@ -807,7 +876,11 @@
     if (!Array.isArray(accounts) || accounts.length <= 0) {
       const emptyEl = document.createElement("div");
       emptyEl.className = "empty-list-msg";
-      emptyEl.textContent = "No tagged accounts";
+      emptyEl.textContent = puT(
+        "post.taggedAccounts.empty",
+        {},
+        "No tagged accounts",
+      );
       listEl.appendChild(emptyEl);
       return;
     }
@@ -859,7 +932,11 @@
       if (account.isFollower) {
         const followerTagEl = document.createElement("span");
         followerTagEl.className = "follower-tag";
-        followerTagEl.textContent = "Follows you";
+        followerTagEl.textContent = puT(
+          "post.reactions.followsYou",
+          {},
+          "Follows you",
+        );
         nameBox.appendChild(followerTagEl);
       }
 
@@ -879,7 +956,7 @@
         actionBtn.className = "follow-btn view-profile-btn";
         actionBtn.innerHTML = `
           <i data-lucide="user"></i>
-          <span>View Profile</span>
+          <span>${puT("post.reactions.viewProfile", {}, "View Profile")}</span>
         `;
         actionBtn.addEventListener("click", (event) => {
           event.stopPropagation();
@@ -889,7 +966,7 @@
         actionBtn.className = "follow-btn following";
         actionBtn.innerHTML = `
           <i data-lucide="check"></i>
-          <span>Following</span>
+          <span>${puT("common.buttons.following", {}, "Following")}</span>
         `;
         actionBtn.addEventListener("click", (event) => {
           event.stopPropagation();
@@ -899,7 +976,7 @@
         actionBtn.className = "follow-btn requested";
         actionBtn.innerHTML = `
           <i data-lucide="clock-3"></i>
-          <span>Request Sent</span>
+          <span>${puT("common.buttons.requestSent", {}, "Request Sent")}</span>
         `;
         actionBtn.addEventListener("click", (event) => {
           event.stopPropagation();
@@ -909,7 +986,7 @@
         actionBtn.className = "follow-btn";
         actionBtn.innerHTML = `
           <i data-lucide="user-plus"></i>
-          <span>Follow</span>
+          <span>${puT("common.buttons.follow", {}, "Follow")}</span>
         `;
         actionBtn.addEventListener("click", (event) => {
           event.stopPropagation();
@@ -1263,15 +1340,19 @@
     };
 
     if (total === 1) {
-      summaryHtml = `<span class="post-tag-prefix">with</span> ${firstLinkHtml}`;
-      summaryTitle = `with ${firstNameFull}`;
+      const prefixText = getPostTagPrefixText();
+      summaryHtml = `<span class="post-tag-prefix">${puEscapeHtml(prefixText)}</span> ${firstLinkHtml}`;
+      summaryTitle = `${prefixText} ${firstNameFull}`;
     } else if (total === 2) {
+      const prefixText = getPostTagPrefixText();
+      const andText = getPostTagAndText();
+      const oneOtherLabel = getPostTagOtherLabel(1);
       if (mode === "minimal" || mode === "compact") {
-        summaryHtml = `<span class="post-tag-prefix">with</span> ${firstLinkHtml} <span class="post-tag-prefix">and</span> ${buildOthersTriggerHtml("1 other")}`;
-        summaryTitle = `with ${firstNameFull} and 1 other`;
+        summaryHtml = `<span class="post-tag-prefix">${puEscapeHtml(prefixText)}</span> ${firstLinkHtml} <span class="post-tag-prefix">${puEscapeHtml(andText)}</span> ${buildOthersTriggerHtml(oneOtherLabel)}`;
+        summaryTitle = `${prefixText} ${firstNameFull} ${andText} ${oneOtherLabel}`;
       } else if (!secondAccount) {
-        summaryHtml = `<span class="post-tag-prefix">with</span> ${firstLinkHtml} <span class="post-tag-prefix">and</span> ${buildOthersTriggerHtml("1 other")}`;
-        summaryTitle = `with ${firstNameFull} and 1 other`;
+        summaryHtml = `<span class="post-tag-prefix">${puEscapeHtml(prefixText)}</span> ${firstLinkHtml} <span class="post-tag-prefix">${puEscapeHtml(andText)}</span> ${buildOthersTriggerHtml(oneOtherLabel)}`;
+        summaryTitle = `${prefixText} ${firstNameFull} ${andText} ${oneOtherLabel}`;
       } else {
         const secondNameFull = PostUtils.getPostTagDisplayName(
           secondAccount,
@@ -1288,33 +1369,35 @@
           total,
           true,
         );
-        let summaryText = `with ${firstNameDisplay} and ${secondNameDisplay}`;
-        summaryTitle = `with ${firstNameFull} and ${secondNameFull}`;
+        let summaryText = `${prefixText} ${firstNameDisplay} ${andText} ${secondNameDisplay}`;
+        summaryTitle = `${prefixText} ${firstNameFull} ${andText} ${secondNameFull}`;
 
         // Fallback when 2 long names still exceed header budget
         if (summaryText.length > summaryMaxLen) {
-          summaryText = `with ${firstNameDisplay} and 1 other`;
-          summaryHtml = `<span class="post-tag-prefix">with</span> ${firstLinkHtml} <span class="post-tag-prefix">and</span> ${buildOthersTriggerHtml("1 other")}`;
+          summaryText = `${prefixText} ${firstNameDisplay} ${andText} ${oneOtherLabel}`;
+          summaryHtml = `<span class="post-tag-prefix">${puEscapeHtml(prefixText)}</span> ${firstLinkHtml} <span class="post-tag-prefix">${puEscapeHtml(andText)}</span> ${buildOthersTriggerHtml(oneOtherLabel)}`;
         } else {
-          summaryHtml = `<span class="post-tag-prefix">with</span> ${firstLinkHtml} <span class="post-tag-prefix">and</span> ${secondLinkHtml}`;
+          summaryHtml = `<span class="post-tag-prefix">${puEscapeHtml(prefixText)}</span> ${firstLinkHtml} <span class="post-tag-prefix">${puEscapeHtml(andText)}</span> ${secondLinkHtml}`;
         }
       }
     } else {
       const otherCount = total - 1;
-      const otherLabel = otherCount === 1 ? "other" : "others";
-      const summaryText = `with ${firstNameDisplay} and ${otherCount} ${otherLabel}`;
+      const prefixText = getPostTagPrefixText();
+      const andText = getPostTagAndText();
+      const otherLabel = getPostTagOtherLabel(otherCount);
+      const summaryText = `${prefixText} ${firstNameDisplay} ${andText} ${otherLabel}`;
 
       if (mode === "minimal" || mode === "compact") {
-        summaryHtml = `<span class="post-tag-prefix">with</span> ${firstLinkHtml} <span class="post-tag-prefix">and</span> ${buildOthersTriggerHtml(`${otherCount} ${otherLabel}`)}`;
-        summaryTitle = `with ${firstNameFull} and ${otherCount} ${otherLabel}`;
+        summaryHtml = `<span class="post-tag-prefix">${puEscapeHtml(prefixText)}</span> ${firstLinkHtml} <span class="post-tag-prefix">${puEscapeHtml(andText)}</span> ${buildOthersTriggerHtml(otherLabel)}`;
+        summaryTitle = `${prefixText} ${firstNameFull} ${andText} ${otherLabel}`;
       } else {
-        summaryHtml = `<span class="post-tag-prefix">with</span> ${firstLinkHtml} <span class="post-tag-prefix">and</span> ${buildOthersTriggerHtml(`${otherCount} ${otherLabel}`)}`;
-        summaryTitle = `with ${firstNameFull} and ${otherCount} ${otherLabel}`;
+        summaryHtml = `<span class="post-tag-prefix">${puEscapeHtml(prefixText)}</span> ${firstLinkHtml} <span class="post-tag-prefix">${puEscapeHtml(andText)}</span> ${buildOthersTriggerHtml(otherLabel)}`;
+        summaryTitle = `${prefixText} ${firstNameFull} ${andText} ${otherLabel}`;
 
         // Extra safeguard for very small widths: if text still too long, keep compact wording.
         if (summaryText.length > summaryMaxLen && otherCount > 1) {
-          summaryHtml = `<span class="post-tag-prefix">with</span> ${firstLinkHtml} <span class="post-tag-prefix">and</span> ${buildOthersTriggerHtml(`${otherCount} ${otherLabel}`)}`;
-          summaryTitle = `with ${firstNameFull} and ${otherCount} others`;
+          summaryHtml = `<span class="post-tag-prefix">${puEscapeHtml(prefixText)}</span> ${firstLinkHtml} <span class="post-tag-prefix">${puEscapeHtml(andText)}</span> ${buildOthersTriggerHtml(otherLabel)}`;
+          summaryTitle = `${prefixText} ${firstNameFull} ${andText} ${otherLabel}`;
         }
       }
     }
@@ -1333,6 +1416,7 @@
    */
   PostUtils.applyPostTagSummary = function (element, source) {
     if (!element) return;
+    bindPostUtilsLanguageChange();
 
     const postUserEl = element.closest(".post-user");
     const tagRowEl = element.closest(".user-tag-row");
@@ -1364,6 +1448,7 @@
           postUserEl.classList.remove("has-tag-summary");
         }
         setFeedStackedMode(false);
+        postTagSummaryElements.delete(element);
         postTagSummaryContextMap.delete(element);
         return null;
       }
@@ -1374,6 +1459,7 @@
       element.innerHTML = summary.html;
       element.classList.remove("hidden");
       element.dataset.totalTaggedAccounts = summary.total.toString();
+      postTagSummaryElements.add(element);
       postTagSummaryContextMap.set(element, {
         source,
         total: summary.total,
@@ -1519,7 +1605,11 @@
     const normalized = PostUtils.normalizePostTaggedAccounts(source);
 
     if (!normalized.total || normalized.total <= 0) {
-      if (window.toastInfo) window.toastInfo("No tagged accounts");
+      if (window.toastInfo) {
+        window.toastInfo(
+          puT("post.taggedAccounts.empty", {}, "No tagged accounts"),
+        );
+      }
       return;
     }
 
@@ -1560,10 +1650,22 @@
       );
       if ((error?.message || "") === "TAGGED_ACCOUNTS_UNAVAILABLE") {
         if (window.toastInfo) {
-          window.toastInfo("This tagged list is no longer available.");
+          window.toastInfo(
+            puT(
+              "post.taggedAccounts.unavailable",
+              {},
+              "This tagged list is no longer available.",
+            ),
+          );
         }
       } else if (window.toastError) {
-        window.toastError("Could not load tagged accounts list.");
+        window.toastError(
+          puT(
+            "post.taggedAccounts.loadFailed",
+            {},
+            "Could not load tagged accounts list.",
+          ),
+        );
       }
       renderTaggedAccountsModalList(fallbackAccounts);
       syncTaggedSummaryToPostElements(
@@ -1587,17 +1689,19 @@
    * @returns {string} Formatted date (e.g. "February 2, 2026, 09:07 PM")
    */
   PostUtils.formatFullDateTime = function (dateStr) {
-    const date = new Date(dateStr);
-    const options = {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
+      const date = new Date(dateStr);
+      const options = {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      };
+      if (window.I18n?.formatDateTime) {
+        return window.I18n.formatDateTime(date, options);
+      }
+      return date.toLocaleString("en-US", options);
     };
-    return date.toLocaleString("en-US", options);
-  };
 
   /**
    * Format time for chat separators (e.g. "13:58 Today", "Mon 09:30")
@@ -1623,9 +1727,9 @@
       return `${HH}:${mm}`;
     }
 
-    if (isYesterday) {
-      return `${HH}:${mm} Yesterday`;
-    }
+      if (isYesterday) {
+        return `${HH}:${mm} ${window.I18n?.t ? window.I18n.t("common.labels.yesterday") : "Yesterday"}`;
+      }
 
     if (diffInDays < 7) {
       const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -1674,17 +1778,18 @@
     // Create Toggle Btn
     const btn = document.createElement("span");
     btn.className = "caption-toggle";
-    btn.textContent = "more";
+    btn.textContent = puT("common.buttons.more", {}, "more");
 
     btn.onclick = (e) => {
       e.stopPropagation(); // prevent post click
-      const isMore = btn.textContent === "more";
+      const isMore =
+        btn.textContent === puT("common.buttons.more", {}, "more");
       if (isMore) {
         textNode.textContent = fullContent;
-        btn.textContent = "less";
+        btn.textContent = puT("common.buttons.less", {}, "less");
       } else {
         textNode.textContent = truncatedContent;
-        btn.textContent = "more";
+        btn.textContent = puT("common.buttons.more", {}, "more");
       }
     };
 
@@ -1713,15 +1818,24 @@
    * @param {number} privacy
    */
   PostUtils.getPrivacyLabel = function (privacy) {
+    const t = window.I18n?.t?.bind(window.I18n);
     switch (privacy) {
       case 0:
-        return "Public";
+        return t
+          ? t("common.labels.public", {}, "Public")
+          : "Public";
       case 1:
-        return "Followers";
+        return t
+          ? t("common.labels.followersOnly", {}, "Followers Only")
+          : "Followers Only";
       case 2:
-        return "Private";
+        return t
+          ? t("common.labels.private", {}, "Private")
+          : "Private";
       default:
-        return "Public";
+        return t
+          ? t("common.labels.public", {}, "Public")
+          : "Public";
     }
   };
 
@@ -1913,8 +2027,15 @@
           if (window.unlockScroll) unlockScroll();
         }
       }
-      if (window.toastInfo)
-        window.toastInfo("This post is no longer available.");
+      if (window.toastInfo) {
+        window.toastInfo(
+          puT(
+            "post.detail.unavailable",
+            {},
+            "This post is no longer available.",
+          ),
+        );
+      }
 
       // Close interaction modal if open
       if (

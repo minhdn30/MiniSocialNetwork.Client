@@ -1,4 +1,39 @@
 (function (global) {
+  function psT(key, params = {}, fallback = "") {
+    return global.I18n?.t ? global.I18n.t(key, params, fallback || key) : (fallback || key);
+  }
+
+  function psUiError(action, status, rawMessage, fallbackKey) {
+    const featureAction = action === "forward" ? "share-forward" : action;
+    const resolved = global.UIErrors?.format?.("post", featureAction, status, rawMessage);
+    const resolvedKey = resolved?.key || "";
+    const normalizedRaw = (rawMessage || "").toString().trim();
+
+    if (
+      normalizedRaw &&
+      (!resolvedKey ||
+        resolvedKey === "errors.generic" ||
+        resolvedKey === "errors.post.shareChat" ||
+        resolvedKey === "errors.post.shareForward")
+    ) {
+      return psTranslateServerText(normalizedRaw) || normalizedRaw;
+    }
+
+    return resolved?.message || psT(fallbackKey, {}, fallbackKey);
+  }
+
+  function psTranslateServerText(rawMessage = "") {
+    const normalized = (rawMessage || "").toString().trim();
+    if (!normalized) return "";
+    if (global.I18n?.translateServerText) {
+      return global.I18n.translateServerText(normalized);
+    }
+    if (global.I18n?.translateLiteral) {
+      return global.I18n.translateLiteral(normalized);
+    }
+    return normalized;
+  }
+
   const state = {
     modal: null,
     mode: "postShare",
@@ -79,7 +114,9 @@
   }
 
   function getActionVerb() {
-    return isForwardMode() ? "Forward" : "Send";
+    return isForwardMode()
+      ? psT("common.buttons.forward", {}, "Forward")
+      : psT("common.buttons.send", {}, "Send");
   }
 
   function isMainContentScrollLocked() {
@@ -260,7 +297,7 @@
       key: `receiver:${accountId}`,
       type: "receiver",
       id: accountId,
-      name: name || "Unknown user",
+      name: name || psT("post.share.unknownUser", {}, "Unknown user"),
       subtitle,
       avatarUrl,
       useGroupIcon: false,
@@ -283,7 +320,11 @@
     if (!selectedCount || !selectedList || !selectedHint) return;
 
     const selectedItems = Array.from(state.selectedTargets.values());
-    selectedCount.textContent = `${selectedItems.length} selected`;
+    selectedCount.textContent = psT(
+      "post.share.selectedCount",
+      { count: selectedItems.length },
+      `${selectedItems.length} selected`,
+    );
 
     if (!selectedItems.length) {
       selectedList.innerHTML = "";
@@ -299,8 +340,8 @@
         (target) => `
         <div class="post-share-chat-chip" data-target-key="${escapeAttr(target.key)}">
           ${renderAvatarHtml(target, "post-share-chat-chip-avatar")}
-          <span class="post-share-chat-chip-name">${escapeHtml(truncateSafe(target.name, 36) || "Unknown")}</span>
-          <button type="button" class="post-share-chat-chip-remove" data-target-key="${escapeAttr(target.key)}" aria-label="Remove recipient">
+          <span class="post-share-chat-chip-name">${escapeHtml(truncateSafe(target.name, 36) || psT("common.labels.user", {}, "User"))}</span>
+          <button type="button" class="post-share-chat-chip-remove" data-target-key="${escapeAttr(target.key)}" aria-label="${escapeAttr(psT("post.share.removeRecipientAria", {}, "Remove recipient"))}">
             <i data-lucide="x"></i>
           </button>
         </div>
@@ -316,7 +357,7 @@
   function renderResultsEmpty(message) {
     const { resultList } = getModalElements();
     if (!resultList) return;
-    resultList.innerHTML = `<div class="post-share-chat-empty-state">${escapeHtml(message || "No results")}</div>`;
+    resultList.innerHTML = `<div class="post-share-chat-empty-state">${escapeHtml(message || psT("common.empty.noResults", {}, "No results."))}</div>`;
   }
 
   function renderLoadingSkeleton() {
@@ -331,7 +372,7 @@
 
   function renderTargetItemHtml(target) {
     const isSelected = state.selectedTargets.has(target.key);
-    const name = truncateSafe(target.name, 42) || "Unknown";
+    const name = truncateSafe(target.name, 42) || psT("common.labels.user", {}, "User");
     const subtitle = truncateSafe(target.subtitle, 64);
     return `
       <div class="post-share-chat-item ${isSelected ? "selected" : ""}" data-target-key="${escapeAttr(target.key)}">
@@ -361,12 +402,17 @@
     const { resultList } = getModalElements();
     if (!resultList) return;
 
-    const sectionsHtml = renderResultSection("Recipients", state.targetResults);
+    const sectionsHtml = renderResultSection(
+      psT("post.share.recipientsSection", {}, "Recipients"),
+      state.targetResults,
+    );
 
     if (!sectionsHtml) {
       const hasKeyword = state.searchKeyword.length > 0;
       renderResultsEmpty(
-        hasKeyword ? "No matching users or groups" : "No recent contacts",
+        hasKeyword
+          ? psT("post.share.noMatchingRecipients", {}, "No matching users or groups")
+          : psT("post.share.noRecentContacts", {}, "No recent contacts"),
       );
       return;
     }
@@ -389,19 +435,21 @@
     } = getModalElements();
 
     if (title) {
-      title.textContent = isForwardMode() ? "Forward message" : "Share post";
+      title.textContent = isForwardMode()
+        ? psT("post.share.forwardTitle", {}, "Forward message")
+        : psT("post.share.shareTitle", {}, "Share post");
     }
 
     if (selectedHint) {
       selectedHint.textContent = isForwardMode()
-        ? "Select one or more chats to forward to."
-        : "Select one or more users or groups.";
+        ? psT("post.share.selectedHintForward", {}, "Select one or more chats to forward to.")
+        : psT("post.share.selectedHintShare", {}, "Select one or more users or groups.");
     }
 
     if (searchInput) {
       searchInput.placeholder = isForwardMode()
-        ? "Search chat recipients..."
-        : "Search username, full name, or group name...";
+        ? psT("post.share.searchPlaceholderForward", {}, "Search chat recipients...")
+        : psT("post.share.searchPlaceholderShare", {}, "Search username, full name, or group name...");
     }
 
     if (contentWrap) {
@@ -429,7 +477,9 @@
     const hasRecipients = state.selectedTargets.size > 0;
     sendBtn.disabled = !hasRecipients || state.isSending;
     sendBtn.textContent = state.isSending
-      ? `${getActionVerb()}ing...`
+      ? isForwardMode()
+        ? psT("common.buttons.sending", {}, "Sending...")
+        : psT("common.buttons.sending", {}, "Sending...")
       : getActionVerb();
   }
 
@@ -448,14 +498,14 @@
     updateSendButtonState();
   }
 
-  async function readApiError(res, fallbackMessage) {
-    let message = fallbackMessage || "Request failed";
-    if (!res) return message;
+  async function readApiError(res, action, fallbackKey) {
+    let rawMessage = "";
+    if (!res) return psUiError(action, 0, "", fallbackKey);
 
     try {
       const data = await res.clone().json();
       if (data && typeof data === "object") {
-        const msg = (
+        rawMessage = (
           data.message ||
           data.Message ||
           data.title ||
@@ -464,16 +514,10 @@
         )
           .toString()
           .trim();
-        if (msg) return msg;
       }
     } catch (_) {}
 
-    try {
-      const text = (await res.clone().text()).toString().trim();
-      if (text) return text;
-    } catch (_) {}
-
-    return message;
+    return psUiError(action, res.status, rawMessage, fallbackKey);
   }
 
   function normalizeSendResult(rawResult) {
@@ -577,13 +621,22 @@
     const verbPast = action === "forward" ? "Forwarded" : "Shared";
     const fallbackError =
       action === "forward"
-        ? "Failed to forward message."
-        : "Failed to share post.";
+        ? psT("errors.post.shareForward", {}, "Could not forward this message right now.")
+        : psT("errors.post.shareChat", {}, "Could not share this post right now.");
 
     if (successResults.length > 0 && failedResults.length === 0) {
       if (global.toastSuccess) {
         global.toastSuccess(
-          `${verbPast} to ${successResults.length} chat${successResults.length > 1 ? "s" : ""}.`,
+          psT(
+            action === "forward"
+              ? "post.share.forwardSuccess"
+              : "post.share.shareSuccess",
+            {
+              count: successResults.length,
+              suffix: successResults.length > 1 ? "s" : "",
+            },
+            `${verbPast} to ${successResults.length} chat${successResults.length > 1 ? "s" : ""}.`,
+          ),
         );
       }
       closeModal({ force: true });
@@ -593,16 +646,26 @@
     if (successResults.length > 0) {
       if (global.toastInfo) {
         global.toastInfo(
-          `${verbPast} to ${successResults.length} chat${successResults.length > 1 ? "s" : ""}. ${failedResults.length} failed.`,
+          psT(
+            action === "forward"
+              ? "post.share.forwardPartial"
+              : "post.share.sharePartial",
+            {
+              successCount: successResults.length,
+              successSuffix: successResults.length > 1 ? "s" : "",
+              failedCount: failedResults.length,
+            },
+            `${verbPast} to ${successResults.length} chat${successResults.length > 1 ? "s" : ""}. ${failedResults.length} failed.`,
+          ),
         );
       }
       closeModal({ force: true });
       return;
     }
 
-    const firstError =
-      failedResults.find((result) => result.errorMessage)?.errorMessage ||
-      fallbackError;
+    const firstErrorRaw =
+      failedResults.find((result) => result.errorMessage)?.errorMessage || "";
+    const firstError = psTranslateServerText(firstErrorRaw) || fallbackError;
     if (global.toastError) {
       global.toastError(firstError);
     }
@@ -617,7 +680,11 @@
 
     if (!conversationIds.length && !receiverIds.length) return;
     if (!global.API?.Messages?.sharePost) {
-      if (global.toastError) global.toastError("Share API is unavailable.");
+      if (global.toastError) {
+        global.toastError(
+          psT("post.share.shareUnavailable", {}, "Share API is unavailable."),
+        );
+      }
       return;
     }
 
@@ -639,7 +706,11 @@
       });
 
       if (!res.ok) {
-        const errorMessage = await readApiError(res, "Failed to share post.");
+        const errorMessage = await readApiError(
+          res,
+          "share-chat",
+          "errors.post.shareChat",
+        );
         if (global.toastError) global.toastError(errorMessage);
         return;
       }
@@ -655,7 +726,7 @@
     } catch (error) {
       console.error("Failed to share post:", error);
       if (global.toastError) {
-        global.toastError("Failed to share post.");
+        global.toastError(psT("errors.post.shareChat", {}, "Could not share this post right now."));
       }
     } finally {
       state.isSending = false;
@@ -672,7 +743,11 @@
 
     if (!conversationIds.length && !receiverIds.length) return;
     if (!global.API?.Messages?.forward) {
-      if (global.toastError) global.toastError("Forward API is unavailable.");
+      if (global.toastError) {
+        global.toastError(
+          psT("post.share.forwardUnavailable", {}, "Forward API is unavailable."),
+        );
+      }
       return;
     }
 
@@ -692,7 +767,8 @@
       if (!res.ok) {
         const errorMessage = await readApiError(
           res,
-          "Failed to forward message.",
+          "share-forward",
+          "errors.post.shareForward",
         );
         if (global.toastError) global.toastError(errorMessage);
         return;
@@ -709,7 +785,7 @@
     } catch (error) {
       console.error("Failed to forward message:", error);
       if (global.toastError) {
-        global.toastError("Failed to forward message.");
+        global.toastError(psT("errors.post.shareForward", {}, "Could not forward this message right now."));
       }
     } finally {
       state.isSending = false;
@@ -744,7 +820,7 @@
     }
 
     if (!global.API?.Messages?.searchPostShareTargets) {
-      renderResultsEmpty("Search API is unavailable");
+      renderResultsEmpty(psT("post.share.searchUnavailable", {}, "Search is unavailable right now."));
       return;
     }
 
@@ -759,7 +835,8 @@
       if (!searchRes?.ok) {
         const errorMessage = await readApiError(
           searchRes,
-          "Failed to search recipients.",
+          "share-chat",
+          "post.share.searchFailed",
         );
         renderResultsEmpty(errorMessage);
         return;
@@ -783,7 +860,7 @@
     } catch (error) {
       if (requestSequence !== state.searchRequestSequence) return;
       console.error("Failed to search post share recipients:", error);
-      renderResultsEmpty("Could not connect to server");
+      renderResultsEmpty(psT("post.share.serverUnavailable", {}, "Could not connect to server."));
     }
   }
 
@@ -855,11 +932,14 @@
       typeof global.ChatCommon.showConfirm === "function"
     ) {
       global.ChatCommon.showConfirm({
-        title: "Discard changes?",
-        message:
+        title: psT("post.share.discardTitle", {}, "Discard changes?"),
+        message: psT(
+          "post.share.discardDescription",
+          {},
           "You have unsent changes. Are you sure you want to discard them?",
-        confirmText: "Discard",
-        cancelText: "Keep",
+        ),
+        confirmText: psT("common.buttons.discard", {}, "Discard"),
+        cancelText: psT("common.buttons.keep", {}, "Keep"),
         isDanger: true,
         onConfirm: handleConfirm,
         onCancel: handleCancel,
@@ -867,7 +947,9 @@
       return;
     }
 
-    const confirmed = global.confirm("Discard unsent changes?");
+      const confirmed = global.confirm(
+        psT("post.share.discardDescription", {}, "Discard unsent changes?"),
+      );
     if (confirmed) {
       handleConfirm();
       return;
@@ -1023,19 +1105,19 @@
     modal.innerHTML = `
       <div class="modal-container post-share-chat-modal">
         <div class="modal-header post-share-chat-header">
-          <h2 class="modal-title" id="postShareChatModalTitle">Share post</h2>
-          <button type="button" class="modal-back-btn" id="postShareChatCloseBtn" aria-label="Close">
+          <h2 class="modal-title" id="postShareChatModalTitle">${escapeHtml(psT("post.share.shareTitle", {}, "Share post"))}</h2>
+          <button type="button" class="modal-back-btn" id="postShareChatCloseBtn" aria-label="${escapeAttr(psT("common.buttons.close", {}, "Close"))}">
             <i data-lucide="x"></i>
           </button>
         </div>
         <div class="post-share-chat-body">
           <div class="post-share-chat-selected">
             <div class="post-share-chat-selected-header">
-              <span class="post-share-chat-label">Recipients</span>
-              <span class="post-share-chat-selected-count" id="postShareChatSelectedCount">0 selected</span>
+              <span class="post-share-chat-label">${escapeHtml(psT("post.share.recipientsSection", {}, "Recipients"))}</span>
+              <span class="post-share-chat-selected-count" id="postShareChatSelectedCount">${escapeHtml(psT("post.share.selectedCount", { count: 0 }, "0 selected"))}</span>
             </div>
             <div class="post-share-chat-selected-list hidden" id="postShareChatSelectedList"></div>
-            <div class="post-share-chat-selected-hint" id="postShareChatSelectedHint">Select one or more users or groups.</div>
+            <div class="post-share-chat-selected-hint" id="postShareChatSelectedHint">${escapeHtml(psT("post.share.selectedHintShare", {}, "Select one or more users or groups."))}</div>
           </div>
 
           <div class="post-share-chat-search-wrap" id="postShareChatSearchWrap">
@@ -1044,7 +1126,7 @@
               type="text"
               class="post-share-chat-search-input"
               id="postShareChatSearchInput"
-              placeholder="Search username, full name, or group name..."
+              placeholder="${escapeAttr(psT("post.share.searchPlaceholderShare", {}, "Search username, full name, or group name..."))}"
               autocomplete="off"
             />
           </div>
@@ -1056,14 +1138,14 @@
               <textarea
                 class="post-share-chat-content-input"
                 id="postShareChatContentInput"
-                placeholder="Add a message (optional)"
+                placeholder="${escapeAttr(psT("post.share.addMessageOptional", {}, "Add a message (optional)"))}"
                 rows="1"
               ></textarea>
               <button
                 type="button"
                 class="post-share-chat-content-emoji-btn"
                 id="postShareChatContentEmojiBtn"
-                aria-label="Open emoji picker"
+                aria-label="${escapeAttr(psT("post.share.openEmojiPickerAria", {}, "Open emoji picker"))}"
               >
                 <i data-lucide="smile"></i>
               </button>
@@ -1076,8 +1158,8 @@
         </div>
 
         <div class="post-share-chat-footer">
-          <button type="button" class="post-share-chat-btn-cancel" id="postShareChatCancelBtn">Cancel</button>
-          <button type="button" class="post-share-chat-btn-send" id="postShareChatSendBtn" disabled>Send</button>
+          <button type="button" class="post-share-chat-btn-cancel" id="postShareChatCancelBtn">${escapeHtml(psT("common.buttons.cancel", {}, "Cancel"))}</button>
+          <button type="button" class="post-share-chat-btn-send" id="postShareChatSendBtn" disabled>${escapeHtml(psT("common.buttons.send", {}, "Send"))}</button>
         </div>
       </div>
     `;
@@ -1096,7 +1178,11 @@
   function openModal(postId, options = {}) {
     const normalizedPostId = normalizeId(postId);
     if (!normalizedPostId) {
-      if (global.toastError) global.toastError("Post is unavailable.");
+      if (global.toastError) {
+        global.toastError(
+          psT("post.share.postUnavailable", {}, "Post is unavailable."),
+        );
+      }
       return;
     }
 
@@ -1132,7 +1218,11 @@
   function openForwardModal(messageId) {
     const normalizedMessageId = normalizeId(messageId);
     if (!normalizedMessageId) {
-      if (global.toastError) global.toastError("Message is unavailable.");
+      if (global.toastError) {
+        global.toastError(
+          psT("post.share.messageUnavailable", {}, "Message is unavailable."),
+        );
+      }
       return;
     }
 

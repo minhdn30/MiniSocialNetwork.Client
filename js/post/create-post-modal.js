@@ -49,6 +49,7 @@ let cpTagSearchDebounceTimer = null;
 let cpTagSearchRequestSequence = 0;
 let cpTagActiveResultIndex = -1;
 let cpTagEventsBound = false;
+let cpLanguageUnsubscribe = null;
 
 const cpGetPostTagMaxCount = () => window.APP_CONFIG?.MAX_POST_TAGS || 20;
 const cpGetPostTagSearchLimit = () =>
@@ -60,7 +61,10 @@ const cpGetDefaultAvatar = () =>
 const cpGetPostTagErrorToastMaxLength = () =>
   window.APP_CONFIG?.POST_TAG_ERROR_TOAST_MAX_LENGTH || 220;
 
-function cpFormatPostTagErrorMessage(message) {
+const cpT = (key, params = {}, fallback = "") =>
+  window.I18n?.t ? window.I18n.t(key, params, fallback || key) : (fallback || key);
+
+function cpFormatPostTagErrorMessageLegacy(message) {
   const normalized = String(message || "").trim();
   if (!normalized) {
     return "Failed to create post. Please try again.";
@@ -75,6 +79,67 @@ function cpFormatPostTagErrorMessage(message) {
 }
 
 // Emoji picker instance
+
+function cpFormatPostTagErrorMessage(
+  message,
+  fallbackKey = "post.submit.createFailed",
+  status = 0,
+) {
+  const normalized = String(message || "").trim();
+  const fallbackMessage = cpT(
+    fallbackKey,
+    {},
+    "Failed to create post. Please try again.",
+  );
+  if (!normalized) {
+    return fallbackMessage;
+  }
+
+  const resolved = window.UIErrors?.format?.(
+    "post",
+    "create",
+    status,
+    normalized,
+  );
+  if (
+    resolved &&
+    resolved.key !== "errors.generic" &&
+    resolved.key !== "errors.post.create"
+  ) {
+    return resolved.message;
+  }
+
+  if (window.I18n?.translateLiteral) {
+    const translatedLiteral = window.I18n.translateLiteral(normalized);
+    if (translatedLiteral !== normalized) {
+      return translatedLiteral;
+    }
+  }
+
+  const safeToShowRawMessage =
+    Number(status) > 0 &&
+    Number(status) < 500 &&
+    !/^internal server error\.?$/i.test(normalized) &&
+    !/^database is temporarily unavailable\.?$/i.test(normalized) &&
+    !/^invalid data for database constraints\.?$/i.test(normalized);
+
+  if (safeToShowRawMessage) {
+    return cpFormatPostTagErrorMessageLegacy(normalized);
+  }
+
+  const maxLength = cpGetPostTagErrorToastMaxLength();
+  if (
+    !Number.isFinite(maxLength) ||
+    maxLength <= 0 ||
+    fallbackMessage.length <= maxLength
+  ) {
+    return fallbackMessage;
+  }
+
+  return `${fallbackMessage
+    .slice(0, Math.max(1, maxLength - 1))
+    .trimEnd()}\u2026`;
+}
 
 // File size formatting moved to js/shared/file-utils.js
 
@@ -96,17 +161,44 @@ function loadCreatePostUserInfo() {
   }
 
   if (nameElement) {
-    const display = username || fullname || "User";
+    const display =
+      username ||
+      fullname ||
+      cpT("common.labels.user", {}, "User");
     nameElement.textContent = window.PostUtils
       ? PostUtils.truncateName(display)
       : display;
   }
 }
 
+function cpRefreshLocalizedUi() {
+  const modal = document.getElementById("createPostModal");
+  if (!modal || !modal.classList.contains("show")) {
+    return;
+  }
+
+  window.I18n?.translateDom?.(modal);
+  showStep(currentStep);
+  updatePrivacyUI(selectedPrivacy);
+  cpUpdatePostTagCounter();
+  cpRefreshPostTagInputState();
+}
+
+function cpEnsureLanguageSubscription() {
+  if (cpLanguageUnsubscribe || !window.I18n?.onChange) {
+    return;
+  }
+
+  cpLanguageUnsubscribe = window.I18n.onChange(() => {
+    cpRefreshLocalizedUi();
+  });
+}
+
 // Open create post modal
 function openCreatePostModal() {
   const modal = document.getElementById("createPostModal");
   if (!modal) return;
+  cpEnsureLanguageSubscription();
 
   currentStep = 1;
   showStep(1);
@@ -122,6 +214,7 @@ function openCreatePostModal() {
 
   modal.classList.add("show");
   if (window.lockScroll) lockScroll();
+  cpRefreshLocalizedUi();
 
   loadCreatePostUserInfo();
   resetPrivacySelector();
@@ -166,14 +259,14 @@ function showDiscardConfirmation() {
 
   popup.innerHTML = `
     <div class="post-options-header">
-      <h3>Discard post?</h3>
-      <p>If you leave, your edits won't be saved.</p>
+      <h3>${cpEscapeHtml(cpT("post.create.discardTitle", {}, "Discard post?"))}</h3>
+      <p>${cpEscapeHtml(cpT("post.create.discardDescription", {}, "If you leave, your edits won't be saved."))}</p>
     </div>
     <button class="post-option post-option-danger" onclick="confirmDiscardPost()">
-      Discard
+      ${cpEscapeHtml(cpT("common.buttons.discard", {}, "Discard"))}
     </button>
     <button class="post-option post-option-cancel" onclick="cancelDiscardPost()">
-      Cancel
+      ${cpEscapeHtml(cpT("common.buttons.cancel", {}, "Cancel"))}
     </button>
   `;
 
@@ -277,7 +370,13 @@ async function handleNextStep() {
     // Check if media is uploaded
     if (mediaFiles.length === 0) {
       if (window.toastError) {
-        toastError("Please upload at least one image to continue!");
+        toastError(
+          cpT(
+            "post.create.uploadAtLeastOneImage",
+            {},
+            "Please upload at least one image to continue!",
+          ),
+        );
       }
       return;
     }
@@ -311,13 +410,29 @@ function showStep(step) {
   if (step === 1) {
     if (step1Content) step1Content.style.display = "flex";
     if (step2Content) step2Content.style.display = "none";
-    if (modalTitle) modalTitle.textContent = "Upload and Edit Photos";
-    if (actionBtn) actionBtn.textContent = "Next Step";
+    if (modalTitle) {
+      modalTitle.textContent = cpT(
+        "post.create.title",
+        {},
+        "Upload and Edit Photos",
+      );
+    }
+    if (actionBtn) {
+      actionBtn.textContent = cpT("common.buttons.next", {}, "Next");
+    }
   } else {
     if (step1Content) step1Content.style.display = "none";
     if (step2Content) step2Content.style.display = "flex";
-    if (modalTitle) modalTitle.textContent = "Create New Post";
-    if (actionBtn) actionBtn.textContent = "Share";
+    if (modalTitle) {
+      modalTitle.textContent = cpT(
+        "post.create.reviewTitle",
+        {},
+        "Create New Post",
+      );
+    }
+    if (actionBtn) {
+      actionBtn.textContent = cpT("common.buttons.share", {}, "Share");
+    }
 
     setTimeout(() => {
       const captionInput = document.getElementById("postCaption");
@@ -788,7 +903,13 @@ function resetPostForm() {
   // 1. Reset UI form elements
   if (captionInput) captionInput.value = "";
   if (charCount) charCount.textContent = "0";
-  if (imageResolution) imageResolution.textContent = "No image selected";
+  if (imageResolution) {
+    imageResolution.textContent = cpT(
+      "post.create.noFileSelected",
+      {},
+      "No file selected",
+    );
+  }
   if (mediaInput) mediaInput.value = "";
 
   // 2. Clean up image preview - force remove Base64 from memory
@@ -887,7 +1008,11 @@ async function handleMediaUpload(event) {
   if (files.length > remainingSlots) {
     if (window.toastError) {
       toastError(
-        `You can only upload ${remainingSlots} more image(s). Maximum is 8 images per post.`,
+        cpT(
+          "post.create.uploadRemainingLimit",
+          { remaining: remainingSlots, max: 8 },
+          `You can only upload ${remainingSlots} more image(s). Maximum is 8 images per post.`,
+        ),
       );
     }
     event.target.value = "";
@@ -898,7 +1023,13 @@ async function handleMediaUpload(event) {
     // Check if we've reached the limit
     if (mediaFiles.length >= APP_CONFIG.MAX_UPLOAD_FILES) {
       if (window.toastError) {
-        toastError(`Maximum ${APP_CONFIG.MAX_UPLOAD_FILES} images per post!`);
+        toastError(
+          cpT(
+            "post.create.uploadMaxLimit",
+            { max: APP_CONFIG.MAX_UPLOAD_FILES },
+            `Maximum ${APP_CONFIG.MAX_UPLOAD_FILES} images per post!`,
+          ),
+        );
       }
       break;
     }
@@ -907,7 +1038,13 @@ async function handleMediaUpload(event) {
 
     if (!isImage) {
       if (window.toastError) {
-        toastError("Please select image files only!");
+        toastError(
+          cpT(
+            "post.create.imageFilesOnly",
+            {},
+            "Please select image files only!",
+          ),
+        );
       }
       continue;
     }
@@ -917,7 +1054,15 @@ async function handleMediaUpload(event) {
       const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
       if (window.toastError) {
         toastError(
-          `Image "${file.name}" is ${fileSizeMB}MB. Maximum size is ${APP_CONFIG.MAX_UPLOAD_SIZE_MB}MB!`,
+          cpT(
+            "post.create.fileTooLarge",
+            {
+              fileName: file.name,
+              size: fileSizeMB,
+              max: APP_CONFIG.MAX_UPLOAD_SIZE_MB,
+            },
+            `Image "${file.name}" is ${fileSizeMB}MB. Maximum size is ${APP_CONFIG.MAX_UPLOAD_SIZE_MB}MB!`,
+          ),
         );
       }
       continue;
@@ -1093,12 +1238,20 @@ async function cpSearchPostTagAccounts(keyword) {
   }
 
   if (Number(selectedPrivacy) === 2) {
-    cpRenderPostTagEmptyState("Tagging is unavailable for private posts");
+    cpRenderPostTagEmptyState(
+      cpT(
+        "post.editTagging.taggingUnavailablePrivate",
+        {},
+        "Tagging is unavailable for private posts.",
+      ),
+    );
     return;
   }
 
   if (!window.API?.Accounts?.searchPostTagAccounts) {
-    cpRenderPostTagEmptyState("Search is unavailable");
+    cpRenderPostTagEmptyState(
+      cpT("post.editTagging.searchUnavailable", {}, "Search is unavailable."),
+    );
     return;
   }
 
@@ -1125,10 +1278,18 @@ async function cpSearchPostTagAccounts(keyword) {
     if (requestSequence !== cpTagSearchRequestSequence) return;
 
     if (!res.ok) {
-      let message = "Failed to load users";
+      let message = cpT(
+        "post.editTagging.searchLoadFailed",
+        {},
+        "Failed to load users",
+      );
       try {
         const errorData = await res.json();
-        message = errorData?.message || errorData?.title || message;
+        const rawMessage = errorData?.message || errorData?.title || "";
+        message = cpFormatPostTagErrorMessage(
+          rawMessage,
+          "post.editTagging.searchLoadFailed",
+        );
       } catch (_) {}
       cpRenderPostTagEmptyState(message);
       return;
@@ -1158,7 +1319,13 @@ async function cpSearchPostTagAccounts(keyword) {
   } catch (error) {
     if (requestSequence !== cpTagSearchRequestSequence) return;
     console.error("Failed to search post tag accounts:", error);
-    cpRenderPostTagEmptyState("Could not connect to server");
+    cpRenderPostTagEmptyState(
+      cpT(
+        "post.editTagging.serverUnavailable",
+        {},
+        "Could not connect to server",
+      ),
+    );
   }
 }
 
@@ -1193,7 +1360,9 @@ function cpRenderPostTagEmptyState(message) {
   const container = document.getElementById("postTagSearchResults");
   if (!container) return;
 
-  container.innerHTML = `<div class="post-tag-empty-state">${cpEscapeHtml(message || "No results")}</div>`;
+  container.innerHTML = `<div class="post-tag-empty-state">${cpEscapeHtml(
+    message || cpT("common.empty.noResults", {}, "No results"),
+  )}</div>`;
   container.style.display = "flex";
 }
 
@@ -1203,7 +1372,17 @@ function cpRenderPostTagResults(keyword = "") {
 
   if (!cpTagSearchResults.length) {
     cpRenderPostTagEmptyState(
-      keyword ? "No matching users found" : "No users available for tagging",
+      keyword
+        ? cpT(
+            "post.editTagging.noMatchingUsers",
+            {},
+            "No matching users found",
+          )
+        : cpT(
+            "post.editTagging.noUsersAvailable",
+            {},
+            "No users available for tagging",
+          ),
     );
     return;
   }
@@ -1213,7 +1392,9 @@ function cpRenderPostTagResults(keyword = "") {
     .map((account, index) => {
       const username = account.username || "unknown";
       const displayName =
-        account.fullName || account.username || "Unknown user";
+        account.fullName ||
+        account.username ||
+        cpT("post.share.unknownUser", {}, "Unknown user");
       const avatarUrl = account.avatarUrl || cpGetDefaultAvatar();
 
       return `
@@ -1262,7 +1443,11 @@ function cpAddPostTagAccount(account) {
   if (cpTagSelectedAccounts.length >= cpGetPostTagMaxCount()) {
     if (window.toastWarning) {
       window.toastWarning(
-        `You can tag up to ${cpGetPostTagMaxCount()} people in one post`,
+        cpT(
+          "post.editTagging.tagLimitWarning",
+          { count: cpGetPostTagMaxCount() },
+          `You can tag up to ${cpGetPostTagMaxCount()} people in one post`,
+        ),
       );
     }
     return;
@@ -1317,7 +1502,8 @@ function cpRenderPostTagChips() {
     .map((account) => {
       const chipText = account.username
         ? account.username
-        : account.fullName || "Unknown user";
+        : account.fullName ||
+          cpT("post.share.unknownUser", {}, "Unknown user");
       const avatarUrl = account.avatarUrl || cpGetDefaultAvatar();
 
       return `
@@ -1328,7 +1514,7 @@ function cpRenderPostTagChips() {
             type="button"
             class="post-tag-chip-remove"
             data-account-id="${cpEscapeHtmlAttr(account.accountId)}"
-            aria-label="Remove tag"
+            aria-label="${cpEscapeHtmlAttr(cpT("post.editTagging.removeTagAria", {}, "Remove tag"))}"
           >
             &times;
           </button>
@@ -1350,7 +1536,13 @@ function cpUpdatePostTagCounter() {
   const countEl = document.getElementById("postTagSelectedCount");
   const selectedCount = cpTagSelectedAccounts.length;
 
-  if (countEl) countEl.textContent = `${selectedCount} selected`;
+  if (countEl) {
+    countEl.textContent = cpT(
+      "post.editTagging.selectedCount",
+      { count: selectedCount },
+      `${selectedCount} selected`,
+    );
+  }
 }
 
 function cpRefreshPostTagInputState() {
@@ -1358,13 +1550,19 @@ function cpRefreshPostTagInputState() {
   if (!input) return;
 
   if (!input.dataset.defaultPlaceholder) {
-    input.dataset.defaultPlaceholder = input.placeholder || "Search users...";
+    input.dataset.defaultPlaceholder =
+      input.placeholder ||
+      cpT(
+        "post.create.searchUsersPlaceholder",
+        {},
+        "Search users...",
+      );
   }
 
   const isAtLimit = cpTagSelectedAccounts.length >= cpGetPostTagMaxCount();
   input.disabled = isAtLimit;
   input.placeholder = isAtLimit
-    ? "Tag limit reached"
+    ? cpT("post.editTagging.tagLimitReached", {}, "Tag limit reached")
     : input.dataset.defaultPlaceholder;
 
   if (isAtLimit) {
@@ -1534,7 +1732,13 @@ function selectPrivacy(privacy) {
 
   if (selectedPrivacy === 2 && cpTagSelectedAccounts.length > 0) {
     if (window.toastWarning) {
-      toastWarning("You cannot tag people on a private post.");
+      toastWarning(
+        cpT(
+          "post.create.privateTaggingNotAllowed",
+          {},
+          "You cannot tag people on a private post.",
+        ),
+      );
     }
   }
 
@@ -1560,9 +1764,12 @@ function updatePrivacyUI(privacy) {
 
   // Update icon and text
   const iconMap = {
-    0: { icon: "globe", text: "Public" },
-    1: { icon: "users", text: "Followers Only" },
-    2: { icon: "lock", text: "Private" },
+    0: { icon: "globe", text: cpT("common.labels.public", {}, "Public") },
+    1: {
+      icon: "users",
+      text: cpT("common.labels.followersOnly", {}, "Followers Only"),
+    },
+    2: { icon: "lock", text: cpT("common.labels.private", {}, "Private") },
   };
 
   const selected = iconMap[privacy];
@@ -1595,7 +1802,13 @@ async function submitPost() {
   // Require at least one image (media is now required)
   if (mediaFiles.length === 0) {
     if (window.toastError) {
-      toastError("Please add at least one image to your post!");
+      toastError(
+        cpT(
+          "post.create.addAtLeastOneImage",
+          {},
+          "Please add at least one image to your post!",
+        ),
+      );
     }
     return;
   }
@@ -1611,7 +1824,13 @@ async function submitPost() {
   const taggedAccountIds = cpGetSelectedPostTagAccountIds();
   if (Number(selectedPrivacy) === 2 && taggedAccountIds.length > 0) {
     if (window.toastWarning) {
-      toastWarning("You cannot tag people on a private post.");
+      toastWarning(
+        cpT(
+          "post.create.privateTaggingNotAllowed",
+          {},
+          "You cannot tag people on a private post.",
+        ),
+      );
     }
     return;
   }
@@ -1693,11 +1912,27 @@ async function submitPost() {
       // Do nothing with progress - just keep spinner spinning
     });
 
-    if (!res) throw new Error("No response from server");
+    if (!res) {
+      throw new Error(
+        cpT(
+          "post.submit.createFailed",
+          {},
+          "Failed to create post. Please try again.",
+        ),
+      );
+    }
 
     if (res.status === 201 || res.ok) {
       const data = await res.json().catch(() => null);
-      if (window.toastSuccess) toastSuccess(`Post uploaded successfully!`);
+      if (window.toastSuccess) {
+        toastSuccess(
+          cpT(
+            "post.submit.createSuccess",
+            {},
+            "Post uploaded successfully!",
+          ),
+        );
+      }
 
       // Close modal automatically after successful upload
       const modal = document.getElementById("createPostModal");
@@ -1752,23 +1987,47 @@ async function submitPost() {
         }, 100);
       }
     } else if (res.status === 401) {
-      if (window.toastError) toastError("Unauthorized. Please login again.");
+      if (window.toastError) {
+        toastError(
+          cpT(
+            "common.auth.sessionExpired",
+            {},
+            "Your session has expired. Please sign in again.",
+          ),
+        );
+      }
     } else {
-      let errText = "Failed to create post. Please try again.";
+      let errText = cpT(
+        "post.submit.createFailed",
+        {},
+        "Failed to create post. Please try again.",
+      );
       try {
         const errJson = await res.json();
-        if (errJson?.message || errJson?.title) {
-          errText = errJson.message || errJson.title;
-        }
+        const rawMessage = errJson?.message || errJson?.title || "";
+        errText = cpFormatPostTagErrorMessage(
+          rawMessage,
+          "post.submit.createFailed",
+          res.status,
+        );
       } catch (_) {}
-      if (window.toastError) toastError(cpFormatPostTagErrorMessage(errText));
+      if (window.toastError) {
+        toastError(errText);
+      }
     }
   } catch (err) {
     console.error("submitPost error:", err);
     if (window.toastError) {
       toastError(
         cpFormatPostTagErrorMessage(
-          err?.message || "Failed to create post. Please try again.",
+          err?.message ||
+            cpT(
+              "post.submit.createFailed",
+              {},
+              "Failed to create post. Please try again.",
+            ),
+          "post.submit.createFailed",
+          0,
         ),
       );
     }

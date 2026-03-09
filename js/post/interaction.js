@@ -4,6 +4,11 @@
  */
 
 const InteractionModule = (function () {
+  function interactionT(key, params = {}, fallback = "") {
+    return window.I18n?.t ? window.I18n.t(key, params, fallback) : fallback;
+  }
+
+  let interactionLanguageBound = false;
   let currentPage = 1;
   let targetId = null;
   let targetType = "post"; // 'post' or 'comment'
@@ -13,6 +18,17 @@ const InteractionModule = (function () {
   const PAGE_SIZE = window.APP_CONFIG?.INTERACTIONS_PAGE_SIZE || 10;
 
   const MODAL_ID = "interactionModal";
+
+  function bindInteractionLanguageChange() {
+    if (interactionLanguageBound || !window.I18n?.onChange) return;
+    interactionLanguageBound = true;
+    window.I18n.onChange(() => {
+      const modal = document.getElementById(MODAL_ID);
+      if (!modal || !modal.classList.contains("show")) return;
+      if (!targetId || isLoading) return;
+      openReactList(targetId, targetType);
+    });
+  }
 
   /**
    * Private helper to fetch data from API
@@ -29,6 +45,7 @@ const InteractionModule = (function () {
    * @param {string} type - 'post' or 'comment'
    */
   async function openReactList(id, type = "post") {
+    bindInteractionLanguageChange();
     targetId = id;
     targetType = type;
     currentPage = 1;
@@ -40,11 +57,21 @@ const InteractionModule = (function () {
 
       if (res.status === 403) {
         if (window.toastError)
-          toastError("You don't have permission to view this list");
+          toastError(
+            interactionT(
+              "post.reactions.permissionDenied",
+              {},
+              "You don't have permission to view this list",
+            ),
+          );
         return;
       }
       if (res.status === 404) {
-        if (window.toastError) toastError("Content not found");
+        if (window.toastError) {
+          toastError(
+            interactionT("post.reactions.notFound", {}, "Content not found"),
+          );
+        }
         return;
       }
       if (!res.ok) throw new Error("Load failed");
@@ -52,7 +79,15 @@ const InteractionModule = (function () {
       const data = await res.json();
       if (!data) return;
       if (!data.totalItems || data.totalItems === 0) {
-        if (window.toastInfo) toastInfo("No one has reacted yet");
+        if (window.toastInfo) {
+          toastInfo(
+            interactionT(
+              "post.reactions.empty",
+              {},
+              "No one has reacted yet",
+            ),
+          );
+        }
         return;
       }
       currentTotalCount = Number.isFinite(Number(data.totalItems))
@@ -77,7 +112,15 @@ const InteractionModule = (function () {
       _handleDataResponse(data, listContainer);
     } catch (error) {
       console.error(error);
-      if (window.toastError) toastError("Could not load reaction list");
+      if (window.toastError) {
+        toastError(
+          interactionT(
+            "post.reactions.loadFailed",
+            {},
+            "Could not load reaction list",
+          ),
+        );
+      }
     }
   }
 
@@ -100,7 +143,15 @@ const InteractionModule = (function () {
       _handleDataResponse(data, listContainer);
     } catch (error) {
       console.error(error);
-      if (window.toastError) toastError("Could not load more reacts");
+      if (window.toastError) {
+        toastError(
+          interactionT(
+            "post.reactions.loadMoreFailed",
+            {},
+            "Could not load more reactions",
+          ),
+        );
+      }
     } finally {
       isLoading = false;
     }
@@ -161,26 +212,26 @@ const InteractionModule = (function () {
         actionBtnHtml = `
                     <button class="follow-btn view-profile-btn" onclick="viewProfile('${item.username}')">
                         <i data-lucide="user"></i>
-                        <span>View Profile</span>
+                        <span>${interactionT("post.reactions.viewProfile", {}, "View Profile")}</span>
                     </button>`;
       } else {
         if (item.isFollowing) {
           actionBtnHtml = `
                         <button class="follow-btn following" onclick="InteractionModule.handleFollow('${item.accountId}', this)">
                             <i data-lucide="check"></i>
-                            <span>Following</span>
+                            <span>${interactionT("post.reactions.following", {}, "Following")}</span>
                         </button>`;
         } else if (item.isFollowRequested) {
           actionBtnHtml = `
                         <button class="follow-btn requested" onclick="InteractionModule.handleFollow('${item.accountId}', this)">
                             <i data-lucide="clock-3"></i>
-                            <span>Request Sent</span>
+                            <span>${interactionT("post.reactions.requestSent", {}, "Request Sent")}</span>
                         </button>`;
         } else {
           actionBtnHtml = `
                         <button class="follow-btn" onclick="InteractionModule.handleFollow('${item.accountId}', this)">
                             <i data-lucide="user-plus"></i>
-                            <span>Follow</span>
+                            <span>${interactionT("post.reactions.follow", {}, "Follow")}</span>
                         </button>`;
         }
       }
@@ -191,7 +242,7 @@ const InteractionModule = (function () {
                     <div class="name-box">
                         <span class="fullname post-username">${PostUtils.truncateName(item.username)}</span>
                         <span class="username-subtext">${item.fullName || ""}</span>
-                        ${item.isFollower ? '<span class="follower-tag">Follows you</span>' : ""}
+                        ${item.isFollower ? `<span class="follower-tag">${interactionT("post.reactions.followsYou", {}, "Follows you")}</span>` : ""}
                     </div>
                 </div>
                 <div class="action-box">
@@ -252,12 +303,12 @@ const InteractionModule = (function () {
 
     popup.innerHTML = `
             <div class="unfollow-content">
-                <h3>Unfollow this account?</h3>
-                <p>You can always follow them again later.</p>
+                <h3>${interactionT("post.reactions.unfollowTitle", {}, "Unfollow this account?")}</h3>
+                <p>${interactionT("post.reactions.unfollowDescription", {}, "You can always follow them again later.")}</p>
             </div>
             <div class="unfollow-actions">
-                <button class="unfollow-btn unfollow-confirm" id="confirmUnfollowBtn">Unfollow</button>
-                <button class="unfollow-btn unfollow-cancel" id="cancelUnfollowBtn">Cancel</button>
+                <button class="unfollow-btn unfollow-confirm" id="confirmUnfollowBtn">${interactionT("post.reactions.unfollowConfirm", {}, "Unfollow")}</button>
+                <button class="unfollow-btn unfollow-cancel" id="cancelUnfollowBtn">${interactionT("common.buttons.cancel", {}, "Cancel")}</button>
             </div>
         `;
 
@@ -290,7 +341,15 @@ const InteractionModule = (function () {
    */
   async function performFollowAction(accountId, btn, wasFollowing) {
     if (!window.FollowModule) {
-      if (window.toastError) toastError("Follow module not loaded.");
+      if (window.toastError) {
+        toastError(
+          interactionT(
+            "post.reactions.followModuleUnavailable",
+            {},
+            "Follow module not loaded.",
+          ),
+        );
+      }
       return;
     }
 
@@ -360,7 +419,7 @@ const InteractionModule = (function () {
                 <div class="modal-backdrop" onclick="InteractionModule.closeReactList()"></div>
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h3>Reactions</h3>
+                        <h3>${interactionT("post.reactions.title", {}, "Reactions")}</h3>
                         <button class="close-btn" onclick="InteractionModule.closeReactList()">
                             <i data-lucide="x"></i>
                         </button>

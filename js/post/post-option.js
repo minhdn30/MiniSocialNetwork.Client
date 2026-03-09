@@ -2,6 +2,10 @@ let currentPostOptions = null;
 const pendingSavePosts = new Set();
 const pendingUntagPosts = new Set();
 
+function poT(key, params = {}, fallback = "") {
+  return window.I18n?.t ? window.I18n.t(key, params, fallback || key) : fallback || key;
+}
+
 function normalizePostId(value) {
   return (value || "").toString().trim().toLowerCase();
 }
@@ -98,7 +102,9 @@ async function togglePostSave(postId, triggerEl = null, options = {}) {
         PostUtils.hidePost(postId);
       }
       if (window.toastInfo) {
-        toastInfo("This post is no longer available.");
+        toastInfo(
+          poT("post.options.postUnavailable", {}, "This post is no longer available."),
+        );
       }
       return false;
     }
@@ -120,16 +126,24 @@ async function togglePostSave(postId, triggerEl = null, options = {}) {
     }
 
     if (confirmedSavedState) {
-      if (window.toastSuccess) toastSuccess("Post saved.");
+      if (window.toastSuccess) {
+        toastSuccess(poT("post.options.saved", {}, "Post saved."));
+      }
     } else if (window.toastInfo) {
-      toastInfo("Removed from saved.");
+      toastInfo(
+        poT("post.options.removedFromSaved", {}, "Removed from saved."),
+      );
     }
 
     return confirmedSavedState;
   } catch (err) {
     console.error(err);
     syncPostSaveState(postId, currentSavedState);
-    if (window.toastError) toastError("Could not update saved state.");
+    if (window.toastError) {
+      toastError(
+        poT("post.options.saveFailed", {}, "Could not update saved state."),
+      );
+    }
     return currentSavedState;
   } finally {
     pendingSavePosts.delete(normalizedPostId);
@@ -165,16 +179,16 @@ function showPostOptions(
   if (isOwnPost) {
     optionsHTML = `
       <button class="post-option post-option-danger" onclick="deletePost('${postId}')">
-        <i data-lucide="trash-2"></i><span>Delete</span>
+        <i data-lucide="trash-2"></i><span>${poT("post.options.menu.delete", {}, "Delete")}</span>
       </button>
       <button class="post-option" onclick="editPost('${postId}')">
-        <i data-lucide="edit"></i><span>Edit</span>
+        <i data-lucide="edit"></i><span>${poT("post.options.menu.edit", {}, "Edit")}</span>
       </button>
       <button class="post-option" onclick="hidePostLikes('${postId}')">
-        <i data-lucide="eye-off"></i><span>Hide like count</span>
+        <i data-lucide="eye-off"></i><span>${poT("post.options.menu.hideLikeCount", {}, "Hide like count")}</span>
       </button>
       <button class="post-option" onclick="turnOffCommenting('${postId}')">
-        <i data-lucide="message-square-off"></i><span>Turn off commenting</span>
+        <i data-lucide="message-square-off"></i><span>${poT("post.options.menu.turnOffCommenting", {}, "Turn off commenting")}</span>
       </button>
     `;
   } else {
@@ -185,30 +199,30 @@ function showPostOptions(
 
     optionsHTML = `
       <button class="post-option post-option-danger" onclick="reportPost('${postId}')">
-        <i data-lucide="flag"></i><span>Report</span>
+        <i data-lucide="flag"></i><span>${poT("post.options.menu.report", {}, "Report")}</span>
       </button>
       <button class="post-option" onclick="hidePost('${postId}')">
-        <i data-lucide="eye-off"></i><span>Hide</span>
+        <i data-lucide="eye-off"></i><span>${poT("post.options.menu.hide", {}, "Hide")}</span>
       </button>
       ${
         isCurrentUserTagged
           ? `<button class="post-option" onclick="untagMeFromPost('${postId}')">
-        <i data-lucide="tag"></i><span>Remove Tag</span>
+        <i data-lucide="tag"></i><span>${poT("post.options.menu.removeTag", {}, "Remove Tag")}</span>
       </button>`
           : ""
       }
       <button class="post-option" onclick="copyPostLink('${safePostCodeForJs}')">
-        <i data-lucide="link"></i><span>Copy link</span>
+        <i data-lucide="link"></i><span>${poT("post.options.menu.copyLink", {}, "Copy link")}</span>
       </button>
       <button class="post-option" onclick="aboutThisAccount('${accountId}')">
-        <i data-lucide="info"></i><span>About this account</span>
+        <i data-lucide="info"></i><span>${poT("post.options.menu.aboutAccount", {}, "About this account")}</span>
       </button>
     `;
   }
 
   optionsHTML += `
     <button class="post-option post-option-cancel" onclick="closePostOptions()">
-      Cancel
+      ${poT("post.options.menu.cancel", {}, "Cancel")}
     </button>
   `;
 
@@ -259,14 +273,14 @@ function showUntagConfirm(postId) {
 
   popup.innerHTML = `
     <div class="post-options-header">
-      <h3>Remove tag from this post?</h3>
-      <p>You can be tagged again if the owner tags you later.</p>
+      <h3>${poT("post.options.untag.title", {}, "Remove tag from this post?")}</h3>
+      <p>${poT("post.options.untag.description", {}, "You can be tagged again if the owner tags you later.")}</p>
     </div>
     <button class="post-option post-option-danger" onclick="confirmUntagMeFromPost('${postId}')">
-      Remove Tag
+      ${poT("post.options.untag.confirm", {}, "Remove Tag")}
     </button>
     <button class="post-option post-option-cancel" onclick="closeUntagConfirm()">
-      Cancel
+      ${poT("post.options.menu.cancel", {}, "Cancel")}
     </button>
   `;
 
@@ -397,10 +411,18 @@ function markPostAsCurrentUserUntagged(postId, latestState = null) {
 }
 
 async function confirmUntagMeFromPost(postId) {
-  const genericUntagErrorMessage = "Could not remove tag. Please try again.";
+  const genericUntagErrorMessage = poT(
+    "post.options.untag.failed",
+    {},
+    "Could not remove tag. Please try again.",
+  );
 
   if (!window.API?.Posts?.untagMe) {
-    if (window.toastError) toastError("Untag is unavailable.");
+    if (window.toastError) {
+      toastError(
+        poT("post.options.untag.unavailable", {}, "Untag is unavailable."),
+      );
+    }
     closeUntagConfirm();
     return;
   }
@@ -425,7 +447,11 @@ async function confirmUntagMeFromPost(postId) {
 
     if (res.status === 403 || res.status === 404) {
       closeUntagConfirm();
-      if (window.toastInfo) toastInfo("This post is no longer available.");
+      if (window.toastInfo) {
+        toastInfo(
+          poT("post.options.postUnavailable", {}, "This post is no longer available."),
+        );
+      }
       if (window.PostUtils?.hidePost) {
         window.PostUtils.hidePost(postId);
       }
@@ -449,7 +475,9 @@ async function confirmUntagMeFromPost(postId) {
         Boolean(latestState?.isCurrentUserTagged),
       );
     }
-    if (window.toastSuccess) toastSuccess("Tag removed.");
+    if (window.toastSuccess) {
+      toastSuccess(poT("post.options.untag.success", {}, "Tag removed."));
+    }
   } catch (err) {
     console.error(err);
     if (window.toastError) {
@@ -472,14 +500,14 @@ function showDeleteConfirm(postId) {
 
     popup.innerHTML = `
         <div class="post-options-header">
-            <h3>Delete this post?</h3>
-            <p>This action cannot be undone.</p>
+            <h3>${poT("post.options.deleteConfirm.title", {}, "Delete this post?")}</h3>
+            <p>${poT("post.options.deleteConfirm.description", {}, "This action cannot be undone.")}</p>
         </div>
         <button class="post-option post-option-danger" onclick="confirmDeletePost('${postId}')">
-            Delete
+            ${poT("post.options.deleteConfirm.confirm", {}, "Delete")}
         </button>
         <button class="post-option post-option-cancel" onclick="closeDeleteConfirm()">
-            Cancel
+            ${poT("post.options.menu.cancel", {}, "Cancel")}
         </button>
     `;
 
@@ -516,11 +544,23 @@ async function confirmDeletePost(postId) {
             PostUtils.hidePost(postId);
         }
         
-        if (window.toastSuccess) toastSuccess("Post deleted.");
+        if (window.toastSuccess) {
+          toastSuccess(
+            poT("post.options.deleteConfirm.success", {}, "Post deleted."),
+          );
+        }
 
     } catch (err) {
         console.error(err);
-        if (window.toastError) toastError("Could not delete post");
+        if (window.toastError) {
+          toastError(
+            poT(
+              "post.options.deleteConfirm.failed",
+              {},
+              "Could not delete the post.",
+            ),
+          );
+        }
         if(btn) btn.disabled = false;
         closeDeleteConfirm();
     }
@@ -534,20 +574,22 @@ function editPost(postId) {
   if (window.PostEdit) {
       window.PostEdit.startEditPost(postId);
   } else {
-      toastInfo("Edit post module not loaded");
+      toastInfo(
+        poT("post.options.editUnavailable", {}, "Edit post module is not loaded."),
+      );
   }
 }
 
 function hidePostLikes(postId) {
   closePostOptions();
   console.log("Hide likes:", postId);
-  toastInfo("Like count hidden");
+  toastInfo(poT("post.options.likeCountHidden", {}, "Like count hidden."));
 }
 
 function turnOffCommenting(postId) {
   closePostOptions();
   console.log("Turn off commenting:", postId);
-  toastInfo("Commenting turned off");
+  toastInfo(poT("post.options.commentingOff", {}, "Commenting turned off."));
 }
 
 /* ===== Other post actions ===== */
@@ -563,20 +605,24 @@ function showReportReasons(targetId, type = 'post') {
   const popup = document.createElement("div");
   popup.className = "post-options-popup";
 
-  const typeLabel = type === 'comment' ? 'comment' : 'post';
+  const typeLabel = type === "comment"
+    ? poT("common.labels.comment", {}, "comment")
+    : poT("common.labels.post", {}, "post");
 
   popup.innerHTML = `
     <div class="post-options-header">
-      <h3>Report</h3>
-      <p>Why are you reporting this ${typeLabel}?</p>
+      <h3>${poT("post.options.reportDialog.title", {}, "Report")}</h3>
+      <p>${type === "comment"
+        ? poT("post.options.reportDialog.descriptionComment", {}, "Why are you reporting this comment?")
+        : poT("post.options.reportDialog.descriptionPost", {}, "Why are you reporting this post?")}</p>
     </div>
-    <button class="post-option" onclick="submitReport('${targetId}', 'spam', '${type}')">It's spam</button>
-    <button class="post-option" onclick="submitReport('${targetId}', 'inappropriate', '${type}')">Nudity or sexual activity</button>
-    <button class="post-option" onclick="submitReport('${targetId}', 'hate', '${type}')">Hate speech or symbols</button>
-    <button class="post-option" onclick="submitReport('${targetId}', 'violence', '${type}')">Violence or dangerous organizations</button>
-    <button class="post-option" onclick="submitReport('${targetId}', 'false', '${type}')">False information</button>
-    <button class="post-option" onclick="submitReport('${targetId}', 'scam', '${type}')">Scam or fraud</button>
-    <button class="post-option post-option-cancel" onclick="this.closest('.post-options-overlay').remove()">Cancel</button>
+    <button class="post-option" onclick="submitReport('${targetId}', 'spam', '${type}')">${poT("post.options.reportDialog.spam", {}, "It's spam")}</button>
+    <button class="post-option" onclick="submitReport('${targetId}', 'inappropriate', '${type}')">${poT("post.options.reportDialog.nudity", {}, "Nudity or sexual activity")}</button>
+    <button class="post-option" onclick="submitReport('${targetId}', 'hate', '${type}')">${poT("post.options.reportDialog.hate", {}, "Hate speech or symbols")}</button>
+    <button class="post-option" onclick="submitReport('${targetId}', 'violence', '${type}')">${poT("post.options.reportDialog.violence", {}, "Violence or dangerous organizations")}</button>
+    <button class="post-option" onclick="submitReport('${targetId}', 'false', '${type}')">${poT("post.options.reportDialog.falseInformation", {}, "False information")}</button>
+    <button class="post-option" onclick="submitReport('${targetId}', 'scam', '${type}')">${poT("post.options.reportDialog.scam", {}, "Scam or fraud")}</button>
+    <button class="post-option post-option-cancel" onclick="this.closest('.post-options-overlay').remove()">${poT("post.options.menu.cancel", {}, "Cancel")}</button>
   `;
 
   overlay.appendChild(popup);
@@ -592,12 +638,23 @@ function showReportReasons(targetId, type = 'post') {
 function submitReport(targetId, reason, type = 'post') {
   console.log(`Report ${type}:`, targetId, reason);
   document.querySelector(".post-options-overlay")?.remove();
-  const typeLabel = type === 'comment' ? 'comment' : 'post';
   
   if (window.toastSuccess) {
-      toastSuccess(`Thanks for reporting. We'll review this ${typeLabel}.`);
+      toastSuccess(
+        type === "comment"
+          ? poT(
+              "post.options.reportDialog.successComment",
+              {},
+              "Thanks for reporting. We'll review this comment.",
+            )
+          : poT(
+              "post.options.reportDialog.successPost",
+              {},
+              "Thanks for reporting. We'll review this post.",
+            ),
+      );
   } else {
-      console.log(`Thanks for reporting. We'll review this ${typeLabel}.`);
+      console.log("Report submitted.");
   }
 }
 
@@ -608,19 +665,19 @@ function reportPost(postId) {
 function followFromPost(accountId) {
   closePostOptions();
   console.log("Follow:", accountId);
-  toastSuccess("Following");
+  toastSuccess(poT("post.options.following", {}, "Following"));
 }
 
 function unfollowFromPost(accountId) {
   closePostOptions();
   console.log("Unfollow:", accountId);
-  toastInfo("Unfollowed");
+  toastInfo(poT("post.options.unfollowed", {}, "Unfollowed"));
 }
 
 function hidePost(postId) {
   closePostOptions();
   console.log("Hide post:", postId);
-  toastInfo("Post hidden");
+  toastInfo(poT("post.options.hidden", {}, "Post hidden."));
 }
 
 function addToFavorites(postId) {
@@ -651,27 +708,33 @@ function copyPostLink(postCode = "") {
   closePostOptions();
   const path = buildPostDetailPathForCopy(postCode);
   if (!path) {
-    toastError("Unable to copy post link.");
+    toastError(
+      poT("post.options.copyUnavailable", {}, "Unable to copy post link."),
+    );
     return;
   }
   const link = buildAbsoluteHashLink(path);
 
   navigator.clipboard
     .writeText(link)
-    .then(() => toastSuccess("Link copied"))
-    .catch(() => toastError("Failed to copy link"));
+    .then(() => toastSuccess(poT("post.options.copySuccess", {}, "Link copied.")))
+    .catch(() => toastError(poT("post.options.copyFailed", {}, "Failed to copy link.")));
 }
 
 function shareToStory(postId) {
   closePostOptions();
   console.log("Share to story:", postId);
-  toastInfo("Share to story (todo)");
+  toastInfo(
+    poT("post.options.shareToStorySoon", {}, "Share to story is coming soon."),
+  );
 }
 
 function aboutThisAccount(accountId) {
   closePostOptions();
   console.log("About account:", accountId);
-  toastInfo("About this account (todo)");
+  toastInfo(
+    poT("post.options.aboutAccountSoon", {}, "About this account is coming soon."),
+  );
 }
 
 /* ===== Export ===== */

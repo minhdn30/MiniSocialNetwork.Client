@@ -1,19 +1,17 @@
 <!-- Create Post Modal -->
-<div class="modal-overlay" id="createPostModal">
+<div class="modal-overlay" id="createPostModal" data-i18n-auto>
   <div class="modal-container">
     <!-- Header -->
     <div class="modal-header">
       <button class="modal-back-btn" onclick="handleBackButton()">
         <i data-lucide="arrow-left"></i>
       </button>
-      <h2 class="modal-title" id="modalTitle">Upload and Edit Photos</h2>
+      <h2 class="modal-title" id="modalTitle" data-i18n="post.create.title">Upload and Edit Photos</h2>
       <button
         class="modal-next-btn"
         id="modalActionBtn"
         onclick="handleNextStep()"
-      >
-        Next
-      </button>
+      data-i18n="common.buttons.next">Next</button>
     </div>
 
     <!-- Step 1: Upload & Edit -->
@@ -25,8 +23,8 @@
           <div class="placeholder-icon">
             <i data-lucide="image"></i>
           </div>
-          <p class="placeholder-text">Upload photos here</p>
-          <button class="select-btn" onclick="triggerMediaUpload()">
+          <p class="placeholder-text" data-i18n="post.create.uploadPlaceholder">Upload photos here</p>
+          <button class="select-btn" onclick="triggerMediaUpload()" data-i18n="common.buttons.upload">
             Upload
           </button>
         </div>
@@ -42,7 +40,8 @@
               <img
                 id="postImagePreview"
                 src=""
-                alt="Preview"
+                alt=""
+                data-i18n-alt="post.create.previewImageAlt"
                 style="display: none"
                 data-media-fallback-ignore="true"
               />
@@ -62,7 +61,7 @@
 
           <!-- Zoom Controls - Vertical on Right -->
           <div class="zoom-controls" id="zoomControls">
-            <button class="zoom-btn" onclick="zoomIn()" title="Zoom in">
+            <button class="zoom-btn" onclick="zoomIn()" title="Zoom in" data-i18n-title="post.create.zoomIn">
               <i data-lucide="zoom-in"></i>
             </button>
             <div class="zoom-slider" id="zoomSlider">
@@ -70,7 +69,7 @@
                 <div class="zoom-slider-thumb" id="zoomSliderThumb"></div>
               </div>
             </div>
-            <button class="zoom-btn" onclick="zoomOut()" title="Zoom out">
+            <button class="zoom-btn" onclick="zoomOut()" title="Zoom out" data-i18n-title="post.create.zoomOut">
               <i data-lucide="zoom-out"></i>
             </button>
           </div>
@@ -99,11 +98,10 @@
               data-lucide="crop"
               style="width: 24px; height: 24px; color: var(--accent-primary)"
             ></i>
-            <h3>Crop Ratio</h3>
+            <h3 data-i18n="post.create.cropRatio">Crop Ratio</h3>
           </div>
-          <p class="crop-info-desc">
-            Choose a ratio that fits the aesthetic of your post. <br />
-            1:1 (Square) is recommended for most feeds.
+          <p class="crop-info-desc" data-i18n="post.create.cropHint">
+            Choose a ratio that fits the aesthetic of your post. 1:1 (Square) is recommended for most feeds.
           </p>
 
           <div class="crop-ratio-grid">
@@ -137,7 +135,7 @@
               onclick="changeCropRatio('original')"
             >
               <div class="ratio-preview ratio-original"></div>
-              <span>Original</span>
+              <span data-i18n="post.create.original">Original</span>
             </button>
           </div>
 
@@ -148,18 +146,17 @@
                 style="width: 20px; height: 20px"
               ></i>
               <div>
-                <strong>Important Reminder</strong>
-                <p>
-                  After changing the crop ratio, check all images to ensure
-                  they're properly cropped
+                <strong data-i18n="post.create.importantReminder">Important Reminder</strong>
+                <p data-i18n="post.create.cropReminder">
+                  After changing the crop ratio, check all images to ensure they're properly cropped
                 </p>
               </div>
             </div>
             <div class="help-item">
               <i data-lucide="info" style="width: 20px; height: 20px"></i>
               <div>
-                <strong>Image Details</strong>
-                <p id="imageResolution">No file selected</p>
+                <strong data-i18n="post.create.imageDetails">Image Details</strong>
+                <p id="imageResolution" data-i18n="post.create.noFileSelected">No file selected</p>
               </div>
             </div>
             <div class="help-item">
@@ -168,8 +165,8 @@
                 style="width: 20px; height: 20px"
               ></i>
               <div>
-                <strong>Help & Shortcuts</strong>
-                <p>Scroll to zoom • Click and drag to pan</p>
+                <strong data-i18n="post.create.helpShortcuts">Help & Shortcuts</strong>
+                <p data-i18n="post.create.zoomHint">Scroll to zoom • Click and drag to pan</p>
               </div>
             </div>
           </div>
@@ -213,15 +210,15 @@
       <div class="post-details-panel">
         <!-- User Info with Privacy Selector -->
         <div class="create-post-user-info">
-          <img id="post-user-avatar" src="" alt="avatar" class="user-avatar" />
+          <img id="post-user-avatar" src="" alt="" class="user-avatar" />
           <div class="user-info-details">
-            <span id="post-user-name" class="user-name">User</span>
+            <span id="post-user-name" class="user-name" data-i18n="common.labels.user">User</span>
             <div
               class="privacy-selector"
               onclick="togglePrivacyDropdown(event)"
             >
               <i data-lucide="globe" class="privacy-icon" id="privacyIcon"></i>
-              <span class="privacy-text" id="privacyText">Public</span>
+              <span class="privacy-text" id="privacyText" data-i18n="common.labels.public">Public</span>
               <i data-lucide="chevron-right" class="privacy-chevron"></i>
             </div>
           </div>
@@ -237,8 +234,8 @@
             <div class="privacy-option-left">
               <i data-lucide="globe"></i>
               <div>
-                <span class="privacy-option-title">Public</span>
-                <span class="privacy-option-desc"
+                <span class="privacy-option-title" data-i18n="common.labels.public">Public</span>
+                <span class="privacy-option-desc" data-i18n="post.privacy.publicDescription"
                   >Anyone can see this post</span
                 >
               </div>
@@ -253,8 +250,8 @@
             <div class="privacy-option-left">
               <i data-lucide="users"></i>
               <div>
-                <span class="privacy-option-title">Followers Only</span>
-                <span class="privacy-option-desc"
+                <span class="privacy-option-title" data-i18n="common.labels.followersOnly">Followers Only</span>
+                <span class="privacy-option-desc" data-i18n="post.privacy.followersOnlyDescription"
                   >Only your followers can see</span
                 >
               </div>
@@ -269,8 +266,8 @@
             <div class="privacy-option-left">
               <i data-lucide="lock"></i>
               <div>
-                <span class="privacy-option-title">Private</span>
-                <span class="privacy-option-desc"
+                <span class="privacy-option-title" data-i18n="common.labels.private">Private</span>
+                <span class="privacy-option-desc" data-i18n="post.privacy.privateDescription"
                   >Only you can see this post</span
                 >
               </div>
@@ -285,6 +282,7 @@
             id="postCaption"
             class="post-caption-input"
             placeholder="Write a caption..."
+            data-i18n-placeholder="post.create.captionPlaceholder"
             oninput="updateCharCount()"
           ></textarea>
           <div class="post-caption-tools">
@@ -296,6 +294,7 @@
               class="post-caption-emoji-btn"
               onclick="toggleEmojiPicker(event)"
               aria-label="Add emoji"
+              data-i18n-aria-label="post.create.addEmojiAria"
             >
               <i data-lucide="smile-plus"></i>
             </button>
@@ -315,7 +314,7 @@
           >
             <div class="section-left">
               <i data-lucide="users" class="section-icon"></i>
-              <span class="section-title">Tag People</span>
+              <span class="section-title" data-i18n="post.create.tagPeople">Tag People</span>
             </div>
             <i data-lucide="chevron-right" class="chevron-icon"></i>
           </div>
@@ -331,6 +330,7 @@
                   id="postTagSearchInput"
                   class="collaborator-input"
                   placeholder="Search users..."
+                  data-i18n-placeholder="post.create.searchUsersPlaceholder"
                   autocomplete="off"
                 />
                 <div
@@ -344,7 +344,11 @@
                 id="postTagSelectedChips"
               ></div>
               <div class="post-tag-meta">
-                <span id="postTagSelectedCount">0 selected</span>
+                <span
+                  id="postTagSelectedCount"
+                  data-i18n="post.editTagging.selectedCount"
+                  data-i18n-params='{"count":0}'
+                >0 selected</span>
               </div>
             </div>
           </div>
@@ -358,7 +362,7 @@
           >
             <div class="section-left">
               <i data-lucide="map-pin" class="section-icon"></i>
-              <span class="section-title">Add Location</span>
+              <span class="section-title" data-i18n="post.create.addLocation">Add Location</span>
             </div>
             <i data-lucide="chevron-right" class="chevron-icon"></i>
           </div>
@@ -371,6 +375,7 @@
               type="text"
               class="location-input"
               placeholder="Search location..."
+              data-i18n-placeholder="post.create.searchLocationPlaceholder"
             />
           </div>
         </div>
@@ -383,7 +388,7 @@
           >
             <div class="section-left">
               <i data-lucide="accessibility" class="section-icon"></i>
-              <span class="section-title">Accessibility</span>
+              <span class="section-title" data-i18n="post.create.accessibility">Accessibility</span>
             </div>
             <i data-lucide="chevron-right" class="chevron-icon"></i>
           </div>
@@ -393,11 +398,14 @@
             style="display: none"
           >
             <p class="section-helper-text">
+              <span data-i18n="post.create.accessibilityHelper">
               Alt text describes your photos for people with visual impairments.
+              </span>
             </p>
             <textarea
               class="alt-text-input"
               placeholder="Write alt text..."
+              data-i18n-placeholder="post.create.altTextPlaceholder"
               maxlength="500"
             ></textarea>
           </div>
@@ -411,7 +419,7 @@
           >
             <div class="section-left">
               <i data-lucide="sliders" class="section-icon"></i>
-              <span class="section-title">Advanced Settings</span>
+              <span class="section-title" data-i18n="post.create.advancedSettings">Advanced Settings</span>
             </div>
             <i data-lucide="chevron-right" class="chevron-icon"></i>
           </div>
@@ -428,8 +436,8 @@
                   class="setting-icon-only"
                 ></i>
                 <div class="setting-details">
-                  <span class="setting-name">Turn off commenting</span>
-                  <span class="setting-desc"
+                  <span class="setting-name" data-i18n="post.create.turnOffCommenting">Turn off commenting</span>
+                  <span class="setting-desc" data-i18n="post.create.turnOffCommentingDescription"
                     >People won't be able to comment on this post</span
                   >
                 </div>
@@ -444,8 +452,8 @@
               <div class="setting-info">
                 <i data-lucide="eye-off" class="setting-icon-only"></i>
                 <div class="setting-details">
-                  <span class="setting-name">Hide like and view counts</span>
-                  <span class="setting-desc"
+                  <span class="setting-name" data-i18n="post.create.hideLikeCounts">Hide like and view counts</span>
+                  <span class="setting-desc" data-i18n="post.create.hideLikeCountsDescription"
                     >Only you will see the total number of likes and views</span
                   >
                 </div>

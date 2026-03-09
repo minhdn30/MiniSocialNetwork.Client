@@ -1,4 +1,24 @@
 (function (global) {
+  function stT(key, params = {}, fallback = "") {
+    return global.I18n?.t ? global.I18n.t(key, params, fallback || key) : (fallback || key);
+  }
+
+  function stUiError(action, status, rawMessage, fallbackKey) {
+    if (global.UIErrors?.resolveMessage) {
+      return global.UIErrors.resolveMessage(
+        "story",
+        action,
+        status,
+        rawMessage,
+        fallbackKey,
+        stT(fallbackKey, {}, fallbackKey),
+      );
+    }
+
+    const resolved = global.UIErrors?.format?.("story", action, status, rawMessage);
+    return resolved?.message || stT(fallbackKey, {}, fallbackKey);
+  }
+
   const STORY_URL_PARAM = "storyId";
   const STORY_HASH_ROUTE_PREFIX = "/stories/";
   const STORY_HASH_ROUTE_LEGACY_PREFIX = "/story/";
@@ -21,9 +41,9 @@
   };
   const ARCHIVE_PREFETCH_THRESHOLD = 2;
   const STORY_PRIVACY_OPTIONS = [
-    { value: 0, label: "Public", icon: "globe" },
-    { value: 1, label: "Followers Only", icon: "users" },
-    { value: 2, label: "Private", icon: "lock" },
+    { value: 0, label: "common.labels.public", icon: "globe" },
+    { value: 1, label: "common.labels.followersOnly", icon: "users" },
+    { value: 2, label: "common.labels.private", icon: "lock" },
   ];
   const STORY_TEXT_VIEWER_FALLBACK = {
     options: {
@@ -97,6 +117,7 @@
     queueHasMore: false,
     viewedAuthors: new Map(), // authorId → "seen" | "partial"
   };
+  let storyViewerLanguageBound = false;
 
   function stEscapeHtml(value) {
     return (value || "")
@@ -211,7 +232,13 @@
 
     stCloseViewer();
     if (typeof global.toastInfo === "function") {
-      global.toastInfo("You no longer have permission to view this highlight.");
+      global.toastInfo(
+        stT(
+          "story.viewer.noPermissionHighlight",
+          {},
+          "You no longer have permission to view this highlight.",
+        ),
+      );
     }
     return true;
   }
@@ -405,7 +432,15 @@
     const option = STORY_PRIVACY_OPTIONS.find(
       (item) => item.value === parsedPrivacy,
     );
-    return option?.label || "Public";
+    const fallbackLabel =
+      parsedPrivacy === 1
+        ? "Followers Only"
+        : parsedPrivacy === 2
+          ? "Private"
+          : "Public";
+    return option
+      ? stT(option.label, {}, fallbackLabel)
+      : stT("common.labels.public", {}, "Public");
   }
 
   function stResolveStoryContentType(story) {
@@ -536,7 +571,7 @@
     modal.className = "sn-story-viewer-modal sn-story-viewer-hidden";
     modal.innerHTML = `
       <div class="sn-story-viewer-backdrop" data-story-viewer-close="true"></div>
-      <div class="sn-story-viewer-card" role="dialog" aria-modal="true" aria-label="Story viewer">
+      <div class="sn-story-viewer-card" role="dialog" aria-modal="true" aria-label="${stEscapeAttr(stT("story.viewer.viewerAria", {}, "Story viewer"))}">
         <div class="sn-story-viewer-surface">
           <div class="sn-story-viewer-progress" id="storyViewerProgress"></div>
           <div class="sn-story-viewer-header">
@@ -552,7 +587,7 @@
               </div>
             </div>
             <div class="sn-story-viewer-header-actions">
-              <button type="button" class="sn-story-viewer-more-btn" id="storyViewerMoreBtn" aria-label="More options">
+              <button type="button" class="sn-story-viewer-more-btn" id="storyViewerMoreBtn" aria-label="${stEscapeAttr(stT("story.viewer.moreOptionsAria", {}, "More options"))}">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="12" cy="12" r="1"></circle>
                   <circle cx="19" cy="12" r="1"></circle>
@@ -573,9 +608,9 @@
                 class="sn-story-viewer-reply-input"
                 type="text"
                 maxlength="500"
-                placeholder="Reply to story..."
+                placeholder="${stEscapeAttr(stT("story.viewer.replyPlaceholder", {}, "Reply to story..."))}"
               />
-              <button type="button" id="storyViewerReplyEmojiBtn" class="sn-story-viewer-reply-emoji-btn" aria-label="Insert emoji">
+              <button type="button" id="storyViewerReplyEmojiBtn" class="sn-story-viewer-reply-emoji-btn" aria-label="${stEscapeAttr(stT("story.viewer.insertEmojiAria", {}, "Insert emoji"))}">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-smile">
                   <circle cx="12" cy="12" r="10"></circle>
                   <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
@@ -583,7 +618,7 @@
                   <line x1="15" x2="15.01" y1="9" y2="9"></line>
                 </svg>
               </button>
-              <button type="button" id="storyViewerReplySendBtn" class="sn-story-viewer-reply-send-btn" aria-label="Send reply">
+              <button type="button" id="storyViewerReplySendBtn" class="sn-story-viewer-reply-send-btn" aria-label="${stEscapeAttr(stT("story.viewer.sendReplyAria", {}, "Send reply"))}">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <line x1="22" y1="2" x2="11" y2="13"></line>
                   <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
@@ -592,18 +627,18 @@
               <div id="storyViewerReplyEmojiPicker" class="emoji-picker-container sn-story-viewer-emoji-picker-container"></div>
             </div>
             <div class="sn-story-viewer-react-frame" id="storyViewerReactFrame">
-              <button type="button" class="sn-story-viewer-react-btn" data-story-react="👍" aria-label="Like">👍</button>
-              <button type="button" class="sn-story-viewer-react-btn" data-story-react="❤️" aria-label="Love">❤️</button>
-              <button type="button" class="sn-story-viewer-react-btn" data-story-react="😆" aria-label="Haha">😆</button>
-              <button type="button" class="sn-story-viewer-react-btn" data-story-react="😮" aria-label="Wow">😮</button>
-              <button type="button" class="sn-story-viewer-react-btn" data-story-react="😢" aria-label="Sad">😢</button>
-              <button type="button" class="sn-story-viewer-react-btn" data-story-react="😡" aria-label="Angry">😡</button>
+              <button type="button" class="sn-story-viewer-react-btn" data-story-react="👍" aria-label="${stEscapeAttr(stT("story.viewer.likeAria", {}, "Like"))}">👍</button>
+              <button type="button" class="sn-story-viewer-react-btn" data-story-react="❤️" aria-label="${stEscapeAttr(stT("story.viewer.loveAria", {}, "Love"))}">❤️</button>
+              <button type="button" class="sn-story-viewer-react-btn" data-story-react="😆" aria-label="${stEscapeAttr(stT("story.viewer.hahaAria", {}, "Haha"))}">😆</button>
+              <button type="button" class="sn-story-viewer-react-btn" data-story-react="😮" aria-label="${stEscapeAttr(stT("story.viewer.wowAria", {}, "Wow"))}">😮</button>
+              <button type="button" class="sn-story-viewer-react-btn" data-story-react="😢" aria-label="${stEscapeAttr(stT("story.viewer.sadAria", {}, "Sad"))}">😢</button>
+              <button type="button" class="sn-story-viewer-react-btn" data-story-react="😡" aria-label="${stEscapeAttr(stT("story.viewer.angryAria", {}, "Angry"))}">😡</button>
             </div>
           </div>
           <div class="sn-story-viewer-viewers-panel sn-story-viewer-panel-hidden" id="storyViewersPanel">
             <div class="sn-story-viewer-viewers-header">
-              <span class="sn-story-viewer-viewers-title">Story Viewers <span class="sn-story-viewer-viewers-total" id="storyViewersTotalCount"></span></span>
-              <button type="button" class="sn-story-viewer-viewers-close" id="storyViewersCloseBtn" aria-label="Close viewers list">
+              <span class="sn-story-viewer-viewers-title">${stEscapeHtml(stT("story.viewer.viewersTitle", {}, "Story Viewers"))} <span class="sn-story-viewer-viewers-total" id="storyViewersTotalCount"></span></span>
+              <button type="button" class="sn-story-viewer-viewers-close" id="storyViewersCloseBtn" aria-label="${stEscapeAttr(stT("story.viewer.closeViewersAria", {}, "Close viewers list"))}">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18"></line>
                   <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -611,15 +646,15 @@
               </button>
             </div>
             <div class="sn-story-viewer-viewers-list" id="storyViewersList"></div>
-            <div class="sn-story-viewer-viewers-loading sn-story-viewer-hidden" id="storyViewersLoading">Loading...</div>
+            <div class="sn-story-viewer-viewers-loading sn-story-viewer-hidden" id="storyViewersLoading">${stEscapeHtml(stT("story.viewer.viewersLoading", {}, "Loading viewers..."))}</div>
           </div>
         </div>
-        <button type="button" class="sn-story-viewer-nav sn-story-viewer-nav-prev" id="storyViewerPrevBtn" aria-label="Previous story">
+        <button type="button" class="sn-story-viewer-nav sn-story-viewer-nav-prev" id="storyViewerPrevBtn" aria-label="${stEscapeAttr(stT("story.viewer.previousStoryAria", {}, "Previous story"))}">
           <svg class="sn-story-viewer-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M15 18L9 12L15 6"></path>
           </svg>
         </button>
-        <button type="button" class="sn-story-viewer-nav sn-story-viewer-nav-next" id="storyViewerNextBtn" aria-label="Next story">
+        <button type="button" class="sn-story-viewer-nav sn-story-viewer-nav-next" id="storyViewerNextBtn" aria-label="${stEscapeAttr(stT("story.viewer.nextStoryAria", {}, "Next story"))}">
           <svg class="sn-story-viewer-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M9 18L15 12L9 6"></path>
           </svg>
@@ -658,6 +693,7 @@
       viewersLoading: modal.querySelector("#storyViewersLoading"),
       viewersTotalCount: modal.querySelector("#storyViewersTotalCount"),
     };
+    stBindLanguageChange();
 
     modal.addEventListener("click", (event) => {
       const closeTrigger = event.target.closest(
@@ -827,6 +863,73 @@
     });
 
     return modal;
+  }
+
+  function stRefreshViewerLanguage() {
+    if (!viewerState.modal || !viewerState.isOpen) return;
+
+    const card = viewerState.modal.querySelector(".sn-story-viewer-card");
+    if (card) {
+      card.setAttribute(
+        "aria-label",
+        stT("story.viewer.viewerAria", {}, "Story viewer"),
+      );
+    }
+
+    if (viewerState.dom.moreBtn) {
+      viewerState.dom.moreBtn.setAttribute(
+        "aria-label",
+        stT("story.viewer.moreOptionsAria", {}, "More options"),
+      );
+    }
+
+    if (viewerState.dom.viewersCloseBtn) {
+      viewerState.dom.viewersCloseBtn.setAttribute(
+        "aria-label",
+        stT("story.viewer.closeViewersAria", {}, "Close viewers list"),
+      );
+    }
+
+    const viewersTitleEl = viewerState.modal.querySelector(
+      ".sn-story-viewer-viewers-title",
+    );
+    if (viewersTitleEl && viewersTitleEl.firstChild) {
+      viewersTitleEl.firstChild.textContent = `${stT(
+        "story.viewer.viewersTitle",
+        {},
+        "Story Viewers",
+      )} `;
+    }
+
+    if (viewerState.dom.viewersLoading) {
+      viewerState.dom.viewersLoading.textContent = stT(
+        "story.viewer.viewersLoading",
+        {},
+        "Loading viewers...",
+      );
+    }
+
+    const currentAccountId = stCurrentAccountId();
+    if (currentAccountId && viewerState.dom.viewersList) {
+      viewerState.dom.viewersList
+        .querySelectorAll(
+          `.post-user[data-account-id="${stEscapeAttr(currentAccountId)}"] .sn-story-viewer-viewers-item-username`,
+        )
+        .forEach((el) => {
+          el.textContent = stT("common.labels.you", {}, "You");
+        });
+    }
+
+    stRenderCurrentStory("fade");
+    stRenderStrip();
+  }
+
+  function stBindLanguageChange() {
+    if (storyViewerLanguageBound || !global.I18n?.onChange) return;
+    storyViewerLanguageBound = true;
+    global.I18n.onChange(() => {
+      stRefreshViewerLanguage();
+    });
   }
 
   function stStopProgressTimer() {
@@ -1263,15 +1366,19 @@
 
   function stRenderViewersListItems(viewers) {
     if (!viewerState.dom.viewersList) return;
+    const currentAccountId = stCurrentAccountId();
 
     const html = viewers
       .map((v, index) => {
-        const username = v.username || v.Username || "user";
+        const accountId = stNormalizeId(v.accountId || v.AccountId || "");
+        const username =
+          accountId && accountId === currentAccountId
+            ? stT("common.labels.you", {}, "You")
+            : v.username || v.Username || "user";
         const fullName = v.fullName || v.FullName || "";
         const avatarUrl =
           v.avatarUrl || v.AvatarUrl || global.APP_CONFIG.DEFAULT_AVATAR;
         const emoji = stGetReactionEmoji(v.reactType ?? v.ReactType);
-        const accountId = v.accountId || v.AccountId || "";
         const delay = index * 0.04; // Staggered delay
 
         return `
@@ -1356,18 +1463,29 @@
         }
 
         if (typeof global.toastSuccess === "function") {
-          global.toastSuccess("Reply sent!");
+          global.toastSuccess(
+            stT("story.viewer.replySent", {}, "Reply sent!"),
+          );
         }
       } else {
         const err = await res.json().catch(() => ({}));
         if (typeof global.toastError === "function") {
-          global.toastError(err.message || "Failed to send reply.");
+          global.toastError(
+            stUiError(
+              "reply",
+              res?.status,
+              err?.message || err?.Message || err?.title || err?.Title || "",
+              "story.viewer.replySendFailed",
+            ),
+          );
         }
       }
     } catch (err) {
       console.error("Story reply error:", err);
       if (typeof global.toastError === "function") {
-        global.toastError("Failed to send reply.");
+        global.toastError(
+          stUiError("reply", 0, "", "story.viewer.replySendFailed"),
+        );
       }
     } finally {
       inputEl.disabled = false;
@@ -1412,12 +1530,24 @@
             story.currentUserReactType === null ||
             story.currentUserReactType === undefined;
           global.toastSuccess(
-            isUnreact ? "Reaction removed" : `Reacted ${emoji}`,
+            isUnreact
+              ? stT("story.viewer.reactionRemoved", {}, "Reaction removed.")
+              : stT(
+                  "story.viewer.reactedWithEmoji",
+                  { emoji },
+                  `Reacted ${emoji}`,
+                ),
           );
         }
       } else {
         if (typeof global.toastError === "function") {
-          global.toastError("Failed to update reaction");
+          global.toastError(
+            stT(
+              "story.viewer.reactionUpdateFailed",
+              {},
+              "Failed to update reaction.",
+            ),
+          );
         }
       }
     } catch (err) {
@@ -1483,11 +1613,11 @@
       if (!stIsArchiveLikeMode()) {
         const currentLabel = stGetStoryPrivacyLabel(story?.privacy ?? 0);
         menuHtml += `
-          <button class="sn-story-viewer-menu-item" data-action="edit-privacy" title="Current: ${stEscapeAttr(currentLabel)}">
+          <button class="sn-story-viewer-menu-item" data-action="edit-privacy" title="${stEscapeAttr(stT("story.viewer.currentPrivacy", { label: currentLabel }, "Current: {label}"))}">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10"></circle><path d="M2 12h20"></path><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"></path>
             </svg>
-            <span>Edit Privacy</span>
+            <span>${stT("story.viewer.editPrivacy", {}, "Edit Privacy")}</span>
           </button>
         `;
       }
@@ -1501,7 +1631,7 @@
               <circle cx="12" cy="12" r="10"></circle>
               <line x1="8" y1="12" x2="16" y2="12"></line>
             </svg>
-            <span>Remove</span>
+            <span>${stT("common.buttons.remove", {}, "Remove")}</span>
           </button>
         `;
       }
@@ -1510,7 +1640,7 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
           </svg>
-          <span>Delete Story</span>
+          <span>${stEscapeHtml(stT("story.viewer.deleteAction", {}, "Delete Story"))}</span>
         </button>
       `;
     } else {
@@ -1519,7 +1649,7 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line>
           </svg>
-          <span>Report</span>
+          <span>${stEscapeHtml(stT("common.buttons.report", {}, "Report"))}</span>
         </button>
       `;
     }
@@ -1657,11 +1787,14 @@
     stPauseProgressTimer();
 
     stShowSystemConfirm({
-      title: "Remove from Group",
-      message:
+      title: stT("story.viewer.removeFromGroupTitle", {}, "Remove from Group"),
+      message: stT(
+        "story.viewer.removeFromGroupDescription",
+        {},
         "Are you sure you want to remove this story from the highlight group?",
-      confirmText: "Remove",
-      cancelText: "Cancel",
+      ),
+      confirmText: stT("common.buttons.remove", {}, "Remove"),
+      cancelText: stT("common.buttons.cancel", {}, "Cancel"),
       isDanger: true,
       onConfirm: () => stExecuteRemoveHighlightItem(story),
       onCancel: () => stResumeProgressTimer(),
@@ -1722,7 +1855,7 @@
     const popup = document.createElement("div");
     popup.className = "sn-story-viewer-privacy-popup";
     popup.innerHTML = `
-      <h3>Edit Story Privacy</h3>
+      <h3>${stT("story.viewer.editPrivacy", {}, "Edit Story Privacy")}</h3>
       <div class="sn-story-viewer-privacy-options">
         ${options
           .map(
@@ -1730,15 +1863,15 @@
           <label class="sn-story-viewer-privacy-option ${opt.value === currentPrivacy ? "selected" : ""}">
             <input type="radio" name="storyPrivacy" value="${opt.value}" ${opt.value === currentPrivacy ? "checked" : ""}>
             <i data-lucide="${opt.icon}"></i>
-            <span>${opt.label}</span>
+            <span>${stEscapeHtml(stGetStoryPrivacyLabel(opt.value))}</span>
           </label>
         `,
           )
           .join("")}
       </div>
       <div class="sn-story-viewer-privacy-actions">
-        <button class="sn-story-viewer-privacy-cancel" id="stPrivacyCancelBtn">Cancel</button>
-        <button class="sn-story-viewer-privacy-save" id="stPrivacySaveBtn">Save</button>
+        <button class="sn-story-viewer-privacy-cancel" id="stPrivacyCancelBtn">${stT("common.buttons.cancel", {}, "Cancel")}</button>
+        <button class="sn-story-viewer-privacy-save" id="stPrivacySaveBtn">${stT("common.buttons.save", {}, "Save")}</button>
       </div>
     `;
 
@@ -1794,13 +1927,33 @@
           if (res?.ok) {
             story.privacy = newPrivacy;
             if (global.toastSuccess)
-              global.toastSuccess("Story privacy updated.");
+              global.toastSuccess(
+                stT(
+                  "story.viewer.privacyUpdated",
+                  {},
+                  "Story privacy updated.",
+                ),
+              );
           } else {
             if (global.toastError)
-              global.toastError("Failed to update privacy.");
+              global.toastError(
+                stT(
+                  "story.viewer.privacyUpdateFailed",
+                  {},
+                  "Failed to update privacy.",
+                ),
+              );
           }
         } catch (_) {
-          if (global.toastError) global.toastError("Failed to update privacy.");
+          if (global.toastError) {
+            global.toastError(
+              stT(
+                "story.viewer.privacyUpdateFailed",
+                {},
+                "Failed to update privacy.",
+              ),
+            );
+          }
         }
         closeOverlay();
       });
@@ -1813,11 +1966,14 @@
     stPauseProgressTimer();
 
     stShowSystemConfirm({
-      title: "Delete Story",
-      message:
+      title: stT("story.viewer.deleteTitle", {}, "Delete Story"),
+      message: stT(
+        "story.viewer.deleteDescription",
+        {},
         "Are you sure you want to delete this story? This action cannot be undone.",
-      confirmText: "Delete",
-      cancelText: "Cancel",
+      ),
+      confirmText: stT("common.buttons.delete", {}, "Delete"),
+      cancelText: stT("common.buttons.cancel", {}, "Cancel"),
       isDanger: true,
       onConfirm: () => stDeleteStory(story),
       onCancel: () => stResumeProgressTimer(),
@@ -1830,7 +1986,11 @@
     try {
       const res = await global.API.Stories.delete(story.storyId);
       if (res?.ok) {
-        if (global.toastSuccess) global.toastSuccess("Story deleted.");
+        if (global.toastSuccess) {
+          global.toastSuccess(
+            stT("story.viewer.deleteSuccess", {}, "Story deleted."),
+          );
+        }
 
         // Remove from viewer list
         viewerState.stories = viewerState.stories.filter(
@@ -1867,11 +2027,19 @@
         stRenderProgressBars(viewerState.stories.length);
         stRenderCurrentStory();
       } else {
-        if (global.toastError) global.toastError("Failed to delete story.");
+        if (global.toastError) {
+          global.toastError(
+            stT("story.viewer.deleteFailed", {}, "Failed to delete story."),
+          );
+        }
         stResumeProgressTimer();
       }
     } catch (_) {
-      if (global.toastError) global.toastError("Failed to delete story.");
+      if (global.toastError) {
+        global.toastError(
+          stT("story.viewer.deleteFailed", {}, "Failed to delete story."),
+        );
+      }
       stResumeProgressTimer();
     }
   }
@@ -1880,7 +2048,13 @@
     const story = stCurrentStory();
     if (!story) return;
     if (global.toastInfo) {
-      global.toastInfo("Report feature will be available soon.");
+      global.toastInfo(
+        stT(
+          "story.viewer.reportComingSoon",
+          {},
+          "Report feature will be available soon.",
+        ),
+      );
     }
   }
 
@@ -2020,11 +2194,34 @@
     reason,
     iconName = "eye-off",
   ) {
+    const fallbackReason = stT(
+      "story.viewer.unavailable",
+      {},
+      "This story is no longer available.",
+    );
+    const resolvedReason = (() => {
+      const normalizedReason =
+        typeof reason === "string" ? reason.trim() : "";
+      if (!normalizedReason) {
+        return fallbackReason;
+      }
+      if (global.I18n?.translateServerText) {
+        return global.I18n.translateServerText(
+          normalizedReason,
+          {},
+          fallbackReason,
+        );
+      }
+      if (global.I18n?.translateLiteral) {
+        return global.I18n.translateLiteral(normalizedReason);
+      }
+      return normalizedReason;
+    })();
     const unavailableEl = document.createElement("div");
     unavailableEl.className = "sn-story-viewer-unavailable";
     unavailableEl.innerHTML = `
       <i data-lucide="${iconName}" style="width:48px;height:48px;opacity:0.5;"></i>
-      <p style="margin-top:12px;font-size:15px;opacity:0.7;">${reason || "This story is no longer available."}</p>
+      <p style="margin-top:12px;font-size:15px;opacity:0.7;">${stEscapeHtml(resolvedReason)}</p>
     `;
     parentShell.appendChild(unavailableEl);
     if (global.lucide) global.lucide.createIcons();
@@ -2159,7 +2356,10 @@
       const muteBtn = document.createElement("button");
       muteBtn.type = "button";
       muteBtn.className = "sn-story-viewer-mute-btn";
-      muteBtn.setAttribute("aria-label", "Toggle sound");
+      muteBtn.setAttribute(
+        "aria-label",
+        stT("story.viewer.toggleSoundAria", {}, "Toggle sound"),
+      );
       muteBtn.innerHTML = `
         <svg class="sn-story-mute-icon sn-story-mute-icon--muted" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
@@ -2205,7 +2405,11 @@
         previewShell.innerHTML = "";
         stRenderUnavailableContent(
           previewShell,
-          "this video could not be loaded",
+          stT(
+            "common.media.videoUnavailable",
+            {},
+            "This video could not be loaded",
+          ),
           "video-off",
         );
         stStartProgressTimer(DEFAULT_STORY_DURATION_MS);
@@ -2219,7 +2423,11 @@
         previewShell.innerHTML = "";
         stRenderUnavailableContent(
           previewShell,
-          "this video could not be loaded",
+          stT(
+            "common.media.videoUnavailable",
+            {},
+            "This video could not be loaded",
+          ),
           "video-off",
         );
         stStartProgressTimer(DEFAULT_STORY_DURATION_MS);
@@ -2230,7 +2438,11 @@
     if (!story.mediaUrl) {
       stRenderUnavailableContent(
         previewShell,
-        "This story is no longer available.",
+        stT(
+          "story.viewer.unavailable",
+          {},
+          "This story is no longer available.",
+        ),
       );
       stMountPreviewShell(previewShell, direction);
       stStartProgressTimer(DEFAULT_STORY_DURATION_MS);
@@ -2245,7 +2457,11 @@
       previewShell.innerHTML = "";
       stRenderUnavailableContent(
         previewShell,
-        "this image could not be loaded",
+        stT(
+          "common.media.imageUnavailable",
+          {},
+          "This image could not be loaded",
+        ),
         "image-off",
       );
     });
@@ -2808,7 +3024,7 @@
 
         const displayName =
           author.isCurrentUser || author.accountId === myId
-            ? "You"
+            ? stT("common.labels.you", {}, "You")
             : stEscapeHtml(author.username);
 
         const classes = [
@@ -3657,6 +3873,75 @@
     viewerState.baseUrl = null;
   }
 
+  function stGetExpiredStoryPreviewHtml() {
+    return `
+      <div class="msg-story-reply-expired-icon"><i data-lucide="image-off"></i></div>
+      <span>${stEscapeHtml(
+        stT(
+          "story.viewer.unavailableShort",
+          {},
+          "Story is no longer available",
+        ),
+      )}</span>
+    `;
+  }
+
+  function stToastStoryUnavailable() {
+    if (typeof global.toastInfo === "function") {
+      global.toastInfo(
+        stT(
+          "story.viewer.unavailable",
+          {},
+          "This story is no longer available.",
+        ),
+      );
+    }
+  }
+
+  function stToastStoryPermissionDenied() {
+    if (typeof global.toastInfo === "function") {
+      global.toastInfo(
+        stT(
+          "story.viewer.permissionDenied",
+          {},
+          "You no longer have permission to view this story.",
+        ),
+      );
+    }
+  }
+
+  function stToastStoryLoadFailed() {
+    if (typeof global.toastError === "function") {
+      global.toastError(
+        stT("story.viewer.loadFailed", {}, "Failed to load story."),
+      );
+    }
+  }
+
+  function stToastHighlightGroupUnavailable() {
+    if (typeof global.toastInfo === "function") {
+      global.toastInfo(
+        stT(
+          "story.viewer.highlightGroupUnavailable",
+          {},
+          "This highlight group is no longer available.",
+        ),
+      );
+    }
+  }
+
+  function stToastHighlightLoadFailed() {
+    if (typeof global.toastError === "function") {
+      global.toastError(
+        stT(
+          "story.viewer.loadHighlightFailed",
+          {},
+          "Failed to load highlight stories.",
+        ),
+      );
+    }
+  }
+
   function stMarkStoryReplyPreviewExpired(storyId) {
     const normalizedStoryId = (storyId || "").toString().trim();
     if (!normalizedStoryId) return;
@@ -3669,10 +3954,7 @@
       el.removeAttribute("style");
       el.removeAttribute("data-story-id");
       el.className = "msg-story-reply-preview msg-story-reply-expired";
-      el.innerHTML = `
-          <div class="msg-story-reply-expired-icon"><i data-lucide="image-off"></i></div>
-          <span>Story is no longer available</span>
-        `;
+      el.innerHTML = stGetExpiredStoryPreviewHtml();
       if (global.lucide && typeof global.lucide.createIcons === "function") {
         global.lucide.createIcons({ root: el });
       }
@@ -3783,17 +4065,15 @@
     if (resolveResult.notFound) {
       if (options.redirectOnNotFound) {
         stNavigateToNotFoundRoute();
-      } else if (typeof global.toastInfo === "function") {
-        global.toastInfo("This story is no longer available.");
+      } else {
+        stToastStoryUnavailable();
       }
       stMarkStoryReplyPreviewExpired(normalizedStoryId);
       return STORY_OPEN_STATUS.UNAVAILABLE;
     }
 
     if (resolveResult.forbidden) {
-      if (typeof global.toastInfo === "function") {
-        global.toastInfo("You no longer have permission to view this story.");
-      }
+      stToastStoryPermissionDenied();
       if (options.redirectOnForbidden) {
         const fallbackHashPath = stGetFallbackHashPath();
         if (global.RouteHelper?.goTo && global.RouteHelper?.parseHash) {
@@ -3811,7 +4091,13 @@
 
     if (!resolveResult.authorId) {
       if (typeof global.toastError === "function") {
-        global.toastError("Failed to resolve story route.");
+        global.toastError(
+          stT(
+            "story.viewer.resolveRouteFailed",
+            {},
+            "Failed to resolve story route.",
+          ),
+        );
       }
       return STORY_OPEN_STATUS.ERROR;
     }
@@ -3826,22 +4112,18 @@
         if (response?.status === 404) {
           if (options.redirectOnNotFound) {
             stNavigateToNotFoundRoute();
-          } else if (typeof global.toastInfo === "function") {
-            global.toastInfo("This story is no longer available.");
+          } else {
+            stToastStoryUnavailable();
           }
           return STORY_OPEN_STATUS.UNAVAILABLE;
         }
 
         if (response?.status === 403) {
-          if (typeof global.toastInfo === "function") {
-            global.toastInfo("You no longer have permission to view this story.");
-          }
+          stToastStoryPermissionDenied();
           return STORY_OPEN_STATUS.UNAVAILABLE;
         }
 
-        if (typeof global.toastError === "function") {
-          global.toastError("Failed to load story.");
-        }
+        stToastStoryLoadFailed();
         return STORY_OPEN_STATUS.ERROR;
       }
 
@@ -3881,9 +4163,7 @@
       openStatus !== STORY_OPEN_STATUS.SUCCESS &&
       options.redirectOnForbidden
     ) {
-      if (typeof global.toastInfo === "function") {
-        global.toastInfo("You no longer have permission to view this story.");
-      }
+      stToastStoryPermissionDenied();
       const fallbackHashPath = stGetFallbackHashPath();
       if (global.RouteHelper?.goTo && global.RouteHelper?.parseHash) {
         const parsed = global.RouteHelper.parseHash(fallbackHashPath);
@@ -4012,9 +4292,7 @@
     }
 
     if (!stories.length) {
-      if (global.toastInfo) {
-        global.toastInfo("This story is no longer available.");
-      }
+      stToastStoryUnavailable();
       stCloseViewer();
       return STORY_OPEN_STATUS.UNAVAILABLE;
     }
@@ -4060,9 +4338,7 @@
       : -1;
 
     if (targetStoryId && targetStoryIndex === -1) {
-      if (global.toastInfo) {
-        global.toastInfo("This story is no longer available.");
-      }
+      stToastStoryUnavailable();
       stCloseViewer();
       return STORY_OPEN_STATUS.UNAVAILABLE;
     }
@@ -4096,7 +4372,9 @@
 
     if (!global.API?.Stories?.getHighlightGroupStories) {
       if (global.toastError) {
-        global.toastError("Story highlight API is unavailable.");
+        global.toastError(
+          stT("story.viewer.apiUnavailable", {}, "Story API is unavailable."),
+        );
       }
       return STORY_OPEN_STATUS.ERROR;
     }
@@ -4183,16 +4461,12 @@
 
         if (!response?.ok) {
           if (response?.status === 404 || response?.status === 403) {
-            if (global.toastInfo) {
-              global.toastInfo("This highlight group is no longer available.");
-            }
+            stToastHighlightGroupUnavailable();
             stCloseViewer();
             return STORY_OPEN_STATUS.UNAVAILABLE;
           }
 
-          if (global.toastError) {
-            global.toastError("Failed to load highlight stories.");
-          }
+          stToastHighlightLoadFailed();
           stCloseViewer();
           return STORY_OPEN_STATUS.ERROR;
         }
@@ -4216,9 +4490,7 @@
         .trim();
 
       if (!stories.length) {
-        if (global.toastInfo) {
-          global.toastInfo("This highlight group is no longer available.");
-        }
+        stToastHighlightGroupUnavailable();
         stCloseViewer();
         return STORY_OPEN_STATUS.UNAVAILABLE;
       }
@@ -4254,7 +4526,9 @@
         {
           groupId: normalizedGroupId,
           accountId: normalizedTargetAccountId,
-          name: viewerState.highlightGroupName || "highlight",
+          name:
+            viewerState.highlightGroupName ||
+            stT("story.viewer.highlightFallbackName", {}, "highlight"),
           coverImageUrl: payload?.coverImageUrl ?? payload?.CoverImageUrl ?? "",
           storyCount: stories.length,
           fallbackStory: stories[0] || null,
@@ -4316,7 +4590,13 @@
 
       if (targetStoryId && targetStoryIndex === -1) {
         if (global.toastInfo) {
-          global.toastInfo("This story is no longer available in this group.");
+          global.toastInfo(
+            stT(
+              "story.viewer.unavailableGroup",
+              {},
+              "This story is no longer available in this group.",
+            ),
+          );
         }
         stCloseViewer();
         return STORY_OPEN_STATUS.UNAVAILABLE;
@@ -4348,9 +4628,7 @@
       if (requestId !== viewerState.requestId) {
         return STORY_OPEN_STATUS.ERROR;
       }
-      if (global.toastError) {
-        global.toastError("Failed to load highlight stories.");
-      }
+      stToastHighlightLoadFailed();
       stCloseViewer();
       return STORY_OPEN_STATUS.ERROR;
     }
@@ -4374,7 +4652,9 @@
 
     if (!global.API?.Stories?.getActiveByAuthor) {
       if (global.toastError) {
-        global.toastError("Story API is unavailable.");
+        global.toastError(
+          stT("story.viewer.apiUnavailable", {}, "Story API is unavailable."),
+        );
       }
       return STORY_OPEN_STATUS.ERROR;
     }
@@ -4429,17 +4709,15 @@
 
       if (!response.ok) {
         if (response.status === 404 || response.status === 403) {
-          if (global.toastInfo) {
-            global.toastInfo("This story is no longer available.");
-          }
+          stToastStoryUnavailable();
           stSyncRingGlobally(normalizedAuthorId, "none");
           global.dispatchEvent(
             new CustomEvent("story:unavailable", {
               detail: { authorId: normalizedAuthorId },
             }),
           );
-        } else if (global.toastError) {
-          global.toastError("Failed to load story.");
+        } else {
+          stToastStoryLoadFailed();
         }
         // In queue mode: don't close viewer, just return (caller will skip)
         if (options._keepQueue) {
@@ -4463,9 +4741,7 @@
         .map(stResolveStoryItem)
         .filter((story) => !!story.storyId);
       if (!stories.length) {
-        if (global.toastInfo) {
-          global.toastInfo("This story is no longer available.");
-        }
+        stToastStoryUnavailable();
         stSyncRingGlobally(normalizedAuthorId, "none");
         global.dispatchEvent(
           new CustomEvent("story:unavailable", {
@@ -4510,9 +4786,7 @@
         : -1;
 
       if (targetStoryId && targetStoryIndex === -1) {
-        if (global.toastInfo) {
-          global.toastInfo("This story is no longer available.");
-        }
+        stToastStoryUnavailable();
         stCloseViewer();
 
         const expiredElements = document.querySelectorAll(
@@ -4523,10 +4797,7 @@
           el.removeAttribute("style");
           el.removeAttribute("data-story-id");
           el.className = "msg-story-reply-preview msg-story-reply-expired";
-          el.innerHTML = `
-            <div class="msg-story-reply-expired-icon"><i data-lucide="image-off"></i></div>
-            <span>Story is no longer available</span>
-          `;
+          el.innerHTML = stGetExpiredStoryPreviewHtml();
           if (
             global.lucide &&
             typeof global.lucide.createIcons === "function"
@@ -4569,9 +4840,7 @@
       if (requestId !== viewerState.requestId) {
         return STORY_OPEN_STATUS.ERROR;
       }
-      if (global.toastError) {
-        global.toastError("Failed to load story.");
-      }
+      stToastStoryLoadFailed();
       if (options._keepQueue) {
         viewerState.isOpen = true;
         return STORY_OPEN_STATUS.ERROR;
@@ -4839,7 +5108,13 @@
         stExtractProfileHighlightRouteContext(hashPath);
       if (looksLikeProfileHighlightRoute && !profileHighlightContext) {
         if (global.toastInfo) {
-          global.toastInfo("Invalid highlight link.");
+          global.toastInfo(
+            stT(
+              "story.viewer.invalidHighlightLink",
+              {},
+              "Invalid highlight link.",
+            ),
+          );
         }
         return;
       }
@@ -4857,7 +5132,13 @@
         }
         if (!resolveResult.accountId) {
           if (global.toastInfo) {
-            global.toastInfo("Unable to open this highlight link right now.");
+            global.toastInfo(
+              stT(
+                "story.viewer.openHighlightUnavailable",
+                {},
+                "Unable to open this highlight link right now.",
+              ),
+            );
           }
           return;
         }
@@ -4879,7 +5160,13 @@
       const highlightContext = stExtractHighlightRouteContext(hashPath);
       if (looksLikeLegacyHighlightRoute && !highlightContext) {
         if (global.toastInfo) {
-          global.toastInfo("Invalid highlight link.");
+          global.toastInfo(
+            stT(
+              "story.viewer.invalidHighlightLink",
+              {},
+              "Invalid highlight link.",
+            ),
+          );
         }
         return;
       }

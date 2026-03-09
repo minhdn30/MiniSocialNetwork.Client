@@ -4,6 +4,10 @@
  */
 
 (function (global) {
+  function shT(key, params = {}, fallback = "") {
+    return global.I18n?.t ? global.I18n.t(key, params, fallback) : fallback;
+  }
+
   const HIGHLIGHT_ARCHIVE_PAGE_SIZE =
     global.APP_CONFIG?.STORY_HIGHLIGHT_ARCHIVE_PAGE_SIZE || 24;
   const HIGHLIGHT_GROUP_NAME_MAX_LENGTH =
@@ -55,18 +59,26 @@
     return (value || "").toString().trim().toLowerCase();
   }
 
-  async function readApiErrorMessage(response, fallbackMessage) {
-    if (!response) return fallbackMessage;
+  async function readApiErrorMessage(response, fallbackKey, fallbackMessage) {
+    if (!response) return shT(fallbackKey, {}, fallbackMessage);
+    let rawMessage = "";
     try {
       const payload = await response.json();
-      const rawMessage = payload?.message ?? payload?.Message;
-      if (typeof rawMessage === "string" && rawMessage.trim()) {
-        return rawMessage.trim();
-      }
+      rawMessage = payload?.message ?? payload?.Message ?? "";
     } catch (_) {
       // Ignore non-JSON response
     }
-    return fallbackMessage;
+    if (global.UIErrors?.resolveMessage) {
+      return global.UIErrors.resolveMessage(
+        "story",
+        "load-highlight",
+        response.status,
+        rawMessage,
+        fallbackKey,
+        fallbackMessage,
+      );
+    }
+    return shT(fallbackKey, {}, fallbackMessage);
   }
 
   function configure(options = {}) {
@@ -598,9 +610,9 @@
     const menuEl = document.createElement("div");
     menuEl.className = "profile-highlight-card-menu";
     menuEl.innerHTML = `
-      <button type="button" data-action="add-items"><i data-lucide="plus"></i><span>Add stories</span></button>
-      <button type="button" data-action="edit-group"><i data-lucide="pencil-line"></i><span>Edit group</span></button>
-      <button type="button" data-action="delete-group" class="danger"><i data-lucide="trash-2"></i><span>Delete group</span></button>
+      <button type="button" data-action="add-items"><i data-lucide="plus"></i><span>${escapeHtml(shT("profile.highlights.menuAddStories", {}, "Add stories"))}</span></button>
+      <button type="button" data-action="edit-group"><i data-lucide="pencil-line"></i><span>${escapeHtml(shT("profile.highlights.menuEditGroup", {}, "Edit group"))}</span></button>
+      <button type="button" data-action="delete-group" class="danger"><i data-lucide="trash-2"></i><span>${escapeHtml(shT("profile.highlights.menuDeleteGroup", {}, "Delete group"))}</span></button>
     `;
     document.body.appendChild(menuEl);
 
@@ -694,6 +706,7 @@
       if (!response.ok) {
         const message = await readApiErrorMessage(
           response,
+          "profile.highlights.removeStoryFailed",
           "Failed to remove story from highlight group.",
         );
         if (window.toastError) {
@@ -711,9 +724,21 @@
 
       if (options.showSuccessToast !== false && window.toastSuccess) {
         if (groupDeleted) {
-          toastSuccess("Story removed and empty highlight group deleted.");
+          toastSuccess(
+            shT(
+              "profile.highlights.removeStoryDeletedGroupSuccess",
+              {},
+              "Story removed and empty highlight group deleted.",
+            ),
+          );
         } else {
-          toastSuccess("Story removed from highlight group.");
+          toastSuccess(
+            shT(
+              "profile.highlights.removeStorySuccess",
+              {},
+              "Story removed from highlight group.",
+            ),
+          );
         }
       }
 
@@ -721,7 +746,13 @@
     } catch (error) {
       console.error(error);
       if (window.toastError) {
-        toastError("Failed to remove story from highlight group.");
+        toastError(
+          shT(
+            "profile.highlights.removeStoryFailed",
+            {},
+            "Failed to remove story from highlight group.",
+          ),
+        );
       }
       return { ok: false, groupDeleted: false };
     }
@@ -768,7 +799,7 @@
               <i data-lucide="plus"></i>
             </div>
           </div>
-          <div class="profile-highlight-name">Add New</div>
+          <div class="profile-highlight-name">${escapeHtml(shT("profile.highlights.addNew", {}, "Add New"))}</div>
         </div>
       `
       : "";
@@ -778,12 +809,17 @@
         const safeGroupId = escapeAttr(group.storyHighlightGroupId);
         const safeGroupName = escapeHtml(group.name || "highlight");
         const storyCount = Math.max(0, Number(group.storyCount || 0));
-        const storyCountText =
-          storyCount === 1 ? "1 story" : `${storyCount} stories`;
+        const storyCountText = shT(
+          storyCount === 1
+            ? "profile.highlights.storyCountSingle"
+            : "profile.highlights.storyCountPlural",
+          { count: storyCount },
+          storyCount === 1 ? `${storyCount} story` : `${storyCount} stories`,
+        );
         const ownerClass = isOwner ? "profile-highlight-owner" : "";
         const menuButtonHtml = isOwner
           ? `
-            <button type="button" class="profile-highlight-card-menu-btn" data-action="open-group-menu" data-group-id="${safeGroupId}" aria-label="Highlight group options">
+            <button type="button" class="profile-highlight-card-menu-btn" data-action="open-group-menu" data-group-id="${safeGroupId}" aria-label="${escapeAttr(shT("profile.highlights.groupOptionsAria", {}, "Highlight group options"))}">
               <i data-lucide="more-horizontal"></i>
             </button>
           `
@@ -808,7 +844,7 @@
           type="button"
           class="profile-highlights-nav profile-highlights-nav-prev is-hidden"
           data-action="scroll-highlights-prev"
-          aria-label="Previous highlight groups"
+          aria-label="${escapeAttr(shT("profile.highlights.prevGroupsAria", {}, "Previous highlight groups"))}"
         >
           <i data-lucide="chevron-left"></i>
         </button>
@@ -820,7 +856,7 @@
           type="button"
           class="profile-highlights-nav profile-highlights-nav-next is-hidden"
           data-action="scroll-highlights-next"
-          aria-label="Next highlight groups"
+          aria-label="${escapeAttr(shT("profile.highlights.nextGroupsAria", {}, "Next highlight groups"))}"
         >
           <i data-lucide="chevron-right"></i>
         </button>
@@ -915,7 +951,13 @@
 
     try {
       if (!API?.Stories?.getHighlightGroupsByProfile) {
-        throw new Error("Story highlight API is unavailable.");
+        throw new Error(
+          shT(
+            "profile.highlights.apiUnavailable",
+            {},
+            "Story highlight API is unavailable.",
+          ),
+        );
       }
 
       const response =
@@ -932,6 +974,7 @@
       if (!response.ok) {
         const message = await readApiErrorMessage(
           response,
+          "profile.highlights.loadFailed",
           "Failed to load story highlights.",
         );
         if (!silent && window.toastError) {
@@ -961,7 +1004,13 @@
     } catch (error) {
       console.error(error);
       if (!silent && window.toastError) {
-        toastError("Failed to load story highlights.");
+        toastError(
+          shT(
+            "profile.highlights.loadFailed",
+            {},
+            "Failed to load story highlights.",
+          ),
+        );
       }
       highlightGroups = [];
       renderProfileHighlightsSection();
@@ -980,7 +1029,13 @@
 
     if (typeof window.openStoryViewerByHighlightGroup !== "function") {
       if (window.toastError) {
-        toastError("Story viewer is unavailable.");
+        toastError(
+          shT(
+            "profile.highlights.viewerUnavailable",
+            {},
+            "Story viewer is unavailable.",
+          ),
+        );
       }
       return;
     }
@@ -1061,14 +1116,14 @@
     overlay.innerHTML = `
       <div class="profile-highlight-modal" role="dialog" aria-modal="true">
         <div class="${headerClass}">
-          <button type="button" class="profile-highlight-btn profile-highlight-icon-btn profile-highlight-modal-back hidden" data-action="prev-step" aria-label="Back">
+          <button type="button" class="profile-highlight-btn profile-highlight-icon-btn profile-highlight-modal-back hidden" data-action="prev-step" aria-label="${escapeAttr(shT("profile.highlights.backAria", {}, "Back"))}">
             <i data-lucide="arrow-left"></i>
           </button>
           <div class="profile-highlight-modal-title-wrap">
             <h3 class="profile-highlight-modal-title">${escapeHtml(title)}</h3>
             ${hasSubtitle ? `<p class="profile-highlight-modal-subtitle">${escapeHtml(subtitle)}</p>` : ""}
           </div>
-          <button type="button" class="profile-highlight-modal-close" data-action="close-highlight-modal" aria-label="Close">
+          <button type="button" class="profile-highlight-modal-close" data-action="close-highlight-modal" aria-label="${escapeAttr(shT("profile.highlights.closeAria", {}, "Close"))}">
             <i data-lucide="x"></i>
           </button>
         </div>
@@ -1120,10 +1175,10 @@
 
   function showSystemConfirm(options = {}) {
     const {
-      title = "Are you sure?",
+      title = shT("chat.common.areYouSure", {}, "Are you sure?"),
       message = "",
-      confirmText = "Confirm",
-      cancelText = "Cancel",
+      confirmText = shT("common.buttons.confirm", {}, "Confirm"),
+      cancelText = shT("common.buttons.cancel", {}, "Cancel"),
       isDanger = false,
       onConfirm = null,
       onCancel = null,
@@ -1205,12 +1260,24 @@
 
     const groupName = (group.name || "").toString().trim();
     showSystemConfirm({
-      title: "Delete highlight group",
+      title: shT(
+        "profile.highlights.deleteGroupConfirmTitle",
+        {},
+        "Delete highlight group",
+      ),
       message: groupName
-        ? `Delete highlight group "${groupName}"? This action cannot be undone.`
-        : "Delete this highlight group? This action cannot be undone.",
-      confirmText: "Delete",
-      cancelText: "Cancel",
+        ? shT(
+            "profile.highlights.deleteGroupConfirmNamed",
+            { name: groupName },
+            `Delete highlight group "${groupName}"? This action cannot be undone.`,
+          )
+        : shT(
+            "profile.highlights.deleteGroupConfirmUnnamed",
+            {},
+            "Delete this highlight group? This action cannot be undone.",
+          ),
+      confirmText: shT("common.buttons.delete", {}, "Delete"),
+      cancelText: shT("common.buttons.cancel", {}, "Cancel"),
       isDanger: true,
       onConfirm: async () => {
         try {
@@ -1220,6 +1287,7 @@
           if (!response.ok) {
             const message = await readApiErrorMessage(
               response,
+              "profile.highlights.deleteGroupFailed",
               "Failed to delete highlight group.",
             );
             if (window.toastError) toastError(message);
@@ -1227,13 +1295,25 @@
           }
 
           if (window.toastSuccess) {
-            toastSuccess("Highlight group deleted.");
+            toastSuccess(
+              shT(
+                "profile.highlights.deleteGroupSuccess",
+                {},
+                "Highlight group deleted.",
+              ),
+            );
           }
           loadProfileHighlightGroups({ silent: true, force: true });
         } catch (error) {
           console.error(error);
           if (window.toastError) {
-            toastError("Failed to delete highlight group.");
+            toastError(
+              shT(
+                "profile.highlights.deleteGroupFailed",
+                {},
+                "Failed to delete highlight group.",
+              ),
+            );
           }
         }
       },
@@ -1247,16 +1327,22 @@
       return;
     }
 
-    const shell = createHighlightModalShell("Create highlight group", "", {
+    const shell = createHighlightModalShell(
+      shT("profile.highlights.createTitle", {}, "Create highlight group"),
+      "",
+      {
       centerTitle: true,
       onRequestClose: (closeFn) => {
         if ((state.name || "").trim().length > 0 || state.coverObjectUrl) {
           showSystemConfirm({
-            title: "Discard changes?",
-            message:
+            title: shT("profile.highlights.discardTitle", {}, "Discard changes?"),
+            message: shT(
+              "profile.highlights.discardDescription",
+              {},
               "You have unsaved changes. Are you sure you want to discard them?",
-            confirmText: "Discard",
-            cancelText: "Cancel",
+            ),
+            confirmText: shT("common.buttons.discard", {}, "Discard"),
+            cancelText: shT("common.buttons.cancel", {}, "Cancel"),
             isDanger: true,
             onConfirm: closeFn,
           });
@@ -1309,6 +1395,7 @@
         if (!response.ok) {
           const message = await readApiErrorMessage(
             response,
+            "profile.highlights.storiesLoadFailed",
             "Failed to load stories.",
           );
           if (window.toastError) {
@@ -1342,7 +1429,13 @@
       } catch (error) {
         console.error(error);
         if (window.toastError) {
-          toastError("Failed to load stories.");
+          toastError(
+            shT(
+              "profile.highlights.storiesLoadFailed",
+              {},
+              "Failed to load stories.",
+            ),
+          );
         }
       } finally {
         state.isLoadingCandidates = false;
@@ -1356,28 +1449,48 @@
       const normalizedName = (state.name || "").trim();
       if (!normalizedName) {
         if (window.toastError) {
-          toastError("Group name is required.");
+          toastError(
+            shT(
+              "profile.highlights.groupNameRequired",
+              {},
+              "Group name is required.",
+            ),
+          );
         }
         return;
       }
       if (normalizedName.length > HIGHLIGHT_GROUP_NAME_MAX_LENGTH) {
         if (window.toastError) {
           toastError(
-            `Group name must be at most ${HIGHLIGHT_GROUP_NAME_MAX_LENGTH} characters.`,
+            shT(
+              "profile.highlights.groupNameMax",
+              { max: HIGHLIGHT_GROUP_NAME_MAX_LENGTH },
+              `Group name must be at most ${HIGHLIGHT_GROUP_NAME_MAX_LENGTH} characters.`,
+            ),
           );
         }
         return;
       }
       if (state.selectedStoryIds.size <= 0) {
         if (window.toastError) {
-          toastError("Please select at least one story.");
+          toastError(
+            shT(
+              "profile.highlights.selectAtLeastOneStory",
+              {},
+              "Please select at least one story.",
+            ),
+          );
         }
         return;
       }
       if (state.selectedStoryIds.size > HIGHLIGHT_STORY_MAX_PER_GROUP) {
         if (window.toastError) {
           toastError(
-            `Maximum ${HIGHLIGHT_STORY_MAX_PER_GROUP} stories are allowed in a group.`,
+            shT(
+              "profile.highlights.maxStories",
+              { max: HIGHLIGHT_STORY_MAX_PER_GROUP },
+              `Maximum ${HIGHLIGHT_STORY_MAX_PER_GROUP} stories are allowed in a group.`,
+            ),
           );
         }
         return;
@@ -1403,6 +1516,7 @@
         if (!response.ok) {
           const message = await readApiErrorMessage(
             response,
+            "profile.highlights.createFailed",
             "Failed to create highlight group.",
           );
           if (window.toastError) {
@@ -1412,14 +1526,26 @@
         }
 
         if (window.toastSuccess) {
-          toastSuccess("Highlight group created.");
+          toastSuccess(
+            shT(
+              "profile.highlights.createSuccess",
+              {},
+              "Highlight group created.",
+            ),
+          );
         }
         closeHighlightModal();
         loadProfileHighlightGroups({ silent: true, force: true });
       } catch (error) {
         console.error(error);
         if (window.toastError) {
-          toastError("Failed to create highlight group.");
+          toastError(
+            shT(
+              "profile.highlights.createFailed",
+              {},
+              "Failed to create highlight group.",
+            ),
+          );
         }
       } finally {
         if (typeof window.hideGlobalLoader === "function") {
@@ -1434,19 +1560,19 @@
 
     const renderStepOne = () => {
       const coverPreviewHtml = state.coverObjectUrl
-        ? `<img src="${escapeAttr(state.coverObjectUrl)}" alt="Cover preview">`
+        ? `<img src="${escapeAttr(state.coverObjectUrl)}" alt="${escapeAttr(shT("profile.highlights.coverPreviewAlt", {}, "Cover preview"))}">`
         : `<i data-lucide="image-plus"></i>`;
       const coverActionLabel = state.coverObjectUrl
-        ? "Change cover image"
-        : "Upload cover image";
+        ? shT("profile.highlights.changeCoverImage", {}, "Change cover image")
+        : shT("profile.highlights.uploadCoverImage", {}, "Upload cover image");
 
       shell.bodyEl.innerHTML = `
         <div class="profile-highlight-create-step-one">
           <div class="profile-highlight-form-group">
-            <label for="highlightGroupNameInput">Group name</label>
+            <label for="highlightGroupNameInput">${escapeHtml(shT("profile.highlights.groupNameLabel", {}, "Group name"))}</label>
             <div class="profile-highlight-input-wrapper">
-              <input id="highlightGroupNameInput" class="profile-highlight-input" type="text" maxlength="${HIGHLIGHT_GROUP_NAME_MAX_LENGTH}" placeholder="Enter group name">
-              <button type="button" class="profile-highlight-emoji-btn" id="highlightGroupNameEmojiBtn" aria-label="Add emoji">
+              <input id="highlightGroupNameInput" class="profile-highlight-input" type="text" maxlength="${HIGHLIGHT_GROUP_NAME_MAX_LENGTH}" placeholder="${escapeAttr(shT("profile.highlights.groupNamePlaceholder", {}, "Enter group name"))}">
+              <button type="button" class="profile-highlight-emoji-btn" id="highlightGroupNameEmojiBtn" aria-label="${escapeAttr(shT("profile.highlights.addEmojiAria", {}, "Add emoji"))}">
                 <i data-lucide="smile"></i>
               </button>
               <div class="profile-highlight-emoji-picker-container" id="highlightGroupNameEmojiPicker"></div>
@@ -1454,17 +1580,17 @@
             </div>
           </div>
           <div class="profile-highlight-cover-upload-shell">
-            <span class="profile-highlight-cover-upload-title">Cover image</span>
+            <span class="profile-highlight-cover-upload-title">${escapeHtml(shT("profile.highlights.coverImage", {}, "Cover image"))}</span>
             <div class="profile-highlight-cover-upload-main">
               <div class="profile-highlight-cover-circle-wrap">
-                <label class="profile-highlight-cover-circle" for="highlightCoverFileInput" aria-label="Choose cover image">
+                <label class="profile-highlight-cover-circle" for="highlightCoverFileInput" aria-label="${escapeAttr(shT("profile.highlights.chooseCoverImageAria", {}, "Choose cover image"))}">
                   ${coverPreviewHtml}
                 </label>
                 <button
                   type="button"
                   class="profile-highlight-cover-circle-remove${state.coverObjectUrl ? "" : " hidden"}"
                   data-action="remove-cover"
-                  aria-label="Remove cover"
+                  aria-label="${escapeAttr(shT("profile.highlights.removeCoverAria", {}, "Remove cover"))}"
                 >
                   <i data-lucide="x"></i>
                 </button>
@@ -1483,7 +1609,7 @@
 
       shell.footerEl.innerHTML = `
         <div class="profile-highlight-footer-right" style="width: 100%; display: flex; justify-content: flex-end;">
-          <button type="button" class="profile-highlight-btn primary" data-action="next-step">Next</button>
+          <button type="button" class="profile-highlight-btn primary" data-action="next-step">${escapeHtml(shT("profile.highlights.next", {}, "Next"))}</button>
         </div>
       `;
 
@@ -1540,7 +1666,11 @@
           if (file.size > maxSizeBytes) {
             if (window.toastError) {
               toastError(
-                `Cover image size exceeds ${APP_CONFIG.MAX_UPLOAD_SIZE_MB || 5}MB.`,
+                shT(
+                  "profile.highlights.coverImageTooLarge",
+                  { size: APP_CONFIG.MAX_UPLOAD_SIZE_MB || 5 },
+                  `Cover image size exceeds ${APP_CONFIG.MAX_UPLOAD_SIZE_MB || 5}MB.`,
+                ),
               );
             }
             fileInput.value = "";
@@ -1595,13 +1725,13 @@
             })
             .join("")
         : !state.isLoadingCandidates
-          ? '<div class="profile-highlight-candidate-empty"><i data-lucide="image-off"></i><div class="profile-highlight-candidate-empty-title">No stories available.</div><div class="profile-highlight-candidate-empty-subtitle">Create at least one story first to add to your highlights.</div></div>'
+          ? `<div class="profile-highlight-candidate-empty"><i data-lucide="image-off"></i><div class="profile-highlight-candidate-empty-title">${escapeHtml(shT("profile.highlights.noStoriesAvailable", {}, "No stories available."))}</div><div class="profile-highlight-candidate-empty-subtitle">${escapeHtml(shT("profile.highlights.createStoryFirst", {}, "Create at least one story first to add to your highlights."))}</div></div>`
           : "";
 
       shell.bodyEl.innerHTML = `
         <div class="profile-highlight-candidates-toolbar">
-          <div class="profile-highlight-selected-counter">Selected: ${state.selectedStoryIds.size}/${HIGHLIGHT_STORY_MAX_PER_GROUP}</div>
-          ${state.isLoadingCandidates ? '<span class="profile-highlight-selected-counter">loading...</span>' : ""}
+          <div class="profile-highlight-selected-counter">${escapeHtml(shT("profile.highlights.selectedCount", { selected: state.selectedStoryIds.size, max: HIGHLIGHT_STORY_MAX_PER_GROUP }, `Selected: ${state.selectedStoryIds.size}/${HIGHLIGHT_STORY_MAX_PER_GROUP}`))}</div>
+          ${state.isLoadingCandidates ? `<span class="profile-highlight-selected-counter">${escapeHtml(shT("profile.highlights.loading", {}, "loading..."))}</span>` : ""}
         </div>
         <div class="profile-highlight-candidates-scroll-area">
           <div class="profile-highlight-candidates-grid">${candidatesHtml}</div>
@@ -1644,7 +1774,7 @@
 
       shell.footerEl.innerHTML = `
         <div class="profile-highlight-footer-right" style="width: 100%; display: flex; justify-content: flex-end;">
-          <button type="button" class="profile-highlight-btn primary" data-action="submit-create-group"${state.isSubmitting ? " disabled" : ""}>${state.isSubmitting ? "Adding..." : "Add"}</button>
+          <button type="button" class="profile-highlight-btn primary" data-action="submit-create-group"${state.isSubmitting ? " disabled" : ""}>${escapeHtml(state.isSubmitting ? shT("profile.highlights.adding", {}, "Adding...") : shT("profile.highlights.add", {}, "Add"))}</button>
         </div>
       `;
 
@@ -1669,7 +1799,14 @@
           );
           const updateSelectedCounterText = () => {
             if (!selectedCounterEl) return;
-            selectedCounterEl.textContent = `Selected: ${state.selectedStoryIds.size}/${HIGHLIGHT_STORY_MAX_PER_GROUP}`;
+            selectedCounterEl.textContent = shT(
+              "profile.highlights.selectedCount",
+              {
+                selected: state.selectedStoryIds.size,
+                max: HIGHLIGHT_STORY_MAX_PER_GROUP,
+              },
+              `Selected: ${state.selectedStoryIds.size}/${HIGHLIGHT_STORY_MAX_PER_GROUP}`,
+            );
           };
 
           if (state.selectedStoryIds.has(normalizedStoryId)) {
@@ -1682,7 +1819,11 @@
           if (state.selectedStoryIds.size >= HIGHLIGHT_STORY_MAX_PER_GROUP) {
             if (window.toastError) {
               toastError(
-                `Maximum ${HIGHLIGHT_STORY_MAX_PER_GROUP} stories are allowed in a group.`,
+                shT(
+                  "profile.highlights.maxStories",
+                  { max: HIGHLIGHT_STORY_MAX_PER_GROUP },
+                  `Maximum ${HIGHLIGHT_STORY_MAX_PER_GROUP} stories are allowed in a group.`,
+                ),
               );
             }
             return;
@@ -1702,14 +1843,24 @@
           const normalizedName = (state.name || "").trim();
           if (!normalizedName) {
             if (window.toastError) {
-              toastError("Group name is required.");
+              toastError(
+                shT(
+                  "profile.highlights.groupNameRequired",
+                  {},
+                  "Group name is required.",
+                ),
+              );
             }
             return;
           }
           if (normalizedName.length > HIGHLIGHT_GROUP_NAME_MAX_LENGTH) {
             if (window.toastError) {
               toastError(
-                `Group name must be at most ${HIGHLIGHT_GROUP_NAME_MAX_LENGTH} characters.`,
+                shT(
+                  "profile.highlights.groupNameMax",
+                  { max: HIGHLIGHT_GROUP_NAME_MAX_LENGTH },
+                  `Group name must be at most ${HIGHLIGHT_GROUP_NAME_MAX_LENGTH} characters.`,
+                ),
               );
             }
             return;
@@ -1752,14 +1903,22 @@
     if ((group.storyCount || 0) >= HIGHLIGHT_STORY_MAX_PER_GROUP) {
       if (window.toastError) {
         toastError(
-          `This group already has ${HIGHLIGHT_STORY_MAX_PER_GROUP} stories.`,
+          shT(
+            "profile.highlights.groupFull",
+            { max: HIGHLIGHT_STORY_MAX_PER_GROUP },
+            `This group already has ${HIGHLIGHT_STORY_MAX_PER_GROUP} stories.`,
+          ),
         );
       }
       return;
     }
 
     const shell = createHighlightModalShell(
-      "Add stories to highlight group",
+      shT(
+        "profile.highlights.addStoriesTitle",
+        {},
+        "Add stories to highlight group",
+      ),
       "",
       { centerTitle: true },
     );
@@ -1797,6 +1956,7 @@
         if (!response.ok) {
           const message = await readApiErrorMessage(
             response,
+            "profile.highlights.storiesLoadFailed",
             "Failed to load stories.",
           );
           if (window.toastError) {
@@ -1830,7 +1990,13 @@
       } catch (error) {
         console.error(error);
         if (window.toastError) {
-          toastError("Failed to load stories.");
+          toastError(
+            shT(
+              "profile.highlights.storiesLoadFailed",
+              {},
+              "Failed to load stories.",
+            ),
+          );
         }
       } finally {
         state.isLoadingCandidates = false;
@@ -1844,7 +2010,13 @@
       const selectedCount = state.selectedStoryIds.size;
       if (selectedCount <= 0) {
         if (window.toastError) {
-          toastError("Please select at least one story.");
+          toastError(
+            shT(
+              "profile.highlights.selectAtLeastOneStory",
+              {},
+              "Please select at least one story.",
+            ),
+          );
         }
         return;
       }
@@ -1852,7 +2024,11 @@
       if (group.storyCount + selectedCount > HIGHLIGHT_STORY_MAX_PER_GROUP) {
         if (window.toastError) {
           toastError(
-            `Maximum ${HIGHLIGHT_STORY_MAX_PER_GROUP} stories are allowed in a group.`,
+            shT(
+              "profile.highlights.maxStories",
+              { max: HIGHLIGHT_STORY_MAX_PER_GROUP },
+              `Maximum ${HIGHLIGHT_STORY_MAX_PER_GROUP} stories are allowed in a group.`,
+            ),
           );
         }
         return;
@@ -1869,6 +2045,7 @@
         if (!response.ok) {
           const message = await readApiErrorMessage(
             response,
+            "profile.highlights.addStoriesFailed",
             "Failed to add stories.",
           );
           if (window.toastError) {
@@ -1878,14 +2055,26 @@
         }
 
         if (window.toastSuccess) {
-          toastSuccess("Stories added to highlight group.");
+          toastSuccess(
+            shT(
+              "profile.highlights.addStoriesSuccess",
+              {},
+              "Stories added to highlight group.",
+            ),
+          );
         }
         closeHighlightModal();
         loadProfileHighlightGroups({ silent: true, force: true });
       } catch (error) {
         console.error(error);
         if (window.toastError) {
-          toastError("Failed to add stories.");
+          toastError(
+            shT(
+              "profile.highlights.addStoriesFailed",
+              {},
+              "Failed to add stories.",
+            ),
+          );
         }
       } finally {
         state.isSubmitting = false;
@@ -1921,13 +2110,13 @@
             })
             .join("")
         : !state.isLoadingCandidates
-          ? '<div class="profile-highlight-candidate-empty"><i data-lucide="image-off"></i><div class="profile-highlight-candidate-empty-title">No stories available.</div><div class="profile-highlight-candidate-empty-subtitle">Create at least one story first to add to your highlights.</div></div>'
+          ? `<div class="profile-highlight-candidate-empty"><i data-lucide="image-off"></i><div class="profile-highlight-candidate-empty-title">${escapeHtml(shT("profile.highlights.noStoriesAvailable", {}, "No stories available."))}</div><div class="profile-highlight-candidate-empty-subtitle">${escapeHtml(shT("profile.highlights.createStoryFirst", {}, "Create at least one story first to add to your highlights."))}</div></div>`
           : "";
 
       shell.bodyEl.innerHTML = `
         <div class="profile-highlight-candidates-toolbar">
-          <div class="profile-highlight-selected-counter">Selected: ${selectedCount} | total after add: ${totalAfterAdd}/${HIGHLIGHT_STORY_MAX_PER_GROUP}</div>
-          ${state.isLoadingCandidates ? '<span class="profile-highlight-selected-counter">loading...</span>' : ""}
+          <div class="profile-highlight-selected-counter">${escapeHtml(shT("profile.highlights.selectedSummary", { selected: selectedCount, total: totalAfterAdd, max: HIGHLIGHT_STORY_MAX_PER_GROUP }, `Selected: ${selectedCount} | total after add: ${totalAfterAdd}/${HIGHLIGHT_STORY_MAX_PER_GROUP}`))}</div>
+          ${state.isLoadingCandidates ? `<span class="profile-highlight-selected-counter">${escapeHtml(shT("profile.highlights.loading", {}, "loading..."))}</span>` : ""}
         </div>
         <div class="profile-highlight-candidates-scroll-area">
           <div class="profile-highlight-candidates-grid">${candidatesHtml}</div>
@@ -1936,7 +2125,7 @@
 
       shell.footerEl.innerHTML = `
         <div class="profile-highlight-footer-right" style="width: 100%; display: flex; justify-content: flex-end;">
-          <button type="button" class="profile-highlight-btn primary" data-action="submit-add-stories"${state.isSubmitting ? " disabled" : ""}>${state.isSubmitting ? "Adding..." : "Add"}</button>
+          <button type="button" class="profile-highlight-btn primary" data-action="submit-add-stories"${state.isSubmitting ? " disabled" : ""}>${escapeHtml(state.isSubmitting ? shT("profile.highlights.adding", {}, "Adding...") : shT("profile.highlights.add", {}, "Add"))}</button>
         </div>
       `;
 
@@ -1963,7 +2152,15 @@
             if (!selectedCounterEl) return;
             const selectedCount = state.selectedStoryIds.size;
             const totalAfterAdd = group.storyCount + selectedCount;
-            selectedCounterEl.textContent = `Selected: ${selectedCount} | total after add: ${totalAfterAdd}/${HIGHLIGHT_STORY_MAX_PER_GROUP}`;
+            selectedCounterEl.textContent = shT(
+              "profile.highlights.selectedSummary",
+              {
+                selected: selectedCount,
+                total: totalAfterAdd,
+                max: HIGHLIGHT_STORY_MAX_PER_GROUP,
+              },
+              `Selected: ${selectedCount} | total after add: ${totalAfterAdd}/${HIGHLIGHT_STORY_MAX_PER_GROUP}`,
+            );
           };
 
           if (state.selectedStoryIds.has(normalizedStoryId)) {
@@ -1979,7 +2176,11 @@
           ) {
             if (window.toastError) {
               toastError(
-                `Maximum ${HIGHLIGHT_STORY_MAX_PER_GROUP} stories are allowed in a group.`,
+                shT(
+                  "profile.highlights.maxStories",
+                  { max: HIGHLIGHT_STORY_MAX_PER_GROUP },
+                  `Maximum ${HIGHLIGHT_STORY_MAX_PER_GROUP} stories are allowed in a group.`,
+                ),
               );
             }
             return;
@@ -2039,7 +2240,10 @@
   function openEditHighlightGroupModal(group) {
     if (!group?.storyHighlightGroupId || !isCurrentProfileOwner()) return;
 
-    const shell = createHighlightModalShell("Edit highlight group", "", {
+    const shell = createHighlightModalShell(
+      shT("profile.highlights.editTitle", {}, "Edit highlight group"),
+      "",
+      {
       centerTitle: true,
       onRequestClose: (closeFn) => {
         const normalizedName = (state.name || "").trim();
@@ -2051,11 +2255,14 @@
 
         if (hasChanges) {
           showSystemConfirm({
-            title: "Discard changes?",
-            message:
+            title: shT("profile.highlights.discardTitle", {}, "Discard changes?"),
+            message: shT(
+              "profile.highlights.discardDescription",
+              {},
               "You have unsaved changes. Are you sure you want to discard them?",
-            confirmText: "Discard",
-            cancelText: "Cancel",
+            ),
+            confirmText: shT("common.buttons.discard", {}, "Discard"),
+            cancelText: shT("common.buttons.cancel", {}, "Cancel"),
             isDanger: true,
             onConfirm: closeFn,
           });
@@ -2086,14 +2293,24 @@
       const normalizedName = (state.name || "").trim();
       if (!normalizedName) {
         if (window.toastError) {
-          toastError("Group name is required.");
+          toastError(
+            shT(
+              "profile.highlights.groupNameRequired",
+              {},
+              "Group name is required.",
+            ),
+          );
         }
         return;
       }
       if (normalizedName.length > HIGHLIGHT_GROUP_NAME_MAX_LENGTH) {
         if (window.toastError) {
           toastError(
-            `Group name must be at most ${HIGHLIGHT_GROUP_NAME_MAX_LENGTH} characters.`,
+            shT(
+              "profile.highlights.groupNameMax",
+              { max: HIGHLIGHT_GROUP_NAME_MAX_LENGTH },
+              `Group name must be at most ${HIGHLIGHT_GROUP_NAME_MAX_LENGTH} characters.`,
+            ),
           );
         }
         return;
@@ -2118,6 +2335,7 @@
         if (!response.ok) {
           const message = await readApiErrorMessage(
             response,
+            "profile.highlights.updateFailed",
             "Failed to update highlight group.",
           );
           if (window.toastError) {
@@ -2127,14 +2345,26 @@
         }
 
         if (window.toastSuccess) {
-          toastSuccess("Highlight group updated.");
+          toastSuccess(
+            shT(
+              "profile.highlights.updateSuccess",
+              {},
+              "Highlight group updated.",
+            ),
+          );
         }
         closeHighlightModal();
         loadProfileHighlightGroups({ silent: true, force: true });
       } catch (error) {
         console.error(error);
         if (window.toastError) {
-          toastError("Failed to update highlight group.");
+          toastError(
+            shT(
+              "profile.highlights.updateFailed",
+              {},
+              "Failed to update highlight group.",
+            ),
+          );
         }
       } finally {
         state.isSubmitting = false;
@@ -2150,24 +2380,24 @@
       }
 
       const coverPreviewHtml = state.coverObjectUrl
-        ? `<img src="${escapeAttr(state.coverObjectUrl)}" alt="Cover preview">`
+        ? `<img src="${escapeAttr(state.coverObjectUrl)}" alt="${escapeAttr(shT("profile.highlights.coverPreviewAlt", {}, "Cover preview"))}">`
         : !state.removeCover && group.coverImageUrl
-          ? `<img src="${escapeAttr(group.coverImageUrl)}" alt="Cover image">`
+          ? `<img src="${escapeAttr(group.coverImageUrl)}" alt="${escapeAttr(shT("profile.highlights.coverImageAlt", {}, "Cover image"))}">`
           : `<i data-lucide="image-plus"></i>`;
 
       const showRemoveBtn =
         state.coverObjectUrl || (!state.removeCover && group.coverImageUrl);
       const coverActionLabel = showRemoveBtn
-        ? "Change cover image"
-        : "Upload cover image";
+        ? shT("profile.highlights.changeCoverImage", {}, "Change cover image")
+        : shT("profile.highlights.uploadCoverImage", {}, "Upload cover image");
 
       shell.bodyEl.innerHTML = `
         <div class="profile-highlight-create-step-one">
           <div class="profile-highlight-form-group">
-            <label for="editHighlightGroupNameInput">Group name</label>
+            <label for="editHighlightGroupNameInput">${escapeHtml(shT("profile.highlights.groupNameLabel", {}, "Group name"))}</label>
             <div class="profile-highlight-input-wrapper">
-              <input id="editHighlightGroupNameInput" class="profile-highlight-input" type="text" maxlength="${HIGHLIGHT_GROUP_NAME_MAX_LENGTH}" placeholder="Enter group name">
-              <button type="button" class="profile-highlight-emoji-btn" id="editHighlightGroupNameEmojiBtn" aria-label="Add emoji">
+              <input id="editHighlightGroupNameInput" class="profile-highlight-input" type="text" maxlength="${HIGHLIGHT_GROUP_NAME_MAX_LENGTH}" placeholder="${escapeAttr(shT("profile.highlights.groupNamePlaceholder", {}, "Enter group name"))}">
+              <button type="button" class="profile-highlight-emoji-btn" id="editHighlightGroupNameEmojiBtn" aria-label="${escapeAttr(shT("profile.highlights.addEmojiAria", {}, "Add emoji"))}">
                 <i data-lucide="smile"></i>
               </button>
               <div class="profile-highlight-emoji-picker-container" id="editHighlightGroupNameEmojiPicker"></div>
@@ -2175,17 +2405,17 @@
             </div>
           </div>
           <div class="profile-highlight-cover-upload-shell">
-            <span class="profile-highlight-cover-upload-title">Cover image</span>
+            <span class="profile-highlight-cover-upload-title">${escapeHtml(shT("profile.highlights.coverImage", {}, "Cover image"))}</span>
             <div class="profile-highlight-cover-upload-main">
               <div class="profile-highlight-cover-circle-wrap">
-                <label class="profile-highlight-cover-circle" for="editHighlightCoverFileInput" aria-label="Choose cover image">
+                <label class="profile-highlight-cover-circle" for="editHighlightCoverFileInput" aria-label="${escapeAttr(shT("profile.highlights.chooseCoverImageAria", {}, "Choose cover image"))}">
                   ${coverPreviewHtml}
                 </label>
                 <button
                   type="button"
                   class="profile-highlight-cover-circle-remove${showRemoveBtn ? "" : " hidden"}"
                   data-action="remove-cover"
-                  aria-label="Remove cover"
+                  aria-label="${escapeAttr(shT("profile.highlights.removeCoverAria", {}, "Remove cover"))}"
                 >
                   <i data-lucide="x"></i>
                 </button>
@@ -2199,7 +2429,7 @@
 
       shell.footerEl.innerHTML = `
         <div class="profile-highlight-footer-right" style="width: 100%; display: flex; justify-content: flex-end;">
-          <button type="button" class="profile-highlight-btn primary" data-action="submit-update-group"${state.isSubmitting ? " disabled" : ""}>${state.isSubmitting ? "Saving..." : "Save"}</button>
+          <button type="button" class="profile-highlight-btn primary" data-action="submit-update-group"${state.isSubmitting ? " disabled" : ""}>${escapeHtml(state.isSubmitting ? shT("profile.highlights.saving", {}, "Saving...") : shT("profile.highlights.save", {}, "Save"))}</button>
         </div>
       `;
 
@@ -2260,7 +2490,11 @@
           if (file.size > maxSizeBytes) {
             if (window.toastError) {
               toastError(
-                `Cover image size exceeds ${APP_CONFIG.MAX_UPLOAD_SIZE_MB || 5}MB.`,
+                shT(
+                  "profile.highlights.coverImageTooLarge",
+                  { size: APP_CONFIG.MAX_UPLOAD_SIZE_MB || 5 },
+                  `Cover image size exceeds ${APP_CONFIG.MAX_UPLOAD_SIZE_MB || 5}MB.`,
+                ),
               );
             }
             fileInput.value = "";

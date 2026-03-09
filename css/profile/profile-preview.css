@@ -546,6 +546,7 @@
   border-radius: 16px;
   width: 90%;
   max-width: 400px;
+  max-height: min(80vh, 520px);
   overflow: hidden;
   transform: scale(0.9);
   transition: transform var(--transition-normal);
@@ -559,6 +560,8 @@
   padding: 32px 24px;
   text-align: center;
   border-bottom: 1px solid var(--border-secondary);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .unfollow-content h3 {
@@ -573,6 +576,7 @@
   font-size: 14px;
   margin: 0;
   line-height: 1.5;
+  white-space: normal;
 }
 
 .unfollow-actions {

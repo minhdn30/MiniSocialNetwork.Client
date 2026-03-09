@@ -9,9 +9,80 @@ const CommentModule = (function () {
   let commentHasNext = false;
   let isCommentsLoading = false;
   let currentPostOwnerId = null;
+  let commentLanguageBound = false;
 
   // Race condition prevention: Request ID validation
   let currentLoadRequestId = 0;
+
+  function cmtT(key, params = {}, fallback = "") {
+    if (window.I18n?.t) {
+      return window.I18n.t(key, params, fallback || key);
+    }
+    return fallback || key;
+  }
+
+  function cmtUiError(action, status, rawMessage, fallbackKey) {
+    if (window.UIErrors?.resolveMessage) {
+      return window.UIErrors.resolveMessage(
+        "comment",
+        action,
+        status,
+        rawMessage,
+        fallbackKey,
+        cmtT(fallbackKey, {}, fallbackKey),
+      );
+    }
+
+    const resolved = window.UIErrors?.format?.(
+      "comment",
+      action,
+      status,
+      rawMessage,
+    );
+    if (resolved?.message) return resolved.message;
+    return cmtT(fallbackKey, {}, fallbackKey);
+  }
+
+  async function cmtReadApiError(response, fallbackKey) {
+    let rawMessage = "";
+    try {
+      const data = await response.clone().json();
+      rawMessage =
+        data?.message || data?.Message || data?.title || data?.Title || "";
+    } catch (_) {}
+
+    return cmtUiError(actionForFallbackKey(fallbackKey), response?.status, rawMessage, fallbackKey);
+  }
+
+  function actionForFallbackKey(fallbackKey) {
+    if (fallbackKey === "post.comments.reactFailed") return "react";
+    if (fallbackKey === "post.comments.deleteFailed") return "delete";
+    if (fallbackKey === "post.comments.updateFailed") return "update";
+    return "create";
+  }
+
+  function bindCommentLanguageChange() {
+    if (commentLanguageBound || !window.I18n?.onChange) return;
+    commentLanguageBound = true;
+    window.I18n.onChange(() => {
+      const postId = (window.currentPostId || "").toString().trim();
+      const modal = document.getElementById("postDetailModal");
+      if (!postId || !modal || !modal.classList.contains("show")) return;
+      if (isCommentsLoading) return;
+
+      const mainInput = document.getElementById("detailCommentInput");
+      const hasMainDraft =
+        typeof mainInput?.value === "string" &&
+        mainInput.value.trim().length > 0;
+      if (hasMainDraft || hasUnsavedReply()) return;
+
+      loadComments(
+        postId,
+        1,
+        window.currentPostOwnerId || currentPostOwnerId || null,
+      );
+    });
+  }
 
   function resolveStoryRingClass(storyRingState) {
     const normalizedState = (storyRingState ?? "")
@@ -152,6 +223,9 @@ const CommentModule = (function () {
       try {
         const res = await fetch("pages/post/comment.html");
         container.innerHTML = await res.text();
+        if (window.I18n?.translateDom) {
+          window.I18n.translateDom(container);
+        }
       } catch (err) {
         console.error("Failed to load comment.html", err);
       }
@@ -162,6 +236,7 @@ const CommentModule = (function () {
    * Fetch and render comments for a post
    */
   async function loadComments(postId, page = 1, postOwnerId = null) {
+    bindCommentLanguageChange();
     if (isCommentsLoading) return;
 
     await ensureHtmlLoaded();
@@ -206,7 +281,11 @@ const CommentModule = (function () {
         PostUtils.hidePost(postId);
         return;
       }
-      if (!res.ok) throw new Error("Failed to load comments");
+      if (!res.ok) {
+        throw new Error(
+          cmtT("post.comments.loadFailed", {}, "Failed to load comments"),
+        );
+      }
 
       const data = await res.json();
       const comments = data.items || [];
@@ -410,12 +489,14 @@ const CommentModule = (function () {
         PostUtils.hidePost(window.currentPostId);
         return;
       }
-      if (!res.ok) throw new Error("Failed to react to comment");
+      if (!res.ok) throw new Error("comment-react-failed");
     } catch (err) {
       // Revert
       icon.classList.toggle("reacted");
       container.classList.toggle("active");
-      if (window.toastError) toastError("Failed to update reaction");
+      if (window.toastError) {
+        toastError(cmtUiError("react", 0, "", "post.comments.reactFailed"));
+      }
     }
   }
 
@@ -485,7 +566,7 @@ const CommentModule = (function () {
             <div class="emoji-trigger reply-emoji-trigger">
                 <i data-lucide="smile"></i>
             </div>
-            <textarea class="reply-input" placeholder="Add a reply..." autocomplete="off" rows="1" maxlength="${maxLength}"></textarea>
+            <textarea class="reply-input" placeholder="${escapeAttr(cmtT("post.comments.addReply", {}, "Add a reply..."))}" autocomplete="off" rows="1" maxlength="${maxLength}"></textarea>
             <button class="reply-post-btn" disabled>
                 <i data-lucide="arrow-up-circle"></i>
             </button>
@@ -579,7 +660,11 @@ const CommentModule = (function () {
 
     try {
       const postId = window.currentPostId;
-      if (!postId) throw new Error("Post ID not found");
+      if (!postId) {
+        throw new Error(
+          cmtUiError("create", 0, "", "post.comments.createCommentFailed"),
+        );
+      }
 
       const response = await API.Comments.create(postId, {
         content: content,
@@ -593,10 +678,20 @@ const CommentModule = (function () {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || "Failed to post reply");
+        const rawMessage = error?.message || error?.Message || error?.title || error?.Title || "";
+        throw new Error(
+          cmtUiError(
+            "create",
+            response?.status,
+            rawMessage,
+            "post.comments.createReplyFailed",
+          ),
+        );
       }
 
-      if (window.toastSuccess) toastSuccess("Reply posted!");
+      if (window.toastSuccess) {
+        toastSuccess(cmtT("post.comments.replyPosted", {}, "Reply posted!"));
+      }
 
       const result = await response.json();
       container.innerHTML = ""; // Close form
@@ -612,7 +707,12 @@ const CommentModule = (function () {
       }
     } catch (err) {
       console.error(err);
-      if (window.toastError) toastError(err.message || "Failed to post reply");
+      if (window.toastError) {
+        toastError(
+          err?.message ||
+            cmtUiError("create", 0, "", "post.comments.createReplyFailed"),
+        );
+      }
       btn.disabled = false;
       input.disabled = false;
     }
@@ -690,7 +790,9 @@ const CommentModule = (function () {
         PostUtils.hidePost(window.currentPostId);
         return;
       }
-      if (!res.ok) throw new Error("Failed to load replies");
+      if (!res.ok) {
+        throw new Error(cmtT("post.comments.loadFailed", {}, "Failed to load comments"));
+      }
 
       const data = await res.json();
       const replies = data.items || [];
@@ -741,7 +843,11 @@ const CommentModule = (function () {
         const totalCount = data.totalCount;
         const countText =
           totalCount && totalCount > 0 ? ` (${totalCount})` : "";
-        moreBtn.textContent = `View more replies${countText}`;
+        moreBtn.textContent = cmtT(
+          "post.comments.viewMoreReplies",
+          { count: countText },
+          `View more replies${countText}`,
+        );
         moreBtn.onclick = (e) => {
           e.stopPropagation();
           moreBtn.remove();
@@ -760,7 +866,11 @@ const CommentModule = (function () {
         // If we've reached the end, show a "Hide" button
         const hideBtn = document.createElement("div");
         hideBtn.className = "load-more-comments hide-replies-btn";
-        hideBtn.textContent = "Hide replies";
+        hideBtn.textContent = cmtT(
+          "post.comments.hideReplies",
+          {},
+          "Hide replies",
+        );
         hideBtn.onclick = (e) => {
           e.stopPropagation();
           handleReplyToggle(commentId, true); // Toggle closes it when open
@@ -774,7 +884,9 @@ const CommentModule = (function () {
     } catch (err) {
       console.error(err);
       repliesList.querySelector(".replies-loading")?.remove();
-      if (window.toastError) toastError("Failed to load replies");
+      if (window.toastError) {
+        toastError(cmtT("post.comments.loadFailed", {}, "Failed to load comments"));
+      }
     }
   }
 
@@ -851,7 +963,15 @@ const CommentModule = (function () {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || "Failed to post comment");
+        const rawMessage = error?.message || error?.Message || error?.title || error?.Title || "";
+        throw new Error(
+          cmtUiError(
+            "create",
+            response?.status,
+            rawMessage,
+            "post.comments.createCommentFailed",
+          ),
+        );
       }
 
       const result = await response.json();
@@ -871,14 +991,23 @@ const CommentModule = (function () {
 
       // Show success toast
       if (window.toastSuccess) {
-        window.toastSuccess("Comment posted successfully!");
+        window.toastSuccess(
+          cmtT(
+            "post.comments.commentPosted",
+            {},
+            "Comment posted successfully!",
+          ),
+        );
       }
 
       return true;
     } catch (error) {
       console.error("Error posting comment:", error);
       if (window.toastError) {
-        window.toastError(error.message || "Failed to post comment");
+        window.toastError(
+          error?.message ||
+            cmtUiError("create", 0, "", "post.comments.createCommentFailed"),
+        );
       }
       return false;
     }
@@ -968,8 +1097,17 @@ const CommentModule = (function () {
           if (!editedEl) {
             footer.insertAdjacentHTML("beforeend", getEditedHtml(comment));
           } else {
+            editedEl.textContent = `• ${cmtT(
+              "post.comments.editedLabel",
+              {},
+              "edited",
+            )}`;
             editedEl.title =
-              "Edited at " + PostUtils.formatFullDateTime(comment.updatedAt);
+              cmtT(
+                "post.comments.editedAt",
+                { time: PostUtils.formatFullDateTime(comment.updatedAt) },
+                `Edited at ${PostUtils.formatFullDateTime(comment.updatedAt)}`,
+              );
           }
         }
       }
@@ -999,7 +1137,7 @@ const CommentModule = (function () {
     if (canDelete) {
       optionsHTML += `
           <button class="post-option post-option-danger" onclick="CommentModule.deleteComment('${commentId}', ${isReply})">
-            <i data-lucide="trash-2"></i><span>Delete</span>
+            <i data-lucide="trash-2"></i><span>${escapeHtml(cmtT("common.buttons.delete", {}, "Delete"))}</span>
           </button>
         `;
     }
@@ -1007,7 +1145,7 @@ const CommentModule = (function () {
     if (canEdit) {
       optionsHTML += `
           <button class="post-option" onclick="CommentModule.editComment('${commentId}', ${isReply})">
-            <i data-lucide="edit"></i><span>Edit</span>
+            <i data-lucide="edit"></i><span>${escapeHtml(cmtT("common.buttons.edit", {}, "Edit"))}</span>
           </button>
         `;
     }
@@ -1016,14 +1154,14 @@ const CommentModule = (function () {
     if (!canEdit) {
       optionsHTML += `
         <button class="post-option post-option-danger" onclick="CommentModule.reportComment('${commentId}', ${isReply})">
-          <i data-lucide="flag"></i><span>Report</span>
+          <i data-lucide="flag"></i><span>${escapeHtml(cmtT("common.buttons.report", {}, "Report"))}</span>
         </button>
       `;
     }
 
     optionsHTML += `
       <button class="post-option post-option-cancel" onclick="document.getElementById('commentOptionsOverlay').remove()">
-        Cancel
+        ${escapeHtml(cmtT("common.buttons.cancel", {}, "Cancel"))}
       </button>
     `;
 
@@ -1057,12 +1195,12 @@ const CommentModule = (function () {
 
     popup.innerHTML = `
           <div class="unfollow-content">
-              <h3>Delete this comment?</h3>
-              <p>This action cannot be undone.</p>
+              <h3>${escapeHtml(cmtT("post.comments.deleteTitle", {}, "Delete this comment?"))}</h3>
+              <p>${escapeHtml(cmtT("post.comments.deleteDescription", {}, "This action cannot be undone."))}</p>
           </div>
           <div class="unfollow-actions">
-              <button class="unfollow-btn unfollow-confirm" id="confirmDeleteBtn">Delete</button>
-              <button class="unfollow-btn unfollow-cancel" id="cancelDeleteBtn">Cancel</button>
+              <button class="unfollow-btn unfollow-confirm" id="confirmDeleteBtn">${escapeHtml(cmtT("common.buttons.delete", {}, "Delete"))}</button>
+              <button class="unfollow-btn unfollow-cancel" id="cancelDeleteBtn">${escapeHtml(cmtT("common.buttons.cancel", {}, "Cancel"))}</button>
           </div>
       `;
 
@@ -1083,7 +1221,7 @@ const CommentModule = (function () {
       // Disable button to prevent double-click
       const btn = document.getElementById("confirmDeleteBtn");
       btn.disabled = true;
-      btn.textContent = "Deleting...";
+      btn.textContent = cmtT("common.buttons.deleting", {}, "Deleting...");
 
       try {
         const res = await API.Comments.delete(commentId);
@@ -1092,10 +1230,20 @@ const CommentModule = (function () {
           closePopup();
           return;
         }
-        if (!res.ok) throw new Error("Failed to delete comment");
+        if (!res.ok) {
+          const errorMessage = await cmtReadApiError(
+            res,
+            "post.comments.deleteFailed",
+          );
+          throw new Error(errorMessage);
+        }
 
         // Success feedback
-        if (window.toastSuccess) toastSuccess("Comment deleted!");
+        if (window.toastSuccess) {
+          toastSuccess(
+            cmtT("post.comments.deleteSuccess", {}, "Comment deleted!"),
+          );
+        }
 
         // Remove from DOM immediately
         const selector = isReply
@@ -1110,7 +1258,12 @@ const CommentModule = (function () {
         closePopup();
       } catch (err) {
         console.error(err);
-        if (window.toastError) toastError("Failed to delete comment");
+        if (window.toastError) {
+          toastError(
+            err?.message ||
+              cmtUiError("delete", 0, "", "post.comments.deleteFailed"),
+          );
+        }
         closePopup();
       }
     };
@@ -1168,12 +1321,12 @@ const CommentModule = (function () {
           </div>
           <textarea class="reply-input edit-input" rows="1">${originalContent}</textarea>
           
-          <button class="edit-cancel-btn btn-cancel-edit" title="Cancel">
+          <button class="edit-cancel-btn btn-cancel-edit" title="${escapeAttr(cmtT("common.buttons.cancel", {}, "Cancel"))}">
                <i data-lucide="x"></i>
           </button>
 
           <div class="edit-actions">
-            <button class="edit-save-btn btn-save-edit" disabled title="Save">
+            <button class="edit-save-btn btn-save-edit" disabled title="${escapeAttr(cmtT("common.buttons.save", {}, "Save"))}">
                 <i data-lucide="check-circle"></i>
             </button>
           </div>
@@ -1275,7 +1428,13 @@ const CommentModule = (function () {
           PostUtils.hidePost(window.currentPostId);
           return;
         }
-        if (!res.ok) throw new Error("Failed to update comment");
+        if (!res.ok) {
+          const errorMessage = await cmtReadApiError(
+            res,
+            "post.comments.updateFailed",
+          );
+          throw new Error(errorMessage);
+        }
 
         const updatedComment = await res.json();
 
@@ -1286,10 +1445,25 @@ const CommentModule = (function () {
         // Then update with new content (uses inject logic for consistency)
         injectUpdatedComment(updatedComment, true);
 
-        if (window.toastSuccess) toastSuccess(isReply ? "Reply updated!" : "Comment updated!");
+        if (window.toastSuccess) {
+          toastSuccess(
+            cmtT(
+              isReply
+                ? "post.comments.updateSuccessReply"
+                : "post.comments.updateSuccessComment",
+              {},
+              isReply ? "Reply updated!" : "Comment updated!",
+            ),
+          );
+        }
       } catch (err) {
         console.error(err);
-        if (window.toastError) toastError("Failed to update");
+        if (window.toastError) {
+          toastError(
+            err?.message ||
+              cmtUiError("update", 0, "", "post.comments.updateFailed"),
+          );
+        }
         saveBtn.disabled = false;
         input.disabled = false;
       }
@@ -1301,7 +1475,15 @@ const CommentModule = (function () {
   function reportComment(commentId, isReply) {
     document.getElementById("commentOptionsOverlay")?.remove();
     console.log("Report comment:", commentId, "isReply:", isReply);
-    if (window.toastInfo) toastInfo("Thank you for reporting this comment");
+    if (window.toastInfo) {
+      toastInfo(
+        cmtT(
+          "post.comments.reportSuccess",
+          {},
+          "Thank you for reporting this comment.",
+        ),
+      );
+    }
   }
 
   /**
@@ -1311,7 +1493,13 @@ const CommentModule = (function () {
     if (!comment.updatedAt || comment.updatedAt === comment.createdAt)
       return "";
     const fullTime = PostUtils.formatFullDateTime(comment.updatedAt);
-    return `<span class="comment-edited" title="Edited at ${fullTime}">• edited</span>`;
+    const editedAtTitle = cmtT(
+      "post.comments.editedAt",
+      { time: fullTime },
+      `Edited at ${fullTime}`,
+    );
+    const editedLabel = cmtT("post.comments.editedLabel", {}, "edited");
+    return `<span class="comment-edited" title="${escapeAttr(editedAtTitle)}">• ${escapeHtml(editedLabel)}</span>`;
   }
 
   /**
@@ -1385,7 +1573,15 @@ const CommentModule = (function () {
       window.showReportReasons(commentId, "comment");
     } else {
       console.error("Report module not found");
-      if (window.toastInfo) toastInfo("Report feature unavailable");
+      if (window.toastInfo) {
+        toastInfo(
+          cmtT(
+            "post.comments.reportUnavailable",
+            {},
+            "Report feature unavailable.",
+          ),
+        );
+      }
     }
   }
 
@@ -1402,7 +1598,13 @@ const CommentModule = (function () {
       const replyInput = el.querySelector(".reply-input");
       if (replyInput && replyInput.value.trim().length > 0) {
         if (window.toastInfo)
-          toastInfo("The comment you were replying to has been deleted.");
+          toastInfo(
+            cmtT(
+              "post.comments.deletedWhileReplying",
+              {},
+              "The comment you were replying to has been deleted.",
+            ),
+          );
       }
 
       // If it was a reply, check if parent list is now empty or only has the 'Hide' button

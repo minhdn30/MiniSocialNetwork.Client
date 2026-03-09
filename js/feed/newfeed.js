@@ -9,6 +9,8 @@
   let cursorPostId = null;
 
   const LIMIT = APP_CONFIG.NEWSFEED_LIMIT;
+  const feedT = (key, params = {}, fallback = "") =>
+    window.I18n?.t ? window.I18n.t(key, params, fallback) : fallback;
 
   function initFeed(shouldReload = true) {
     feedContainer = document.getElementById("feed");
@@ -165,11 +167,11 @@
                 ? isAuthorRequested
                   ? `<button class="follow-btn requested" onclick="FollowModule.showUnfollowConfirm('${post.author.accountId}', this)">
                     <i data-lucide="clock-3"></i>
-                    <span>Request Sent</span>
+                    <span data-i18n="common.buttons.requestSent">${feedT("common.buttons.requestSent", {}, "Request Sent")}</span>
                    </button>`
                   : `<button class="follow-btn" onclick="FollowModule.followUser('${post.author.accountId}', this)">
                     <i data-lucide="user-plus"></i>
-                    <span>Follow</span>
+                    <span data-i18n="common.buttons.follow">${feedT("common.buttons.follow", {}, "Follow")}</span>
                    </button>`
                 : ""
             }
@@ -296,6 +298,13 @@
   function renderMedias(medias, postId, postCode) {
     if (!medias || medias.length === 0) return "";
 
+    const previousMediaAria = escapeHtml(
+      feedT("post.feed.previousMediaAria", {}, "Previous media"),
+    );
+    const nextMediaAria = escapeHtml(
+      feedT("post.feed.nextMediaAria", {}, "Next media"),
+    );
+
     return `
       <div class="post-media">
         <div class="media-slider">
@@ -310,10 +319,10 @@
               })
               .join("")}
           </div>
-          <button class="nav prev" aria-label="Previous media">
+          <button class="nav prev" aria-label="${previousMediaAria}">
             <i data-lucide="chevron-left"></i>
           </button>
-          <button class="nav next" aria-label="Next media">
+          <button class="nav next" aria-label="${nextMediaAria}">
             <i data-lucide="chevron-right"></i>
           </button>
         </div>
@@ -472,7 +481,8 @@
     try {
       const res = await API.Posts.toggleReact(postId);
       if (res.status === 403 || res.status === 400) {
-        if (window.toastInfo) toastInfo("This post is no longer available.");
+        if (window.toastInfo)
+          toastInfo(feedT("post.options.postUnavailable"));
         PostUtils.hidePost(postId);
         return;
       }

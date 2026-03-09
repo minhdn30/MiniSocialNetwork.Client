@@ -38,6 +38,13 @@
   ]);
   let activeTab = PROFILE_POSTS_TAB;
 
+  function profileT(key, params = {}, fallback = "") {
+    if (window.I18n?.t) {
+      return window.I18n.t(key, params, fallback);
+    }
+    return fallback;
+  }
+
   const POSTS_PAGE_SIZE = APP_CONFIG.PROFILE_POSTS_PAGE_SIZE;
   const TAGGED_POSTS_PAGE_SIZE =
     APP_CONFIG.PROFILE_TAGGED_POSTS_PAGE_SIZE ||
@@ -346,8 +353,12 @@
 
     avatarWrapper.classList.remove("profile-avatar-wrapper--story-ring");
 
+    const avatarAlt = escapeAttr(
+      profileT("common.labels.avatar", {}, "Avatar"),
+    );
+
     if (!ringClass) {
-      avatarWrapper.innerHTML = `<img id="profile-avatar" src="${safeAvatarUrl}" alt="Profile Picture">`;
+      avatarWrapper.innerHTML = `<img id="profile-avatar" src="${safeAvatarUrl}" alt="${avatarAlt}">`;
       return;
     }
 
@@ -357,7 +368,7 @@
     avatarWrapper.classList.add("profile-avatar-wrapper--story-ring");
     avatarWrapper.innerHTML = `
       <span class="post-avatar-ring ${ringClass} profile-story-ring"${storyAuthorAttr}>
-        <img id="profile-avatar" class="post-avatar" src="${safeAvatarUrl}" alt="Profile Picture">
+        <img id="profile-avatar" class="post-avatar" src="${safeAvatarUrl}" alt="${avatarAlt}">
       </span>
     `;
   }
@@ -979,7 +990,13 @@
 
     if (avatarWrapper)
       renderProfileAvatar(avatarWrapper, APP_CONFIG.DEFAULT_AVATAR, null);
-    if (fullNameLabel) fullNameLabel.textContent = "Loading...";
+    if (fullNameLabel) {
+      fullNameLabel.textContent = profileT(
+        "common.loading.generic",
+        {},
+        "Loading...",
+      );
+    }
     if (bioText) bioText.textContent = "";
     const bioSection = document.querySelector(".profile-bio-section");
     const statsEl = document.querySelector(".profile-stats");
@@ -1136,7 +1153,11 @@
           }
           return;
         }
-        if (window.toastError) toastError("Failed to load profile details.");
+        if (window.toastError) {
+          toastError(
+            profileT("profile.page.loadProfileFailed"),
+          );
+        }
         return;
       }
 
@@ -1254,7 +1275,11 @@
       if (!isSilent) {
         const contentEl = document.getElementById("profile-content");
         if (contentEl)
-          contentEl.innerHTML = `<div class="error-message">Failed to load profile. <button onclick="loadProfileData()">Retry</button></div>`;
+          contentEl.innerHTML = `<div class="error-message">${profileT(
+            "profile.page.loadProfileFailed",
+          )} <button onclick="loadProfileData()">${profileT(
+            "common.buttons.retry",
+          )}</button></div>`;
       }
     } finally {
       if (!startedPostLoad) {
@@ -1359,10 +1384,10 @@
             ? "clock-3"
             : "user-plus";
         const followText = relation.isFollowing
-          ? "Following"
+          ? profileT("common.buttons.following")
           : relation.isRequested
-            ? "Request Sent"
-            : "Follow";
+            ? profileT("common.buttons.requestSent")
+            : profileT("common.buttons.follow");
 
         followBtn.className = `profile-btn ${followBtnClass}`;
         followBtn.innerHTML = `<i data-lucide="${followIcon}"></i><span>${followText}</span>`;
@@ -1577,25 +1602,25 @@
         actionBtn.innerHTML = `
                     <button class="profile-btn profile-btn-edit" onclick="openEditProfile()">
                         <i data-lucide="edit-3"></i>
-                        <span>Edit Profile</span>
+                        <span>${profileT("profile.edit.title")}</span>
                     </button>
                     <button class="profile-btn profile-btn-secondary" id="profile-settings-btn" onclick="window.location.hash='${mySettingsHash}'">
                         <i data-lucide="settings"></i>
-                        <span>Settings</span>
+                        <span>${profileT("common.navigation.settings")}</span>
                     </button>
                     <div class="profile-more-menu-wrap" id="profile-more-menu-wrap">
                         <button class="profile-btn profile-btn-more" id="profile-more-menu-trigger" onclick="openProfileMoreMenu(event)">
                             <i data-lucide="more-horizontal"></i>
-                            <span>More</span>
+                            <span>${profileT("common.navigation.more")}</span>
                         </button>
                         <div class="profile-more-menu" id="profile-more-menu" hidden>
                             <button type="button" onclick="openSentFollowRequestsFromProfileMenu(event)">
                                 <i data-lucide="clock-3"></i>
-                                <span>Pending requests</span>
+                                <span>${profileT("profile.more.pendingRequests")}</span>
                             </button>
                             <button type="button" onclick="openBlockedAccountsFromProfileMenu(event)">
                                 <i data-lucide="user-x"></i>
-                                <span>Blocked users</span>
+                                <span>${profileT("profile.more.blockedUsers")}</span>
                             </button>
                         </div>
                     </div>
@@ -1612,10 +1637,10 @@
             ? "clock-3"
             : "user-plus";
         const followText = followRelation.isFollowing
-          ? "Following"
+          ? profileT("common.buttons.following")
           : followRelation.isRequested
-            ? "Request Sent"
-            : "Follow";
+            ? profileT("common.buttons.requestSent")
+            : profileT("common.buttons.follow");
 
         actionBtn.innerHTML = `
                     <button class="profile-btn ${followBtnClass}" onclick="toggleFollowProfile('${profileAccountId}')">
@@ -1624,21 +1649,21 @@
                     </button>
                     <button class="profile-btn profile-btn-message" onclick="openMessage('${profileAccountId}')">
                         <i data-lucide="send"></i>
-                        <span>Message</span>
+                        <span>${profileT("profile.page.messageAction")}</span>
                     </button>
                     <div class="profile-more-menu-wrap" id="profile-more-menu-wrap">
                         <button class="profile-btn profile-btn-more" id="profile-more-menu-trigger" onclick="openProfileMoreMenu(event)">
                             <i data-lucide="more-horizontal"></i>
-                            <span>More</span>
+                            <span>${profileT("common.navigation.more")}</span>
                         </button>
                         <div class="profile-more-menu" id="profile-more-menu" hidden>
                             <button type="button" class="danger" onclick="reportProfileFromMoreMenu(event)">
                                 <i data-lucide="flag"></i>
-                                <span>Report</span>
+                                <span>${profileT("profile.more.report")}</span>
                             </button>
                             <button type="button" class="danger" onclick="blockProfileFromMoreMenu(event)">
                                 <i data-lucide="ban"></i>
-                                <span>Block</span>
+                                <span>${profileT("profile.more.block")}</span>
                             </button>
                         </div>
                     </div>
@@ -1832,16 +1857,36 @@
     if (!tabsContainer) return;
 
     let tabs = [
-      { id: PROFILE_POSTS_TAB, label: "Posts", icon: "grid" },
-      { id: PROFILE_REELS_TAB, label: "Reels", icon: "clapperboard" },
-      { id: PROFILE_TAGGED_TAB, label: "Tagged", icon: "user-square" },
+      {
+        id: PROFILE_POSTS_TAB,
+        label: profileT("profile.stats.posts", {}, "Posts"),
+        icon: "grid",
+      },
+      {
+        id: PROFILE_REELS_TAB,
+        label: profileT("common.navigation.reels", {}, "Reels"),
+        icon: "clapperboard",
+      },
+      {
+        id: PROFILE_TAGGED_TAB,
+        label: profileT("profile.tabs.tagged", {}, "Tagged"),
+        icon: "user-square",
+      },
     ];
 
     if (isOwner) {
-      tabs.push({ id: PROFILE_SAVED_TAB, label: "Saved", icon: "bookmark" });
+      tabs.push({
+        id: PROFILE_SAVED_TAB,
+        label: profileT("profile.tabs.saved", {}, "Saved"),
+        icon: "bookmark",
+      });
       tabs.push({
         id: PROFILE_ARCHIVED_STORIES_TAB,
-        label: "Archived Stories",
+        label: profileT(
+          "profile.tabs.archivedStories",
+          {},
+          "Archived Stories",
+        ),
         icon: "archive",
       });
     }
@@ -2159,7 +2204,13 @@
       return items;
     } catch (err) {
       console.error(err);
-      if (window.toastError) toastError("Failed to load tagged posts.");
+      if (window.toastError) {
+        toastError(
+          profileT(
+            "profile.page.loadTaggedFailed",
+          ),
+        );
+      }
       return [];
     } finally {
       if (fetchForId === currentProfileId && fetchForTab === activeTab) {
@@ -2180,54 +2231,90 @@
     const ownerConfig = {
       [PROFILE_POSTS_TAB]: {
         icon: "grid",
-        title: "No posts yet",
-        desc: "When you share photos, they will appear on your profile.",
+        title: profileT(
+          "profile.page.placeholders.owner.posts.title",
+        ),
+        desc: profileT(
+          "profile.page.placeholders.owner.posts.desc",
+        ),
       },
       [PROFILE_TAGGED_TAB]: {
         icon: "user-square",
-        title: "No tagged posts",
-        desc: "When people tag you in posts, they'll appear here.",
+        title: profileT(
+          "profile.page.placeholders.owner.tagged.title",
+        ),
+        desc: profileT(
+          "profile.page.placeholders.owner.tagged.desc",
+        ),
       },
       [PROFILE_SAVED_TAB]: {
         icon: "bookmark",
-        title: "No saved posts yet",
-        desc: "Posts you save will appear here.",
+        title: profileT(
+          "profile.page.placeholders.owner.saved.title",
+        ),
+        desc: profileT(
+          "profile.page.placeholders.owner.saved.desc",
+        ),
       },
       [PROFILE_ARCHIVED_STORIES_TAB]: {
         icon: "archive",
-        title: "No archived stories",
-        desc: "Your expired stories will appear here.",
+        title: profileT(
+          "profile.page.placeholders.owner.archivedStories.title",
+        ),
+        desc: profileT(
+          "profile.page.placeholders.owner.archivedStories.desc",
+        ),
       },
       [PROFILE_REELS_TAB]: {
         icon: "clapperboard",
-        title: "Reels coming soon",
-        desc: "We're working on reels feature. It will be available in a future update.",
+        title: profileT(
+          "profile.page.placeholders.owner.reels.title",
+        ),
+        desc: profileT(
+          "profile.page.placeholders.owner.reels.desc",
+        ),
       },
     };
 
     const visitorConfig = {
       [PROFILE_POSTS_TAB]: {
         icon: "grid",
-        title: "No posts yet",
-        desc: "This user hasn't shared any posts.",
+        title: profileT(
+          "profile.page.placeholders.visitor.posts.title",
+        ),
+        desc: profileT(
+          "profile.page.placeholders.visitor.posts.desc",
+        ),
       },
       [PROFILE_TAGGED_TAB]: {
         icon: "user-square",
-        title: "No tagged posts",
-        desc: "No posts with this user tagged.",
+        title: profileT(
+          "profile.page.placeholders.visitor.tagged.title",
+        ),
+        desc: profileT(
+          "profile.page.placeholders.visitor.tagged.desc",
+        ),
       },
       [PROFILE_REELS_TAB]: {
         icon: "clapperboard",
-        title: "Reels coming soon",
-        desc: "We're working on reels feature. It will be available in a future update.",
+        title: profileT(
+          "profile.page.placeholders.visitor.reels.title",
+        ),
+        desc: profileT(
+          "profile.page.placeholders.visitor.reels.desc",
+        ),
       },
     };
 
     const configMap = isOwner ? ownerConfig : visitorConfig;
     const config = configMap[tabName] || {
       icon: "info",
-      title: "Nothing here yet",
-      desc: "Content will appear here when available.",
+      title: profileT(
+        "profile.page.placeholders.generic.title",
+      ),
+      desc: profileT(
+        "profile.page.placeholders.generic.desc",
+      ),
     };
 
     grid.classList.add("placeholder-mode");
@@ -2334,7 +2421,13 @@
       return items;
     } catch (err) {
       console.error(err);
-      if (window.toastError) toastError("Failed to load saved posts.");
+      if (window.toastError) {
+        toastError(
+          profileT(
+            "profile.page.loadSavedFailed",
+          ),
+        );
+      }
       return [];
     } finally {
       if (fetchForId === currentProfileId && fetchForTab === activeTab) {
@@ -2420,7 +2513,13 @@
       return appendedItems;
     } catch (err) {
       console.error(err);
-      if (window.toastError) toastError("Failed to load archived stories.");
+      if (window.toastError) {
+        toastError(
+          profileT(
+            "profile.page.loadArchivedStoriesFailed",
+          ),
+        );
+      }
       return [];
     } finally {
       if (fetchForId === currentProfileId && fetchForTab === activeTab) {
@@ -2781,8 +2880,9 @@
         : window.APP_CONFIG?.DEFAULT_POST_IMAGE || "";
     const safePrimaryMedia = escapeAttr(primaryMedia);
 
+    const postImageAlt = escapeAttr(profileT("common.labels.post", {}, "post"));
     item.innerHTML = `
-            <img class="img-loaded" src="${safePrimaryMedia}" alt="post">
+            <img class="img-loaded" src="${safePrimaryMedia}" alt="${postImageAlt}">
             ${isMulti ? '<div class="profile-multi-media-icon"><i data-lucide="layers"></i></div>' : ""}
             <div class="profile-grid-overlay">
                 <div class="profile-overlay-stat">
@@ -3176,9 +3276,27 @@
   let currentAddressPrivacy = 0;
 
   const PRIVACY_CONFIG = {
-    0: { icon: "globe", next: 1, class: "public", title: "Public" },
-    1: { icon: "users", next: 2, class: "follow", title: "Follow Only" },
-    2: { icon: "lock", next: 0, class: "private", title: "Private" },
+    0: {
+      icon: "globe",
+      next: 1,
+      class: "public",
+      titleKey: "common.labels.public",
+      fallbackTitle: "Public",
+    },
+    1: {
+      icon: "users",
+      next: 2,
+      class: "follow",
+      titleKey: "common.labels.followersOnly",
+      fallbackTitle: "Followers Only",
+    },
+    2: {
+      icon: "lock",
+      next: 0,
+      class: "private",
+      titleKey: "common.labels.private",
+      fallbackTitle: "Private",
+    },
   };
 
   function updatePrivacyUI(type) {
@@ -3190,7 +3308,16 @@
     const config = PRIVACY_CONFIG[value];
     btn.innerHTML = `<i data-lucide="${config.icon}"></i>`;
     btn.className = `privacy-toggle-btn ${config.class}`;
-    btn.title = `Current: ${config.title} (Click to change)`;
+    const titleText = profileT(
+      config.titleKey,
+      {},
+      config.fallbackTitle,
+    );
+    btn.title = profileT(
+      "profile.edit.privacy.current",
+      { title: titleText },
+      `Current: ${titleText} (Click to change)`,
+    );
 
     if (window.lucide) lucide.createIcons();
   }
@@ -3320,7 +3447,13 @@
           const maxSize =
             (window.APP_CONFIG.MAX_UPLOAD_SIZE_MB || 5) * 1024 * 1024;
           if (file.size > maxSize) {
-            if (window.toastError) toastError("File size exceeds limit.");
+            if (window.toastError) {
+              toastError(
+                profileT(
+                  "profile.page.fileSizeExceeded",
+                ),
+              );
+            }
             avatarInput.value = "";
             return;
           }
@@ -3360,8 +3493,13 @@
           const maxSize =
             (window.APP_CONFIG.MAX_UPLOAD_SIZE_MB || 5) * 1024 * 1024;
           if (file.size > maxSize) {
-            if (window.toastError)
-              toastError("Cover image size exceeds limit.");
+            if (window.toastError) {
+              toastError(
+                profileT(
+                  "profile.page.coverImageSizeExceeded",
+                ),
+              );
+            }
             coverInput.value = "";
             return;
           }
@@ -3457,15 +3595,27 @@
 
     const popup = document.createElement("div");
     popup.className = "unfollow-popup"; // Reuse popup style
+    const discardTitle = profileT(
+      "profile.settings.discardChangesTitle",
+      {},
+      "Discard changes?",
+    );
+    const discardDescription = profileT(
+      "profile.settings.discardChangesDescription",
+      {},
+      "You have unsaved changes. Are you sure you want to discard them?",
+    );
+    const discardText = profileT("common.buttons.discard", {}, "Discard");
+    const keepText = profileT("common.buttons.cancel", {}, "Cancel");
 
     popup.innerHTML = `
             <div class="unfollow-content">
-                <h3>Discard changes?</h3>
-                <p>You have unsaved changes. Are you sure you want to discard them?</p>
+                <h3>${escapeHtml(discardTitle)}</h3>
+                <p>${escapeHtml(discardDescription)}</p>
             </div>
             <div class="unfollow-actions">
-                <button class="unfollow-btn unfollow-confirm" data-action="discard">Discard</button>
-                <button class="unfollow-btn unfollow-cancel" data-action="keep">Cancel</button>
+                <button class="unfollow-btn unfollow-confirm" data-action="discard">${escapeHtml(discardText)}</button>
+                <button class="unfollow-btn unfollow-cancel" data-action="keep">${escapeHtml(keepText)}</button>
             </div>
         `;
 
@@ -3539,6 +3689,10 @@
     currentPhonePrivacy = originalProfileData.phonePrivacy;
     currentAddressPrivacy = originalProfileData.addressPrivacy;
 
+    if (window.I18n?.translateDom) {
+      window.I18n.translateDom(modal);
+    }
+
     updatePrivacyUI("phone");
     updatePrivacyUI("address");
 
@@ -3593,6 +3747,9 @@
     }
 
     modal.style.display = "flex";
+    if (window.I18n?.translateDom) {
+      window.I18n.translateDom(modal);
+    }
 
     if (!bioEmojiPickerInstance) {
       setupEditProfileListeners();
@@ -3643,14 +3800,23 @@
 
     // Validation
     if (!fullName) {
-      if (window.toastError) toastError("Full name is required");
+      if (window.toastError) {
+        toastError(
+          profileT(
+            "profile.page.validation.fullNameRequired",
+          ),
+        );
+      }
       return;
     }
 
     if (fullName.length > window.APP_CONFIG.MAX_PROFILE_FULLNAME_LENGTH) {
       if (window.toastError)
         toastError(
-          `Full name must be less than ${window.APP_CONFIG.MAX_PROFILE_FULLNAME_LENGTH} characters`,
+          profileT(
+            "profile.page.validation.fullNameMax",
+            { max: window.APP_CONFIG.MAX_PROFILE_FULLNAME_LENGTH },
+          ),
         );
       return;
     }
@@ -3658,22 +3824,33 @@
     if (bio.length > window.APP_CONFIG.MAX_PROFILE_BIO_LENGTH) {
       if (window.toastError)
         toastError(
-          `Bio must be less than ${window.APP_CONFIG.MAX_PROFILE_BIO_LENGTH} characters`,
+          profileT(
+            "profile.page.validation.bioMax",
+            { max: window.APP_CONFIG.MAX_PROFILE_BIO_LENGTH },
+          ),
         );
       return;
     }
 
     // Phone validation - must be valid format if provided
     if (phone && !/^[\d\+\s\-]+$/.test(phone)) {
-      if (window.toastError)
-        toastError("Phone number contains invalid characters");
+      if (window.toastError) {
+        toastError(
+          profileT(
+            "profile.page.validation.phoneInvalid",
+          ),
+        );
+      }
       return;
     }
 
     if (phone.length > window.APP_CONFIG.MAX_PROFILE_PHONE_LENGTH) {
       if (window.toastError)
         toastError(
-          `Phone number must be less than ${window.APP_CONFIG.MAX_PROFILE_PHONE_LENGTH} characters`,
+          profileT(
+            "profile.page.validation.phoneMax",
+            { max: window.APP_CONFIG.MAX_PROFILE_PHONE_LENGTH },
+          ),
         );
       return;
     }
@@ -3681,14 +3858,16 @@
     if (address.length > window.APP_CONFIG.MAX_PROFILE_ADDRESS_LENGTH) {
       if (window.toastError)
         toastError(
-          `Address must be less than ${window.APP_CONFIG.MAX_PROFILE_ADDRESS_LENGTH} characters`,
+          profileT(
+            "profile.page.validation.addressMax",
+            { max: window.APP_CONFIG.MAX_PROFILE_ADDRESS_LENGTH },
+          ),
         );
       return;
     }
 
     const originalContent = btn.innerHTML;
-    btn.innerHTML =
-      '<span class="spinner spinner-tiny" aria-hidden="true"></span><span>Saving...</span>';
+    btn.innerHTML = `<span class="spinner spinner-tiny" aria-hidden="true"></span><span>${profileT("profile.page.saving")}</span>`;
     btn.disabled = true;
 
     try {
@@ -3717,16 +3896,34 @@
 
       const res = await API.Accounts.updateProfile(formData);
       if (res.ok) {
-        if (window.toastSuccess) toastSuccess("Profile updated successfully!");
+        if (window.toastSuccess) {
+          toastSuccess(
+            profileT(
+              "profile.page.updateSuccess",
+            ),
+          );
+        }
         closeEditProfile();
         loadProfileData();
       } else {
         await res.json().catch(() => null);
-        if (window.toastError) toastError("Failed to update profile.");
+        if (window.toastError) {
+          toastError(
+            profileT(
+              "profile.page.updateFailed",
+            ),
+          );
+        }
       }
     } catch (err) {
       console.error(err);
-      if (window.toastError) toastError("An error occurred while saving.");
+      if (window.toastError) {
+        toastError(
+            profileT(
+              "profile.page.saveError",
+            ),
+        );
+      }
     } finally {
       btn.innerHTML = originalContent;
       if (window.lucide) lucide.createIcons();
@@ -3758,7 +3955,13 @@
 
   global.toggleFollowAction = async function (accountId, btn, isFollowed) {
     if (!window.FollowModule) {
-      if (window.toastError) toastError("Follow module not loaded.");
+      if (window.toastError) {
+        toastError(
+          profileT(
+            "profile.page.followModuleUnavailable",
+          ),
+        );
+      }
       return;
     }
 
@@ -3773,7 +3976,13 @@
     if (window.ChatWindow) {
       ChatWindow.openByAccountId(accountId);
     } else {
-      if (window.toastInfo) toastInfo("Messaging feature is loading...");
+      if (window.toastInfo) {
+        toastInfo(
+          profileT(
+            "profile.page.messagingLoading",
+          ),
+        );
+      }
     }
   };
 
@@ -3842,7 +4051,11 @@
 
     if (!window.FollowListModule?.openSentFollowRequestList) {
       if (window.toastError) {
-        toastError("Pending requests are not available right now.");
+        toastError(
+          profileT(
+            "profile.page.pendingRequestsUnavailable",
+          ),
+        );
       }
       return;
     }
@@ -3858,7 +4071,11 @@
     closeProfileMoreMenu();
 
     if (window.toastInfo) {
-      toastInfo("Blocked users list coming soon!");
+      toastInfo(
+        profileT(
+          "profile.more.blockedUsersComingSoon",
+        ),
+      );
     }
   };
 
@@ -3868,7 +4085,11 @@
     closeProfileMoreMenu();
 
     if (window.toastInfo) {
-      toastInfo("Report feature will be available soon.");
+      toastInfo(
+        profileT(
+          "profile.more.reportComingSoon",
+        ),
+      );
     }
   };
 
@@ -3878,7 +4099,11 @@
     closeProfileMoreMenu();
 
     if (window.toastInfo) {
-      toastInfo("Block feature will be available soon.");
+      toastInfo(
+        profileT(
+          "profile.more.blockComingSoon",
+        ),
+      );
     }
   };
 
@@ -4051,20 +4276,17 @@
         );
         if (followBtn) {
           if (normalizedRelation.isFollowing) {
-            followBtn.innerHTML =
-              '<i data-lucide="check"></i><span>Following</span>';
+            followBtn.innerHTML = `<i data-lucide="check"></i><span>${profileT("common.buttons.following")}</span>`;
             followBtn.className = "profile-btn profile-btn-following";
             followBtn.onclick = (e) =>
               FollowModule.showUnfollowConfirm(profileAccountId, e.currentTarget);
           } else if (normalizedRelation.isRequested) {
-            followBtn.innerHTML =
-              '<i data-lucide="clock-3"></i><span>Request Sent</span>';
+            followBtn.innerHTML = `<i data-lucide="clock-3"></i><span>${profileT("common.buttons.requestSent")}</span>`;
             followBtn.className = "profile-btn profile-btn-requested";
             followBtn.onclick = (e) =>
               FollowModule.showUnfollowConfirm(profileAccountId, e.currentTarget);
           } else {
-            followBtn.innerHTML =
-              '<i data-lucide="user-plus"></i><span>Follow</span>';
+            followBtn.innerHTML = `<i data-lucide="user-plus"></i><span>${profileT("common.buttons.follow")}</span>`;
             followBtn.className = "profile-btn profile-btn-follow";
             followBtn.onclick = () =>
               FollowModule.followUser(profileAccountId, followBtn);
@@ -4174,7 +4396,11 @@
       !isCurrentUserProfile()
     ) {
       if (window.toastError) {
-        toastError("This tab is private and only visible to the profile owner");
+        toastError(
+          profileT(
+            "profile.page.privateTabOwnerOnly",
+          ),
+        );
       }
       if (activeTab !== PROFILE_POSTS_TAB) {
         applyProfileTab(PROFILE_POSTS_TAB);
@@ -4253,6 +4479,28 @@
         navigateToFollowListRoute("following");
       };
     }
+  }
+
+  if (window.I18n?.onChange) {
+    window.I18n.onChange(() => {
+      const profileRoot = document.querySelector(".profile-container");
+      if (!profileRoot) return;
+
+      if (window.I18n?.translateDom) {
+        window.I18n.translateDom(profileRoot);
+      }
+
+      if (currentProfileData) {
+        renderProfileHeader(currentProfileData);
+      } else {
+        renderProfileTabs(isCurrentUserProfile());
+      }
+
+      const grid = document.getElementById("profile-posts-grid");
+      if (grid?.classList.contains("placeholder-mode")) {
+        renderTabPlaceholder(activeTab);
+      }
+    });
   }
 
   // Expose ProfilePage module for external updates (e.g., SignalR)

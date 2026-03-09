@@ -6,6 +6,15 @@ let currentUserId = null;
 let lastMouseEvent = null;
 let currentAccountId = null;
 let profilePreviewPresenceUnsubscribe = null;
+let currentPreviewData = null;
+let profilePreviewLanguageBound = false;
+
+function ppT(key, params = {}, fallback = "") {
+  if (window.I18n?.t) {
+    return window.I18n.t(key, params, fallback || key);
+  }
+  return fallback || key;
+}
 
 function normalizePresenceId(value) {
   if (
@@ -140,8 +149,9 @@ function escapeAttr(value) {
 
 function renderProfilePreviewAvatar(avatarUrl, storyRingClass, accountId) {
   const safeAvatarUrl = escapeAttr(avatarUrl || APP_CONFIG.DEFAULT_AVATAR);
+  const avatarAlt = escapeAttr(ppT("profile.preview.avatarAlt", {}, "avatar"));
   if (!storyRingClass) {
-    return `<img class="profile-preview-avatar-image" src="${safeAvatarUrl}" alt="avatar">`;
+    return `<img class="profile-preview-avatar-image" src="${safeAvatarUrl}" alt="${avatarAlt}">`;
   }
 
   const storyAuthorAttr = accountId
@@ -149,7 +159,7 @@ function renderProfilePreviewAvatar(avatarUrl, storyRingClass, accountId) {
     : "";
   return `
     <span class="post-avatar-ring profile-preview-avatar-ring ${storyRingClass}"${storyAuthorAttr}>
-      <img class="post-avatar" src="${safeAvatarUrl}" alt="avatar">
+      <img class="post-avatar" src="${safeAvatarUrl}" alt="${avatarAlt}">
     </span>
   `;
 }
@@ -186,6 +196,7 @@ async function loadProfilePreview(accountId) {
 /* ===== Render UI ===== */
 function renderProfilePreview(data) {
   if (!data) return;
+  currentPreviewData = data;
 
   const account = data.account || data.Account || {};
   const recentPosts = data.recentPosts || data.RecentPosts || [];
@@ -251,7 +262,7 @@ function renderProfilePreview(data) {
     actionsHTML = `
       <button class="profile-preview-btn profile-preview-btn-view-profile" onclick="viewProfile('${profileUsername}')">
         <i data-lucide="user"></i>
-        <span>View Profile</span>
+        <span>${ppT("profile.preview.actions.viewProfile", {}, "View Profile")}</span>
       </button>
     `;
   } else {
@@ -259,20 +270,20 @@ function renderProfilePreview(data) {
       ? `
         <button class="profile-preview-btn profile-preview-btn-following" id="followBtn" onclick="toggleFollowMenu(event, '${currentUserId}')">
           <i data-lucide="check"></i>
-          <span>Following</span>
+          <span>${ppT("common.buttons.following", {}, "Following")}</span>
         </button>
       `
       : relation.isRequested
         ? `
         <button class="profile-preview-btn profile-preview-btn-requested" id="followBtn" onclick="toggleFollowMenu(event, '${currentUserId}')">
           <i data-lucide="clock-3"></i>
-          <span>Request Sent</span>
+          <span>${ppT("common.buttons.requestSent", {}, "Request Sent")}</span>
         </button>
       `
       : `
         <button class="profile-preview-btn profile-preview-btn-follow" id="followBtn" onclick="toggleFollow('${currentUserId}')">
           <i data-lucide="user-plus"></i>
-          <span>Follow</span>
+          <span>${ppT("common.buttons.follow", {}, "Follow")}</span>
         </button>
       `;
 
@@ -286,7 +297,7 @@ function renderProfilePreview(data) {
     actionsHTML = `
       <button class="profile-preview-btn profile-preview-btn-message ${statusClass}" ${disabledAttr} onclick="openChat('${currentUserId}')">
         <i data-lucide="send"></i>
-        <span>Message</span>
+        <span>${ppT("profile.page.messageAction", {}, "Message")}</span>
       </button>
       ${followBtnHTML.replace('class="profile-preview-btn', `class="profile-preview-btn ${statusClass}`).replace("onclick=", isTargetActive ? "onclick=" : "data-onclick=")}
     `;
@@ -295,7 +306,7 @@ function renderProfilePreview(data) {
   // Cover & Dynamic Background
   const coverAreaId = `pp-cover-${currentUserId}`;
   const coverImgHtml = profileCoverUrl
-    ? `<img src="${profileCoverUrl}" alt="cover" onerror="this.style.display='none'">`
+    ? `<img src="${profileCoverUrl}" alt="${escapeAttr(ppT("common.labels.coverPhoto", {}, "cover"))}" onerror="this.style.display='none'">`
     : "";
 
   previewEl.innerHTML = `
@@ -316,15 +327,15 @@ function renderProfilePreview(data) {
         <div class="profile-preview-stats">
             <div>
                 <b>${postCountValue}</b>
-                <span>Posts</span>
+                <span>${ppT("profile.stats.posts", {}, "Posts")}</span>
             </div>
             <div>
                 <b>${followerCountValue}</b>
-                <span>Followers</span>
+                <span>${ppT("profile.stats.followers", {}, "Followers")}</span>
             </div>
             <div>
                 <b>${followingCountValue}</b>
-                <span>Following</span>
+                <span>${ppT("profile.stats.following", {}, "Following")}</span>
             </div>
         </div>
 
@@ -336,7 +347,7 @@ function renderProfilePreview(data) {
                   .map(
                     (p) => `
                     <div class="profile-preview-media-item" onclick="if(window.InteractionModule) window.InteractionModule.closeReactList(); if(window.openPostDetail) window.openPostDetail('${p.postId || p.PostId}', '${p.postCode || p.PostCode || ""}'); hidePreview();">
-                      <img src="${p.mediaUrl || p.MediaUrl}" alt="post">
+                      <img src="${p.mediaUrl || p.MediaUrl}" alt="${escapeAttr(ppT("common.labels.post", {}, "post"))}">
                     </div>
                   `,
                   )
@@ -474,6 +485,21 @@ function showPreview(mouseEvent) {
   });
 }
 
+function bindProfilePreviewLanguageChange() {
+  if (profilePreviewLanguageBound || !window.I18n?.onChange) return;
+  profilePreviewLanguageBound = true;
+  window.I18n.onChange(() => {
+    if (
+      !previewEl ||
+      previewEl.classList.contains("hidden") ||
+      !currentPreviewData
+    ) {
+      return;
+    }
+    renderProfilePreview(currentPreviewData);
+  });
+}
+
 function hidePreview() {
   if (previewEl) previewEl.classList.add("hidden");
   currentAccountId = null;
@@ -538,6 +564,7 @@ function resolvePreviewAccountId(target) {
 function initProfilePreview() {
   if (previewEl) return;
   createProfilePreview();
+  bindProfilePreviewLanguageChange();
 
   if (
     !profilePreviewPresenceUnsubscribe &&
