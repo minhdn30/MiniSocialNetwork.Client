@@ -11,34 +11,48 @@
   const LANGUAGE_OPTIONS = ["en", "vi"];
 
   const PRIVACY_LEVELS = {
+    0: { key: "profile.accountSettings.labels.anyone", icon: "globe", class: "public" },
+    1: {
+      key: "profile.accountSettings.labels.followersOnly",
+      icon: "users",
+      class: "follow",
+    },
+    2: { key: "profile.accountSettings.labels.onlyMe", icon: "lock", class: "private" },
+  };
+
+  const GROUP_CHAT_INVITE_LEVELS = {
+    0: { key: "profile.accountSettings.labels.noOneAtAll", icon: "lock", class: "private" },
+    1: {
+      key: "profile.accountSettings.labels.followersOrFollowing",
+      icon: "users",
+      class: "follow",
+    },
+    2: { key: "profile.accountSettings.labels.anyone", icon: "globe", class: "public" },
+  };
+
+  const ONLINE_STATUS_VISIBILITY_LEVELS = {
+    0: { key: "profile.accountSettings.labels.noOneAtAll", icon: "lock", class: "private" },
+    1: {
+      key: "profile.accountSettings.labels.contactsOnly",
+      icon: "users",
+      class: "follow",
+    },
+  };
+
+  const FOLLOW_PRIVACY_LEVELS = {
+    0: { key: "profile.accountSettings.labels.followApprovalOff", icon: "globe", class: "public" },
+    1: { key: "profile.accountSettings.labels.followApprovalOn", icon: "lock", class: "private" },
+  };
+
+  const POST_PRIVACY_LEVELS = {
     0: { key: "common.labels.public", icon: "globe", class: "public" },
     1: { key: "common.labels.followersOnly", icon: "users", class: "follow" },
     2: { key: "common.labels.private", icon: "lock", class: "private" },
   };
 
-  const GROUP_CHAT_INVITE_LEVELS = {
-    0: { key: "common.labels.noOne", icon: "lock", class: "private" },
-    1: {
-      key: "common.labels.followersOrFollowing",
-      icon: "users",
-      class: "follow",
-    },
-    2: { key: "common.labels.anyone", icon: "globe", class: "public" },
-  };
-
-  const ONLINE_STATUS_VISIBILITY_LEVELS = {
-    0: { key: "common.labels.noOne", icon: "lock", class: "private" },
-    1: { key: "common.labels.contactsOnly", icon: "users", class: "follow" },
-  };
-
-  const FOLLOW_PRIVACY_LEVELS = {
-    0: { key: "common.labels.anyone", icon: "globe", class: "public" },
-    1: { key: "common.labels.private", icon: "lock", class: "private" },
-  };
-
   const TAG_PERMISSION_LEVELS = {
-    0: { key: "common.labels.noOne", icon: "lock", class: "private" },
-    1: { key: "common.labels.anyone", icon: "globe", class: "public" },
+    0: { key: "profile.accountSettings.labels.noOneAtAll", icon: "lock", class: "private" },
+    1: { key: "profile.accountSettings.labels.anyone", icon: "globe", class: "public" },
   };
 
   const SETTING_KEYS = {
@@ -58,7 +72,7 @@
   const SETTING_LEVEL_MAP = {
     phone: PRIVACY_LEVELS,
     address: PRIVACY_LEVELS,
-    post: PRIVACY_LEVELS,
+    post: POST_PRIVACY_LEVELS,
     follow: FOLLOW_PRIVACY_LEVELS,
     followers: PRIVACY_LEVELS,
     following: PRIVACY_LEVELS,
@@ -66,6 +80,56 @@
     "online-status": ONLINE_STATUS_VISIBILITY_LEVELS,
     "group-chat-invite": GROUP_CHAT_INVITE_LEVELS,
     "tag-permission": TAG_PERMISSION_LEVELS,
+  };
+
+  const DESCRIPTION_LEVEL_KEYS = {
+    phone: {
+      0: "profile.accountSettings.descriptions.phone.anyone",
+      1: "profile.accountSettings.descriptions.phone.followersOnly",
+      2: "profile.accountSettings.descriptions.phone.onlyMe",
+    },
+    address: {
+      0: "profile.accountSettings.descriptions.address.anyone",
+      1: "profile.accountSettings.descriptions.address.followersOnly",
+      2: "profile.accountSettings.descriptions.address.onlyMe",
+    },
+    post: {
+      0: "profile.accountSettings.descriptions.post.anyone",
+      1: "profile.accountSettings.descriptions.post.followersOnly",
+      2: "profile.accountSettings.descriptions.post.onlyMe",
+    },
+    follow: {
+      0: "profile.accountSettings.descriptions.follow.off",
+      1: "profile.accountSettings.descriptions.follow.on",
+    },
+    followers: {
+      0: "profile.accountSettings.descriptions.followers.anyone",
+      1: "profile.accountSettings.descriptions.followers.followersOnly",
+      2: "profile.accountSettings.descriptions.followers.onlyMe",
+    },
+    following: {
+      0: "profile.accountSettings.descriptions.following.anyone",
+      1: "profile.accountSettings.descriptions.following.followersOnly",
+      2: "profile.accountSettings.descriptions.following.onlyMe",
+    },
+    "story-highlight": {
+      0: "profile.accountSettings.descriptions.storyHighlights.anyone",
+      1: "profile.accountSettings.descriptions.storyHighlights.followersOnly",
+      2: "profile.accountSettings.descriptions.storyHighlights.onlyMe",
+    },
+    "online-status": {
+      0: "profile.accountSettings.descriptions.onlineStatus.noOneAtAll",
+      1: "profile.accountSettings.descriptions.onlineStatus.contactsOnly",
+    },
+    "group-chat-invite": {
+      0: "profile.accountSettings.descriptions.groupChatInvite.noOneAtAll",
+      1: "profile.accountSettings.descriptions.groupChatInvite.followersOrFollowing",
+      2: "profile.accountSettings.descriptions.groupChatInvite.anyone",
+    },
+    "tag-permission": {
+      0: "profile.accountSettings.descriptions.tagPermission.noOneAtAll",
+      1: "profile.accountSettings.descriptions.tagPermission.anyone",
+    },
   };
 
   function t(key, params = {}, fallback = "") {
@@ -84,10 +148,16 @@
 
   function formatLanguageLabel(language) {
     return window.I18n?.formatLanguageLabel
-      ? window.I18n.formatLanguageLabel(language)
+      ? t(
+          normalizeLanguage(language) === "vi"
+            ? "profile.accountSettings.labels.vietnamese"
+            : "profile.accountSettings.labels.english",
+          {},
+          normalizeLanguage(language) === "vi" ? "Vietnamese" : "English"
+        )
       : normalizeLanguage(language) === "vi"
-        ? t("common.labels.vietnamese", {}, "Vietnamese")
-        : t("common.labels.english", {}, "English");
+        ? t("profile.accountSettings.labels.vietnamese", {}, "Vietnamese")
+        : t("profile.accountSettings.labels.english", {}, "English");
   }
 
   function getMyProfileHash() {
@@ -184,6 +254,21 @@
     return LANGUAGE_OPTIONS[(currentIndex + 1) % LANGUAGE_OPTIONS.length];
   }
 
+  function getDescriptionElement(settingKey) {
+    const button = document.getElementById(`btn-${settingKey}-privacy`);
+    return button?.closest(".acc-setting-item")?.querySelector(".acc-setting-description") || null;
+  }
+
+  function updateSettingDescription(settingKey, value) {
+    const descriptionElement = getDescriptionElement(settingKey);
+    if (!descriptionElement) return;
+
+    const descriptionKey = DESCRIPTION_LEVEL_KEYS[settingKey]?.[value];
+    if (!descriptionKey) return;
+
+    descriptionElement.textContent = t(descriptionKey, {}, descriptionElement.textContent || "");
+  }
+
   function updatePrivacyButton(settingKey, value) {
     const button = document.getElementById(`btn-${settingKey}-privacy`);
     const label = document.getElementById(`label-${settingKey}-privacy`);
@@ -197,6 +282,7 @@
     button.innerHTML = `<i data-lucide="${config.icon}"></i>`;
     button.dataset.value = String(value);
     label.textContent = t(config.key, {}, config.key);
+    updateSettingDescription(settingKey, value);
 
     if (window.lucide) {
       lucide.createIcons();
@@ -213,6 +299,16 @@
     button.innerHTML = '<i data-lucide="languages"></i>';
     button.dataset.value = normalizedLanguage;
     label.textContent = formatLanguageLabel(normalizedLanguage);
+
+    const descriptionElement =
+      button.closest(".acc-setting-item")?.querySelector(".acc-setting-description");
+    if (descriptionElement) {
+      const descriptionKey =
+        normalizedLanguage === "vi"
+          ? "profile.accountSettings.descriptions.language.vietnamese"
+          : "profile.accountSettings.descriptions.language.english";
+      descriptionElement.textContent = t(descriptionKey, {}, descriptionElement.textContent || "");
+    }
 
     if (window.lucide) {
       lucide.createIcons();

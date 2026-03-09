@@ -514,11 +514,11 @@
       },
       settings: {
         title: "Account Settings",
-        subtitle: "Manage your privacy and account preferences",
-        phonePrivacyTitle: "Phone Number Privacy",
+        subtitle: "Manage my privacy and account preferences",
+        phonePrivacyTitle: "Who can see my phone number?",
         phonePrivacyDescription:
           "Control who can see your phone number on your profile",
-        addressPrivacyTitle: "Address Privacy",
+        addressPrivacyTitle: "Who can see my address?",
         addressPrivacyDescription:
           "Choose who can view your address information",
         defaultPostPrivacyTitle: "Default Post Privacy",
@@ -536,10 +536,10 @@
         storyHighlightPrivacyTitle: "Who Can View My Story Highlights",
         storyHighlightPrivacyDescription:
           "Choose who can view your highlighted stories on your profile",
-        onlineStatusVisibilityTitle: "Online Status Visibility",
+        onlineStatusVisibilityTitle: "Who can see my online status?",
         onlineStatusVisibilityDescription:
           "Choose who can see your online status and recent activity",
-        groupChatInvitePermissionTitle: "Who Can Add Me to Group Chats",
+        groupChatInvitePermissionTitle: "Who can add me to group chats?",
         groupChatInvitePermissionDescription:
           "Choose who can add you into group chats",
         tagPermissionTitle: "Who Can Tag Me",
@@ -714,9 +714,89 @@
         },
       },
       accountSettings: {
+        subtitle: "Manage my privacy and account preferences",
+        labels: {
+          onlyMe: "Only me",
+          followersOnly: "Followers only",
+          anyone: "Anyone",
+          followApprovalOff: "Off",
+          followApprovalOn: "On",
+          noOneAtAll: "No one",
+          contactsOnly: "Contacts only",
+          followersOrFollowing: "Followers or following",
+          english: "English",
+          vietnamese: "Vietnamese",
+        },
+        descriptions: {
+          phone: {
+            anyone: "Anyone can see my phone number on my profile",
+            followersOnly: "Only my followers can see my phone number on my profile",
+            onlyMe: "Only I can see my phone number on my profile",
+          },
+          address: {
+            anyone: "Anyone can see my address on my profile",
+            followersOnly: "Only my followers can see my address on my profile",
+            onlyMe: "Only I can see my address on my profile",
+          },
+          post: {
+            anyone: "Default privacy when I create a new post - Public",
+            followersOnly: "Default privacy when I create a new post - Followers Only",
+            onlyMe: "Default privacy when I create a new post - Private",
+          },
+          follow: {
+            off: "Anyone can follow me right away",
+            on: "Anyone who wants to follow me needs my approval",
+          },
+          followers: {
+            anyone: "Anyone can see my followers list",
+            followersOnly: "Only my followers can see my followers list",
+            onlyMe: "Only I can see my followers list",
+          },
+          following: {
+            anyone: "Anyone can see who I follow",
+            followersOnly: "Only my followers can see who I follow",
+            onlyMe: "Only I can see who I follow",
+          },
+          storyHighlights: {
+            anyone: "Anyone can see my highlights",
+            followersOnly: "Only my followers can see my highlights",
+            onlyMe: "Only I can see my highlights",
+          },
+          onlineStatus: {
+            noOneAtAll: "No one can see my online status",
+            contactsOnly: "Only my contacts can see my online status",
+          },
+          groupChatInvite: {
+            noOneAtAll: "No one can add me to group chats",
+            followersOrFollowing:
+              "Only people who follow me or people I follow can add me to group chats",
+            anyone: "Anyone can add me to group chats",
+          },
+          tagPermission: {
+            noOneAtAll: "No one can tag me",
+            anyone: "Anyone can tag me",
+          },
+          language: {
+            english: "Use English across this device and my account",
+            vietnamese: "Use Vietnamese across this device and my account",
+          },
+        },
+        titles: {
+          phonePrivacy: "Who can see my phone number?",
+          addressPrivacy: "Who can see my address?",
+          defaultPostPrivacy: "Who can see my new posts?",
+          followPrivacy: "Turn follow request approval on/off",
+          followerPrivacy: "Who can see my followers?",
+          followingPrivacy: "Who can see who I follow?",
+          storyHighlightPrivacy: "Who can see my highlights?",
+          onlineStatusVisibility: "Who can see my online status?",
+          groupChatInvitePermission: "Who can add me to group chats?",
+          tagPermission: "Who can tag me?",
+          language: "Language",
+        },
         address: {
-          description: "Choose who can view your address information",
-          title: "Address Privacy",
+          description: "Choose who can view my address information",
+          title: "Who can see my address?",
         },
         discard: {
           confirm: "Discard",
@@ -726,49 +806,54 @@
         },
         follow: {
           description:
-            "Set whether following your account requires approval. Switching from Private to Anyone will automatically approve any pending follow requests.",
+            "Set whether following my account requires approval. Switching from Private to Anyone will automatically approve any pending follow requests.",
           title: "Who Can Follow Me",
         },
         followers: {
-          description: "Decide who can see the list of people following you",
+          description: "Decide who can see the list of people following me",
           title: "Followers List Visibility",
         },
         following: {
-          description: "Control who can see the list of people you follow",
+          description: "Control who can see the list of people I follow",
           title: "Following List Visibility",
         },
         groupChatInvite: {
-          description: "Choose who can add you into group chats",
-          title: "Who Can Add Me to Group Chats",
+          description: "Choose who can add me to group chats",
+          title: "Who can add me to group chats?",
         },
         onlineStatus: {
           description:
-            "Choose who can see your online status and recent activity",
-          title: "Online Status Visibility",
+            "Choose who can see my online status and recent activity",
+          title: "Who can see my online status?",
         },
         phone: {
-          description: "Control who can see your phone number on your profile",
-          title: "Phone Number Privacy",
+          description: "Control who can see my phone number on my profile",
+          title: "Who can see my phone number?",
         },
         post: {
           description:
-            "Set the default visibility for your new posts. You can change this for each post individually",
-          title: "Default Post Privacy",
+            "Set the default visibility for my new posts. I can still change this for each post individually",
+          title: "Who can see my new posts?",
         },
         save: {
           pending: "Saving...",
         },
         storyHighlights: {
           description:
-            "Choose who can view your highlighted stories on your profile",
+            "Choose who can view my highlights on my profile",
           title: "Who Can View My Story Highlights",
         },
-        subtitle: "Manage your privacy and account preferences",
+        subtitle: "Manage my privacy and account preferences",
         tagPermission: {
-          description: "Choose who can tag you",
+          description: "Choose who can tag me",
           title: "Who Can Tag Me",
         },
         title: "Account Settings",
+        language: {
+          description:
+            "Choose the language used across the app on this device and my account.",
+          title: "Language",
+        },
         toast: {
           loadError: "An error occurred while loading settings",
           loadFailed: "Failed to load settings",
@@ -1613,12 +1698,12 @@
           apiUnavailable: "Chat settings aren't available right now",
           loadFailed: "Failed to load settings",
           updateFailed: "Failed to update settings",
-          onlineStatusTitle: "Online Status Visibility",
-          online_status_visibility: "Online Status Visibility",
+          onlineStatusTitle: "Who can see my online status?",
+          online_status_visibility: "Who can see my online status?",
           onlineStatusToggleAria: "Toggle online status visibility",
           toggle_online_status: "Toggle online status visibility",
-          groupInviteTitle: "Who Can Add Me to Group Chats",
-          group_invite_permission: "Who Can Add Me to Group Chats",
+          groupInviteTitle: "Who can add me to group chats?",
+          group_invite_permission: "Who can add me to group chats?",
           groupInviteToggleAria: "Toggle who can add you to group chats",
           toggle_group_invite: "Toggle who can add you to group chats",
           save: "Save",
@@ -2399,11 +2484,11 @@
       title: "Account Settings",
       subtitle: "Manage your privacy and account preferences",
       phone_privacy: {
-        title: "Phone Number Privacy",
+        title: "Who can see my phone number?",
         description: "Control who can see your phone number on your profile",
       },
       address_privacy: {
-        title: "Address Privacy",
+        title: "Who can see my address?",
         description: "Choose who can view your address information",
       },
       default_post_privacy: {
@@ -2430,12 +2515,12 @@
           "Choose who can view your highlighted stories on your profile",
       },
       online_status_visibility: {
-        title: "Online Status Visibility",
+        title: "Who can see my online status?",
         description:
           "Choose who can see your online status and recent activity",
       },
       group_chat_invite_permission: {
-        title: "Who Can Add Me to Group Chats",
+        title: "Who can add me to group chats?",
         description: "Choose who can add you into group chats",
       },
       tag_permission: {

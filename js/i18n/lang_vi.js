@@ -197,15 +197,13 @@
       welcomeBack: "Chào mừng bạn quay lại!",
       forgotPassword: "Quên mật khẩu?",
       helloFriend: "Xin chào!",
-      welcomeBackDescription:
-        "Đăng nhập để tiếp tục kết nối với bạn bè",
+      welcomeBackDescription: "Đăng nhập để tiếp tục kết nối với bạn bè",
       verifyEmail: "Xác minh email",
       forgotPasswordTitle: "Quên mật khẩu",
       newPassword: "Mật khẩu mới",
       registrationRequirements: "Yêu cầu đăng ký",
       completeProfile: "Hoàn tất hồ sơ",
-      helloFriendDescription:
-        "Đăng ký và bắt đầu chia sẻ khoảnh khắc của bạn",
+      helloFriendDescription: "Đăng ký và bắt đầu chia sẻ khoảnh khắc của bạn",
       registrationRules: "Quy định đăng ký",
       forgotPasswordDescription:
         "Nhập email tài khoản để nhận mã đặt lại gồm 6 chữ số",
@@ -223,10 +221,8 @@
       signUpSuccess: "Đăng ký thành công",
       serverError: "Máy chủ đang bận, vui lòng thử lại sau",
       passwordRequired: "Vui lòng nhập mật khẩu",
-      googleCanceled:
-        "Chưa thể đăng nhập bằng Google, vui lòng thử lại",
-      invalidLoginResponse:
-        "Không thể hoàn tất đăng nhập",
+      googleCanceled: "Chưa thể đăng nhập bằng Google, vui lòng thử lại",
+      invalidLoginResponse: "Không thể hoàn tất đăng nhập",
       googleSuccess: "Đăng nhập Google thành công",
       googleInitializing:
         "Đang chuẩn bị đăng nhập Google, vui lòng thử lại sau",
@@ -240,10 +236,8 @@
       enterSixDigitCode: "Vui lòng nhập mã gồm 6 chữ số",
       passwordMismatch: "Mật khẩu không khớp",
       resetCodeSent: "Đã gửi mã đặt lại",
-      emailVerifiedLoginSuccess:
-        "Xác minh email thành công, đã đăng nhập",
-      verificationEmailSent:
-        "Đã gửi email xác minh, vui lòng kiểm tra hộp thư",
+      emailVerifiedLoginSuccess: "Xác minh email thành công, đã đăng nhập",
+      verificationEmailSent: "Đã gửi email xác minh, vui lòng kiểm tra hộp thư",
       loginFailed: "Chưa thể đăng nhập",
       invalidCredentials: "Sai tài khoản hoặc mật khẩu",
       usernameAlreadyExists: "Tên người dùng đã tồn tại",
@@ -252,32 +246,26 @@
       fullNameRequired: "Vui lòng nhập họ tên",
       externalProfileRequired:
         "Vui lòng nhập tên người dùng và họ tên để tiếp tục",
-      externalSignInUnavailable:
-        "Chưa thể đăng nhập bằng tài khoản này",
-      externalProfileCompleteFailed:
-        "Không thể hoàn tất hồ sơ",
+      externalSignInUnavailable: "Chưa thể đăng nhập bằng tài khoản này",
+      externalProfileCompleteFailed: "Không thể hoàn tất hồ sơ",
       externalLoginEstablishFailed:
         "Không thể bắt đầu đăng nhập bằng tài khoản này",
       externalProviderMismatch:
         "Nhà cung cấp đăng nhập không khớp với thông tin xác thực",
-      providerEmailNotVerified:
-        "Email từ nhà cung cấp chưa được xác minh",
+      providerEmailNotVerified: "Email từ nhà cung cấp chưa được xác minh",
       externalIdentifierInvalid: "Định danh tài khoản liên kết không hợp lệ",
       providerEmailInvalid: "Email từ nhà cung cấp không hợp lệ",
       googleCredentialInvalid: "Thông tin đăng nhập Google không hợp lệ",
-      googleEmailUnavailable:
-        "Tài khoản Google không có email khả dụng",
+      googleEmailUnavailable: "Tài khoản Google không có email khả dụng",
       accountRestricted: "Tài khoản của bạn đang bị hạn chế",
       accountRestrictedSupport:
         "Tài khoản của bạn đang bị hạn chế, vui lòng liên hệ hỗ trợ",
       accountNotFound: "Không tìm thấy tài khoản",
       invalidResetCode: "Mã đặt lại không hợp lệ hoặc đã hết hạn",
-      prepareResetRequestFailed:
-        "Không thể bắt đầu yêu cầu đặt lại",
+      prepareResetRequestFailed: "Không thể bắt đầu yêu cầu đặt lại",
       resetCodeAlreadyUsed:
         "Mã đặt lại này đã được dùng, vui lòng yêu cầu mã mới",
-      otpRequestLimitReached:
-        "Bạn đã dùng hết lượt OTP hôm nay cho email này",
+      otpRequestLimitReached: "Bạn đã dùng hết lượt OTP hôm nay cho email này",
       authMethodMissing:
         "Tài khoản này thiếu phương thức đăng nhập, vui lòng liên hệ hỗ trợ",
       fillAllFields: "Vui lòng điền đầy đủ các trường",
@@ -285,8 +273,7 @@
       emailNotVerifiedLogin:
         "Email chưa được xác minh, vui lòng xác minh email",
       usernameLength: "Tên người dùng phải có từ {min} đến {max} ký tự",
-      fullNameLength:
-        "Họ tên phải có từ {min} đến {max} ký tự",
+      fullNameLength: "Họ tên phải có từ {min} đến {max} ký tự",
       usernameCharactersOnly:
         "Tên người dùng chỉ được gồm chữ, số và dấu gạch dưới",
       sendCodeFailed: "Chưa thể gửi mã",
@@ -327,8 +314,7 @@
       or_continue_with: "Hoặc tiếp tục với",
       forgot_password: "Quên mật khẩu?",
       welcome_back: "Chào mừng bạn quay lại!",
-      welcome_back_description:
-        "Đăng nhập để tiếp tục kết nối với bạn bè",
+      welcome_back_description: "Đăng nhập để tiếp tục kết nối với bạn bè",
       hello_friend: "Xin chào!",
       hello_friend_description:
         "Đăng ký và bắt đầu chia sẻ khoảnh khắc của bạn",
@@ -403,8 +389,7 @@
         saveError: "Không thể lưu thay đổi",
         followModuleUnavailable: "Tính năng theo dõi tạm thời chưa dùng được",
         messagingLoading: "Tính năng nhắn tin đang được tải...",
-        pendingRequestsUnavailable:
-          "Hiện chưa thể xem yêu cầu đang chờ",
+        pendingRequestsUnavailable: "Hiện chưa thể xem yêu cầu đang chờ",
         privateTabOwnerOnly:
           "Tab này ở chế độ riêng tư và chỉ chủ hồ sơ mới xem được",
         validation: {
@@ -465,9 +450,9 @@
         subtitle: "Quản lý quyền riêng tư và tùy chọn tài khoản của bạn",
         phonePrivacyDescription:
           "Kiểm soát ai có thể xem số điện thoại trên hồ sơ của bạn",
-        addressPrivacyTitle: "Quyền riêng tư địa chỉ",
+        addressPrivacyTitle: "Ai có thể nhìn thấy địa chỉ của tôi?",
         defaultPostPrivacyTitle: "Quyền riêng tư bài viết mặc định",
-        phonePrivacyTitle: "Quyền riêng tư số điện thoại",
+        phonePrivacyTitle: "Ai có thể nhìn thấy số điện thoại của tôi?",
         followPrivacyTitle: "Ai có thể theo dõi tôi",
         defaultPostPrivacyDescription:
           "Đặt quyền hiển thị mặc định cho bài viết mới. Bạn có thể đổi cho từng bài viết",
@@ -476,7 +461,7 @@
           "Chọn người có thể xem thông tin địa chỉ của bạn",
         storyHighlightPrivacyTitle: "Ai có thể xem tin nổi bật của tôi",
         followerPrivacyTitle: "Hiển thị danh sách người theo dõi",
-        onlineStatusVisibilityTitle: "Hiển thị trạng thái trực tuyến",
+        onlineStatusVisibilityTitle: "Ai có thể nhìn thấy trạng thái trực tuyến của tôi?",
         followPrivacyDescription:
           "Thiết lập việc theo dõi tài khoản của bạn có cần phê duyệt hay không. Việc chuyển từ Riêng tư sang Mọi người sẽ tự động chấp nhận mọi yêu cầu theo dõi đang chờ",
         followingPrivacyDescription:
@@ -490,7 +475,7 @@
         savePending: "Đang lưu...",
         saveSuccess: "Đã lưu cài đặt",
         groupChatInvitePermissionTitle:
-          "Ai có thể thêm tôi vào cuộc trò chuyện nhóm",
+          "Ai có thể thêm tôi vào nhóm chat?",
         noChanges: "Không có thay đổi",
         saveFailed: "Không lưu được cài đặt",
         tagPermissionDescription: "Chọn người có thể gắn thẻ bạn",
@@ -514,8 +499,7 @@
         deleteGroup: "Xóa",
         createTitle: "Tạo tin nổi bật",
         discardTitle: "Không lưu thay đổi?",
-        removeStoryDeletedGroupSuccess:
-          "Đã xóa tin và xóa mục trống",
+        removeStoryDeletedGroupSuccess: "Đã xóa tin và xóa mục trống",
         removeStoryFailed: "Không xóa được tin khỏi tin nổi bật",
         removeStorySuccess: "Đã xóa tin khỏi tin nổi bật",
         deleteGroupFailed: "Không xóa được tin nổi bật",
@@ -646,8 +630,7 @@
           createGroup: "Đã tạo tin nổi bật",
           deleteGroup: "Đã xóa tin nổi bật",
           removeStory: "Đã xóa tin khỏi tin nổi bật",
-          removeStoryAndDeleteGroup:
-            "Đã xóa tin và xóa luôn tin nổi bật trống",
+          removeStoryAndDeleteGroup: "Đã xóa tin và xóa luôn tin nổi bật trống",
           updateGroup: "Đã cập nhật tin nổi bật",
         },
         validation: {
@@ -695,7 +678,7 @@
         genderOther: "Khác",
         phone: "Số điện thoại",
         phonePlaceholder: "+84 123 456 789",
-        phonePrivacyTitle: "Đổi quyền riêng tư số điện thoại",
+        phonePrivacyTitle: "Đổi chế độ hiển thị số điện thoại",
         privacy: {
           current: "Đang dùng: {title} (Nhấn để thay đổi)",
         },
@@ -716,60 +699,147 @@
           "Hiện tại bạn không có yêu cầu theo dõi nào đang chờ xử lý",
       },
       accountSettings: {
+        subtitle: "Quản lý quyền riêng tư và tùy chọn tài khoản của tôi",
+        labels: {
+          onlyMe: "Chỉ mình tôi",
+          followersOnly: "Chỉ người theo dõi",
+          anyone: "Mọi người",
+          followApprovalOff: "Tắt",
+          followApprovalOn: "Bật",
+          noOneAtAll: "Không ai cả",
+          contactsOnly: "Chỉ người liên hệ",
+          followersOrFollowing: "Người theo dõi hoặc đang theo dõi",
+          english: "Tiếng Anh",
+          vietnamese: "Tiếng Việt",
+        },
+        descriptions: {
+          phone: {
+            anyone: "Mọi người đều có thể xem số điện thoại trên trang cá nhân của tôi",
+            followersOnly:
+              "Chỉ người theo dõi mới có thể xem số điện thoại trên trang cá nhân của tôi",
+            onlyMe: "Chỉ mình tôi có thể xem số điện thoại trên trang cá nhân của tôi",
+          },
+          address: {
+            anyone: "Mọi người đều có thể xem địa chỉ trên trang cá nhân của tôi",
+            followersOnly:
+              "Chỉ người theo dõi mới có thể xem địa chỉ trên trang cá nhân của tôi",
+            onlyMe: "Chỉ mình tôi có thể xem địa chỉ trên trang cá nhân của tôi",
+          },
+          post: {
+            anyone: "Quyền riêng tư mặc định khi tôi tạo bài viết mới - Công khai",
+            followersOnly:
+              "Quyền riêng tư mặc định khi tôi tạo bài viết mới - Chỉ người theo dõi",
+            onlyMe: "Quyền riêng tư mặc định khi tôi tạo bài viết mới - Riêng tư",
+          },
+          follow: {
+            off: "Mọi người có thể theo dõi tôi ngay lập tức",
+            on: "Bất kỳ ai muốn theo dõi tôi đều cần được tôi đồng ý",
+          },
+          followers: {
+            anyone: "Mọi người đều có thể xem danh sách người theo dõi của tôi",
+            followersOnly: "Chỉ người theo dõi mới có thể xem danh sách người theo dõi tôi",
+            onlyMe: "Chỉ mình tôi có thể xem danh sách người theo dõi của tôi",
+          },
+          following: {
+            anyone: "Mọi người đều có thể xem danh sách tôi đang theo dõi",
+            followersOnly: "Chỉ người theo dõi mới có thể xem danh sách tôi đang theo dõi",
+            onlyMe: "Chỉ mình tôi có thể xem danh sách tôi đang theo dõi",
+          },
+          storyHighlights: {
+            anyone: "Mọi người đều có thể xem tin nổi bật của tôi",
+            followersOnly: "Chỉ người theo dõi mới có thể xem tin nổi bật của tôi",
+            onlyMe: "Chỉ mình tôi có thể xem tin nổi bật của tôi",
+          },
+          onlineStatus: {
+            noOneAtAll: "Không ai có thể xem trạng thái trực tuyến của tôi",
+            contactsOnly: "Chỉ người liên hệ mới có thể xem trạng thái trực tuyến của tôi",
+          },
+          groupChatInvite: {
+            noOneAtAll: "Không ai có thể thêm tôi vào nhóm chat",
+            followersOrFollowing:
+              "Chỉ người đang theo dõi tôi hoặc người tôi đang theo dõi mới có thể thêm tôi vào nhóm chat",
+            anyone: "Mọi người đều có thể thêm tôi vào nhóm chat",
+          },
+          tagPermission: {
+            noOneAtAll: "Không ai có thể gắn thẻ tôi",
+            anyone: "Mọi người đều có thể gắn thẻ tôi",
+          },
+          language: {
+            english: "Dùng tiếng Anh trên thiết bị này và trên tài khoản của tôi",
+            vietnamese: "Dùng tiếng Việt trên thiết bị này và trên tài khoản của tôi",
+          },
+        },
+        titles: {
+          phonePrivacy: "Ai có thể nhìn thấy số điện thoại của tôi?",
+          addressPrivacy: "Ai có thể nhìn thấy địa chỉ của tôi?",
+          defaultPostPrivacy: "Ai có thể nhìn thấy những bài viết mới của tôi?",
+          followPrivacy: "Bật/Tắt tính năng phê duyệt yêu cầu theo dõi",
+          followerPrivacy: "Ai có thể nhìn thấy danh sách người theo dõi của tôi?",
+          followingPrivacy: "Ai có thể nhìn thấy danh sách người tôi đang theo dõi?",
+          storyHighlightPrivacy: "Ai có thể nhìn thấy tin nổi bật của tôi?",
+          onlineStatusVisibility: "Ai có thể nhìn thấy trạng thái trực tuyến của tôi?",
+          groupChatInvitePermission: "Ai có thể thêm tôi vào nhóm chat?",
+          tagPermission: "Ai có thể gắn thẻ tôi?",
+          language: "Ngôn ngữ",
+        },
         address: {
-          description: "Chọn ai có thể xem thông tin địa chỉ của bạn",
-          title: "Quyền riêng tư địa chỉ",
+          description: "Chọn ai có thể xem thông tin địa chỉ của tôi",
+          title: "Ai có thể nhìn thấy địa chỉ của tôi?",
         },
         discard: {
           confirm: "Bỏ",
-          message:
-            "Bạn chưa lưu thay đổi. Bạn có chắc muốn bỏ không?",
+          message: "Tôi chưa lưu thay đổi. Tôi có chắc muốn bỏ không?",
           title: "Bỏ thay đổi?",
         },
         follow: {
           description:
-            "Chọn việc theo dõi tài khoản của bạn có cần phê duyệt hay không. Khi chuyển từ Riêng tư sang Mọi người, các yêu cầu đang chờ sẽ được tự động duyệt.",
+            "Chọn việc theo dõi tài khoản của tôi có cần phê duyệt hay không. Khi chuyển từ Riêng tư sang Mọi người, các yêu cầu đang chờ sẽ được tự động duyệt.",
           title: "Ai có thể theo dõi tôi",
         },
         followers: {
-          description: "Chọn ai có thể xem danh sách người theo dõi bạn",
+          description: "Chọn ai có thể xem danh sách người theo dõi tôi",
           title: "Hiển thị danh sách người theo dõi",
         },
         following: {
-          description: "Chọn ai có thể xem danh sách bạn đang theo dõi",
+          description: "Chọn ai có thể xem danh sách tôi đang theo dõi",
           title: "Hiển thị danh sách đang theo dõi",
         },
         groupChatInvite: {
-          description: "Chọn ai có thể thêm bạn vào nhóm chat",
-          title: "Ai có thể thêm tôi vào nhóm chat",
+          description: "Chọn ai có thể thêm tôi vào nhóm chat",
+          title: "Ai có thể thêm tôi vào nhóm chat?",
         },
         onlineStatus: {
           description:
-            "Chọn ai có thể xem trạng thái trực tuyến và hoạt động gần đây của bạn",
-          title: "Hiển thị trạng thái hoạt động",
+            "Chọn ai có thể xem trạng thái trực tuyến và hoạt động gần đây của tôi",
+          title: "Ai có thể nhìn thấy trạng thái trực tuyến của tôi?",
         },
         phone: {
-          description: "Chọn ai có thể xem số điện thoại trên hồ sơ của bạn",
-          title: "Quyền riêng tư số điện thoại",
+          description: "Chọn ai có thể xem số điện thoại trên hồ sơ của tôi",
+          title: "Ai có thể nhìn thấy số điện thoại của tôi?",
         },
         post: {
           description:
-            "Đặt quyền riêng tư mặc định cho bài viết mới. Bạn vẫn có thể đổi cho từng bài riêng lẻ",
-          title: "Quyền riêng tư bài viết mặc định",
+            "Đặt quyền riêng tư mặc định cho bài viết mới. Tôi vẫn có thể đổi cho từng bài riêng lẻ",
+          title: "Ai có thể nhìn thấy những bài viết mới của tôi?",
         },
         save: {
           pending: "Đang lưu...",
         },
         storyHighlights: {
-          description: "Chọn ai có thể xem các tin nổi bật trên hồ sơ của bạn",
+          description: "Chọn ai có thể xem các tin nổi bật trên hồ sơ của tôi",
           title: "Ai có thể xem tin nổi bật của tôi",
         },
-        subtitle: "Quản lý quyền riêng tư và các tùy chọn tài khoản",
+        subtitle: "Quản lý quyền riêng tư và tùy chọn tài khoản của tôi",
         tagPermission: {
-          description: "Chọn ai có thể gắn thẻ bạn",
+          description: "Chọn ai có thể gắn thẻ tôi",
           title: "Ai có thể gắn thẻ tôi",
         },
         title: "Cài đặt tài khoản",
+        language: {
+          description:
+            "Chọn ngôn ngữ được dùng trong ứng dụng trên thiết bị này và tài khoản của tôi",
+          title: "Ngôn ngữ",
+        },
         toast: {
           loadError: "Không thể tải cài đặt",
           loadFailed: "Không thể tải cài đặt",
@@ -778,7 +848,7 @@
           saveFailed: "Không thể lưu cài đặt",
           saveSuccess: "Đã lưu cài đặt",
         },
-        unsavedChangesBrowser: "Bạn chưa lưu thay đổi.",
+        unsavedChangesBrowser: "Tôi chưa lưu thay đổi.",
       },
       actions: {
         block: "Chặn",
@@ -831,8 +901,7 @@
         loadProfile: "Không thể tải hồ sơ",
         loadSavedPosts: "Không thể tải bài viết đã lưu",
         loadTaggedPosts: "Không thể tải bài viết được gắn thẻ",
-        pendingRequestsUnavailable:
-          "Hiện chưa thể xem yêu cầu đang chờ",
+        pendingRequestsUnavailable: "Hiện chưa thể xem yêu cầu đang chờ",
         privateTabOnly: "Tab này là riêng tư và chỉ chủ hồ sơ mới xem được",
         saveProfile: "Không thể lưu thay đổi",
         updateProfile: "Không thể cập nhật hồ sơ",
@@ -940,8 +1009,7 @@
         unavailable: "Yêu cầu này không còn tồn tại",
         removeUnavailable: "Hiện chưa thể xóa yêu cầu theo dõi này",
         permissionAccept: "Bạn không có quyền chấp nhận yêu cầu theo dõi này",
-        acceptUnavailable:
-          "Hiện chưa thể chấp nhận yêu cầu theo dõi này",
+        acceptUnavailable: "Hiện chưa thể chấp nhận yêu cầu theo dõi này",
         acceptFailed:
           "Không thể chấp nhận yêu cầu theo dõi này, vui lòng thử lại",
         stateChanged:
@@ -1002,8 +1070,7 @@
           falseInformation: "Thông tin sai sự thật",
           nudity: "Ảnh khỏa thân hoặc hoạt động tình dục",
           violence: "Các tổ chức bạo lực hoặc nguy hiểm",
-          successComment:
-            "Đã gửi báo cáo. Bình luận này sẽ được xem xét.",
+          successComment: "Đã gửi báo cáo. Bình luận này sẽ được xem xét.",
           scam: "Lừa đảo hoặc gian lận",
           successPost: "Đã gửi báo cáo. Bài viết này sẽ được xem xét.",
         },
@@ -1063,12 +1130,10 @@
         turnOffCommentingDescription:
           "Mọi người sẽ không thể bình luận về bài viết này",
         hideLikeCounts: "Ẩn số lượt thích và lượt xem",
-        uploadAtLeastOneImage:
-          "Vui lòng tải lên ít nhất một ảnh để tiếp tục",
+        uploadAtLeastOneImage: "Vui lòng tải lên ít nhất một ảnh để tiếp tục",
         tagPeople: "Gắn thẻ mọi người",
         helpShortcuts: "Trợ giúp & Phím tắt",
-        hideLikeCountsDescription:
-          "Chỉ bạn mới thấy số lượt thích và lượt xem",
+        hideLikeCountsDescription: "Chỉ bạn mới thấy số lượt thích và lượt xem",
         imageFilesOnly: "Vui lòng chỉ chọn tệp ảnh",
         addAtLeastOneImage:
           "Vui lòng thêm ít nhất một ảnh vào bài viết của bạn",
@@ -1184,15 +1249,13 @@
       editTagging: {
         privateTagRestriction:
           "Bạn không thể gắn thẻ mọi người trong một bài viết riêng tư",
-        selectedUnavailable:
-          "Một số người dùng đã chọn hiện không thể gắn thẻ",
+        selectedUnavailable: "Một số người dùng đã chọn hiện không thể gắn thẻ",
         tagPermissionDenied:
           "Một hoặc nhiều người không cho phép người khác gắn thẻ họ",
         followOnlyRestriction:
           "Một số người dùng không thể được gắn thẻ trong bài viết chỉ dành cho người theo dõi vì họ chưa theo dõi bạn",
         serverUnavailable: "Không thể kết nối với máy chủ",
-        taggingUnavailablePrivate:
-          "Không thể gắn thẻ trong bài viết riêng tư",
+        taggingUnavailablePrivate: "Không thể gắn thẻ trong bài viết riêng tư",
         genericUpdateFailed: "Không thể cập nhật bài viết",
         contentOrMediaRequired: "Bài viết phải có nội dung hoặc ảnh/video",
         tagLimitWarning:
@@ -1272,10 +1335,8 @@
         disappearsIn6Hours: "Biến mất sau 6 giờ",
         noFileSelected: "Không có tập tin nào được chọn",
         textRequired: "Tin chữ cần có nội dung",
-        chooseStoryMode:
-          "Vui lòng chọn Tin chữ hoặc Tin ảnh/video",
-        typeOnPreview:
-          "Nhập trực tiếp vào khung xem trước để soạn tin",
+        chooseStoryMode: "Vui lòng chọn Tin chữ hoặc Tin ảnh/video",
+        typeOnPreview: "Nhập trực tiếp vào khung xem trước để soạn tin",
         chooseStoryModeFirst: "Vui lòng chọn Tin chữ hoặc Tin ảnh/video trước",
         uploadToPreview: "Chọn ảnh hoặc video từ máy của bạn",
         selectMedia: "Chọn ảnh",
@@ -1394,8 +1455,7 @@
         unavailableGroup: "Tin này không còn trong tin nổi bật này",
         unavailable: "Tin này không còn hiển thị",
         apiUnavailable: "Không thể mở tin này",
-        noPermissionHighlight:
-          "Bạn không còn quyền xem nội dung này",
+        noPermissionHighlight: "Bạn không còn quyền xem nội dung này",
         unavailableShort: "Tin không còn hiển thị",
         openHighlightUnavailable:
           "Không thể mở liên kết tin nổi bật này lúc này",
@@ -1502,8 +1562,7 @@
         memberAddedToGroup: "Thành viên được thêm vào nhóm",
         membersAddedToGroup: "{count} thành viên đã được thêm vào nhóm",
         system: {
-          themeChanged:
-            '{actor} đã đổi chủ đề cuộc trò chuyện thành "{theme}"',
+          themeChanged: '{actor} đã đổi chủ đề cuộc trò chuyện thành "{theme}"',
           themeReset: "{actor} đã đặt lại chủ đề cuộc trò chuyện",
           messagePinned: "{actor} đã ghim một tin nhắn",
           messageUnpinned: "{actor} đã bỏ ghim một tin nhắn",
@@ -1519,8 +1578,7 @@
         unknown_user: "Người dùng không xác định",
         setNickname: "Đặt biệt danh",
         jumpToBottom: "Cuộn xuống cuối",
-        downloadLinkUnavailable:
-          "Không thể lấy liên kết tải xuống cho tệp này",
+        downloadLinkUnavailable: "Không thể lấy liên kết tải xuống cho tệp này",
         downloadLinkRequestFailed: "Không thể lấy liên kết tải xuống của tệp",
         fileDownloadStartFailed: "Không thể bắt đầu tải tệp xuống",
         openMediaTitle: "Mở phương tiện",
@@ -1614,7 +1672,8 @@
       },
       delete: {
         title: "Xóa cuộc trò chuyện này?",
-        message: "Cuộc trò chuyện này sẽ bị xóa khỏi danh sách trò chuyện của bạn",
+        message:
+          "Cuộc trò chuyện này sẽ bị xóa khỏi danh sách trò chuyện của bạn",
         success: "Đã xóa cuộc trò chuyện",
       },
       sidebar: {
@@ -1628,16 +1687,14 @@
             followersOrFollowing: "Người theo dõi hoặc đang theo dõi",
           },
           title: "Cài đặt trò chuyện",
-          onlineStatusTitle: "Hiển thị trạng thái trực tuyến",
-          online_status_visibility: "Hiển thị trạng thái trực tuyến",
+          onlineStatusTitle: "Ai có thể nhìn thấy trạng thái trực tuyến của tôi?",
+          online_status_visibility: "Ai có thể nhìn thấy trạng thái trực tuyến của tôi?",
           loadFailed: "Không tải được cài đặt",
-          groupInviteTitle: "Ai có thể thêm tôi vào cuộc trò chuyện nhóm",
+          groupInviteTitle: "Ai có thể thêm tôi vào nhóm chat?",
           group_invite_permission:
-            "Ai có thể thêm tôi vào cuộc trò chuyện nhóm",
-          onlineStatusToggleAria:
-            "Bật/Tắt hiển thị trạng thái trực tuyến",
-          toggle_online_status:
-            "Bật/Tắt hiển thị trạng thái trực tuyến",
+            "Ai có thể thêm tôi vào nhóm chat?",
+          onlineStatusToggleAria: "Bật/Tắt hiển thị trạng thái trực tuyến",
+          toggle_online_status: "Bật/Tắt hiển thị trạng thái trực tuyến",
           updateFailed: "Không thể cập nhật cài đặt",
           apiUnavailable: "Không thể mở cài đặt trò chuyện",
           saving: "Đang lưu...",
@@ -1766,8 +1823,7 @@
           viewInChat: "Xem trong cuộc trò chuyện",
           moreOptionsTitle: "Tùy chọn khác",
           reachedEnd: "Bạn đã xem hết tin nhắn ghim",
-          noPinnedMessages:
-            "Chưa có tin nhắn ghim trong cuộc trò chuyện này",
+          noPinnedMessages: "Chưa có tin nhắn ghim trong cuộc trò chuyện này",
           retryLoad: "Không tải được, nhấn để thử lại",
           repliedToYourStory: "Đã trả lời tin của bạn",
           pinnedAt: "Đã ghim {time}",
@@ -1809,8 +1865,7 @@
         thisIsYourAccount: "Đây là tài khoản của bạn",
         pinnedMessagesUnavailable: "Tin nhắn đã ghim tạm thời chưa mở được",
         messageActionUnavailable: "Không thể nhắn tin",
-        privateConversationOpenFailed:
-          "Không mở được cuộc trò chuyện riêng tư",
+        privateConversationOpenFailed: "Không mở được cuộc trò chuyện riêng tư",
         addMembersGroupOnly:
           "Thêm thành viên chỉ khả dụng cho các cuộc trò chuyện nhóm",
         cannotResolvePrivateConversation:
@@ -1820,13 +1875,13 @@
           "Danh sách thành viên chỉ có sẵn cho các cuộc trò chuyện nhóm",
         addMembersAdminOnly:
           "Chỉ quản trị viên nhóm mới có thể thêm thành viên",
-        addMemberModalUnavailable:
-          "Không mở được phần thêm thành viên",
+        addMemberModalUnavailable: "Không mở được phần thêm thành viên",
         locateMessageFailed: "Không thể tìm thấy tin nhắn này",
         leaveTitle: "Rời khỏi nhóm?",
         leaveFailed: "Không thể rời khỏi nhóm",
         leaveApiUnavailable: "Không thể rời nhóm",
-        leaveUnavailableUntilCreated: "Bạn có thể rời nhóm sau khi nhóm được tạo xong",
+        leaveUnavailableUntilCreated:
+          "Bạn có thể rời nhóm sau khi nhóm được tạo xong",
         leaveSuccess: "Bạn đã rời khỏi nhóm",
         searchBackTitle: "Quay lại",
         updateMuteFailed: "Không cập nhật được trạng thái tắt tiếng",
@@ -2029,8 +2084,7 @@
           "Bạn có muốn chuyển chủ nhóm cho {name} không? Bạn sẽ trở thành quản trị viên.",
         transferOwnerMessage: "Chuyển chủ nhóm cho @{name}?",
         revokeAdminApiUnavailable: "Không thể gỡ quyền quản trị",
-        transferOwnerApiUnavailable:
-          "Không thể chuyển chủ nhóm",
+        transferOwnerApiUnavailable: "Không thể chuyển chủ nhóm",
         revoke_admin_success: "Đã gỡ quyền quản trị của {name}",
         revokeAdminSuccess: "Đã gỡ quyền quản trị viên",
         transferOwnerFailed: "Không thể chuyển chủ nhóm",
@@ -2350,25 +2404,21 @@
         members_search_failed: "Không thể tìm kiếm thành viên",
         add_members_failed: "Không thể thêm thành viên",
         jump_to_message_failed: "Không thể chuyển tới tin nhắn này",
-        assign_admin_api_unavailable:
-          "Không thể cập nhật quyền quản trị",
+        assign_admin_api_unavailable: "Không thể cập nhật quyền quản trị",
         assign_admin_failed: "Không thể cấp quyền quản trị",
         revoke_admin_api_unavailable: "Không thể gỡ quyền quản trị",
         revoke_admin_failed: "Không thể gỡ quyền quản trị",
-        transfer_owner_api_unavailable:
-          "Không thể chuyển chủ nhóm",
+        transfer_owner_api_unavailable: "Không thể chuyển chủ nhóm",
         transfer_owner_failed: "Không thể chuyển chủ nhóm",
         load_members_failed: "Không thể tải danh sách thành viên",
-        add_member_modal_unavailable:
-          "Không mở được phần thêm thành viên",
+        add_member_modal_unavailable: "Không mở được phần thêm thành viên",
         pinned_messages_unavailable: "Tin nhắn ghim tạm thời chưa dùng được",
         group_search_api_unavailable: "Không thể tìm nhóm",
         create_group_api_unavailable: "Không thể tạo nhóm",
         create_group_failed: "Không thể tạo nhóm",
         settings_load_failed: "Không thể tải cài đặt",
         settings_update_failed: "Không thể cập nhật cài đặt",
-        load_conversations_failed:
-          "Không thể tải danh sách trò chuyện",
+        load_conversations_failed: "Không thể tải danh sách trò chuyện",
         leave_group_api_unavailable: "Không thể rời nhóm",
         leave_group_failed: "Không thể rời nhóm này",
         confirm_unavailable: "Hộp thoại xác nhận tạm thời chưa dùng được",
@@ -2384,8 +2434,7 @@
         group_avatar_update_failed:
           "Không cập nhật được hình đại diện của nhóm",
         group_name_update_failed: "Không cập nhật được tên nhóm",
-        kick_member_api_unavailable:
-          "Không thể xóa thành viên khỏi nhóm",
+        kick_member_api_unavailable: "Không thể xóa thành viên khỏi nhóm",
         kick_member_failed: "Không thể xóa thành viên khỏi nhóm",
         load_messages_failed: "Không thể tải tin nhắn",
         message_action_unavailable: "Không thể nhắn tin",
@@ -2406,8 +2455,7 @@
         settings_api_unavailable: "Không thể mở cài đặt",
         theme_picker_unavailable: "Không thể đổi chủ đề",
         theme_update_failed: "Không cập nhật được chủ đề",
-        update_group_info_api_unavailable:
-          "Không thể cập nhật nhóm",
+        update_group_info_api_unavailable: "Không thể cập nhật nhóm",
         update_mute_failed: "Không cập nhật được trạng thái tắt tiếng",
       },
       account: {
@@ -2450,12 +2498,12 @@
       title: "Cài đặt tài khoản",
       subtitle: "Quản lý quyền riêng tư và tùy chọn tài khoản của bạn",
       phone_privacy: {
-        title: "Quyền riêng tư số điện thoại",
+        title: "Ai có thể nhìn thấy số điện thoại của tôi?",
         description:
           "Quản lý ai có thể xem số điện thoại trên trang cá nhân của bạn",
       },
       address_privacy: {
-        title: "Quyền riêng tư địa chỉ",
+        title: "Ai có thể nhìn thấy địa chỉ của tôi?",
         description: "Chọn ai có thể xem thông tin địa chỉ của bạn",
       },
       default_post_privacy: {
@@ -2482,12 +2530,12 @@
           "Chọn ai có thể xem tin nổi bật trên trang cá nhân của bạn",
       },
       online_status_visibility: {
-        title: "Hiển thị trạng thái hoạt động",
+        title: "Ai có thể nhìn thấy trạng thái trực tuyến của tôi?",
         description:
           "Chọn ai có thể xem trạng thái online và hoạt động gần đây của bạn",
       },
       group_chat_invite_permission: {
-        title: "Ai có thể thêm tôi vào nhóm chat",
+        title: "Ai có thể thêm tôi vào nhóm chat?",
         description: "Chọn ai có thể thêm bạn vào nhóm chat",
       },
       tag_permission: {
@@ -2514,8 +2562,7 @@
       },
       coming_soon: "{{feature}} đang được phát triển",
       coming_soon_suffix: "đang được phát triển",
-      description:
-        "Tính năng này đang được phát triển. Vui lòng quay lại sau.",
+      description: "Tính năng này đang được phát triển. Vui lòng quay lại sau.",
       go_back_home: "Về trang chủ",
     },
     core: {
@@ -2579,8 +2626,7 @@
           loadItems: "Không thể tải danh sách này",
           loadList: "Không thể tải danh sách",
           pendingLoad: "Không thể tải các yêu cầu đang chờ",
-          pendingPermission:
-            "Hiện bạn không có quyền xem các yêu cầu đang chờ",
+          pendingPermission: "Hiện bạn không có quyền xem các yêu cầu đang chờ",
           permissionChanged:
             "Quyền truy cập đã thay đổi, bạn không còn quyền xem {listLabel}",
           privateCurrentList:
@@ -2687,12 +2733,10 @@
             "Không thể chấp nhận yêu cầu theo dõi này, vui lòng thử lại",
           acceptNow: "Hiện chưa thể chấp nhận yêu cầu theo dõi này",
           apiUnavailable: "Yêu cầu theo dõi tạm thời chưa dùng được",
-          changed:
-            "Yêu cầu theo dõi đã thay đổi, vui lòng làm mới rồi thử lại",
+          changed: "Yêu cầu theo dõi đã thay đổi, vui lòng làm mới rồi thử lại",
           invalid: "Yêu cầu theo dõi không hợp lệ",
           removeForbidden: "Bạn không có quyền xóa yêu cầu theo dõi này",
-          removeGeneric:
-            "Không thể xóa yêu cầu theo dõi này, vui lòng thử lại",
+          removeGeneric: "Không thể xóa yêu cầu theo dõi này, vui lòng thử lại",
           removeNow: "Hiện chưa thể xóa yêu cầu theo dõi này",
           sessionExpired: "Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại",
           unavailable: "Yêu cầu theo dõi này không còn khả dụng",

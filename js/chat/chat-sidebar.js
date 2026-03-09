@@ -1126,14 +1126,14 @@ const ChatSidebar = {
     body.innerHTML = `
             <div class="chat-settings-item">
                     <div class="chat-settings-item-labels">
-                    <div class="chat-settings-item-title">${this.t("chat.sidebar.settings.onlineStatusTitle", "Online Status Visibility")}</div>
+                    <div class="chat-settings-item-title">${this.t("chat.sidebar.settings.onlineStatusTitle", "Who can see my online status?")}</div>
                     <div class="chat-settings-item-value" id="chat-setting-online-status-value"></div>
                 </div>
                 <button type="button" class="chat-settings-toggle-btn" id="chat-setting-online-status-btn" aria-label="${this.t("chat.sidebar.settings.onlineStatusToggleAria", "Toggle online status visibility")}"></button>
             </div>
             <div class="chat-settings-item">
                 <div class="chat-settings-item-labels">
-                    <div class="chat-settings-item-title">${this.t("chat.sidebar.settings.groupInviteTitle", "Who Can Add Me to Group Chats")}</div>
+                    <div class="chat-settings-item-title">${this.t("chat.sidebar.settings.groupInviteTitle", "Who can add me to group chats?")}</div>
                     <div class="chat-settings-item-value" id="chat-setting-group-invite-value"></div>
                 </div>
                 <button type="button" class="chat-settings-toggle-btn" id="chat-setting-group-invite-btn" aria-label="${this.t("chat.sidebar.settings.groupInviteToggleAria", "Toggle who can add you to group chats")}"></button>
