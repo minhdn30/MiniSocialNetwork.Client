@@ -8,6 +8,25 @@
         return value.toString().toLowerCase();
     }
 
+    function runtimeT(key, fallback = '', params = {}) {
+        const i18n = global.I18n;
+        if (i18n && typeof i18n.t === 'function') {
+            try {
+                const translated = i18n.t(key, params);
+                if (
+                    typeof translated === 'string' &&
+                    translated.trim().length > 0 &&
+                    translated !== key
+                ) {
+                    return translated;
+                }
+            } catch (_err) {
+                // fallback below
+            }
+        }
+        return fallback || key;
+    }
+
     function createContext(options = {}) {
         const myId = toLowerSafe(options.myAccountId || localStorage.getItem('accountId') || '');
         return {
@@ -361,10 +380,13 @@
             statusEl.innerHTML = '<span class="msg-loading-dots"><span class="msg-loading-dot"></span><span class="msg-loading-dot"></span><span class="msg-loading-dot"></span></span>';
         } else if (status === 'sent') {
             statusEl.className += ' msg-status-sent';
-            statusEl.textContent = 'Sent';
+            statusEl.textContent = runtimeT('chat.message.status.sent', 'Sent');
         } else if (status === 'failed') {
             statusEl.className += ' msg-status-failed';
-            statusEl.textContent = 'Failed to send. Click to retry.';
+            statusEl.textContent = runtimeT(
+                'chat.message.status.failed_retry',
+                'Send failed, tap to retry',
+            );
             if (typeof retryHandler === 'function') {
                 statusEl.onclick = () => retryHandler(tempId, content);
             }

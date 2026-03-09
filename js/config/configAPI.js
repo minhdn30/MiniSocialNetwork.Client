@@ -9,6 +9,7 @@
      CORE API CLIENT
      ========================= */
 
+  const API_BASE_CHANGED_EVENT = "app:api-base-changed";
   let refreshPromise = null;
   let activeApiBase = null;
 
@@ -17,6 +18,12 @@
     const trimmed = baseUrl.trim();
     if (!trimmed) return null;
     return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
+  }
+
+  function toHubBase(apiBase) {
+    const normalized = normalizeApiBase(apiBase);
+    if (!normalized) return null;
+    return normalized.replace(/\/api$/i, "");
   }
 
   function getApiBaseCandidates() {
@@ -79,7 +86,42 @@
     activeApiBase = normalized;
     if (window.APP_CONFIG) {
       window.APP_CONFIG.API_BASE = normalized;
+      window.APP_CONFIG.HUB_BASE = toHubBase(normalized) || window.APP_CONFIG.HUB_BASE;
+
+      const apiCandidates = Array.isArray(window.APP_CONFIG.API_BASE_CANDIDATES)
+        ? window.APP_CONFIG.API_BASE_CANDIDATES
+            .map(normalizeApiBase)
+            .filter(Boolean)
+            .filter((candidate) => candidate !== normalized)
+        : [];
+      window.APP_CONFIG.API_BASE_CANDIDATES = [normalized, ...apiCandidates];
+
+      const selectedHubBase = toHubBase(normalized);
+      if (selectedHubBase) {
+        const hubCandidates = Array.isArray(window.APP_CONFIG.HUB_BASE_CANDIDATES)
+          ? window.APP_CONFIG.HUB_BASE_CANDIDATES
+              .map((candidate) =>
+                typeof candidate === "string"
+                  ? candidate.trim().replace(/\/$/, "")
+                  : null,
+              )
+              .filter(Boolean)
+              .filter((candidate) => candidate !== selectedHubBase)
+          : [];
+        window.APP_CONFIG.HUB_BASE_CANDIDATES = [selectedHubBase, ...hubCandidates];
+      }
     }
+
+    try {
+      window.dispatchEvent(
+        new CustomEvent(API_BASE_CHANGED_EVENT, {
+          detail: {
+            apiBase: normalized,
+            hubBase: toHubBase(normalized) || "",
+          },
+        }),
+      );
+    } catch (_error) {}
   }
 
   function getCurrentApiBase() {
@@ -379,6 +421,76 @@
       .join("&");
 
     return query ? `${url}&${query}` : url;
+  }
+
+  function appendDefinedAccountSetting(target, key, value) {
+    if (value === undefined || value === null) return;
+    target[key] = value;
+  }
+
+  function buildAccountSettingsPayload(settings = {}, overrides = {}) {
+    const payload = {};
+    appendDefinedAccountSetting(
+      payload,
+      "PhonePrivacy",
+      settings.phonePrivacy ?? settings.PhonePrivacy,
+    );
+    appendDefinedAccountSetting(
+      payload,
+      "AddressPrivacy",
+      settings.addressPrivacy ?? settings.AddressPrivacy,
+    );
+    appendDefinedAccountSetting(
+      payload,
+      "DefaultPostPrivacy",
+      settings.defaultPostPrivacy ?? settings.DefaultPostPrivacy,
+    );
+    appendDefinedAccountSetting(
+      payload,
+      "FollowerPrivacy",
+      settings.followerPrivacy ?? settings.FollowerPrivacy,
+    );
+    appendDefinedAccountSetting(
+      payload,
+      "FollowingPrivacy",
+      settings.followingPrivacy ?? settings.FollowingPrivacy,
+    );
+    appendDefinedAccountSetting(
+      payload,
+      "FollowPrivacy",
+      settings.followPrivacy ?? settings.FollowPrivacy,
+    );
+    appendDefinedAccountSetting(
+      payload,
+      "StoryHighlightPrivacy",
+      settings.storyHighlightPrivacy ?? settings.StoryHighlightPrivacy,
+    );
+    appendDefinedAccountSetting(
+      payload,
+      "GroupChatInvitePermission",
+      settings.groupChatInvitePermission ?? settings.GroupChatInvitePermission,
+    );
+    appendDefinedAccountSetting(
+      payload,
+      "OnlineStatusVisibility",
+      settings.onlineStatusVisibility ?? settings.OnlineStatusVisibility,
+    );
+    appendDefinedAccountSetting(
+      payload,
+      "TagPermission",
+      settings.tagPermission ?? settings.TagPermission,
+    );
+
+    const nextLanguage =
+      overrides.Language ??
+      overrides.language ??
+      settings.language ??
+      settings.Language;
+    if (nextLanguage !== undefined) {
+      payload.Language = nextLanguage;
+    }
+
+    return payload;
   }
 
   /* =========================
@@ -706,6 +818,13 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
         }),
+      updateLanguagePreference: async (language) => {
+        return apiFetch("/Accounts/settings", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ Language: language }),
+        });
+      },
       reactivate: () => apiFetch(`/Accounts/reactivate`, { method: "POST" }),
     },
 
@@ -1086,18 +1205,36 @@
           body: JSON.stringify(data),
         }),
     },
+    getCurrentBase: () => getCurrentApiBase(),
+    getCurrentHubBase: () =>
+      toHubBase(getCurrentApiBase()) || window.APP_CONFIG?.HUB_BASE || "",
+    events: {
+      API_BASE_CHANGED: API_BASE_CHANGED_EVENT,
+    },
   };
 
   // Global Reactivation Handler
   async function handleGlobalReactivation(message) {
     if (typeof showToast !== "function") return;
 
+    const promptMessage = message
+      ? window.I18n?.translateServerText?.(message) ||
+        window.I18n?.translateLiteral?.(message) ||
+        message
+      : window.I18n?.t?.("errors.account.restricted") ||
+        "Your account is currently restricted. Please reactivate to continue.";
+    const reactivateLabel =
+      window.I18n?.t?.("auth.reactivateNow", {}, "Reactivate now") ||
+      "Reactivate now";
+    const laterLabel =
+      window.I18n?.t?.("auth.later", {}, "Later") || "Later";
+
     showToast(
       `<div>
-            <p style="margin-bottom: 8px;">${message}</p>
+            <p style="margin-bottom: 8px;">${promptMessage}</p>
             <div class="toast-actions">
-              <button class="toast-btn" onclick="window.reactivateAccountAction()">Reactivate Now</button>
-              <button class="toast-btn secondary" onclick="window.closeToast()">Later</button>
+              <button class="toast-btn" onclick="window.reactivateAccountAction()">${reactivateLabel}</button>
+              <button class="toast-btn secondary" onclick="window.closeToast()">${laterLabel}</button>
             </div>
           </div>`,
       "error",
@@ -1110,8 +1247,9 @@
     try {
       const res = await window.API.Accounts.reactivate();
       if (res.ok) {
-        if (typeof toastSuccess === "function")
-          toastSuccess("Account reactivated successfully!");
+        if (typeof toastSuccessKey === "function") {
+          toastSuccessKey("errors.account.reactivationSuccess");
+        }
         setTimeout(() => {
           window.closeToast();
           if (window.location.pathname.includes("auth.html")) {
@@ -1122,13 +1260,25 @@
         }, 1000);
       } else {
         const data = await res.json();
-        if (typeof toastError === "function")
-          toastError(data.message || "Reactivation failed");
+        if (typeof toastError === "function") {
+          const uiError = window.UIErrors?.format(
+            "account",
+            "reactivate",
+            res.status,
+            data?.message || data?.Message,
+          );
+          toastError(
+            uiError?.message ||
+              window.I18n?.t?.("errors.account.reactivationFailed") ||
+              "Reactivation failed",
+          );
+        }
       }
     } catch (err) {
       console.error(err);
-      if (typeof toastError === "function")
-        toastError("Error during reactivation");
+      if (typeof toastErrorKey === "function") {
+        toastErrorKey("errors.account.reactivationError");
+      }
     }
   };
 

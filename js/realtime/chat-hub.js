@@ -171,7 +171,6 @@
             return false;
         }
 
-        console.log(`[ChatRealtime] Rejoined ${trackedIds.length} conversation groups after ${trigger}.`);
         return true;
     }
 
@@ -460,7 +459,6 @@
                             return false;
                         }
                         console.log(`[SignalR] Network Join: ${normalizedConversationId}`);
-
                         // Owner might have been released while JoinConversation was in flight.
                         // In that case, immediately send a leave to prevent stale network membership.
                         if (getTotalRefCount(normalizedConversationId) <= 0) {
@@ -491,7 +489,6 @@
                             return false;
                         }
                         console.log(`[SignalR] Network Leave: ${normalizedConversationId}`);
-
                         // A new owner may have been added while LeaveConversation was in flight.
                         // Re-join immediately to keep network membership aligned with local refs.
                         if (getTotalRefCount(normalizedConversationId) > 0) {

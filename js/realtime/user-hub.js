@@ -16,6 +16,10 @@
   const SYSTEM_MESSAGE_ACTION_MEMBER_ADDED = 1;
   const SYSTEM_MESSAGE_ACTION_GROUP_CREATED = 7;
 
+  function uhT(key, params = {}, fallback = "") {
+    return global.I18n?.t ? global.I18n.t(key, params, fallback) : fallback;
+  }
+
   function stopHeartbeatLoop() {
     if (heartbeatTimer) {
       clearInterval(heartbeatTimer);
@@ -473,8 +477,19 @@
           return "";
         };
 
+        const getHubBase = () => {
+          if (window.API?.getCurrentHubBase) {
+            const currentHubBase = window.API.getCurrentHubBase();
+            if (currentHubBase) {
+              return currentHubBase;
+            }
+          }
+
+          return window.APP_CONFIG?.HUB_BASE || "http://localhost:5000";
+        };
+
         // 1. Create connection
-        const hubBase = window.APP_CONFIG?.HUB_BASE || "http://localhost:5000";
+        const hubBase = getHubBase();
         connection = new signalR.HubConnectionBuilder()
           .withUrl(`${hubBase}/userHub`, {
             accessTokenFactory: () => getTokenForHub(),
@@ -724,7 +739,13 @@
 
           if (msgAction === "follow" && msgCurrentId && msgCurrentId !== myId) {
             if (window.toastInfo) {
-              toastInfo("You have a new follower!");
+              toastInfo(
+                uhT(
+                  "notification.toast.newFollower",
+                  {},
+                  "You have a new follower",
+                ),
+              );
             }
             return;
           }
@@ -735,16 +756,34 @@
             msgCurrentId !== myId
           ) {
             if (window.toastInfo) {
-              toastInfo("You have a new follow request.");
+              toastInfo(
+                uhT(
+                  "notification.toast.newFollowRequest",
+                  {},
+                  "You have a new follow request",
+                ),
+              );
             }
             return;
           }
 
           if (msgAction === "follow_request_accepted") {
             if (window.toastSuccess) {
-              toastSuccess("Your follow request was accepted.");
+              toastSuccess(
+                uhT(
+                  "notification.toast.followRequestAccepted",
+                  {},
+                  "Your follow request was accepted",
+                ),
+              );
             } else if (window.toastInfo) {
-              toastInfo("Your follow request was accepted.");
+              toastInfo(
+                uhT(
+                  "notification.toast.followRequestAccepted",
+                  {},
+                  "Your follow request was accepted",
+                ),
+              );
             }
             return;
           }

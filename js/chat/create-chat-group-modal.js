@@ -10,6 +10,7 @@ let cgSearchRequestSequence = 0;
 let cgAvatarPreviewObjectUrl = null;
 let cgIsEventBound = false;
 let cgIsCreatingGroup = false;
+let cgLanguageCleanup = null;
 
 const cgGetTotalMemberLimit = () =>
   window.APP_CONFIG?.GROUP_CHAT_MEMBER_LIMIT || 50;
@@ -30,6 +31,131 @@ const cgGetGroupNameMinLength = () =>
 const cgGetGroupNameMaxLength = () =>
   window.APP_CONFIG?.GROUP_NAME_MAX_LENGTH || 50;
 
+function cgInterpolate(template, params = {}) {
+  return String(template || "").replace(/\{(\w+)\}/g, (_match, key) => {
+    const value = params?.[key];
+    return value === null || value === undefined ? "" : String(value);
+  });
+}
+
+function cgT(key, fallback = "", params = {}) {
+  if (window.ChatCommon && typeof window.ChatCommon.t === "function") {
+    return window.ChatCommon.t(key, fallback, params);
+  }
+  return cgInterpolate(fallback || key, params);
+}
+
+function cgFormatCount(value) {
+  if (
+    window.ChatCommon &&
+    typeof window.ChatCommon.formatCount === "function"
+  ) {
+    return window.ChatCommon.formatCount(value);
+  }
+
+  try {
+    return new Intl.NumberFormat().format(Number(value) || 0);
+  } catch (_error) {
+    return String(Number(value) || 0);
+  }
+}
+
+function cgTranslateDom(root) {
+  if (
+    window.ChatCommon &&
+    typeof window.ChatCommon.translateDom === "function"
+  ) {
+    window.ChatCommon.translateDom(root);
+  }
+}
+
+function cgGetUnknownUserLabel() {
+  if (
+    window.ChatCommon &&
+    typeof window.ChatCommon.getUnknownUserLabel === "function"
+  ) {
+    return window.ChatCommon.getUnknownUserLabel();
+  }
+  return cgT("chat.common.unknown_user", "Unknown user");
+}
+
+function cgGetUnknownUsernameLabel() {
+  if (
+    window.ChatCommon &&
+    typeof window.ChatCommon.getUnknownUsernameLabel === "function"
+  ) {
+    return window.ChatCommon.getUnknownUsernameLabel();
+  }
+  return cgT("chat.common.username_unknown", "unknown");
+}
+
+async function cgReadFriendlyApiError(res, options = {}) {
+  const fallbackMessage =
+    options.fallbackMessage ||
+    cgT("errors.chat.generic", "Something went wrong. Please try again.");
+
+  if (
+    window.ChatCommon &&
+    typeof window.ChatCommon.readFriendlyApiError === "function"
+  ) {
+    return window.ChatCommon.readFriendlyApiError(res, {
+      feature: "chat",
+      action: "create-group",
+      ...options,
+      fallbackMessage,
+    });
+  }
+
+  return fallbackMessage;
+}
+
+function cgGetCreateButtonLabel() {
+  return cgT("chat.group_modal.create_group_action", "Create Group");
+}
+
+function cgUpdateCreateButtonText(isLoading = false) {
+  const createBtn = document.getElementById("btn-create-group");
+  if (!createBtn) return;
+
+  if (isLoading) {
+    createBtn.innerHTML = `<span class="spinner spinner-tiny" aria-hidden="true"></span><span>${cgT("chat.group_modal.creating", "Creating...")}</span>`;
+    return;
+  }
+
+  createBtn.textContent = cgGetCreateButtonLabel();
+}
+
+function cgApplyRuntimeTranslations() {
+  const modal = document.getElementById("createGroupModal");
+  if (!modal) return;
+
+  cgTranslateDom(modal);
+  cgRenderChips();
+  cgUpdateCount();
+  cgUpdateCreateBtn();
+
+  const keyword =
+    document.getElementById("member-search-input")?.value?.trim() || "";
+  if (cgSearchResults.length > 0) {
+    cgRenderFriends(cgSearchResults, keyword);
+    return;
+  }
+
+  if (keyword.length === 1) {
+    cgRenderEmptyState(
+      cgT(
+        "chat.group_modal.search_min_chars",
+        "Type at least 2 characters to search",
+      ),
+    );
+    return;
+  }
+
+  // Re-run the current search/recent-contacts state so empty/error messages
+  // are refreshed in the active language instead of falling back to stale text.
+  cgSearchAccountsForInvite(keyword, { showLoading: false });
+}
+
 /* ===== Open / Close ===== */
 
 window.openCreateChatGroupModal = function () {
@@ -38,6 +164,7 @@ window.openCreateChatGroupModal = function () {
 
   cgEnsureEventBindings();
   cgResetForm();
+  cgTranslateDom(modal);
 
   modal.classList.add("show");
   if (window.lockScroll) window.lockScroll();
@@ -78,7 +205,12 @@ function cgEnsureEventBindings() {
 
       // 1 char: just show hint, no API call
       if (keyword.length === 1) {
-        cgRenderEmptyState("Type at least 2 characters to search");
+        cgRenderEmptyState(
+          cgT(
+            "chat.group_modal.search_min_chars",
+            "Type at least 2 characters to search",
+          ),
+        );
         return;
       }
 
@@ -138,6 +270,18 @@ function cgEnsureEventBindings() {
     createBtn.addEventListener("click", cgHandleCreateGroup);
   }
 
+  if (
+    !cgLanguageCleanup &&
+    window.ChatCommon &&
+    typeof window.ChatCommon.onLanguageChange === "function"
+  ) {
+    cgLanguageCleanup = window.ChatCommon.onLanguageChange(() => {
+      const modal = document.getElementById("createGroupModal");
+      if (!modal || !modal.classList.contains("show")) return;
+      cgApplyRuntimeTranslations();
+    });
+  }
+
   cgIsEventBound = true;
 }
 
@@ -171,8 +315,7 @@ function cgResetForm() {
   const hint = document.getElementById("cg-no-members-hint");
   if (hint) hint.classList.remove("hidden");
 
-  const createBtn = document.getElementById("btn-create-group");
-  if (createBtn) createBtn.textContent = "Create Group";
+  cgUpdateCreateButtonText(false);
 
   cgRenderLoadingSkeleton();
   cgUpdateCount();
@@ -187,7 +330,13 @@ function cgHandleAvatarUpload(event) {
 
   if (file.size > cgGetAvatarMaxBytes()) {
     if (window.toastError) {
-      window.toastError(`Image too large (max ${cgGetAvatarMaxSizeMb()}MB)`);
+      window.toastError(
+        cgT(
+          "chat.group_modal.avatar_too_large",
+          "Image too large (max {size}MB)",
+          { size: cgFormatCount(cgGetAvatarMaxSizeMb()) },
+        ),
+      );
     }
 
     if (event?.target) {
@@ -264,12 +413,22 @@ async function cgSearchAccountsForInvite(keyword, { showLoading = true } = {}) {
 
   // 1 char: don't call API, just show hint
   if (normalizedKeyword.length === 1) {
-    cgRenderEmptyState("Type at least 2 characters to search");
+    cgRenderEmptyState(
+      cgT(
+        "chat.group_modal.search_min_chars",
+        "Type at least 2 characters to search",
+      ),
+    );
     return;
   }
 
   if (!window.API?.Conversations?.searchAccountsForGroupInvite) {
-    cgRenderEmptyState("Search API is unavailable");
+    cgRenderEmptyState(
+      cgT(
+        "errors.chat.group_search_api_unavailable",
+        "Search is unavailable right now",
+      ),
+    );
     return;
   }
 
@@ -289,11 +448,11 @@ async function cgSearchAccountsForInvite(keyword, { showLoading = true } = {}) {
     if (requestSequence !== cgSearchRequestSequence) return;
 
     if (!res.ok) {
-      let errorMessage = "Failed to load users";
-      try {
-        const errorData = await res.json();
-        errorMessage = errorData?.message || errorData?.title || errorMessage;
-      } catch (_) {}
+      const errorMessage = await cgReadFriendlyApiError(res, {
+        action: "search-group-invite-accounts",
+        fallbackKey: "errors.chat.members_search_failed",
+        fallbackMessage: "Couldn't search members",
+      });
       cgRenderEmptyState(errorMessage);
       return;
     }
@@ -315,7 +474,9 @@ async function cgSearchAccountsForInvite(keyword, { showLoading = true } = {}) {
   } catch (err) {
     if (requestSequence !== cgSearchRequestSequence) return;
     console.error("Failed to search group invite accounts:", err);
-    cgRenderEmptyState("Could not connect to server");
+    cgRenderEmptyState(
+      cgT("errors.chat.connection_failed", "Can't connect to the server"),
+    );
   }
 }
 
@@ -324,7 +485,8 @@ function cgNormalizeSearchAccount(raw) {
 
   return {
     id: raw.accountId || raw.AccountId || "",
-    fullName: raw.fullName || raw.FullName || "",
+    fullName:
+      raw.fullName || raw.FullName || raw.username || raw.Username || "",
     username:
       raw.username || raw.userName || raw.UserName || raw.Username || "",
     avatar: raw.avatarUrl || raw.AvatarUrl || raw.avatar || raw.Avatar || "",
@@ -336,8 +498,9 @@ function cgNormalizeSelectedMember(member) {
 
   return {
     id: member.id || "",
-    fullName: member.name || "",
-    username: member.username || "",
+    fullName:
+      member.name || member.fullName || member.username || cgGetUnknownUserLabel(),
+    username: member.username || cgGetUnknownUsernameLabel(),
     avatar: member.avatar || "",
   };
 }
@@ -388,7 +551,7 @@ function cgRenderEmptyState(message) {
   const list = document.getElementById("friend-selection-list");
   if (!list) return;
 
-  list.innerHTML = `<div class="cg-empty-state">${cgEscapeHtml(message || "No results")}</div>`;
+  list.innerHTML = `<div class="cg-empty-state">${cgEscapeHtml(message || cgT("common.empty.no_results", "No results"))}</div>`;
 }
 
 function cgRenderFriends(users, keyword) {
@@ -397,24 +560,37 @@ function cgRenderFriends(users, keyword) {
 
   if (!users || users.length === 0) {
     if ((keyword || "").length === 1) {
-      cgRenderEmptyState("Type at least 2 characters to search");
+      cgRenderEmptyState(
+        cgT(
+          "chat.group_modal.search_min_chars",
+          "Type at least 2 characters to search",
+        ),
+      );
       return;
     }
 
     if ((keyword || "").length === 0) {
-      cgRenderEmptyState("No recent contacts available");
+      cgRenderEmptyState(
+        cgT(
+          "chat.group_modal.no_recent_contacts",
+          "No recent contacts available",
+        ),
+      );
       return;
     }
 
-    cgRenderEmptyState("No matching users found");
+    cgRenderEmptyState(
+      cgT("chat.group_modal.no_matching_users", "No matching users found"),
+    );
     return;
   }
 
   list.innerHTML = users
     .map((user) => {
       const isSelected = cgSelectedMembers.some((m) => m.id === user.id);
-      const displayName = user.fullName || user.username || "Unknown user";
-      const displayUsername = user.username || "unknown";
+      const displayName =
+        user.fullName || user.username || cgGetUnknownUserLabel();
+      const displayUsername = user.username || cgGetUnknownUsernameLabel();
       const avatarUrl = user.avatar || cgGetDefaultAvatar();
 
       return `
@@ -450,7 +626,14 @@ function cgToggleMember(id, name, avatar, username) {
     if (cgSelectedMembers.length >= cgGetMemberLimit()) {
       if (window.toastWarning)
         window.toastWarning(
-          `You can select up to ${cgGetMemberLimit()} members (max ${cgGetTotalMemberLimit()} including you)`,
+          cgT(
+            "chat.group_modal.member_limit_warning",
+            "You can select up to {selectedLimit} members (max {totalLimit} including you)",
+            {
+              selectedLimit: cgFormatCount(cgGetMemberLimit()),
+              totalLimit: cgFormatCount(cgGetTotalMemberLimit()),
+            },
+          ),
         );
       return;
     }
@@ -491,7 +674,9 @@ function cgRenderChips() {
   container.classList.remove("hidden");
   container.innerHTML = cgSelectedMembers
     .map((m) => {
-      const displayUsername = m.username ? `@${m.username}` : "@unknown";
+      const displayUsername = m.username
+        ? `@${m.username}`
+        : `@${cgGetUnknownUsernameLabel()}`;
 
       return `
         <div class="cg-chip">
@@ -516,7 +701,11 @@ function cgRenderChips() {
 
 function cgUpdateCount() {
   const el = document.getElementById("cg-selected-count");
-  if (el) el.textContent = `${cgSelectedMembers.length} selected`;
+  if (!el) return;
+
+  el.textContent = cgT("chat.group_modal.selected_count", "{count} selected", {
+    count: cgFormatCount(cgSelectedMembers.length),
+  });
 }
 
 function cgUpdateCreateBtn() {
@@ -529,6 +718,9 @@ function cgUpdateCreateBtn() {
     cgSelectedMembers.length >= cgGetMinSelectedMembers();
 
   btn.disabled = cgIsCreatingGroup || !valid;
+  if (!cgIsCreatingGroup) {
+    cgUpdateCreateButtonText(false);
+  }
 }
 
 function cgEscapeHtml(text) {
@@ -560,7 +752,11 @@ async function cgHandleCreateGroup() {
   if (name.length < cgGetGroupNameMinLength()) {
     if (window.toastWarning) {
       window.toastWarning(
-        `Group name must be at least ${cgGetGroupNameMinLength()} characters`,
+        cgT(
+          "chat.group_modal.group_name_min_length",
+          "Group name must be at least {count} characters",
+          { count: cgFormatCount(cgGetGroupNameMinLength()) },
+        ),
       );
     }
     cgUpdateCreateBtn();
@@ -570,7 +766,11 @@ async function cgHandleCreateGroup() {
   if (memberIds.length < cgGetMinSelectedMembers()) {
     if (window.toastWarning) {
       window.toastWarning(
-        `Select at least ${cgGetMinSelectedMembers()} members`,
+        cgT(
+          "chat.group_modal.select_min_members",
+          "Select at least {count} members",
+          { count: cgFormatCount(cgGetMinSelectedMembers()) },
+        ),
       );
     }
     cgUpdateCreateBtn();
@@ -578,7 +778,14 @@ async function cgHandleCreateGroup() {
   }
 
   if (!window.API?.Conversations?.createGroup) {
-    if (window.toastError) window.toastError("Create group API is unavailable");
+    if (window.toastError) {
+      window.toastError(
+        cgT(
+          "errors.chat.create_group_api_unavailable",
+          "Create group is unavailable right now",
+        ),
+      );
+    }
     return;
   }
 
@@ -593,13 +800,16 @@ async function cgHandleCreateGroup() {
   createBtn.disabled = true;
   createBtn.classList.add("is-loading");
   createBtn.setAttribute("aria-busy", "true");
-  createBtn.innerHTML =
-    '<span class="spinner spinner-tiny" aria-hidden="true"></span><span>Creating...</span>';
+  cgUpdateCreateButtonText(true);
 
   try {
     const res = await window.API.Conversations.createGroup(formData);
     if (!res.ok) {
-      const message = await cgReadErrorMessage(res, "Failed to create group");
+      const message = await cgReadFriendlyApiError(res, {
+        action: "create-group",
+        fallbackKey: "errors.chat.create_group_failed",
+        fallbackMessage: "Failed to create group",
+      });
       if (window.toastError) window.toastError(message);
       return;
     }
@@ -646,53 +856,24 @@ async function cgHandleCreateGroup() {
     }
 
     if (window.toastSuccess) {
-      window.toastSuccess("Group created successfully");
+      window.toastSuccess(
+        cgT("chat.group_modal.create_success", "Group created successfully"),
+      );
     }
 
     window.closeCreateChatGroupModal();
   } catch (err) {
     console.error("Failed to create group:", err);
-    if (window.toastError) window.toastError("Could not connect to server");
+    if (window.toastError) {
+      window.toastError(
+        cgT("errors.chat.connection_failed", "Can't connect to the server"),
+      );
+    }
   } finally {
     cgIsCreatingGroup = false;
     createBtn.classList.remove("is-loading");
     createBtn.removeAttribute("aria-busy");
-    createBtn.textContent = "Create Group";
+    cgUpdateCreateButtonText(false);
     cgUpdateCreateBtn();
   }
-}
-
-async function cgReadErrorMessage(res, fallbackMessage) {
-  let message = fallbackMessage || "Request failed";
-
-  try {
-    const data = await res.json();
-    if (data && typeof data === "object") {
-      if (typeof data.message === "string" && data.message.trim()) {
-        return data.message.trim();
-      }
-      if (typeof data.title === "string" && data.title.trim()) {
-        return data.title.trim();
-      }
-
-      if (data.errors && typeof data.errors === "object") {
-        const firstErrorKey = Object.keys(data.errors)[0];
-        const firstErrorValue = firstErrorKey
-          ? data.errors[firstErrorKey]
-          : null;
-        if (Array.isArray(firstErrorValue) && firstErrorValue.length > 0) {
-          return String(firstErrorValue[0]);
-        }
-      }
-    }
-  } catch (_) {}
-
-  try {
-    const text = await res.text();
-    if (typeof text === "string" && text.trim()) {
-      message = text.trim();
-    }
-  } catch (_) {}
-
-  return message;
 }

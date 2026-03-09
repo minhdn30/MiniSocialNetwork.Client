@@ -152,7 +152,6 @@ window.EmojiUtils = {
       // Apply theme
       const isLightMode = document.body.classList.contains("light-mode");
       picker.className = isLightMode ? "light" : "dark";
-
       // Listen for emoji selection
       picker.addEventListener("emoji-click", (event) => {
         if (onSelect) {
@@ -163,7 +162,6 @@ window.EmojiUtils = {
           });
         }
       });
-
       container.appendChild(picker);
 
       // Fix indicator bar width calculation in shadow DOM

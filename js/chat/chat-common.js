@@ -147,6 +147,9 @@ const ChatCommon = {
 
       if (membersToShow.length > 0) {
         // Build composite avatar UI for members
+        const memberAvatarAlt = this.escapeAttribute(
+          this.t("chat.avatar.member_alt", "Member avatar"),
+        );
         let compositeHtml = `<div class="${className} composite-group-avatar count-${membersToShow.length}"${titleAttr}>`;
 
         membersToShow.forEach((url, i) => {
@@ -155,7 +158,7 @@ const ChatCommon = {
             url && typeof url === "string" && url.trim().length > 0
               ? escapeHtml(url)
               : fallbackAvatar;
-          compositeHtml += `<img src="${safeUrl}" alt="Member avatar" class="composite-avatar-part item-${i}" onerror="this.src='${fallbackAvatar}';">`;
+          compositeHtml += `<img src="${safeUrl}" alt="${memberAvatarAlt}" class="composite-avatar-part item-${i}" onerror="this.src='${fallbackAvatar}';">`;
         });
 
         compositeHtml += `</div>`;
@@ -228,6 +231,390 @@ const ChatCommon = {
 
   getDefaultGroupAvatar() {
     return "ICON:users";
+  },
+
+  _languageChangeEventNames: [
+    "app-language-changed",
+    "app:language-changed",
+    "i18n:language-changed",
+    "languagechange",
+  ],
+
+  getI18n() {
+    const i18n = window.I18n;
+    return i18n && typeof i18n === "object" ? i18n : null;
+  },
+
+  getCurrentLanguage() {
+    const i18n = this.getI18n();
+    if (i18n && typeof i18n.getLanguage === "function") {
+      try {
+        const language = i18n.getLanguage();
+        if (typeof language === "string" && language.trim().length > 0) {
+          return language.trim().toLowerCase();
+        }
+      } catch (_err) {
+        // ignore i18n runtime errors and fall back below
+      }
+    }
+
+    const storedLanguage = localStorage.getItem("appLanguage");
+    if (
+      typeof storedLanguage === "string" &&
+      storedLanguage.trim().length > 0
+    ) {
+      return storedLanguage.trim().toLowerCase();
+    }
+
+    const browserLanguage =
+      navigator.language ||
+      navigator.userLanguage ||
+      navigator.languages?.[0] ||
+      "en";
+    return /^vi/i.test(browserLanguage) ? "vi" : "en";
+  },
+
+  interpolateText(template, params = {}) {
+    const source =
+      template === null || template === undefined ? "" : String(template);
+    return source.replace(/\{(\w+)\}/g, (_match, key) => {
+      const raw = params?.[key];
+      return raw === null || raw === undefined ? "" : String(raw);
+    });
+  },
+
+  t(key, fallback = "", params = {}) {
+    const i18n = this.getI18n();
+    if (i18n && typeof i18n.t === "function") {
+      try {
+        const translated = i18n.t(key, params);
+        if (
+          typeof translated === "string" &&
+          translated.trim().length > 0 &&
+          translated !== key
+        ) {
+          return translated;
+        }
+      } catch (_err) {
+        // fall back to the provided English copy
+      }
+    }
+
+    return this.interpolateText(fallback || key, params);
+  },
+
+  translateServerText(value) {
+    const raw = (value || "").toString().trim();
+    if (!raw) return "";
+
+    const i18n = this.getI18n();
+    if (i18n && typeof i18n.translateLiteral === "function") {
+      const translatedLiteral = i18n.translateLiteral(raw);
+      if (translatedLiteral && translatedLiteral !== raw) {
+        return translatedLiteral;
+      }
+    }
+
+    return raw;
+  },
+
+  translateDom(root = document) {
+    const i18n = this.getI18n();
+    if (!i18n || typeof i18n.translateDom !== "function") return;
+
+    try {
+      i18n.translateDom(root);
+    } catch (_err) {
+      // ignore translation refresh failures in chat helpers
+    }
+  },
+
+  onLanguageChange(callback, options = {}) {
+    if (typeof callback !== "function") {
+      return () => {};
+    }
+
+    const handlers = this._languageChangeEventNames.map((eventName) => {
+      const handler = (event) => callback(event);
+      window.addEventListener(eventName, handler);
+      return { eventName, handler };
+    });
+
+    if (options.invokeImmediately) {
+      callback();
+    }
+
+    return () => {
+      handlers.forEach(({ eventName, handler }) => {
+        window.removeEventListener(eventName, handler);
+      });
+    };
+  },
+
+  escapeAttribute(value) {
+    const raw = value === null || value === undefined ? "" : String(value);
+    if (typeof escapeHtml === "function") {
+      return escapeHtml(raw).replace(/`/g, "&#96;");
+    }
+
+    return raw
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;")
+      .replace(/`/g, "&#96;");
+  },
+
+  getUnknownUserLabel() {
+    return this.t("chat.common.user", "User");
+  },
+
+  getUnknownUsernameLabel() {
+    return this.t("chat.common.username_unknown", "unknown");
+  },
+
+  getChatFallbackLabel() {
+    return this.t("chat.common.chat", "Chat");
+  },
+
+  getGroupChatFallbackLabel() {
+    return this.t("chat.common.group_chat", "Group chat");
+  },
+
+  getYouLabel() {
+    return this.t("chat.common.you", "You");
+  },
+
+  formatCount(value) {
+    try {
+      return new Intl.NumberFormat(this.getCurrentLanguage()).format(
+        Number(value) || 0,
+      );
+    } catch (_err) {
+      return String(Number(value) || 0);
+    }
+  },
+
+  getUiErrorsHelper() {
+    return (
+      window.UIErrors ||
+      window.UiErrors ||
+      window.uiErrors ||
+      window.UIErrorMapper ||
+      null
+    );
+  },
+
+  async readFriendlyApiError(response, options = {}) {
+    const {
+      feature = "chat",
+      action = "generic",
+      fallbackKey = "errors.chat.generic",
+      fallbackMessage = "Something went wrong. Please try again.",
+      context = {},
+    } = options;
+
+    if (!response) {
+      return this.t(fallbackKey, fallbackMessage, context);
+    }
+
+    const status = Number(response.status || 0);
+    let rawServerMessage = "";
+    let validationErrors = null;
+
+    const parseSource =
+      typeof response.clone === "function" ? response.clone() : null;
+    const jsonSource = parseSource || response;
+
+    try {
+      const data = await jsonSource.json();
+      const messageCandidate =
+        data?.message || data?.Message || data?.title || data?.Title || "";
+      rawServerMessage =
+        typeof messageCandidate === "string" ? messageCandidate.trim() : "";
+      validationErrors =
+        data?.errors && typeof data.errors === "object" ? data.errors : null;
+    } catch (_err) {
+      // ignore malformed or empty error payloads
+    }
+
+    if (!rawServerMessage && parseSource) {
+      try {
+        const text = await response.text();
+        rawServerMessage = typeof text === "string" ? text.trim() : "";
+      } catch (_err) {
+        // ignore plain-text parsing issues
+      }
+    }
+
+    const uiErrors = this.getUiErrorsHelper();
+    if (uiErrors) {
+      const resolverCandidates = [
+        () =>
+          typeof uiErrors.resolve === "function"
+            ? uiErrors.resolve({
+                feature,
+                action,
+                status,
+                rawServerMessage,
+                validationErrors,
+                context,
+              })
+            : null,
+        () =>
+          typeof uiErrors.getMessage === "function"
+            ? uiErrors.getMessage({
+                feature,
+                action,
+                status,
+                rawServerMessage,
+                validationErrors,
+                context,
+              })
+            : null,
+        () =>
+          typeof uiErrors.map === "function"
+            ? uiErrors.map({
+                feature,
+                action,
+                status,
+                rawServerMessage,
+                validationErrors,
+                context,
+              })
+            : null,
+      ];
+
+      for (const resolveMessage of resolverCandidates) {
+        try {
+          const resolved = resolveMessage();
+          if (
+            typeof resolved === "string" &&
+            resolved.trim().length > 0 &&
+            resolved !== rawServerMessage
+          ) {
+            return resolved.trim();
+          }
+
+          if (
+            resolved &&
+            typeof resolved === "object" &&
+            typeof resolved.message === "string" &&
+            resolved.message.trim().length > 0 &&
+            resolved.message !== rawServerMessage
+          ) {
+            return resolved.message.trim();
+          }
+
+          if (
+            resolved &&
+            typeof resolved === "object" &&
+            typeof resolved.key === "string" &&
+            resolved.key.trim().length > 0
+          ) {
+            return this.t(resolved.key, fallbackMessage, context);
+          }
+        } catch (_err) {
+          // ignore UI error mapper failures and fall back safely
+        }
+      }
+    }
+
+    if (status === 413) {
+      return this.t(
+        "errors.chat.payload_too_large",
+        "The selected attachment is too large.",
+      );
+    }
+
+    if (status === 401 || status === 403) {
+      return this.t(
+        "errors.chat.permission_denied",
+        "You do not have permission to do that.",
+      );
+    }
+
+    if (status >= 500) {
+      return this.t(
+        "errors.chat.server_busy",
+        "The server is busy right now. Please try again.",
+      );
+    }
+
+    return this.t(fallbackKey, fallbackMessage, context);
+  },
+
+  formatRelativeTime(dateVal, short = false) {
+    if (!dateVal) return "";
+
+    const i18n = this.getI18n();
+    const normalizedShort = !!short;
+    const candidates = [
+      () =>
+        typeof i18n?.formatRelativeTime === "function"
+          ? i18n.formatRelativeTime(dateVal, { short: normalizedShort })
+          : null,
+      () =>
+        typeof i18n?.formatTimeAgo === "function"
+          ? i18n.formatTimeAgo(dateVal, { short: normalizedShort })
+          : null,
+      () =>
+        typeof i18n?.timeAgo === "function"
+          ? i18n.timeAgo(dateVal, normalizedShort)
+          : null,
+    ];
+
+    for (const resolveValue of candidates) {
+      try {
+        const resolved = resolveValue();
+        if (typeof resolved === "string" && resolved.trim().length > 0) {
+          return resolved.trim();
+        }
+      } catch (_err) {
+        // ignore i18n formatter failures and fall back below
+      }
+    }
+
+    if (window.PostUtils && typeof window.PostUtils.timeAgo === "function") {
+      return window.PostUtils.timeAgo(dateVal, normalizedShort);
+    }
+
+    const date = new Date(dateVal);
+    if (Number.isNaN(date.getTime())) return "";
+
+    const diffMs = Date.now() - date.getTime();
+    const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
+    if (diffMinutes < 1) {
+      return this.t("common.time.now", "now");
+    }
+    if (diffMinutes < 60) {
+      return normalizedShort
+        ? this.t("common.time.minutes_short", "{count}m", {
+            count: diffMinutes,
+          })
+        : this.t("common.time.minutes_ago", "{count} minutes ago", {
+            count: this.formatCount(diffMinutes),
+          });
+    }
+
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) {
+      return normalizedShort
+        ? this.t("common.time.hours_short", "{count}h", {
+            count: diffHours,
+          })
+        : this.t("common.time.hours_ago", "{count} hours ago", {
+            count: this.formatCount(diffHours),
+          });
+    }
+
+    const diffDays = Math.floor(diffHours / 24);
+    return normalizedShort
+      ? this.t("common.time.days_short", "{count}d", { count: diffDays })
+      : this.t("common.time.days_ago", "{count} days ago", {
+          count: this.formatCount(diffDays),
+        });
   },
 
   normalizeEntityId(value) {
@@ -424,17 +811,23 @@ const ChatCommon = {
   },
 
   getDisplayName(conv) {
-    if (!conv) return "Chat";
-    if (conv.isGroup) return conv.displayName || "Group Chat";
+    if (!conv) return this.getChatFallbackLabel();
+    if (conv.isGroup)
+      return conv.displayName || this.getGroupChatFallbackLabel();
 
     // Defensive check: ensure we prioritize the OTHER member's info
     const other = conv.otherMember;
     if (other) {
-      return other.nickname || other.username || other.fullName || "Chat";
+      return (
+        other.nickname ||
+        other.username ||
+        other.fullName ||
+        this.getChatFallbackLabel()
+      );
     }
 
     // Fallback for cases where otherMember might be temporarily missing from the object
-    return conv.displayName || "Chat";
+    return conv.displayName || this.getChatFallbackLabel();
   },
 
   getConversationThemeOptions() {
@@ -443,7 +836,7 @@ const ChatCommon = {
       return [
         {
           key: "default",
-          label: "Default",
+          label: this.t("chat.theme.default", "Default"),
           preview: "linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%)",
           dark: {
             accent: "#ff416c",
@@ -495,7 +888,12 @@ const ChatCommon = {
         const key = (opt?.key || "").toString().trim().toLowerCase();
         if (!key) return null;
 
-        const label = (opt?.label || opt?.name || opt?.key || "Theme")
+        const label = (
+          opt?.label ||
+          opt?.name ||
+          opt?.key ||
+          this.t("chat.theme.label", "Theme")
+        )
           .toString()
           .trim();
         const legacyAccent = (opt?.color || opt?.accent || "")
@@ -693,11 +1091,11 @@ const ChatCommon = {
   getConversationThemeLabel(theme, options = {}) {
     const fallbackToDefault = !!options.fallbackToDefault;
     const normalized = this.normalizeConversationTheme(theme);
-    if (!normalized) return "Default";
+    if (!normalized) return this.t("chat.theme.default", "Default");
 
     const option = this.getConversationThemeByKey(normalized);
     if (option?.label) return option.label;
-    if (fallbackToDefault) return "Default";
+    if (fallbackToDefault) return this.t("chat.theme.default", "Default");
     return normalized.charAt(0).toUpperCase() + normalized.slice(1);
   },
 
@@ -1435,6 +1833,22 @@ const ChatCommon = {
     }
   },
 
+  isVietnameseLanguage() {
+    return /^vi\b/i.test(this.getCurrentLanguage());
+  },
+
+  chatSystemT(key, englishFallback, params = {}) {
+    return this.t(key, englishFallback, params);
+  },
+
+  buildSystemMentionList(values) {
+    if (!Array.isArray(values) || values.length === 0) return "";
+    return values
+      .map((value) => this.toMentionUsername(value))
+      .filter(Boolean)
+      .join(", ");
+  },
+
   getSystemMessageText(msg) {
     const parsed = this.parseSystemMessageData(msg);
     if (parsed) {
@@ -1455,23 +1869,207 @@ const ChatCommon = {
       if (actor && Number.isFinite(action) && action === 9) {
         const normalizedTheme = this.normalizeConversationTheme(parsed?.theme);
         if (normalizedTheme) {
-          return `${actor} changed the chat theme to "${this.getConversationThemeLabel(normalizedTheme)}".`;
+          return this.t(
+            "chat.system.theme_changed",
+            '{actor} changed the chat theme to "{theme}".',
+            {
+              actor,
+              theme: this.getConversationThemeLabel(normalizedTheme),
+            },
+          );
         }
-        return `${actor} reset the chat theme.`;
+        return this.t(
+          "chat.system.theme_reset",
+          "{actor} reset the chat theme.",
+          { actor },
+        );
       }
 
       if (actor && Number.isFinite(action) && action === 10) {
-        return `${actor} pinned a message.`;
+        return this.t(
+          "chat.system.message_pinned",
+          "{actor} pinned a message.",
+          { actor },
+        );
       }
 
       if (actor && Number.isFinite(action) && action === 11) {
-        return `${actor} unpinned a message.`;
+        return this.t(
+          "chat.system.message_unpinned",
+          "{actor} unpinned a message.",
+          { actor },
+        );
+      }
+
+      if (actor && Number.isFinite(action) && action === 7) {
+        return this.chatSystemT(
+          "chat.system.group_created",
+          "{actor} created this group.",
+          { actor },
+        );
+      }
+
+      if (actor && Number.isFinite(action) && action === 1) {
+        const targets = this.buildSystemMentionList(
+          parsed?.targetUsernames || parsed?.TargetUsernames || [],
+        );
+        return targets
+          ? this.chatSystemT(
+              "chat.system.member_added",
+              "{actor} added {targets} to the group.",
+              {
+                actor,
+                targets,
+              },
+            )
+          : this.chatSystemT(
+              "chat.system.member_added_generic",
+              "{actor} added new members to the group.",
+              { actor },
+            );
+      }
+
+      if (actor && target && Number.isFinite(action) && action === 3) {
+        return this.chatSystemT(
+          "chat.system.member_kicked",
+          "{actor} removed {target} from the group.",
+          {
+            actor,
+            target,
+          },
+        );
+      }
+
+      if (actor && target && Number.isFinite(action) && action === 5) {
+        return this.chatSystemT(
+          "chat.system.admin_granted",
+          "{actor} made {target} an admin.",
+          {
+            actor,
+            target,
+          },
+        );
+      }
+
+      if (actor && target && Number.isFinite(action) && action === 6) {
+        return this.chatSystemT(
+          "chat.system.admin_revoked",
+          "{actor} removed admin role from {target}.",
+          {
+            actor,
+            target,
+          },
+        );
+      }
+
+      if (actor && Number.isFinite(action) && action === 2) {
+        return this.chatSystemT(
+          "chat.system.member_left",
+          "{actor} left the group.",
+          { actor },
+        );
+      }
+
+      if (actor && target && Number.isFinite(action) && action === 14) {
+        return this.chatSystemT(
+          "chat.system.owner_transferred",
+          "{actor} transferred group ownership to {target}.",
+          {
+            actor,
+            target,
+          },
+        );
+      }
+
+      if (actor && Number.isFinite(action) && action === 4) {
+        const conversationName = (parsed?.conversationName || "")
+          .toString()
+          .trim();
+        if (conversationName) {
+          return this.chatSystemT(
+            "chat.system.group_renamed",
+            '{actor} changed the group name to "{conversationName}".',
+            {
+              actor,
+              conversationName,
+            },
+          );
+        }
+      }
+
+      if (actor && Number.isFinite(action) && action === 12) {
+        const avatarRemoved = !!(
+          parsed?.avatarRemoved ?? parsed?.AvatarRemoved
+        );
+        return avatarRemoved
+          ? this.chatSystemT(
+              "chat.system.group_avatar_removed",
+              "{actor} removed the group avatar.",
+              { actor },
+            )
+          : this.chatSystemT(
+              "chat.system.group_avatar_updated",
+              "{actor} updated the group avatar.",
+              { actor },
+            );
+      }
+
+      if (actor && Number.isFinite(action) && action === 13) {
+        const conversationName = (parsed?.conversationName || "")
+          .toString()
+          .trim();
+        const avatarRemoved = !!(
+          parsed?.avatarRemoved ?? parsed?.AvatarRemoved
+        );
+        const hasConversationNameChanged = !!(
+          parsed?.hasConversationNameChanged ??
+          parsed?.HasConversationNameChanged
+        );
+        const hasConversationAvatarChanged = !!(
+          parsed?.hasConversationAvatarChanged ??
+          parsed?.HasConversationAvatarChanged
+        );
+
+        if (hasConversationNameChanged && hasConversationAvatarChanged) {
+          return avatarRemoved
+            ? this.chatSystemT(
+                "chat.system.group_info_updated_removed_avatar",
+                '{actor} changed the group name to "{conversationName}" and removed the group avatar.',
+                {
+                  actor,
+                  conversationName,
+                },
+              )
+            : this.chatSystemT(
+                "chat.system.group_info_updated",
+                '{actor} changed the group name to "{conversationName}" and updated the group avatar.',
+                {
+                  actor,
+                  conversationName,
+                },
+              );
+        }
       }
 
       if (actor && target && hasNicknameField) {
         return nickname
-          ? `${actor} set nickname for ${target} to "${nickname}".`
-          : `${actor} removed nickname for ${target}.`;
+          ? this.t(
+              "chat.system.nickname_set",
+              '{actor} set nickname for {target} to "{nickname}".',
+              {
+                actor,
+                target,
+                nickname,
+              },
+            )
+          : this.t(
+              "chat.system.nickname_removed",
+              "{actor} removed nickname for {target}.",
+              {
+                actor,
+                target,
+              },
+            );
       }
     }
 
@@ -1486,7 +2084,15 @@ const ChatCommon = {
         const actor = this.toMentionUsername(setNicknameMatch[1]);
         const target = this.toMentionUsername(setNicknameMatch[2]);
         const nickname = setNicknameMatch[3];
-        return `${actor} set nickname for ${target} to "${nickname}".`;
+        return this.t(
+          "chat.system.nickname_set",
+          '{actor} set nickname for {target} to "{nickname}".',
+          {
+            actor,
+            target,
+            nickname,
+          },
+        );
       }
 
       const removeNicknameMatch = content.match(
@@ -1495,7 +2101,14 @@ const ChatCommon = {
       if (removeNicknameMatch) {
         const actor = this.toMentionUsername(removeNicknameMatch[1]);
         const target = this.toMentionUsername(removeNicknameMatch[2]);
-        return `${actor} removed nickname for ${target}.`;
+        return this.t(
+          "chat.system.nickname_removed",
+          "{actor} removed nickname for {target}.",
+          {
+            actor,
+            target,
+          },
+        );
       }
 
       const themeChangedMatch = content.match(
@@ -1504,7 +2117,14 @@ const ChatCommon = {
       if (themeChangedMatch) {
         const actor = this.toMentionUsername(themeChangedMatch[1]);
         const themeLabel = this.getConversationThemeLabel(themeChangedMatch[2]);
-        return `${actor} changed the chat theme to "${themeLabel}".`;
+        return this.t(
+          "chat.system.theme_changed",
+          '{actor} changed the chat theme to "{theme}".',
+          {
+            actor,
+            theme: themeLabel,
+          },
+        );
       }
 
       const themeResetMatch = content.match(
@@ -1512,7 +2132,210 @@ const ChatCommon = {
       );
       if (themeResetMatch) {
         const actor = this.toMentionUsername(themeResetMatch[1]);
-        return `${actor} reset the chat theme.`;
+        return this.t(
+          "chat.system.theme_reset",
+          "{actor} reset the chat theme.",
+          { actor },
+        );
+      }
+
+      const groupCreatedMatch = content.match(
+        /^@?([^\s@]+)\s+created this group\.$/i,
+      );
+      if (groupCreatedMatch) {
+        const actor = this.toMentionUsername(groupCreatedMatch[1]);
+        return this.chatSystemT(
+          "chat.system.group_created",
+          "{actor} created this group.",
+          { actor },
+        );
+      }
+
+      const memberAddedMatch = content.match(
+        /^@?([^\s@]+)\s+added\s+([\s\S]+)\s+to the group\.$/i,
+      );
+      if (memberAddedMatch) {
+        const actor = this.toMentionUsername(memberAddedMatch[1]);
+        const targets = this.buildSystemMentionList(
+          memberAddedMatch[2]
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean),
+        );
+        return targets
+          ? this.chatSystemT(
+              "chat.system.member_added",
+              "{actor} added {targets} to the group.",
+              {
+                actor,
+                targets,
+              },
+            )
+          : this.chatSystemT(
+              "chat.system.member_added_generic",
+              "{actor} added new members to the group.",
+              { actor },
+            );
+      }
+
+      const memberAddedGenericMatch = content.match(
+        /^@?([^\s@]+)\s+added new members to the group\.$/i,
+      );
+      if (memberAddedGenericMatch) {
+        const actor = this.toMentionUsername(memberAddedGenericMatch[1]);
+        return this.chatSystemT(
+          "chat.system.member_added_generic",
+          "{actor} added new members to the group.",
+          { actor },
+        );
+      }
+
+      const memberKickedMatch = content.match(
+        /^@?([^\s@]+)\s+removed\s+@?([^\s@]+)\s+from the group\.$/i,
+      );
+      if (memberKickedMatch) {
+        const actor = this.toMentionUsername(memberKickedMatch[1]);
+        const target = this.toMentionUsername(memberKickedMatch[2]);
+        return this.chatSystemT(
+          "chat.system.member_kicked",
+          "{actor} removed {target} from the group.",
+          {
+            actor,
+            target,
+          },
+        );
+      }
+
+      const memberLeftMatch = content.match(
+        /^@?([^\s@]+)\s+left the group\.$/i,
+      );
+      if (memberLeftMatch) {
+        const actor = this.toMentionUsername(memberLeftMatch[1]);
+        return this.chatSystemT(
+          "chat.system.member_left",
+          "{actor} left the group.",
+          { actor },
+        );
+      }
+
+      const adminGrantedMatch = content.match(
+        /^@?([^\s@]+)\s+made\s+@?([^\s@]+)\s+an admin\.$/i,
+      );
+      if (adminGrantedMatch) {
+        const actor = this.toMentionUsername(adminGrantedMatch[1]);
+        const target = this.toMentionUsername(adminGrantedMatch[2]);
+        return this.chatSystemT(
+          "chat.system.admin_granted",
+          "{actor} made {target} an admin.",
+          {
+            actor,
+            target,
+          },
+        );
+      }
+
+      const adminRevokedMatch = content.match(
+        /^@?([^\s@]+)\s+removed admin role from\s+@?([^\s@]+)\.$/i,
+      );
+      if (adminRevokedMatch) {
+        const actor = this.toMentionUsername(adminRevokedMatch[1]);
+        const target = this.toMentionUsername(adminRevokedMatch[2]);
+        return this.chatSystemT(
+          "chat.system.admin_revoked",
+          "{actor} removed admin role from {target}.",
+          {
+            actor,
+            target,
+          },
+        );
+      }
+
+      const ownerTransferredMatch = content.match(
+        /^@?([^\s@]+)\s+transferred group ownership to\s+@?([^\s@]+)\.$/i,
+      );
+      if (ownerTransferredMatch) {
+        const actor = this.toMentionUsername(ownerTransferredMatch[1]);
+        const target = this.toMentionUsername(ownerTransferredMatch[2]);
+        return this.chatSystemT(
+          "chat.system.owner_transferred",
+          "{actor} transferred group ownership to {target}.",
+          {
+            actor,
+            target,
+          },
+        );
+      }
+
+      const groupInfoRemovedAvatarMatch = content.match(
+        /^@?([^\s@]+)\s+changed the group name to\s+"([\s\S]*)"\s+and removed the group avatar\.$/i,
+      );
+      if (groupInfoRemovedAvatarMatch) {
+        const actor = this.toMentionUsername(groupInfoRemovedAvatarMatch[1]);
+        const conversationName = groupInfoRemovedAvatarMatch[2];
+        return this.chatSystemT(
+          "chat.system.group_info_updated_removed_avatar",
+          '{actor} changed the group name to "{conversationName}" and removed the group avatar.',
+          {
+            actor,
+            conversationName,
+          },
+        );
+      }
+
+      const groupInfoUpdatedMatch = content.match(
+        /^@?([^\s@]+)\s+changed the group name to\s+"([\s\S]*)"\s+and updated the group avatar\.$/i,
+      );
+      if (groupInfoUpdatedMatch) {
+        const actor = this.toMentionUsername(groupInfoUpdatedMatch[1]);
+        const conversationName = groupInfoUpdatedMatch[2];
+        return this.chatSystemT(
+          "chat.system.group_info_updated",
+          '{actor} changed the group name to "{conversationName}" and updated the group avatar.',
+          {
+            actor,
+            conversationName,
+          },
+        );
+      }
+
+      const groupRenamedMatch = content.match(
+        /^@?([^\s@]+)\s+changed the group name to\s+"([\s\S]*)"\.$/i,
+      );
+      if (groupRenamedMatch) {
+        const actor = this.toMentionUsername(groupRenamedMatch[1]);
+        const conversationName = groupRenamedMatch[2];
+        return this.chatSystemT(
+          "chat.system.group_renamed",
+          '{actor} changed the group name to "{conversationName}".',
+          {
+            actor,
+            conversationName,
+          },
+        );
+      }
+
+      const groupAvatarRemovedMatch = content.match(
+        /^@?([^\s@]+)\s+removed the group avatar\.$/i,
+      );
+      if (groupAvatarRemovedMatch) {
+        const actor = this.toMentionUsername(groupAvatarRemovedMatch[1]);
+        return this.chatSystemT(
+          "chat.system.group_avatar_removed",
+          "{actor} removed the group avatar.",
+          { actor },
+        );
+      }
+
+      const groupAvatarUpdatedMatch = content.match(
+        /^@?([^\s@]+)\s+updated the group avatar\.$/i,
+      );
+      if (groupAvatarUpdatedMatch) {
+        const actor = this.toMentionUsername(groupAvatarUpdatedMatch[1]);
+        return this.chatSystemT(
+          "chat.system.group_avatar_updated",
+          "{actor} updated the group avatar.",
+          { actor },
+        );
       }
 
       const normalizedContent =
@@ -1522,7 +2345,7 @@ const ChatCommon = {
       return normalizedContent;
     }
 
-    return "System message";
+    return this.t("chat.system.fallback", "System message");
   },
 
   showAddGroupMembersModal(options = {}) {
@@ -1533,7 +2356,14 @@ const ChatCommon = {
       !window.API?.Conversations?.searchAccountsForAddGroupMembers ||
       !window.API?.Conversations?.addMembers
     ) {
-      if (window.toastError) window.toastError("Add member API is unavailable");
+      if (window.toastError) {
+        window.toastError(
+          this.t(
+            "errors.chat.add_members_api_unavailable",
+            "Add member API is unavailable",
+          ),
+        );
+      }
       return;
     }
 
@@ -1585,36 +2415,13 @@ const ChatCommon = {
 
       return {
         id: accountId,
-        username: username || "unknown",
-        fullName: fullName || username || "Unknown user",
+        username: username || this.getUnknownUsernameLabel(),
+        fullName:
+          fullName ||
+          username ||
+          this.t("chat.common.unknown_user", "Unknown user"),
         avatarUrl: avatarUrl || window.APP_CONFIG?.DEFAULT_AVATAR,
       };
-    };
-
-    const readErrorMessage = async (res, fallback) => {
-      let message = fallback || "Request failed";
-      if (!res) return message;
-
-      try {
-        const data = await res.json();
-        if (data && typeof data === "object") {
-          if (typeof data.message === "string" && data.message.trim()) {
-            return data.message.trim();
-          }
-          if (typeof data.title === "string" && data.title.trim()) {
-            return data.title.trim();
-          }
-        }
-      } catch (_err) {}
-
-      try {
-        const text = await res.text();
-        if (typeof text === "string" && text.trim()) {
-          message = text.trim();
-        }
-      } catch (_err) {}
-
-      return message;
     };
 
     const searchLimit =
@@ -1650,30 +2457,30 @@ const ChatCommon = {
     popup.innerHTML = `
       <div class="chat-add-members-shell">
         <div class="chat-add-members-header">
-          <h3>Add members</h3>
-          <button type="button" class="chat-add-members-close-btn" title="Close">
+          <h3>${toSafeHtml(this.t("chat.members.add_title", "Add members"))}</h3>
+          <button type="button" class="chat-add-members-close-btn" title="${toSafeAttr(this.t("common.buttons.close", "Close"))}">
             <i data-lucide="x"></i>
           </button>
         </div>
         <div class="chat-add-members-selected">
           <div class="chat-add-members-selected-header">
-            <span class="cg-label">Selected members</span>
-            <span class="chat-add-members-selected-count">0 selected</span>
+            <span class="cg-label">${toSafeHtml(this.t("chat.members.selected", "Selected members"))}</span>
+            <span class="chat-add-members-selected-count">${toSafeHtml(this.t("chat.members.selected_count", "{count} selected", { count: 0 }))}</span>
           </div>
           <div class="cg-selected-chips hidden chat-add-members-selected-chips"></div>
           <div class="cg-no-members-hint chat-add-members-selected-hint">
             <i data-lucide="user-plus" size="20"></i>
-            <span>Select members from the list below</span>
+            <span>${toSafeHtml(this.t("chat.members.select_from_list", "Select members from the list below"))}</span>
           </div>
         </div>
         <div class="cg-field cg-search-field chat-add-members-search-field">
           <i data-lucide="search" size="16" class="cg-search-icon"></i>
-          <input type="text" class="cg-input cg-search-input chat-add-members-search-input" placeholder="Search users to add...">
+          <input type="text" class="cg-input cg-search-input chat-add-members-search-input" placeholder="${toSafeAttr(this.t("chat.members.search_placeholder", "Search users to add..."))}">
         </div>
         <div class="cg-friend-list chat-add-members-list"></div>
         <div class="chat-add-members-footer">
-          <button type="button" class="cg-btn-cancel chat-add-members-cancel-btn">Cancel</button>
-          <button type="button" class="cg-btn-create chat-add-members-submit-btn" disabled>Add members</button>
+          <button type="button" class="cg-btn-cancel chat-add-members-cancel-btn">${toSafeHtml(this.t("common.buttons.cancel", "Cancel"))}</button>
+          <button type="button" class="cg-btn-create chat-add-members-submit-btn" disabled>${toSafeHtml(this.t("chat.members.add_action", "Add members"))}</button>
         </div>
       </div>
     `;
@@ -1736,13 +2543,19 @@ const ChatCommon = {
 
     const renderSelectedMembers = () => {
       if (countEl) {
-        countEl.textContent = `${selectedMembers.length} selected`;
+        countEl.textContent = this.t(
+          "chat.members.selected_count",
+          "{count} selected",
+          { count: this.formatCount(selectedMembers.length) },
+        );
       }
 
       if (!chipsEl || !hintEl || !submitBtn) return;
 
       submitBtn.disabled = isSubmitting || selectedMembers.length === 0;
-      submitBtn.textContent = isSubmitting ? "Adding..." : "Add members";
+      submitBtn.textContent = isSubmitting
+        ? this.t("chat.members.adding", "Adding...")
+        : this.t("chat.members.add_action", "Add members");
 
       if (!selectedMembers.length) {
         chipsEl.classList.add("hidden");
@@ -1783,7 +2596,7 @@ const ChatCommon = {
 
     const renderEmptyState = (message) => {
       if (!listEl) return;
-      listEl.innerHTML = `<div class="cg-empty-state">${toSafeHtml(message || "No results")}</div>`;
+      listEl.innerHTML = `<div class="cg-empty-state">${toSafeHtml(message || this.t("common.empty.no_results", "No results"))}</div>`;
     };
 
     const renderSearchResults = (accounts, keyword) => {
@@ -1791,16 +2604,28 @@ const ChatCommon = {
 
       if (!Array.isArray(accounts) || accounts.length === 0) {
         if ((keyword || "").trim().length === 1) {
-          renderEmptyState("Type at least 2 characters to search");
+          renderEmptyState(
+            this.t(
+              "chat.members.search_min_chars",
+              "Type at least 2 characters to search",
+            ),
+          );
           return;
         }
 
         if ((keyword || "").trim().length === 0) {
-          renderEmptyState("No recent contacts available");
+          renderEmptyState(
+            this.t(
+              "chat.members.no_recent_contacts",
+              "No recent contacts available",
+            ),
+          );
           return;
         }
 
-        renderEmptyState("No matching users found");
+        renderEmptyState(
+          this.t("chat.members.no_matching_users", "No matching users found"),
+        );
         return;
       }
 
@@ -1853,7 +2678,12 @@ const ChatCommon = {
       if (!listEl) return;
 
       if (normalizedKeyword.length === 1) {
-        renderEmptyState("Type at least 2 characters to search");
+        renderEmptyState(
+          this.t(
+            "chat.members.search_min_chars",
+            "Type at least 2 characters to search",
+          ),
+        );
         return;
       }
 
@@ -1879,10 +2709,12 @@ const ChatCommon = {
         if (requestSequence !== searchRequestSequence) return;
 
         if (!res.ok) {
-          const message = await readErrorMessage(
-            res,
-            "Failed to search members",
-          );
+          const message = await this.readFriendlyApiError(res, {
+            feature: "chat",
+            action: "search-group-members",
+            fallbackKey: "errors.chat.members_search_failed",
+            fallbackMessage: "Failed to search members",
+          });
           renderEmptyState(message);
           return;
         }
@@ -1901,7 +2733,12 @@ const ChatCommon = {
       } catch (error) {
         if (requestSequence !== searchRequestSequence) return;
         console.error("Failed to search group add-member accounts:", error);
-        renderEmptyState("Could not connect to server");
+        renderEmptyState(
+          this.t(
+            "errors.chat.connection_failed",
+            "Could not connect to server",
+          ),
+        );
       }
     };
 
@@ -1912,7 +2749,12 @@ const ChatCommon = {
       );
       if (!selectedIds.length) {
         if (window.toastWarning)
-          window.toastWarning("Please select at least one member");
+          window.toastWarning(
+            this.t(
+              "chat.members.select_at_least_one",
+              "Please select at least one member",
+            ),
+          );
         return;
       }
 
@@ -1925,7 +2767,12 @@ const ChatCommon = {
           selectedIds,
         );
         if (!res.ok) {
-          const message = await readErrorMessage(res, "Failed to add members");
+          const message = await this.readFriendlyApiError(res, {
+            feature: "chat",
+            action: "add-group-members",
+            fallbackKey: "errors.chat.add_members_failed",
+            fallbackMessage: "Failed to add members",
+          });
           if (window.toastError) window.toastError(message);
           return;
         }
@@ -1942,15 +2789,23 @@ const ChatCommon = {
           const count = selectedIds.length;
           window.toastSuccess(
             count === 1
-              ? "Member added to group"
-              : `${count} members added to group`,
+              ? this.t("chat.members.add_success_one", "Member added to group")
+              : this.t(
+                  "chat.members.add_success_many",
+                  "{count} members added to group",
+                  { count: this.formatCount(count) },
+                ),
           );
         }
 
         closeModal();
       } catch (error) {
         console.error("Failed to add group members:", error);
-        if (window.toastError) window.toastError("Failed to add members");
+        if (window.toastError) {
+          window.toastError(
+            this.t("errors.chat.add_members_failed", "Failed to add members"),
+          );
+        }
       } finally {
         isSubmitting = false;
         renderSelectedMembers();
@@ -2007,7 +2862,12 @@ const ChatCommon = {
         }
 
         if (keyword.length === 1) {
-          renderEmptyState("Type at least 2 characters to search");
+          renderEmptyState(
+            this.t(
+              "chat.members.search_min_chars",
+              "Type at least 2 characters to search",
+            ),
+          );
           return;
         }
 
@@ -2966,7 +3826,7 @@ const ChatCommon = {
     const safeSnippet = this.truncateTextSafe(info.contentSnippet, 140);
     const ownerPrimary = safeOwnerUsername
       ? `@${safeOwnerUsername}`
-      : safeOwnerDisplayName || "Post";
+      : safeOwnerDisplayName || this.t("chat.post_share.post", "Post");
     const canOpenPost =
       !info.isPostUnavailable && (!!info.postCode || !!info.postId);
     const rootAttrs = canOpenPost
@@ -2981,20 +3841,20 @@ const ChatCommon = {
         thumbHtml = `<video src="${escapeHtml(info.thumbnailUrl)}" muted playsinline preload="metadata"></video>
           <div class="msg-post-share-thumb-play"><i data-lucide="play"></i></div>`;
       } else {
-        thumbHtml = `<img src="${escapeHtml(info.thumbnailUrl)}" alt="Post thumbnail" loading="lazy">`;
+        thumbHtml = `<img src="${escapeHtml(info.thumbnailUrl)}" alt="${this.escapeAttribute(this.t("chat.post_share.thumbnail_alt", "Post thumbnail"))}" loading="lazy">`;
       }
     }
 
     const statusText = info.isPostUnavailable
-      ? "Post is no longer available"
-      : "Tap to view post";
+      ? this.t("chat.post_share.unavailable", "Post is no longer available")
+      : this.t("chat.post_share.tap_to_view", "Tap to view post");
     const snippetHtml = safeSnippet
       ? `<div class="msg-post-share-snippet">${escapeHtml(safeSnippet)}</div>`
       : "";
 
     return `
       <div class="msg-post-share-preview ${info.isPostUnavailable ? "msg-post-share-unavailable" : ""}"${rootAttrs}>
-        <div class="msg-post-share-label"><i data-lucide="send"></i> Shared a post</div>
+        <div class="msg-post-share-label"><i data-lucide="send"></i> ${escapeHtml(this.t("chat.post_share.shared", "Shared a post"))}</div>
         <div class="msg-post-share-card">
           <div class="msg-post-share-thumb">
             ${thumbHtml}
@@ -3125,7 +3985,14 @@ const ChatCommon = {
         )
       : "";
     const recalledText =
-      window.APP_CONFIG?.CHAT_RECALLED_MESSAGE_TEXT || "Message was recalled";
+      window.I18n?.translateServerText &&
+      window.APP_CONFIG?.CHAT_RECALLED_MESSAGE_TEXT
+        ? window.I18n.translateServerText(
+            window.APP_CONFIG.CHAT_RECALLED_MESSAGE_TEXT,
+            {},
+            this.t("chat.message.recalled", "Message was recalled"),
+          )
+        : this.t("chat.message.recalled", "Message was recalled");
 
     const dataMessageIdAttr = messageId
       ? ` data-message-id="${messageId}"`
@@ -3138,11 +4005,16 @@ const ChatCommon = {
     if (isSystemMessage) {
       const senderId = msg.sender?.accountId || msg.senderId || "";
       const systemText = this.getSystemMessageText(msg);
+      const rawSystemContent = msg?.content ?? msg?.Content ?? "";
+      const rawSystemData =
+        msg?.systemMessageDataJson ?? msg?.SystemMessageDataJson ?? "";
       return `
                 <div class="msg-bubble-wrapper msg-system msg-group-single"
                      data-sent-at="${msg.sentAt || ""}"
                      data-sender-id="${senderId}"
                      data-message-type="system"
+                     data-system-content="${this.escapeAttribute(rawSystemContent)}"
+                     data-system-message-data="${this.escapeAttribute(rawSystemData)}"
                      ${dataMessageIdAttr}>
                     <div class="msg-system-text">${linkify(escapeHtml(systemText))}</div>
                 </div>
@@ -3181,7 +4053,7 @@ const ChatCommon = {
       ).replace(/"/g, "&quot;");
       const pinBadgeHtml =
         pinHostType === "visual"
-          ? `<div class="msg-pinned-badge msg-pinned-badge-media-anchor" title="Pinned message"><i data-lucide="pin"></i></div>`
+          ? `<div class="msg-pinned-badge msg-pinned-badge-media-anchor" title="${this.escapeAttribute(this.t("chat.message.pinned", "Pinned message"))}"><i data-lucide="pin"></i></div>`
           : "";
 
       mediaHtml += `
@@ -3201,7 +4073,7 @@ const ChatCommon = {
                             let dblclickStr = `ondblclick="ChatCommon.previewGridMedia(this, ${idx}, event)"`;
 
                             if (entry.mediaType === 0) {
-                              inner = `<img src="${safeMediaUrl}" alt="media" loading="lazy">`;
+                              inner = `<img src="${safeMediaUrl}" alt="${this.escapeAttribute(this.t("chat.message.media_alt", "media"))}" loading="lazy">`;
                               onclickStr = `onclick="ChatCommon.previewGridMedia(this, ${idx}, event)"`;
                               dblclickStr = "";
                             } else {
@@ -3233,7 +4105,7 @@ const ChatCommon = {
     if (!isRecalled && documentMedias.length > 0) {
       const pinBadgeHtml =
         pinHostType === "file"
-          ? `<div class="msg-pinned-badge msg-pinned-badge-media-anchor" title="Pinned message"><i data-lucide="pin"></i></div>`
+          ? `<div class="msg-pinned-badge msg-pinned-badge-media-anchor" title="${this.escapeAttribute(this.t("chat.message.pinned", "Pinned message"))}"><i data-lucide="pin"></i></div>`
           : "";
 
       mediaHtml += `
@@ -3271,6 +4143,9 @@ const ChatCommon = {
                               m.fileSize || m.FileSize,
                             );
                             const safeSize = escapeHtml(sizeText || "File");
+                            const defaultFileLabel = escapeHtml(
+                              this.t("chat.message.file", "File"),
+                            );
 
                             return `
                             <div class="msg-file-item" data-media-index="${entry.index}">
@@ -3278,7 +4153,7 @@ const ChatCommon = {
                                     <span class="msg-file-icon"><i data-lucide="file-text"></i></span>
                                     <span class="msg-file-meta">
                                         <span class="msg-file-name" title="${safeFileName}">${safeFileName}</span>
-                                        <span class="msg-file-size">${safeSize}</span>
+                                        <span class="msg-file-size">${safeSize || defaultFileLabel}</span>
                                     </span>
                                 </a>
                             </div>
@@ -3321,7 +4196,7 @@ const ChatCommon = {
     const isWindow = !!options.isWindow;
     const showReactAction = !!(isPage || isWindow);
     const pinnedBadgeHtml = isPinned
-      ? `<div class="msg-pinned-badge" title="Pinned message"><i data-lucide="pin"></i></div>`
+      ? `<div class="msg-pinned-badge" title="${this.escapeAttribute(this.t("chat.message.pinned", "Pinned message"))}"><i data-lucide="pin"></i></div>`
       : "";
     const pinnedInlineBadgeHtml = shouldPinOnMedia ? "" : pinnedBadgeHtml;
     const msgActionsHtml = `
@@ -3329,7 +4204,7 @@ const ChatCommon = {
                 ${
                   showReactAction && !isRecalled
                     ? `
-                    <button class="msg-action-btn react${hasCurrentReact ? " is-reacted" : ""}" title="React" data-action="react" data-react-type="${hasCurrentReact ? currentReactType : ""}" onclick="var mid=this.closest('.msg-bubble-wrapper')?.dataset?.messageId||''; if(mid) window.ChatActions && ChatActions.openReactMenu(event, mid)">
+                    <button class="msg-action-btn react${hasCurrentReact ? " is-reacted" : ""}" title="${this.escapeAttribute(this.t("chat.message.actions.react", "React"))}" data-action="react" data-react-type="${hasCurrentReact ? currentReactType : ""}" onclick="var mid=this.closest('.msg-bubble-wrapper')?.dataset?.messageId||''; if(mid) window.ChatActions && ChatActions.openReactMenu(event, mid)">
                         <i data-lucide="smile"></i>
                     </button>
                 `
@@ -3338,13 +4213,13 @@ const ChatCommon = {
                 ${
                   (isPage || isWindow) && !isRecalled
                     ? `
-                    <button class="msg-action-btn" title="Reply" onclick="var mid=this.closest('.msg-bubble-wrapper')?.dataset?.messageId||''; if(mid) window.ChatActions && ChatActions.replyTo(mid)">
+                    <button class="msg-action-btn" title="${this.escapeAttribute(this.t("chat.message.actions.reply", "Reply"))}" onclick="var mid=this.closest('.msg-bubble-wrapper')?.dataset?.messageId||''; if(mid) window.ChatActions && ChatActions.replyTo(mid)">
                         <i data-lucide="reply"></i>
                     </button>
                 `
                     : ""
                 }
-                <button class="msg-action-btn more" title="More" onclick="var mid=this.closest('.msg-bubble-wrapper')?.dataset?.messageId||''; if(mid) window.ChatActions && ChatActions.openMoreMenu(event, mid, ${isOwn})">
+                <button class="msg-action-btn more" title="${this.escapeAttribute(this.t("chat.message.actions.more", "More"))}" onclick="var mid=this.closest('.msg-bubble-wrapper')?.dataset?.messageId||''; if(mid) window.ChatActions && ChatActions.openMoreMenu(event, mid, ${isOwn})">
                     <i data-lucide="more-horizontal"></i>
                 </button>
             </div>
@@ -3403,10 +4278,13 @@ const ChatCommon = {
                             currentAccountId &&
                             rtSenderId === currentAccountId
                           );
-                          const rtSenderBase = rt.sender?.username || "User";
+                          const rtSenderBase =
+                            rt.sender?.username || this.getUnknownUserLabel();
                           const rtSenderName = isOwnReplyAuthor
-                            ? "You"
-                            : rt.sender?.displayName || rtSenderBase || "User";
+                            ? this.getYouLabel()
+                            : rt.sender?.displayName ||
+                              rtSenderBase ||
+                              this.getUnknownUserLabel();
                           const isReplyHiddenByCurrentUser = !!(
                             window.ChatActions &&
                             typeof window.ChatActions
@@ -3419,9 +4297,29 @@ const ChatCommon = {
                             !!rt.isHidden || isReplyHiddenByCurrentUser;
                           let rtPreview = "";
                           if (isHiddenReplyParent) {
-                            rtPreview = `<em>${escapeHtml(window.APP_CONFIG?.CHAT_HIDDEN_MESSAGE_TEXT || "Message hidden")}</em>`;
+                            rtPreview = `<em>${escapeHtml(
+                              window.I18n?.translateServerText &&
+                                window.APP_CONFIG?.CHAT_HIDDEN_MESSAGE_TEXT
+                                ? window.I18n.translateServerText(
+                                    window.APP_CONFIG.CHAT_HIDDEN_MESSAGE_TEXT,
+                                    {},
+                                    this.t(
+                                      "chat.message.hidden",
+                                      "Message hidden",
+                                    ),
+                                  )
+                                : this.t(
+                                    "chat.message.hidden",
+                                    "Message hidden",
+                                  ),
+                            )}</em>`;
                           } else if (rt.isRecalled) {
-                            rtPreview = "<em>Message was recalled</em>";
+                            rtPreview = `<em>${escapeHtml(
+                              this.t(
+                                "chat.message.recalled",
+                                "Message was recalled",
+                              ),
+                            )}</em>`;
                           } else if (rt.content) {
                             const maxLen = 60;
                             const replyPreviewText =
@@ -3437,13 +4335,23 @@ const ChatCommon = {
                             const replyMessageType = this.getMessageType(rt);
                             rtPreview =
                               replyMessageType === 5
-                                ? "<em>Shared a post</em>"
-                                : "<em>Media</em>";
+                                ? `<em>${escapeHtml(
+                                    this.t(
+                                      "chat.preview.shared_post",
+                                      "Shared a post",
+                                    ),
+                                  )}</em>`
+                                : `<em>${escapeHtml(
+                                    this.t(
+                                      "chat.preview.media.generic",
+                                      "Media",
+                                    ),
+                                  )}</em>`;
                           }
                           return `<div class="msg-reply-preview"
                                 data-reply-id="${rt.messageId}"
                                 data-reply-sender-id="${escapeHtml(rtSenderId)}"
-                                data-reply-sender-base="${escapeHtml(rtSenderBase || "User")}"
+                                data-reply-sender-base="${escapeHtml(rtSenderBase || this.getUnknownUserLabel())}"
                                 data-reply-is-own="${isOwnReplyAuthor ? "true" : "false"}"
                                 data-reply-parent-hidden="${isHiddenReplyParent ? "true" : "false"}"
                                 data-reply-parent-recalled="${rt.isRecalled ? "true" : "false"}"
@@ -3470,7 +4378,7 @@ const ChatCommon = {
                             if (!sri || sri.isStoryExpired) {
                               return `${textBubbleHtml}<div class="msg-story-reply-preview msg-story-reply-expired">
                                 <div class="msg-story-reply-expired-icon"><i data-lucide="image-off"></i></div>
-                                <span>Story is no longer available</span>
+                                <span>${escapeHtml(this.t("chat.story_reply.unavailable", "Story is no longer available"))}</span>
                               </div>`;
                             }
                             if (sri) {
@@ -3572,11 +4480,11 @@ const ChatCommon = {
                               } else if (sri.mediaUrl) {
                                 // Image story
                                 thumbHtml = `<div class="msg-story-reply-thumb">
-                                  <img src="${escapeHtml(sri.mediaUrl)}" alt="Story" loading="lazy">
+                                  <img src="${escapeHtml(sri.mediaUrl)}" alt="${this.escapeAttribute(this.t("chat.story_reply.story_alt", "Story"))}" loading="lazy">
                                 </div>`;
                               }
                               return `${textBubbleHtml}<div class="msg-story-reply-preview" data-story-id="${escapeHtml(sri.storyId)}" onclick="if(window.openStoryViewerByStoryId) window.openStoryViewerByStoryId('${sri.storyId}')" style="cursor: pointer;">
-                                <div class="msg-story-reply-label"><i data-lucide="reply"></i> Replied to story</div>
+                                <div class="msg-story-reply-label"><i data-lucide="reply"></i> ${escapeHtml(this.t("chat.story_reply.replied", "Replied to story"))}</div>
                                 ${thumbHtml}
                               </div>`;
                             }
@@ -3594,7 +4502,7 @@ const ChatCommon = {
                   msg.status
                     ? `
                     <div class="msg-status ${msg.status === "pending" ? "msg-status-sending" : msg.status === "sent" ? "msg-status-sent" : "msg-status-failed"}">
-                        ${msg.status === "pending" ? '<span class="msg-loading-dots"><span class="msg-loading-dot"></span><span class="msg-loading-dot"></span><span class="msg-loading-dot"></span></span>' : msg.status === "sent" ? "Sent" : "Failed to send. Click to retry."}
+                        ${msg.status === "pending" ? '<span class="msg-loading-dots"><span class="msg-loading-dot"></span><span class="msg-loading-dot"></span><span class="msg-loading-dot"></span></span>' : msg.status === "sent" ? escapeHtml(this.t("chat.message.status.sent", "Sent")) : escapeHtml(this.t("chat.message.status.failed_retry", "Send failed, tap to retry"))}
                     </div>
                 `
                     : ""
@@ -3681,12 +4589,22 @@ const ChatCommon = {
             downloadUrl = signedUrl;
           }
         } else if (window.toastError) {
-          window.toastError("Unable to get download link for this file.");
+          window.toastError(
+            this.t(
+              "errors.chat.download_link_unavailable",
+              "Unable to get download link for this file.",
+            ),
+          );
         }
       } catch (error) {
         console.error("Failed to request download URL:", error);
         if (window.toastError) {
-          window.toastError("Failed to request file download link.");
+          window.toastError(
+            this.t(
+              "errors.chat.download_link_request_failed",
+              "Failed to request file download link.",
+            ),
+          );
         }
       }
     }
@@ -3735,7 +4653,12 @@ const ChatCommon = {
     } catch (error) {
       console.error("File download failed:", error);
       if (window.toastError) {
-        window.toastError("Failed to start file download.");
+        window.toastError(
+          this.t(
+            "errors.chat.download_failed",
+            "Failed to start file download.",
+          ),
+        );
       }
       return false;
     }
@@ -3769,12 +4692,22 @@ const ChatCommon = {
   formatTime(dateVal) {
     if (!dateVal) return "";
     const date = new Date(dateVal);
+    if (Number.isNaN(date.getTime())) return "";
     const now = new Date();
-    const pad = (num) => num.toString().padStart(2, "0");
-
-    const HH = pad(date.getHours());
-    const mm = pad(date.getMinutes());
-    const timeStr = `${HH}:${mm}`;
+    const language = this.getCurrentLanguage();
+    const formatTimeValue = (value) => {
+      try {
+        return new Intl.DateTimeFormat(language, {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }).format(value);
+      } catch (_err) {
+        const pad = (num) => num.toString().padStart(2, "0");
+        return `${pad(value.getHours())}:${pad(value.getMinutes())}`;
+      }
+    };
+    const timeStr = formatTimeValue(date);
 
     const isToday = date.toDateString() === now.toDateString();
 
@@ -3783,32 +4716,44 @@ const ChatCommon = {
     const isYesterday = date.toDateString() === yesterday.toDateString();
 
     if (isToday) return timeStr;
-    if (isYesterday) return `${timeStr} Yesterday`;
-
-    const monthNames = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
-    ];
-    const month = monthNames[date.getMonth()];
-    const day = date.getDate();
-    const isSameYear = date.getFullYear() === now.getFullYear();
-
-    if (isSameYear) {
-      return `${month} ${day}, ${timeStr}`;
+    if (isYesterday) {
+      return this.t("chat.time.yesterday_with_time", "{time} Yesterday", {
+        time: timeStr,
+      });
     }
 
-    const year = date.getFullYear();
-    return `${month} ${day}, ${year}, ${timeStr}`;
+    const isSameYear = date.getFullYear() === now.getFullYear();
+    const monthDay = (() => {
+      try {
+        return new Intl.DateTimeFormat(language, {
+          month: "short",
+          day: "numeric",
+        }).format(date);
+      } catch (_err) {
+        return date.toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+        });
+      }
+    })();
+
+    if (isSameYear) {
+      return `${monthDay}, ${timeStr}`;
+    }
+
+    const fullDate = (() => {
+      try {
+        return new Intl.DateTimeFormat(language, {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        }).format(date);
+      } catch (_err) {
+        return `${monthDay}, ${date.getFullYear()}`;
+      }
+    })();
+
+    return `${fullDate}, ${timeStr}`;
   },
 
   /**
@@ -3817,7 +4762,7 @@ const ChatCommon = {
    */
   renderChatSeparator(date) {
     const timeStr = this.formatTime(date);
-    return `<div class="chat-time-separator">${timeStr}</div>`;
+    return `<div class="chat-time-separator" data-separator-date="${this.escapeAttribute(date)}">${timeStr}</div>`;
   },
 
   findPreviousMessageBubble(el) {
@@ -4110,8 +5055,8 @@ const ChatCommon = {
     const items = Array.isArray(medias) ? medias : [];
     if (!items.length) {
       return {
-        sentText: "Sent a media file",
-        replyWithText: "a media file",
+        sentText: this.t("chat.preview.media.sent_file", "Sent a media file"),
+        replyWithText: this.t("chat.preview.media.reply_file", "a media file"),
       };
     }
 
@@ -4127,48 +5072,237 @@ const ChatCommon = {
     if (counts.size === 1) {
       const [[mediaType, count]] = Array.from(counts.entries());
       if (mediaType === 0) {
-        if (count === 1)
-          return { sentText: "Sent a photo", replyWithText: "a photo" };
+        if (count === 1) {
+          return {
+            sentText: this.t("chat.preview.media.sent_photo", "Sent a photo"),
+            replyWithText: this.t("chat.preview.media.reply_photo", "a photo"),
+          };
+        }
         return {
-          sentText: `Sent ${count} photos`,
-          replyWithText: `${count} photos`,
+          sentText: this.t(
+            "chat.preview.media.sent_photos",
+            "Sent {count} photos",
+            { count: this.formatCount(count) },
+          ),
+          replyWithText: this.t(
+            "chat.preview.media.reply_photos",
+            "{count} photos",
+            { count: this.formatCount(count) },
+          ),
         };
       }
       if (mediaType === 1) {
-        if (count === 1)
-          return { sentText: "Sent a video", replyWithText: "a video" };
+        if (count === 1) {
+          return {
+            sentText: this.t("chat.preview.media.sent_video", "Sent a video"),
+            replyWithText: this.t("chat.preview.media.reply_video", "a video"),
+          };
+        }
         return {
-          sentText: `Sent ${count} videos`,
-          replyWithText: `${count} videos`,
+          sentText: this.t(
+            "chat.preview.media.sent_videos",
+            "Sent {count} videos",
+            { count: this.formatCount(count) },
+          ),
+          replyWithText: this.t(
+            "chat.preview.media.reply_videos",
+            "{count} videos",
+            { count: this.formatCount(count) },
+          ),
         };
       }
       if (mediaType === 2) {
-        if (count === 1)
-          return { sentText: "Sent an audio", replyWithText: "an audio" };
+        if (count === 1) {
+          return {
+            sentText: this.t("chat.preview.media.sent_audio", "Sent an audio"),
+            replyWithText: this.t("chat.preview.media.reply_audio", "an audio"),
+          };
+        }
         return {
-          sentText: `Sent ${count} audio files`,
-          replyWithText: `${count} audio files`,
+          sentText: this.t(
+            "chat.preview.media.sent_audio_files",
+            "Sent {count} audio files",
+            { count: this.formatCount(count) },
+          ),
+          replyWithText: this.t(
+            "chat.preview.media.reply_audio_files",
+            "{count} audio files",
+            { count: this.formatCount(count) },
+          ),
         };
       }
-      if (count === 1)
-        return { sentText: "Sent a file", replyWithText: "a file" };
+      if (count === 1) {
+        return {
+          sentText: this.t("chat.preview.media.sent_file", "Sent a file"),
+          replyWithText: this.t("chat.preview.media.reply_file", "a file"),
+        };
+      }
       return {
-        sentText: `Sent ${count} files`,
-        replyWithText: `${count} files`,
+        sentText: this.t(
+          "chat.preview.media.sent_files",
+          "Sent {count} files",
+          { count: this.formatCount(count) },
+        ),
+        replyWithText: this.t(
+          "chat.preview.media.reply_files",
+          "{count} files",
+          { count: this.formatCount(count) },
+        ),
       };
     }
 
     if (total === 1) {
       return {
-        sentText: "Sent an attachment",
-        replyWithText: "an attachment",
+        sentText: this.t(
+          "chat.preview.media.sent_attachment",
+          "Sent an attachment",
+        ),
+        replyWithText: this.t(
+          "chat.preview.media.reply_attachment",
+          "an attachment",
+        ),
       };
     }
 
     return {
-      sentText: "Sent attachments",
-      replyWithText: "attachments",
+      sentText: this.t(
+        "chat.preview.media.sent_attachments",
+        "Sent attachments",
+      ),
+      replyWithText: this.t(
+        "chat.preview.media.reply_attachments",
+        "attachments",
+      ),
     };
+  },
+
+  translateLegacyServerPreview(previewText = "") {
+    const raw = this.normalizeMessageContentForPreview(previewText);
+    if (!raw) return "";
+    const normalized = raw.replace(/[.!]+$/g, "").trim();
+
+    const repliedStoryWithTextMatch = normalized.match(
+      /^Replied to your story:\s+([\s\S]+)$/i,
+    );
+    if (repliedStoryWithTextMatch) {
+      return this.t(
+        "chat.preview.reply_story_with_text",
+        "Replied to your story: {content}",
+        {
+          content: repliedStoryWithTextMatch[1].trim(),
+        },
+      );
+    }
+
+    if (/^Message(?: was)? recalled$/i.test(normalized)) {
+      return this.t("chat.preview.message_recalled", "Message was recalled");
+    }
+
+    if (/^Replied to your story$/i.test(normalized)) {
+      return this.t("chat.preview.reply_story", "Replied to your story");
+    }
+
+    if (/^Replied with a shared post$/i.test(normalized)) {
+      return this.t(
+        "chat.preview.reply_shared_post",
+        "Replied with a shared post",
+      );
+    }
+
+    if (/^Replied with (?:a )?photo$/i.test(normalized)) {
+      return this.t("chat.preview.reply_media", "Replied with {content}", {
+        content: this.t("chat.preview.media.sent_photo", "Sent a photo"),
+      });
+    }
+
+    if (/^Replied with (?:a )?video$/i.test(normalized)) {
+      return this.t("chat.preview.reply_media", "Replied with {content}", {
+        content: this.t("chat.preview.media.sent_video", "Sent a video"),
+      });
+    }
+
+    if (/^Replied with (?:an )?audio$/i.test(normalized)) {
+      return this.t("chat.preview.reply_media", "Replied with {content}", {
+        content: this.t("chat.preview.media.sent_audio", "Sent an audio"),
+      });
+    }
+
+    if (/^Shared a post$/i.test(normalized)) {
+      return this.t("chat.preview.shared_post", "Shared a post");
+    }
+
+    const repliedTextMatch = normalized.match(/^Replied:\s+([\s\S]+)$/i);
+    if (repliedTextMatch) {
+      return this.t("chat.preview.reply_text", "Replied: {content}", {
+        content: repliedTextMatch[1].trim(),
+      });
+    }
+
+    const repliedWithTextMatch = normalized.match(
+      /^Replied with\s+([\s\S]+)$/i,
+    );
+    if (repliedWithTextMatch) {
+      const replyContent = repliedWithTextMatch[1].trim();
+      return this.t("chat.preview.reply_media", "Replied with {content}", {
+        content:
+          this.translateServerText(replyContent) ||
+          this.t("chat.preview.media.generic", "Media"),
+      });
+    }
+
+    if (/^Replied to a message$/i.test(normalized)) {
+      return this.t("chat.preview.reply_message", "Replied to a message");
+    }
+
+    if (/^Replied$/i.test(normalized)) {
+      return this.t("chat.preview.reply_message", "Replied to a message");
+    }
+
+    if (/^Sent a photo$/i.test(normalized)) {
+      return this.t("chat.preview.media.sent_photo", "Sent a photo");
+    }
+
+    if (/^Sent a video$/i.test(normalized)) {
+      return this.t("chat.preview.media.sent_video", "Sent a video");
+    }
+
+    if (/^Sent an audio$/i.test(normalized)) {
+      return this.t("chat.preview.media.sent_audio", "Sent an audio");
+    }
+
+    if (/^Sent (?:a )?(?:file|media file)$/i.test(normalized)) {
+      return this.t("chat.preview.media.sent_file", "Sent a media file");
+    }
+
+    const sentCountMatch = normalized.match(
+      /^Sent\s+(\d+)\s+(photos|videos|audio files|files)$/i,
+    );
+    if (sentCountMatch) {
+      const count = sentCountMatch[1];
+      const unit = sentCountMatch[2].toLowerCase();
+      if (unit === "photos") {
+        return this.t("chat.preview.media.sent_photos", "Sent {count} photos", {
+          count,
+        });
+      }
+      if (unit === "videos") {
+        return this.t("chat.preview.media.sent_videos", "Sent {count} videos", {
+          count,
+        });
+      }
+      if (unit === "audio files") {
+        return this.t(
+          "chat.preview.media.sent_audio_files",
+          "Sent {count} audio files",
+          { count },
+        );
+      }
+      return this.t("chat.preview.media.sent_files", "Sent {count} files", {
+        count,
+      });
+    }
+
+    return "";
   },
 
   getLastMsgPreviewMeta(conv, options = {}) {
@@ -4195,7 +5329,10 @@ const ChatCommon = {
     const contentText = this.normalizeMessageContentForPreview(rawContent);
 
     if (lastMessage?.isRecalled || lastMessage?.IsRecalled) {
-      return { text: "Message recalled", isDerived: true };
+      return {
+        text: this.t("chat.preview.message_recalled", "Message was recalled"),
+        isDerived: true,
+      };
     }
 
     if (lastMessage && this.isSystemMessage(lastMessage)) {
@@ -4218,9 +5355,15 @@ const ChatCommon = {
           !hasReply &&
           contentText.length > 0 &&
           normalizedServerPreview === contentText;
+        const translatedLegacyPreview = this.translateLegacyServerPreview(
+          normalizedServerPreview,
+        );
 
         return {
-          text: normalizedServerPreview,
+          text:
+            translatedLegacyPreview ||
+            this.translateServerText(normalizedServerPreview) ||
+            this.t("chat.preview.sent_message", "Sent a message"),
           isDerived: !isRawContentText,
         };
       }
@@ -4228,7 +5371,12 @@ const ChatCommon = {
 
     if (messageType === 5) {
       return {
-        text: hasReply ? "Replied with a shared post" : "Shared a post",
+        text: hasReply
+          ? this.t(
+              "chat.preview.reply_shared_post",
+              "Replied with a shared post",
+            )
+          : this.t("chat.preview.shared_post", "Shared a post"),
         isDerived: true,
       };
     }
@@ -4236,17 +5384,28 @@ const ChatCommon = {
     if (messageType === 4) {
       if (contentText.length > 0) {
         return {
-          text: `Replied to your story: ${contentText}`,
+          text: this.t(
+            "chat.preview.reply_story_with_text",
+            "Replied to your story: {content}",
+            { content: contentText },
+          ),
           isDerived: true,
         };
       }
-      return { text: "Replied to your story", isDerived: true };
+      return {
+        text: this.t("chat.preview.reply_story", "Replied to your story"),
+        isDerived: true,
+      };
     }
 
     if (messageType === 2) {
       if (contentText.length > 0) {
         return {
-          text: hasReply ? `Replied: ${contentText}` : contentText,
+          text: hasReply
+            ? this.t("chat.preview.reply_text", "Replied: {content}", {
+                content: contentText,
+              })
+            : contentText,
           isDerived: hasReply,
         };
       }
@@ -4256,7 +5415,9 @@ const ChatCommon = {
       );
       return {
         text: hasReply
-          ? `Replied with ${mediaSummary.replyWithText}`
+          ? this.t("chat.preview.reply_media", "Replied with {content}", {
+              content: mediaSummary.replyWithText,
+            })
           : mediaSummary.sentText,
         isDerived: true,
       };
@@ -4265,36 +5426,60 @@ const ChatCommon = {
     if (messageType === 1 || messageType === null) {
       if (contentText.length > 0) {
         return {
-          text: hasReply ? `Replied: ${contentText}` : contentText,
+          text: hasReply
+            ? this.t("chat.preview.reply_text", "Replied: {content}", {
+                content: contentText,
+              })
+            : contentText,
           isDerived: hasReply,
         };
       }
       if (hasReply) {
-        return { text: "Replied to a message", isDerived: true };
+        return {
+          text: this.t("chat.preview.reply_message", "Replied to a message"),
+          isDerived: true,
+        };
       }
       if (messageType === 1) {
-        return { text: "Sent a message", isDerived: true };
+        return {
+          text: this.t("chat.preview.sent_message", "Sent a message"),
+          isDerived: true,
+        };
       }
     }
 
     if (contentText.length > 0) {
       return {
-        text: hasReply ? `Replied: ${contentText}` : contentText,
+        text: hasReply
+          ? this.t("chat.preview.reply_text", "Replied: {content}", {
+              content: contentText,
+            })
+          : contentText,
         isDerived: hasReply,
       };
     }
 
     if (hasReply) {
-      return { text: "Replied to a message", isDerived: true };
+      return {
+        text: this.t("chat.preview.reply_message", "Replied to a message"),
+        isDerived: true,
+      };
     }
 
     if (conv?.lastMessagePreview) {
-      return { text: conv.lastMessagePreview, isDerived: true };
+      return {
+        text:
+          this.translateServerText(conv.lastMessagePreview) ||
+          this.t("chat.preview.sent_message", "Sent a message"),
+        isDerived: true,
+      };
     }
 
     const isGroup = !!(conv?.isGroup ?? conv?.IsGroup ?? false);
     return {
-      text: isGroup ? "Group created" : "Started a conversation",
+      text: isGroup
+        ? this.t("chat.preview.group_created", "Group created.")
+        : this.t("chat.preview.conversation_started", "Conversation started."),
       isDerived: true,
     };
   },
@@ -4408,10 +5593,10 @@ const ChatCommon = {
    */
   showConfirm(options = {}) {
     const {
-      title = "Are you sure?",
+      title = this.t("common.confirm.title", "Are you sure?"),
       message = "",
-      confirmText = "Confirm",
-      cancelText = "Cancel",
+      confirmText = this.t("common.buttons.confirm", "Confirm"),
+      cancelText = this.t("common.buttons.cancel", "Cancel"),
       onConfirm = null,
       onCancel = null,
       isDanger = false,
@@ -4425,12 +5610,12 @@ const ChatCommon = {
 
     popup.innerHTML = `
             <div class="chat-common-confirm-content">
-                <h3>${title}</h3>
-                <p>${message}</p>
+                <h3>${escapeHtml(title)}</h3>
+                <p>${escapeHtml(message)}</p>
             </div>
             <div class="chat-common-confirm-actions">
-                <button class="chat-common-confirm-btn chat-common-confirm-cancel" id="genericCancelBtn">${cancelText}</button>
-                <button class="chat-common-confirm-btn chat-common-confirm-confirm ${isDanger ? "danger" : ""}" id="genericConfirmBtn">${confirmText}</button>
+                <button class="chat-common-confirm-btn chat-common-confirm-cancel" id="genericCancelBtn">${escapeHtml(cancelText)}</button>
+                <button class="chat-common-confirm-btn chat-common-confirm-confirm ${isDanger ? "danger" : ""}" id="genericConfirmBtn">${escapeHtml(confirmText)}</button>
             </div>
         `;
 
@@ -4478,12 +5663,12 @@ const ChatCommon = {
    */
   showPrompt(options = {}) {
     const {
-      title = "Input required",
+      title = this.t("common.prompt.title", "Input required"),
       message = "",
       placeholder = "",
       value = "",
-      confirmText = "Save",
-      cancelText = "Cancel",
+      confirmText = this.t("common.buttons.save", "Save"),
+      cancelText = this.t("common.buttons.cancel", "Cancel"),
       onConfirm = null,
       onCancel = null,
       maxLength = null,
@@ -4510,15 +5695,15 @@ const ChatCommon = {
 
     popup.innerHTML = `
             <div class="chat-common-confirm-content">
-                <h3>${title}</h3>
-                ${message ? `<p>${message}</p>` : ""}
+                <h3>${escapeHtml(title)}</h3>
+                ${message ? `<p>${escapeHtml(message)}</p>` : ""}
                 <div class="chat-common-confirm-input-wrapper">
-                    <input type="text" id="genericPromptInput" class="chat-common-confirm-input" placeholder="${placeholder}" value="${normalizedValue.replace(/"/g, "&quot;")}" autocomplete="off"${maxLengthAttr}>
+                    <input type="text" id="genericPromptInput" class="chat-common-confirm-input" placeholder="${this.escapeAttribute(placeholder)}" value="${this.escapeAttribute(normalizedValue)}" autocomplete="off"${maxLengthAttr}>
                 </div>
             </div>
             <div class="chat-common-confirm-actions">
-                <button class="chat-common-confirm-btn chat-common-confirm-cancel" id="genericCancelBtn">${cancelText}</button>
-                <button class="chat-common-confirm-btn chat-common-confirm-confirm" id="genericConfirmBtn">${confirmText}</button>
+                <button class="chat-common-confirm-btn chat-common-confirm-cancel" id="genericCancelBtn">${escapeHtml(cancelText)}</button>
+                <button class="chat-common-confirm-btn chat-common-confirm-confirm" id="genericConfirmBtn">${escapeHtml(confirmText)}</button>
             </div>
         `;
 
@@ -4598,7 +5783,7 @@ const ChatCommon = {
 
   showThemePicker(options = {}) {
     const {
-      title = "Change theme",
+      title = this.t("chat.theme.change_title", "Change theme"),
       currentTheme = null,
       onSelect = null,
       onCancel = null,
@@ -4686,7 +5871,7 @@ const ChatCommon = {
    */
   showNicknamesModal(options = {}) {
     const {
-      title = "Nicknames",
+      title = this.t("chat.nickname.modal_title", "Nicknames"),
       members = [],
       conversationId = "",
       onNicknameUpdated = null,
@@ -4743,12 +5928,15 @@ const ChatCommon = {
     };
 
     const renderNicknameItem = (member) => {
-      const usernameRawLabel = member.username || "unknown";
+      const usernameRawLabel =
+        member.username || this.getUnknownUsernameLabel();
       const usernameLabel = ChatCommon.truncateDisplayText(
         usernameRawLabel,
         window.APP_CONFIG?.MAX_NAME_DISPLAY_LENGTH || 25,
       );
-      const nicknameRawLabel = member.nickname || "Set nickname";
+      const nicknameRawLabel =
+        member.nickname ||
+        this.t("chat.nickname.set_placeholder", "Set nickname");
       const nicknameLabel = member.nickname
         ? ChatCommon.truncateDisplayText(member.nickname, nicknameMaxLength)
         : nicknameRawLabel;
@@ -4773,7 +5961,8 @@ const ChatCommon = {
       if (!infoArea) return;
       const nameEl = infoArea.querySelector(".chat-nickname-name");
       const labelEl = infoArea.querySelector(".chat-nickname-label");
-      const usernameRawLabel = member.username || "unknown";
+      const usernameRawLabel =
+        member.username || this.getUnknownUsernameLabel();
       const usernameLabel = ChatCommon.truncateDisplayText(
         usernameRawLabel,
         window.APP_CONFIG?.MAX_NAME_DISPLAY_LENGTH || 25,
@@ -4783,7 +5972,9 @@ const ChatCommon = {
         nameEl.title = `@${usernameRawLabel}`;
       }
       if (labelEl) {
-        const nicknameRawLabel = member.nickname || "Set nickname";
+        const nicknameRawLabel =
+          member.nickname ||
+          this.t("chat.nickname.set_placeholder", "Set nickname");
         const nicknameLabel = member.nickname
           ? ChatCommon.truncateDisplayText(member.nickname, nicknameMaxLength)
           : nicknameRawLabel;
@@ -4825,7 +6016,7 @@ const ChatCommon = {
       infoArea.style.display = "none";
       const inputWrapper = document.createElement("div");
       inputWrapper.className = "chat-nickname-input-wrapper";
-      inputWrapper.innerHTML = `<input type="text" class="chat-nickname-input" value="${escapeHtml(currentNicknameValue)}" placeholder="Set nickname..." maxlength="${nicknameMaxLength}">`;
+      inputWrapper.innerHTML = `<input type="text" class="chat-nickname-input" value="${escapeHtml(currentNicknameValue)}" placeholder="${this.escapeAttribute(this.t("chat.nickname.input_placeholder", "Set nickname..."))}" maxlength="${nicknameMaxLength}">`;
       item.insertBefore(inputWrapper, editBtn);
 
       const input = inputWrapper.querySelector("input");
@@ -4864,13 +6055,24 @@ const ChatCommon = {
               onNicknameUpdated(normalizedAccountId, nicknameToSave);
             cancelEdit({ applyUpdatedData: true });
           } else {
-            if (window.toastError)
-              window.toastError("Failed to update nickname");
+            const message = await this.readFriendlyApiError(res, {
+              feature: "chat",
+              action: "update-nickname",
+              fallbackKey: "errors.chat.nickname_update_failed",
+              fallbackMessage: "Failed to update nickname",
+            });
+            if (window.toastError) window.toastError(message);
             cancelEdit();
           }
         } catch (err) {
           console.error("Nickname update error:", err);
-          if (window.toastError) window.toastError("Failed to update nickname");
+          if (window.toastError)
+            window.toastError(
+              this.t(
+                "errors.chat.nickname_update_failed",
+                "Failed to update nickname",
+              ),
+            );
           cancelEdit();
         }
       };
@@ -5024,7 +6226,13 @@ const ChatCommon = {
       );
       const [res] = await Promise.all([resPromise, preJumpAnimation]);
       if (!res.ok) {
-        window.toastError && window.toastError("Failed to jump to message");
+        const message = await this.readFriendlyApiError(res, {
+          feature: "chat",
+          action: "jump-to-message",
+          fallbackKey: "errors.chat.jump_to_message_failed",
+          fallbackMessage: "Failed to jump to message",
+        });
+        window.toastError && window.toastError(message);
         ctx.setState({ isLoading: false });
         return;
       }
@@ -5083,7 +6291,13 @@ const ChatCommon = {
       );
     } catch (err) {
       console.error("contextLoadMessageContext error:", err);
-      window.toastError && window.toastError("Failed to jump to message");
+      window.toastError &&
+        window.toastError(
+          this.t(
+            "errors.chat.jump_to_message_failed",
+            "Failed to jump to message",
+          ),
+        );
       ctx.setState({ isLoading: false });
     }
   },
@@ -5329,7 +6543,7 @@ const ChatCommon = {
     const btn = document.createElement("button");
     btn.className = "chat-jump-bottom-btn";
     btn.id = ctx.getBtnId();
-    btn.title = "Jump to bottom";
+    btn.title = this.t("chat.message.jump_to_bottom", "Jump to bottom");
     btn.innerHTML = '<i data-lucide="chevrons-down"></i>';
     btn.onclick = () => {
       const state = ctx.getState();

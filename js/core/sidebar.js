@@ -105,6 +105,7 @@ window.updateSidebarInfo = function (url, name) {
       name ||
       localStorage.getItem("username") ||
       localStorage.getItem("fullname") ||
+      window.I18n?.t?.("common.labels.user", {}, "User") ||
       "User";
   }
 
@@ -115,6 +116,10 @@ async function loadSidebar() {
   const res = await fetch("pages/core/sidebar.html");
   document.getElementById("sidebar").innerHTML = await res.text();
   applySidebarProfileRoutes();
+  if (window.I18n?.translateDom) {
+    window.I18n.translateDom(document.getElementById("sidebar"));
+  }
+  updateSidebarLanguageValue();
   lucide.createIcons();
 
   const avatarUrl = localStorage.getItem("avatarUrl");
@@ -127,7 +132,11 @@ async function loadSidebar() {
   window.updateSidebarInfo(avatarUrl);
 
   // Display Username as primary identifier
-  nameElement.textContent = username || fullname || "User";
+  nameElement.textContent =
+    username ||
+    fullname ||
+    window.I18n?.t?.("common.labels.user", {}, "User") ||
+    "User";
 
   // Load theme preference
   loadThemePreference();
@@ -179,6 +188,28 @@ async function loadSidebar() {
     typeof window.NotificationsPanel.init === "function"
   ) {
     window.NotificationsPanel.init();
+  }
+
+  if (window.I18n?.onChange && !window.__sidebarLanguageSyncUnsubscribe) {
+    window.__sidebarLanguageSyncUnsubscribe = window.I18n.onChange(() => {
+      updateSidebarLanguageValue();
+      if (window.I18n?.translateDom) {
+        window.I18n.translateDom(document.getElementById("sidebar"));
+      }
+      if (document.getElementById("languageDropdown")?.classList.contains("show")) {
+        lucide.createIcons();
+        positionLanguageMenu();
+      }
+    });
+  }
+
+  if (!window.__sidebarLanguageMenuResizeBound) {
+    window.__sidebarLanguageMenuResizeBound = true;
+    window.addEventListener("resize", () => {
+      if (document.getElementById("languageDropdown")?.classList.contains("show")) {
+        positionLanguageMenu();
+      }
+    });
   }
 }
 
@@ -291,12 +322,14 @@ function setupAutoClose() {
     const moreDropdown = document.getElementById("moreDropdown");
     const settingsDropdown = document.getElementById("settingsDropdown");
     const createDropdown = document.getElementById("createDropdown");
+    const languageDropdown = document.getElementById("languageDropdown");
 
     // Kiểm tra có popup nào đang mở không
     const hasOpenPopup =
       moreDropdown?.classList.contains("show") ||
       settingsDropdown?.classList.contains("show") ||
-      createDropdown?.classList.contains("show");
+      createDropdown?.classList.contains("show") ||
+      languageDropdown?.classList.contains("show");
 
     // Nếu có popup mở, giữ sidebar expanded
     // Nếu không, cho phép sidebar tự thu gọn (CSS hover sẽ xử lý)
@@ -318,6 +351,7 @@ function closeAllDropdowns() {
   moreDropdown?.classList.remove("show");
   settingsDropdown?.classList.remove("show");
   createDropdown?.classList.remove("show");
+  closeLanguageMenu();
   sidebar?.classList.remove("expanded");
   sidebarContainer?.classList.remove("expanded");
 }
@@ -332,6 +366,7 @@ function toggleMoreMenu(e) {
   // Close settings and create if open
   settingsDropdown.classList.remove("show");
   createDropdown?.classList.remove("show");
+  closeLanguageMenu();
 
   // Toggle more menu
   const isOpening = !moreDropdown.classList.contains("show");
@@ -358,6 +393,7 @@ function toggleSettingsMenu(e) {
 
   // Hide more menu and show settings
   moreDropdown.classList.remove("show");
+  closeLanguageMenu();
 
   // Reset animation by removing and re-adding the class
   settingsDropdown.classList.remove("show");
@@ -380,6 +416,7 @@ function backToMoreMenu(e) {
 
   // Hide settings and show more menu
   settingsDropdown.classList.remove("show");
+  closeLanguageMenu();
 
   // Reset animation by removing and re-adding the class
   moreDropdown.classList.remove("show");
@@ -401,6 +438,7 @@ function toggleCreateMenu(e) {
   // Close other menus
   moreDropdown?.classList.remove("show");
   settingsDropdown?.classList.remove("show");
+  closeLanguageMenu();
 
   // Toggle create menu
   const isOpening = !createDropdown.classList.contains("show");
@@ -428,7 +466,11 @@ async function loadCreatePostModal() {
   // Append modal vào body
   const tempDiv = document.createElement("div");
   tempDiv.innerHTML = modalHTML;
-  document.body.appendChild(tempDiv.firstElementChild);
+  const modalElement = tempDiv.firstElementChild;
+  document.body.appendChild(modalElement);
+  if (window.I18n?.translateDom && modalElement) {
+    window.I18n.translateDom(modalElement);
+  }
 
   // Recreate icons cho modal
   lucide.createIcons();
@@ -442,7 +484,11 @@ async function loadCreateStoryModal() {
 
   const tempDiv = document.createElement("div");
   tempDiv.innerHTML = modalHTML;
-  document.body.appendChild(tempDiv.firstElementChild);
+  const modalElement = tempDiv.firstElementChild;
+  document.body.appendChild(modalElement);
+  if (window.I18n?.translateDom && modalElement) {
+    window.I18n.translateDom(modalElement);
+  }
 
   lucide.createIcons();
 }
@@ -452,13 +498,15 @@ document.addEventListener("click", (e) => {
   const moreDropdown = document.getElementById("moreDropdown");
   const settingsDropdown = document.getElementById("settingsDropdown");
   const createDropdown = document.getElementById("createDropdown");
+  const languageDropdown = document.getElementById("languageDropdown");
 
   // Kiểm tra click có nằm trong sidebar hoặc popup không
   const clickedInside =
     sidebar?.contains(e.target) ||
     moreDropdown?.contains(e.target) ||
     settingsDropdown?.contains(e.target) ||
-    createDropdown?.contains(e.target);
+    createDropdown?.contains(e.target) ||
+    languageDropdown?.contains(e.target);
 
   // Nếu click bên ngoài, đóng tất cả popup và collapse sidebar
   if (!clickedInside) {
@@ -740,6 +788,7 @@ function navigate(e, route, clickedEl = null) {
 // Theme toggle functionality
 function toggleTheme(e) {
   e.stopPropagation();
+  closeLanguageMenu();
   if (
     window.themeManager &&
     typeof window.themeManager.toggleTheme === "function"
@@ -792,34 +841,196 @@ function loadThemePreference() {
 }
 
 // Settings menu functions (placeholder)
+function setLanguageMenuExpanded(isExpanded) {
+  const languageItem = document.getElementById("sidebar-language-item");
+  languageItem?.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+  languageItem?.classList.toggle("is-submenu-open", Boolean(isExpanded));
+}
+
+function updateLanguageOptionSelection(language = "") {
+  const normalizedLanguage = window.I18n?.normalizeLanguage
+    ? window.I18n.normalizeLanguage(language)
+    : (language || "").toString().trim().toLowerCase();
+
+  document
+    .querySelectorAll("#languageDropdown .dropdown-item[data-language]")
+    .forEach((item) => {
+      const isSelected =
+        item.dataset.language?.toLowerCase() === normalizedLanguage;
+      item.dataset.selected = isSelected ? "true" : "false";
+      item.setAttribute("aria-checked", isSelected ? "true" : "false");
+    });
+}
+
+function closeLanguageMenu() {
+  document.getElementById("languageDropdown")?.classList.remove("show");
+  setLanguageMenuExpanded(false);
+}
+
+function positionLanguageMenu() {
+  const dropdown = document.getElementById("languageDropdown");
+  const languageItem = document.getElementById("sidebar-language-item");
+  const settingsDropdown = document.getElementById("settingsDropdown");
+  if (!dropdown || !languageItem || !settingsDropdown) return;
+
+  dropdown.style.left = "";
+  dropdown.style.right = "";
+  dropdown.style.top = "";
+
+  const gutter = 12;
+  const settingsRect = settingsDropdown.getBoundingClientRect();
+  const itemRect = languageItem.getBoundingClientRect();
+  const dropdownRect = dropdown.getBoundingClientRect();
+  const dropdownWidth = dropdownRect.width || 240;
+  const dropdownHeight = dropdownRect.height || dropdown.offsetHeight || 0;
+
+  const canOpenRight =
+    settingsRect.right + gutter + dropdownWidth <= window.innerWidth - 8;
+  const canOpenLeft = settingsRect.left - gutter - dropdownWidth >= 8;
+
+  let left = settingsDropdown.offsetWidth + gutter;
+  if (!canOpenRight && canOpenLeft) {
+    left = -(dropdownWidth + gutter);
+  } else if (!canOpenRight) {
+    left = Math.max(8, settingsDropdown.offsetWidth - dropdownWidth);
+  }
+
+  let top = itemRect.top - settingsRect.top;
+  const maxTop = Math.max(
+    8,
+    window.innerHeight - settingsRect.top - dropdownHeight - 8,
+  );
+  top = Math.max(8, Math.min(top, maxTop));
+
+  dropdown.style.left = `${left}px`;
+  dropdown.style.top = `${top}px`;
+}
+
 function openLanguageMenu(e) {
   e.stopPropagation();
-  console.log("Open language menu");
-  // TODO: Implement language selection
+  const dropdown = document.getElementById("languageDropdown");
+  if (!dropdown) return;
+
+  const isOpening = !dropdown.classList.contains("show");
+  if (!isOpening) {
+    closeLanguageMenu();
+    return;
+  }
+
+  updateLanguageOptionSelection(window.I18n?.getLanguage?.());
+  dropdown.classList.remove("show");
+  void dropdown.offsetWidth;
+  dropdown.classList.add("show");
+  setLanguageMenuExpanded(true);
+  lucide.createIcons();
+  positionLanguageMenu();
+}
+
+function updateSidebarLanguageValue() {
+  const valueElement = document.getElementById("sidebar-language-value");
+  if (!valueElement || !window.I18n) return;
+  valueElement.textContent = window.I18n.formatLanguageLabel(
+    window.I18n.getLanguage(),
+  );
+  updateLanguageOptionSelection(window.I18n.getLanguage());
+}
+
+function sidebarReloadAfterLanguageChange() {
+  if (window.__languageChangeReloadInFlight) return;
+  window.__languageChangeReloadInFlight = true;
+
+  if (window.PageCache?.clearAll) {
+    window.PageCache.clearAll();
+  }
+
+  window.setTimeout(() => {
+    window.location.reload();
+  }, 0);
+}
+
+async function applySidebarLanguageSelection(language) {
+  if (window.__sidebarLanguageChangeInFlight) return;
+  window.__sidebarLanguageChangeInFlight = true;
+
+  const nextLanguage = window.I18n?.setLanguage
+    ? window.I18n.setLanguage(language)
+    : language;
+  updateSidebarLanguageValue();
+  closeLanguageMenu();
+  lucide.createIcons();
+
+  try {
+    window.I18n?.markPendingLanguageSync?.(nextLanguage);
+
+    if (window.API?.Accounts?.updateLanguagePreference) {
+      const res = await window.API.Accounts.updateLanguagePreference(
+        nextLanguage,
+      );
+      if (!res?.ok) {
+        throw new Error("language-sync-failed");
+      }
+    } else {
+      throw new Error("language-sync-unavailable");
+    }
+
+    window.I18n?.clearPendingLanguageSync?.(nextLanguage);
+    window.AccountSettingsPage?.syncLanguageSelection?.(nextLanguage);
+  } catch (error) {
+    console.error("Failed to sync language preference:", error);
+  } finally {
+    window.__sidebarLanguageChangeInFlight = false;
+    sidebarReloadAfterLanguageChange();
+  }
+}
+
+async function selectLanguageOption(e, language) {
+  e.stopPropagation();
+
+  const currentPath = sidebarParseHash(window.location.hash || "").path;
+  const isDirtyAccountSettings =
+    sidebarIsAccountSettingsPath(currentPath) &&
+    window.getAccountSettingsModified &&
+    window.getAccountSettingsModified();
+
+  if (
+    isDirtyAccountSettings &&
+    typeof window.showDiscardAccountSettingsConfirmation === "function"
+  ) {
+    closeLanguageMenu();
+    window.showDiscardAccountSettingsConfirmation(
+      () => {
+        applySidebarLanguageSelection(language);
+      },
+      () => {},
+    );
+    return;
+  }
+
+  await applySidebarLanguageSelection(language);
 }
 
 function openNotificationSettings(e) {
   e.stopPropagation();
-  console.log("Open notification settings");
-  // TODO: Implement notification settings
+  closeLanguageMenu();
+  window.toastInfo?.(window.I18n?.t("sidebar.featureComingSoon") || "");
 }
 
 function openPrivacySettings(e) {
   e.stopPropagation();
-  console.log("Open privacy settings");
-  // TODO: Implement privacy settings
+  closeLanguageMenu();
+  window.toastInfo?.(window.I18n?.t("sidebar.featureComingSoon") || "");
 }
 
 function openHelp(e) {
   e.stopPropagation();
-  console.log("Open help");
-  // TODO: Implement help & support
+  closeLanguageMenu();
+  window.toastInfo?.(window.I18n?.t("sidebar.featureComingSoon") || "");
 }
 
 function openAbout(e) {
   e.stopPropagation();
-  console.log("Open about");
-  // TODO: Implement about page
+  closeLanguageMenu();
+  window.toastInfo?.(window.I18n?.t("sidebar.featureComingSoon") || "");
 }
 async function loadCreateChatGroupModal() {
   const res = await fetch("pages/chat/create-chat-group-modal.html");
@@ -828,7 +1039,11 @@ async function loadCreateChatGroupModal() {
   // Append modal to body
   const tempDiv = document.createElement("div");
   tempDiv.innerHTML = modalHTML;
-  document.body.appendChild(tempDiv.firstElementChild);
+  const modalElement = tempDiv.firstElementChild;
+  document.body.appendChild(modalElement);
+  if (window.I18n?.translateDom && modalElement) {
+    window.I18n.translateDom(modalElement);
+  }
 
   // Recreate icons
   lucide.createIcons();

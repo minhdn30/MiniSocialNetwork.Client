@@ -32,6 +32,7 @@
   let feedIsLoadingMore = false;
   let feedNavActionInFlight = false;
   let feedResizeBound = false;
+  let feedLanguageBound = false;
   let feedWindowStart = 0;
   let feedTransitionCleanupTimer = null;
 
@@ -70,7 +71,13 @@
       accountId: normalizeAuthorId(raw?.accountId || raw?.AccountId || ""),
       avatarUrl: raw?.avatarUrl || raw?.AvatarUrl || defaultAvatar,
       username:
-        raw?.username || raw?.Username || raw?.fullName || raw?.FullName || "User",
+        raw?.username ||
+        raw?.Username ||
+        raw?.fullName ||
+        raw?.FullName ||
+        (window.I18n?.t
+          ? window.I18n.t("common.labels.user", {}, "User")
+          : "User"),
       fullName: raw?.fullName || raw?.FullName || "",
       isCurrentUser: !!(raw?.isCurrentUser || raw?.IsCurrentUser),
       storyRingState: raw?.storyRingState ?? raw?.StoryRingState ?? 0,
@@ -93,6 +100,56 @@
     return normalizeAuthorId(localStorage.getItem("accountId"));
   }
 
+  function getYouStoryLabel() {
+    return window.I18n?.t
+      ? window.I18n.t("common.labels.you", {}, "You")
+      : "You";
+  }
+
+  function refreshCurrentUserStoryLabels() {
+    const nextLabel = getYouStoryLabel();
+    [feedAuthorItems, feedRenderItems].forEach((items) => {
+      (Array.isArray(items) ? items : []).forEach((item) => {
+        if (!item?.isCurrentUser) return;
+        item.username = nextLabel;
+      });
+    });
+  }
+
+  function bindStoryFeedLanguageChange() {
+    if (feedLanguageBound || !window.I18n?.onChange) return;
+    feedLanguageBound = true;
+    window.I18n.onChange(() => {
+      refreshCurrentUserStoryLabels();
+      refreshStoryFeedNavLocalization();
+      renderCurrentStoryWindow("");
+    });
+  }
+
+  function refreshStoryFeedNavLocalization() {
+    const { prevBtn, nextBtn } = getStoryFeedElements();
+    if (prevBtn) {
+      prevBtn.setAttribute(
+        "aria-label",
+        window.I18n?.t
+          ? window.I18n.t(
+              "story.feed.previousStoriesAria",
+              {},
+              "Previous stories",
+            )
+          : "Previous stories",
+      );
+    }
+    if (nextBtn) {
+      nextBtn.setAttribute(
+        "aria-label",
+        window.I18n?.t
+          ? window.I18n.t("story.feed.nextStoriesAria", {}, "Next stories")
+          : "Next stories",
+      );
+    }
+  }
+
   function buildOwnStoryPlaceholder(accountId) {
     return {
       accountId,
@@ -100,7 +157,7 @@
         localStorage.getItem("avatarUrl") ||
         window.APP_CONFIG?.DEFAULT_AVATAR ||
         "assets/images/default-avatar.jpg",
-      username: localStorage.getItem("username") || "You",
+      username: localStorage.getItem("username") || getYouStoryLabel(),
       fullName: "",
       isCurrentUser: true,
       storyRingState: 0,
@@ -307,7 +364,9 @@
       }
 
       const displayName = isOwn
-        ? "You"
+        ? (window.I18n?.t
+            ? window.I18n.t("common.labels.you", {}, "You")
+            : "You")
         : escapeAttr(item.username || item.fullName || "User");
       const dataAuthorAttr =
         ringClass && ringClass !== "story-ring-none"
@@ -517,6 +576,7 @@
     nextBtn.classList.toggle("is-hidden", !hasNext);
     nextBtn.classList.toggle("is-loading", feedNavActionInFlight);
     shell.classList.toggle("stories-shell-scrollable", hasPrev || hasNext);
+    refreshStoryFeedNavLocalization();
   }
 
   function bindStoryFeedNavigation() {
@@ -668,7 +728,9 @@
           detail.username ||
           detail.Username ||
           localStorage.getItem("username") ||
-          "You",
+          (window.I18n?.t
+            ? window.I18n.t("common.labels.you", {}, "You")
+            : "You"),
         isCurrentUser: true,
         activeStoryCount: Math.max(
           1,
@@ -706,7 +768,11 @@
         {
           accountId: myId,
           avatarUrl: localStorage.getItem("avatarUrl") || "",
-          username: localStorage.getItem("username") || "You",
+          username:
+            localStorage.getItem("username") ||
+            (window.I18n?.t
+              ? window.I18n.t("common.labels.you", {}, "You")
+              : "You"),
           isCurrentUser: true,
           activeStoryCount: remaining,
           storyRingState: 2,
@@ -768,6 +834,7 @@
   async function initStoryFeed() {
     const container = document.getElementById("story-feed");
     if (!container) return;
+    bindStoryFeedLanguageChange();
 
     feedNavActionInFlight = false;
 
@@ -794,7 +861,7 @@
         items = [
           {
             accountId: myId,
-            username: "You",
+            username: getYouStoryLabel(),
             fullName: "",
             avatarUrl: myAvatar,
             activeStoryCount: 0,
@@ -811,6 +878,7 @@
 
       // Build author queue for story-list viewer
       feedAuthorItems = buildAuthorQueue(items);
+      refreshCurrentUserStoryLabels();
       feedLoadMorePage = 1;
       feedHasMore = resolveHasMoreFromPayload(
         data,

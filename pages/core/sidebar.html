@@ -1,80 +1,48 @@
 <!-- Sidebar -->
 <aside class="sidebar">
-  <!-- Logo -->
   <div class="sidebar-logo" data-route="/home">
-    <span class="logo-icon">☁</span>
+    <span class="logo-icon">&#9729;</span>
     <span class="logo-text">CloudM</span>
   </div>
 
-  <!-- Menu -->
   <nav class="sidebar-menu">
-    <!-- Profile -->
-    <a
-      class="menu-item profile"
-      href="#/"
-      data-route="/profile"
-    >
+    <a class="menu-item profile" href="#/" data-route="/profile">
       <img id="sidebar-avatar" alt="avatar" />
-      <span id="sidebar-name">User</span>
+      <span id="sidebar-name" data-i18n="common.labels.user">User</span>
     </a>
 
-    <a
-      class="menu-item active"
-      href="#/home"
-      data-route="/home"
-    >
+    <a class="menu-item active" href="#/home" data-route="/home">
       <i data-lucide="home"></i>
-      <span>Home</span>
+      <span data-i18n="common.navigation.home">Home</span>
     </a>
 
-    <a
-      class="menu-item"
-      href="#/search"
-      data-route="/search"
-    >
+    <a class="menu-item" href="#/search" data-route="/search">
       <i data-lucide="search"></i>
-      <span>Search</span>
+      <span data-i18n="common.navigation.search">Search</span>
     </a>
 
-    <a
-      class="menu-item"
-      href="#/explore"
-      data-route="/explore"
-    >
+    <a class="menu-item" href="#/explore" data-route="/explore">
       <i data-lucide="compass"></i>
-      <span>Explore</span>
+      <span data-i18n="common.navigation.explore">Explore</span>
     </a>
 
-    <a
-      class="menu-item"
-      href="#/reels"
-      data-route="/reels"
-    >
+    <a class="menu-item" href="#/reels" data-route="/reels">
       <i data-lucide="clapperboard"></i>
-      <span>Reels</span>
+      <span data-i18n="common.navigation.reels">Reels</span>
     </a>
 
-    <a
-      class="menu-item"
-      href="#/messages"
-      data-route="/messages"
-    >
+    <a class="menu-item" href="#/messages" data-route="/messages">
       <i data-lucide="send"></i>
-      <span>Messages</span>
+      <span data-i18n="common.navigation.messages">Messages</span>
       <span class="badge" id="messages-badge" style="display:none;"></span>
     </a>
 
-    <a
-      class="menu-item"
-      href="#/notifications"
-      data-route="/notifications"
-    >
+    <a class="menu-item" href="#/notifications" data-route="/notifications">
       <i data-lucide="bell"></i>
-      <span>Notifications</span>
+      <span data-i18n="common.navigation.notifications">Notifications</span>
       <span class="badge" id="notifications-badge" style="display:none;"></span>
     </a>
 
-    <!-- Create Menu with Dropdown -->
     <div class="create-wrapper">
       <a
         class="menu-item"
@@ -83,101 +51,139 @@
         onclick="toggleCreateMenu(event)"
       >
         <i data-lucide="plus"></i>
-        <span>Create</span>
+        <span data-i18n="common.navigation.create">Create</span>
       </a>
 
-      <!-- Create dropdown -->
       <div class="create-dropdown" id="createDropdown">
         <div class="dropdown-item" onclick="navigate(event, '/create/story')">
           <i data-lucide="circle-plus"></i>
-          <span>Story</span>
+          <span data-i18n="common.navigation.story">Story</span>
         </div>
         <div class="dropdown-item" onclick="navigate(event, '/create/post')">
           <i data-lucide="file-text"></i>
-          <span>Post</span>
+          <span data-i18n="common.navigation.post">Post</span>
         </div>
         <div class="dropdown-item" onclick="navigate(event, '/create/reel')">
           <i data-lucide="video"></i>
-          <span>Reel</span>
+          <span data-i18n="common.navigation.reels">Reels</span>
         </div>
       </div>
     </div>
   </nav>
 
-  <!-- Footer -->
   <div class="sidebar-footer">
     <div class="more-wrapper">
       <a class="menu-item" onclick="toggleMoreMenu(event)">
         <i data-lucide="menu"></i>
-        <span>More</span>
+        <span data-i18n="common.navigation.more">More</span>
       </a>
 
-      <!-- More dropdown -->
       <div class="more-dropdown" id="moreDropdown">
         <div class="dropdown-item" onclick="toggleSettingsMenu(event)">
           <i data-lucide="settings"></i>
-          <span>Settings</span>
+          <span data-i18n="common.navigation.settings">Settings</span>
           <i data-lucide="chevron-right" class="chevron-icon"></i>
         </div>
-        <div class="dropdown-item" data-route="/profile" onclick="navigate(event, '/profile')">
+        <div
+          class="dropdown-item"
+          data-route="/profile"
+          onclick="navigate(event, '/profile')"
+        >
           <i data-lucide="user"></i>
-          <span>Profile</span>
+          <span data-i18n="common.navigation.profile">Profile</span>
         </div>
         <div class="dropdown-divider"></div>
         <div class="dropdown-item danger" onclick="logout()">
           <i data-lucide="log-out"></i>
-          <span>Log out</span>
+          <span data-i18n="common.navigation.logout">Log out</span>
         </div>
       </div>
 
-      <!-- Settings dropdown -->
       <div class="settings-dropdown" id="settingsDropdown">
         <div class="dropdown-header" onclick="backToMoreMenu(event)">
           <button class="back-button">
             <i data-lucide="chevron-left"></i>
           </button>
-          <span>Settings</span>
+          <span data-i18n="common.navigation.settings">Settings</span>
         </div>
 
         <div class="dropdown-item" onclick="toggleTheme(event)">
           <i data-lucide="moon" id="theme-icon"></i>
-          <span>Dark Mode</span>
+          <span data-i18n="common.navigation.darkMode">Dark Mode</span>
           <div class="toggle-switch" id="theme-toggle">
             <div class="toggle-slider"></div>
           </div>
         </div>
 
-        <div class="dropdown-item" onclick="openLanguageMenu(event)">
+        <div
+          class="dropdown-item has-submenu"
+          id="sidebar-language-item"
+          onclick="openLanguageMenu(event)"
+          aria-haspopup="true"
+          aria-expanded="false"
+        >
           <i data-lucide="languages"></i>
-          <span>Language</span>
-          <span class="dropdown-value">English</span>
+          <span data-i18n="common.navigation.language">Language</span>
+          <span class="dropdown-value" id="sidebar-language-value" data-i18n="sidebar.currentLanguage">English</span>
+          <i class="submenu-indicator" data-lucide="chevron-right"></i>
+        </div>
+
+        <div class="submenu-dropdown" id="languageDropdown" role="menu">
+          <div class="submenu-dropdown-header">
+            <i data-lucide="languages"></i>
+            <span data-i18n="sidebar.languageMenuTitle">Language</span>
+          </div>
+          <div
+            class="dropdown-item"
+            data-language="en"
+            role="menuitemradio"
+            aria-checked="true"
+            onclick="selectLanguageOption(event, 'en')"
+          >
+            <i data-lucide="check"></i>
+            <span data-i18n="common.labels.english">English</span>
+          </div>
+          <div
+            class="dropdown-item"
+            data-language="vi"
+            role="menuitemradio"
+            aria-checked="false"
+            onclick="selectLanguageOption(event, 'vi')"
+          >
+            <i data-lucide="check"></i>
+            <span data-i18n="common.labels.vietnamese">Tiếng Việt</span>
+          </div>
         </div>
 
         <div class="dropdown-item" onclick="openNotificationSettings(event)">
           <i data-lucide="bell"></i>
-          <span>Notifications</span>
+          <span data-i18n="common.navigation.notifications">Notifications</span>
         </div>
 
         <div class="dropdown-item" onclick="openPrivacySettings(event)">
           <i data-lucide="shield"></i>
-          <span>Privacy & Security</span>
+          <span data-i18n="common.navigation.privacySecurity">Privacy & Security</span>
         </div>
 
-        <div class="dropdown-item" data-route="/account-settings" onclick="navigate(event, '/account-settings')">
+        <div
+          class="dropdown-item"
+          data-route="/account-settings"
+          onclick="navigate(event, '/account-settings')"
+        >
           <i data-lucide="user-cog"></i>
-          <span>Account Settings</span>
+          <span data-i18n="common.navigation.accountSettings">Account Settings</span>
         </div>
 
         <div class="dropdown-divider"></div>
 
         <div class="dropdown-item" onclick="openHelp(event)">
           <i data-lucide="help-circle"></i>
-          <span>Help & Support</span>
+          <span data-i18n="common.navigation.helpSupport">Help & Support</span>
         </div>
 
         <div class="dropdown-item" onclick="openAbout(event)">
           <i data-lucide="info"></i>
-          <span>About</span>
+          <span data-i18n="common.navigation.about">About</span>
         </div>
       </div>
     </div>

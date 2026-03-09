@@ -190,6 +190,22 @@
   font-size: 15px;
 }
 
+/* Adjustments for Vietnamese to prevent text wrapping in stats */
+[lang="vi"] .profile-preview-stats {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+[lang="vi"] .profile-preview-stats span {
+  font-size: 11px;
+  white-space: nowrap;
+  letter-spacing: -0.02em;
+}
+
+[lang="vi"] .profile-preview-stats > div {
+  min-width: 0;
+}
+
 /* ===== Media grid ===== */
 .profile-preview-medias {
   display: grid;
@@ -546,6 +562,7 @@
   border-radius: 16px;
   width: 90%;
   max-width: 400px;
+  max-height: min(80vh, 520px);
   overflow: hidden;
   transform: scale(0.9);
   transition: transform var(--transition-normal);
@@ -559,6 +576,8 @@
   padding: 32px 24px;
   text-align: center;
   border-bottom: 1px solid var(--border-secondary);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .unfollow-content h3 {
@@ -573,6 +592,7 @@
   font-size: 14px;
   margin: 0;
   line-height: 1.5;
+  white-space: normal;
 }
 
 .unfollow-actions {
@@ -595,6 +615,22 @@
 
 .unfollow-btn:last-child {
   border-bottom: none;
+}
+
+.unfollow-actions.unfollow-actions-inline {
+  flex-direction: row;
+  border-top: 1px solid var(--border-secondary);
+}
+
+.unfollow-actions.unfollow-actions-inline .unfollow-btn {
+  flex: 1;
+  width: auto;
+  border-bottom: none;
+  border-right: 1px solid var(--border-secondary);
+}
+
+.unfollow-actions.unfollow-actions-inline .unfollow-btn:last-child {
+  border-right: none;
 }
 
 .unfollow-btn:hover {

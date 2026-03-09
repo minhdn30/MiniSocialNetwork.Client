@@ -583,6 +583,105 @@ body.light-mode .settings-dropdown .dropdown-item {
   font-size: 14px;
 }
 
+.settings-dropdown .dropdown-item.has-submenu {
+  position: relative;
+}
+
+.settings-dropdown .dropdown-item.has-submenu .submenu-indicator {
+  width: 18px;
+  height: 18px;
+  margin-left: 8px;
+  color: var(--text-disabled);
+  transition:
+    transform var(--transition-normal),
+    color var(--transition-normal);
+}
+
+.settings-dropdown .dropdown-item.has-submenu.is-submenu-open .submenu-indicator {
+  color: var(--text-primary);
+  transform: translateX(2px);
+}
+
+#languageDropdown {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 12px);
+  width: 240px;
+  display: none;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-tertiary);
+  border-radius: 12px;
+  padding: 8px 0;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+  z-index: 10000;
+  opacity: 0;
+  transform: translateX(-8px);
+}
+
+body.light-mode #languageDropdown {
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+}
+
+#languageDropdown.show {
+  display: block;
+  animation: slideInLanguageSubmenu 0.18s ease forwards;
+}
+
+.submenu-dropdown-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-tertiary);
+}
+
+.submenu-dropdown-header i,
+.submenu-dropdown-header svg {
+  width: 18px;
+  height: 18px;
+}
+
+#languageDropdown .dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  color: var(--text-secondary);
+}
+
+#languageDropdown .dropdown-item:hover {
+  background: var(--bg-hover);
+}
+
+#languageDropdown .dropdown-item i,
+#languageDropdown .dropdown-item svg {
+  width: 18px;
+  height: 18px;
+}
+
+#languageDropdown .dropdown-item[data-selected="false"] i,
+#languageDropdown .dropdown-item[data-selected="false"] svg {
+  opacity: 0;
+}
+
+#languageDropdown .dropdown-item[data-selected="true"] {
+  color: var(--text-primary);
+}
+
+@keyframes slideInLanguageSubmenu {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 /* ================= TOGGLE SWITCH ================= */
 .toggle-switch {
   margin-left: auto;

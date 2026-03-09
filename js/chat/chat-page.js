@@ -53,10 +53,174 @@ const ChatPage = {
   _realtimeJoinedConversationId: null,
   _realtimeJoiningConversationId: null,
   _realtimePassiveConversationId: null,
+  _languageCleanup: null,
+
+  t(key, fallback = "", params = {}) {
+    if (window.ChatCommon && typeof window.ChatCommon.t === "function") {
+      return window.ChatCommon.t(key, fallback, params);
+    }
+
+    return String(fallback || key).replace(/\{(\w+)\}/g, (_match, token) => {
+      const value = params?.[token];
+      return value === null || value === undefined ? "" : String(value);
+    });
+  },
+
+  formatCount(value) {
+    if (
+      window.ChatCommon &&
+      typeof window.ChatCommon.formatCount === "function"
+    ) {
+      return window.ChatCommon.formatCount(value);
+    }
+
+    try {
+      return new Intl.NumberFormat().format(Number(value) || 0);
+    } catch (_error) {
+      return String(Number(value) || 0);
+    }
+  },
+
+  formatRelativeTime(value, short = false) {
+    if (
+      window.ChatCommon &&
+      typeof window.ChatCommon.formatRelativeTime === "function"
+    ) {
+      return window.ChatCommon.formatRelativeTime(value, short);
+    }
+
+    return window.PostUtils?.timeAgo ? window.PostUtils.timeAgo(value, short) : "";
+  },
+
+  translateDom(root) {
+    if (
+      window.ChatCommon &&
+      typeof window.ChatCommon.translateDom === "function"
+    ) {
+      window.ChatCommon.translateDom(root);
+    }
+  },
+
+  async readFriendlyApiError(res, options = {}) {
+    const fallbackMessage =
+      options.fallbackMessage ||
+      this.t("errors.chat.generic", "Something went wrong. Please try again.");
+
+    if (
+      window.ChatCommon &&
+      typeof window.ChatCommon.readFriendlyApiError === "function"
+    ) {
+      return window.ChatCommon.readFriendlyApiError(res, {
+        feature: "chat",
+        ...options,
+        fallbackMessage,
+      });
+    }
+
+    return fallbackMessage;
+  },
+
+  getUnknownUserLabel() {
+    if (
+      window.ChatCommon &&
+      typeof window.ChatCommon.getUnknownUserLabel === "function"
+    ) {
+      return window.ChatCommon.getUnknownUserLabel();
+    }
+    return this.t("chat.common.user", "User");
+  },
+
+  getUnknownUsernameLabel() {
+    if (
+      window.ChatCommon &&
+      typeof window.ChatCommon.getUnknownUsernameLabel === "function"
+    ) {
+      return window.ChatCommon.getUnknownUsernameLabel();
+    }
+    return this.t("chat.common.username_unknown", "unknown");
+  },
+
+  getYouLabel() {
+    if (
+      window.ChatCommon &&
+      typeof window.ChatCommon.getYouLabel === "function"
+    ) {
+      return window.ChatCommon.getYouLabel();
+    }
+    return this.t("chat.common.you", "You");
+  },
+
+  getGroupChatLabel() {
+    return this.t("chat.common.group_chat", "Group chat");
+  },
+
+  getGroupMembersLabel(count) {
+    return this.t("chat.members.count", "{count} members", {
+      count: this.formatCount(count),
+    });
+  },
+
+  refreshReplyBarLanguage() {
+    if (!this._replyToMessageId) return;
+    this.showReplyBar(
+      this._replyToMessageId,
+      this._replySenderName,
+      this._replyContentPreview,
+      this._replySenderId,
+      this._replyIsOwn,
+    );
+  },
+
+  handleLanguageChange() {
+    this.translateDom(document.getElementById("chat-main-area"));
+    this.translateDom(document.getElementById("chat-info"));
+
+    if (!this.currentMetaData && !this.currentChatId) {
+      this.renderNoConversationState();
+      return;
+    }
+
+    if (this.currentMetaData) {
+      this.renderHeader(this.currentMetaData);
+    }
+
+    const activePanel = this._activeInfoPanel;
+    if (activePanel === "members") {
+      const adminOnly = !!this._membersPanel?.adminOnly;
+      this.openMembersPanel();
+      this._membersPanel.adminOnly = adminOnly;
+      this.loadMembersPanel({ reset: true });
+    } else if (activePanel === "media") {
+      this.openMediaPanel(this._mediaPanel?.activeTab || "media");
+    } else if (activePanel === "search") {
+      const currentKeyword =
+        document.getElementById("chat-search-input")?.value?.trim() ||
+        this.searchKeyword ||
+        "";
+      this.openSearchPanel();
+      const input = document.getElementById("chat-search-input");
+      const clearBtn = document.getElementById("chat-search-clear-btn");
+      if (input) {
+        input.value = currentKeyword;
+      }
+      if (clearBtn) {
+        clearBtn.classList.toggle("hidden", currentKeyword.length === 0);
+      }
+      this.performSearch(currentKeyword);
+    } else if (this.currentMetaData) {
+      this.renderInfoSidebar(this.currentMetaData);
+    }
+
+    this.refreshReplyBarLanguage();
+  },
 
   async init() {
     this.cleanupEventListeners();
     this.revokeAllBlobUrls();
+    if (typeof this._languageCleanup === "function") {
+      this._languageCleanup();
+      this._languageCleanup = null;
+    }
 
     // Cleanup old group if exists (prevent leaks across re-initializations)
     if (this.currentChatId) {
@@ -69,7 +233,6 @@ const ChatPage = {
       this.leaveAllPageRealtimeConversations();
     }
 
-    console.log("ChatPage initialized");
     this.currentChatId = null;
     this.page = null;
     this.hasMore = true;
@@ -105,6 +268,14 @@ const ChatPage = {
     this.handleUrlNavigation();
     this.registerRealtimeHandlers();
     this.initPresenceTracking();
+    if (
+      window.ChatCommon &&
+      typeof window.ChatCommon.onLanguageChange === "function"
+    ) {
+      this._languageCleanup = window.ChatCommon.onLanguageChange(() =>
+        this.handleLanguageChange(),
+      );
+    }
   },
 
   cacheElements() {
@@ -372,7 +543,10 @@ const ChatPage = {
       window.PresenceUI &&
       typeof window.PresenceUI.resolveConversationStatus === "function"
     ) {
-      return window.PresenceUI.resolveConversationStatus(meta, "Group chat");
+      return window.PresenceUI.resolveConversationStatus(
+        meta,
+        this.getGroupChatLabel(),
+      );
     }
 
     const isGroup = !!(meta.isGroup ?? meta.IsGroup);
@@ -381,7 +555,7 @@ const ChatPage = {
         canShowStatus: false,
         isOnline: false,
         showDot: false,
-        text: "Group chat",
+        text: this.getGroupChatLabel(),
       };
     }
 
@@ -404,7 +578,7 @@ const ChatPage = {
       canShowStatus: legacyIsOnline,
       isOnline: legacyIsOnline,
       showDot: legacyIsOnline,
-      text: legacyIsOnline ? "Online" : "",
+      text: legacyIsOnline ? this.t("chat.presence.online", "Online") : "",
     };
   },
 
@@ -489,7 +663,7 @@ const ChatPage = {
 
     const isGroup = !!(meta?.isGroup ?? meta?.IsGroup);
     if (isGroup) {
-      statusText.innerText = "Group chat";
+      statusText.innerText = this.getGroupChatLabel();
       if (statusDot) statusDot.remove();
       return;
     }
@@ -522,7 +696,7 @@ const ChatPage = {
         : Array.isArray(meta.Members)
           ? meta.Members
           : [];
-      statusEl.textContent = `${memberList.length} Members`;
+      statusEl.textContent = this.getGroupMembersLabel(memberList.length);
       const existingDot = avatarEl.querySelector(".status-dot");
       if (existingDot) existingDot.remove();
       return;
@@ -1612,7 +1786,7 @@ const ChatPage = {
 
     // 4. Create avatar element
     const avatarUrl = memberInfo?.avatar || APP_CONFIG.DEFAULT_AVATAR;
-    const displayName = memberInfo?.name || "User";
+    const displayName = memberInfo?.name || this.getUnknownUserLabel();
 
     const wrapper = document.createElement("div");
     wrapper.className = "seen-avatar-wrapper";
@@ -1976,7 +2150,10 @@ const ChatPage = {
       avatarContainer.innerHTML = avatarHtml;
       if (window.lucide) lucide.createIcons({ container: avatarContainer });
     }
-    if (nameEl) nameEl.innerText = ChatCommon.getDisplayName(meta) || "Chat";
+    if (nameEl) {
+      nameEl.innerText =
+        ChatCommon.getDisplayName(meta) || this.t("chat.common.chat", "Chat");
+    }
     this.updateHeaderMuteIcon(meta);
 
     // --- Profile Navigation Support ---
@@ -2026,8 +2203,14 @@ const ChatPage = {
     const iconEl = document.createElement("i");
     iconEl.className = "chat-view-muted-icon";
     iconEl.setAttribute("data-lucide", "bell-off");
-    iconEl.setAttribute("aria-label", "Muted conversation");
-    iconEl.setAttribute("title", "Muted conversation");
+    iconEl.setAttribute(
+      "aria-label",
+      this.t("chat.mute.muted_conversation", "Muted conversation"),
+    );
+    iconEl.setAttribute(
+      "title",
+      this.t("chat.mute.muted_conversation", "Muted conversation"),
+    );
     nameRow.appendChild(iconEl);
     if (window.lucide) lucide.createIcons({ container: nameRow });
   },
@@ -2102,13 +2285,18 @@ const ChatPage = {
     const msgContainer = document.getElementById("chat-view-messages");
 
     if (img) img.src = window.APP_CONFIG?.DEFAULT_AVATAR;
-    if (nameEl) nameEl.textContent = "Select a conversation";
+    if (nameEl) {
+      nameEl.textContent = this.t(
+        "chat.page.select_conversation_title",
+        "Select a conversation",
+      );
+    }
     this.updateHeaderMuteIcon(null);
     if (statusText) statusText.textContent = "";
     if (statusDot) statusDot.remove();
     if (msgContainer) {
       msgContainer.innerHTML =
-        '<div style="padding:24px; text-align:center; color:var(--text-tertiary);">Select a conversation from the sidebar</div>';
+        `<div style="padding:24px; text-align:center; color:var(--text-tertiary);">${this.t("chat.page.select_conversation_hint", "Select a conversation from the sidebar")}</div>`;
     }
     if (this.infoContent) {
       this.infoContent.innerHTML = "";
@@ -2407,7 +2595,7 @@ const ChatPage = {
           this.currentMetaData.otherMember.Username ||
           this.currentMetaData.otherMember.fullName ||
           this.currentMetaData.otherMember.FullName ||
-          "User"
+          this.getUnknownUserLabel()
         );
       }
 
@@ -2427,12 +2615,12 @@ const ChatPage = {
             member.FullName ||
             member.displayName ||
             member.DisplayName ||
-            "User"
+            this.getUnknownUserLabel()
           );
         }
       }
 
-      return "User";
+      return this.getUnknownUserLabel();
     };
     const fallbackDisplayName = resolveBaseDisplayName();
 
@@ -2469,7 +2657,8 @@ const ChatPage = {
           fallbackDisplayName;
 
         m.nickname = normalizedNickname;
-        m.displayName = normalizedNickname || memberBaseName || "User";
+        m.displayName =
+          normalizedNickname || memberBaseName || this.getUnknownUserLabel();
         changed = true;
       });
     }
@@ -2488,7 +2677,7 @@ const ChatPage = {
     const msgContainer = document.getElementById("chat-view-messages");
     if (msgContainer) {
       const authorDisplayName =
-        normalizedNickname || fallbackDisplayName || "User";
+        normalizedNickname || fallbackDisplayName || this.getUnknownUserLabel();
       if (
         window.ChatCommon &&
         typeof ChatCommon.updateMessageAuthorDisplay === "function"
@@ -2523,12 +2712,14 @@ const ChatPage = {
             (previewEl.dataset.replyIsOwn || "").toLowerCase() === "true" ||
             accTarget === myId;
           if (isOwnReplyAuthor) {
-            authorEl.textContent = "You";
+            authorEl.textContent = this.getYouLabel();
             return;
           }
 
           const baseName =
-            previewEl.dataset.replySenderBase || fallbackDisplayName || "User";
+            previewEl.dataset.replySenderBase ||
+            fallbackDisplayName ||
+            this.getUnknownUserLabel();
           authorEl.textContent = normalizedNickname || baseName;
         });
     }
@@ -2539,11 +2730,11 @@ const ChatPage = {
     ) {
       const isOwnReplyAuthor = !!this._replyIsOwn || accTarget === myId;
       const nextReplySenderName = isOwnReplyAuthor
-        ? "yourself"
+        ? this.getYouLabel()
         : normalizedNickname ||
           fallbackDisplayName ||
           this._replySenderName ||
-          "User";
+          this.getUnknownUserLabel();
       this._replySenderName = nextReplySenderName;
 
       const labelStrong = document.querySelector(
@@ -2605,13 +2796,21 @@ const ChatPage = {
         ) {
           window.ChatWindow.setMuteStatus(conversationId, previous);
         }
-        if (window.toastError)
-          window.toastError("Failed to update mute status");
+        const message = await this._readConversationApiErrorMessage(
+          res,
+          this.t(
+            "errors.chat.update_mute_failed",
+            "Failed to update mute status",
+          ),
+        );
+        if (window.toastError) window.toastError(message);
         return;
       }
       if (window.toastSuccess)
         window.toastSuccess(
-          nextMuted ? "Conversation muted" : "Conversation unmuted",
+          nextMuted
+            ? this.t("chat.mute.updated_muted", "Conversation muted")
+            : this.t("chat.mute.updated_unmuted", "Conversation unmuted"),
         );
     } catch (error) {
       console.error("Failed to update mute status:", error);
@@ -2630,7 +2829,10 @@ const ChatPage = {
       ) {
         window.ChatWindow.setMuteStatus(conversationId, previous);
       }
-      if (window.toastError) window.toastError("Failed to update mute status");
+      if (window.toastError)
+        window.toastError(
+          this.t("errors.chat.update_mute_failed", "Failed to update mute status"),
+        );
     }
   },
 
@@ -2642,14 +2844,19 @@ const ChatPage = {
       typeof window.ChatActions.showPinnedMessages !== "function"
     ) {
       if (window.toastError)
-        window.toastError("Pinned messages are unavailable");
+        window.toastError(
+          this.t(
+            "errors.chat.pinned_messages_unavailable",
+            "Pinned messages are unavailable",
+          ),
+        );
       return;
     }
 
     const title =
       typeof window.ChatActions.getPinnedConversationTitle === "function"
         ? window.ChatActions.getPinnedConversationTitle(conversationId)
-        : "Pinned messages";
+        : this.t("chat.pinned.view", "View pinned messages");
     window.ChatActions.showPinnedMessages(conversationId, { title });
   },
 
@@ -2731,14 +2938,14 @@ const ChatPage = {
     infoContent.innerHTML = `
             <div class="chat-media-panel-inline">
                 <div class="chat-media-header">
-                    <button class="chat-media-back-btn" id="chat-media-back-btn" title="Close media panel">
+                    <button class="chat-media-back-btn" id="chat-media-back-btn" title="${this.t("chat.media.close_panel", "Close media panel")}">
                         <i data-lucide="arrow-left"></i>
                     </button>
-                    <span class="chat-media-title">Media and files</span>
+                    <span class="chat-media-title">${this.t("chat.media.title", "Media and files")}</span>
                 </div>
                 <div class="chat-media-tabs">
-                    <button class="chat-media-tab active" id="chat-media-tab-media" data-tab="media">Media files</button>
-                    <button class="chat-media-tab" id="chat-media-tab-file" data-tab="file">Files</button>
+                    <button class="chat-media-tab active" id="chat-media-tab-media" data-tab="media">${this.t("chat.media.media_files", "Media files")}</button>
+                    <button class="chat-media-tab" id="chat-media-tab-file" data-tab="file">${this.t("chat.media.files_tab", "Files")}</button>
                     <div class="chat-media-tab-indicator" id="chat-media-tab-indicator"></div>
                 </div>
                 <div class="chat-media-results" id="chat-media-results"></div>
@@ -2974,7 +3181,7 @@ const ChatPage = {
       resultsEl.innerHTML = `
                 <div class="chat-media-loading-state">
                     <div class="spinner chat-spinner"></div>
-                    <p>Loading media...</p>
+                    <p>${this.t("chat.media.loading", "Loading media...")}</p>
                 </div>
             `;
       return;
@@ -2984,7 +3191,7 @@ const ChatPage = {
       resultsEl.innerHTML = `
                 <div class="chat-media-empty-state">
                     <i data-lucide="image-off"></i>
-                    <p>No media files in this conversation yet.</p>
+                    <p>${this.t("chat.media.empty", "No media files in this conversation yet.")}</p>
                 </div>
             `;
       if (window.lucide) lucide.createIcons({ container: resultsEl });
@@ -2995,7 +3202,7 @@ const ChatPage = {
       resultsEl.innerHTML = `
                 <div class="chat-media-loading-state">
                     <div class="spinner chat-spinner"></div>
-                    <p>Looking for media files...</p>
+                    <p>${this.t("chat.media.looking", "Looking for media files...")}</p>
                 </div>
             `;
       return;
@@ -3018,7 +3225,7 @@ const ChatPage = {
 
         if (item.mediaType === 1) {
           return `
-                    <button class="chat-media-thumb chat-media-thumb-video${revealClass}"${revealStyle} onclick="ChatPage.openConversationMediaPreview(${index})" title="Open media">
+                    <button class="chat-media-thumb chat-media-thumb-video${revealClass}"${revealStyle} onclick="ChatPage.openConversationMediaPreview(${index})" title="${this.t("chat.media.open_item", "Open media")}">
                         <video src="${safeMedia}" muted playsinline preload="metadata"></video>
                         <span class="chat-media-video-badge"><i data-lucide="play"></i></span>
                     </button>
@@ -3026,8 +3233,8 @@ const ChatPage = {
         }
 
         return `
-                <button class="chat-media-thumb${revealClass}"${revealStyle} onclick="ChatPage.openConversationMediaPreview(${index})" title="Open media">
-                    <img src="${safeThumb}" alt="media" loading="lazy">
+                <button class="chat-media-thumb${revealClass}"${revealStyle} onclick="ChatPage.openConversationMediaPreview(${index})" title="${this.t("chat.media.open_item", "Open media")}">
+                    <img src="${safeThumb}" alt="${this.t("chat.media.alt", "media")}" loading="lazy">
                 </button>
             `;
       })
@@ -3036,9 +3243,9 @@ const ChatPage = {
     const html = `<div class="chat-media-grid">${cells}</div>`;
 
     const footer = state.isLoading
-      ? `<div class="chat-media-inline-loader"><div class="spinner chat-spinner"></div><span>Loading more...</span></div>`
+      ? `<div class="chat-media-inline-loader"><div class="spinner chat-spinner"></div><span>${this.t("chat.media.loading_more", "Loading more...")}</span></div>`
       : !state.hasMore
-        ? `<div class="chat-media-end">All media loaded</div>`
+        ? `<div class="chat-media-end">${this.t("chat.media.all_loaded", "All media loaded")}</div>`
         : "";
 
     resultsEl.innerHTML = `${html}${footer}`;
@@ -3192,7 +3399,10 @@ const ChatPage = {
         .toString()
         .toLowerCase();
       const key = messageMediaId || `${messageId}:${mediaUrl}:${itemIndex}`;
-      const fileName = item?.fileName || item?.FileName || "Unknown file";
+      const fileName =
+        item?.fileName ||
+        item?.FileName ||
+        this.t("chat.media.unknown_file", "Unknown file");
       const fileSize = item?.fileSize || item?.FileSize || 0;
 
       normalized.push({
@@ -3242,7 +3452,7 @@ const ChatPage = {
     if (diffDays === 0) {
       return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     }
-    if (diffDays === 1) return "Yesterday";
+    if (diffDays === 1) return this.t("common.time.yesterday", "Yesterday");
     if (diffDays < 7) return d.toLocaleDateString([], { weekday: "short" });
     return d.toLocaleDateString([], {
       day: "2-digit",
@@ -3260,7 +3470,7 @@ const ChatPage = {
       resultsEl.innerHTML = `
                 <div class="chat-media-loading-state">
                     <div class="spinner chat-spinner"></div>
-                    <p>Loading files...</p>
+                    <p>${this.t("chat.files.loading", "Loading files...")}</p>
                 </div>
             `;
       return;
@@ -3270,7 +3480,7 @@ const ChatPage = {
       resultsEl.innerHTML = `
                 <div class="chat-media-empty-state">
                     <i data-lucide="file-x"></i>
-                    <p>No files in this conversation yet.</p>
+                    <p>${this.t("chat.files.empty", "No files in this conversation yet.")}</p>
                 </div>
             `;
       if (window.lucide) lucide.createIcons({ container: resultsEl });
@@ -3281,7 +3491,7 @@ const ChatPage = {
       resultsEl.innerHTML = `
                 <div class="chat-media-loading-state">
                     <div class="spinner chat-spinner"></div>
-                    <p>Looking for files...</p>
+                    <p>${this.t("chat.files.looking", "Looking for files...")}</p>
                 </div>
             `;
       return;
@@ -3290,7 +3500,9 @@ const ChatPage = {
     let animatedCount = 0;
     const rows = state.items
       .map((item) => {
-        const safeFileName = (item.fileName || "Unknown file")
+        const safeFileName = (
+          item.fileName || this.t("chat.media.unknown_file", "Unknown file")
+        )
           .replace(/</g, "&lt;")
           .replace(/>/g, "&gt;");
         const safeMediaUrl = (item.mediaUrl || "#").replace(/"/g, "&quot;");
@@ -3319,9 +3531,9 @@ const ChatPage = {
       .join("");
 
     const footer = state.isLoading
-      ? `<div class="chat-media-inline-loader"><div class="spinner chat-spinner"></div><span>Loading more...</span></div>`
+      ? `<div class="chat-media-inline-loader"><div class="spinner chat-spinner"></div><span>${this.t("chat.files.loading_more", "Loading more...")}</span></div>`
       : !state.hasMore
-        ? `<div class="chat-media-end">All files loaded</div>`
+        ? `<div class="chat-media-end">${this.t("chat.files.all_loaded", "All files loaded")}</div>`
         : "";
 
     resultsEl.innerHTML = `<div class="chat-file-list">${rows}</div>${footer}`;
@@ -3527,23 +3739,23 @@ const ChatPage = {
     infoContent.innerHTML = `
             <div class="chat-search-panel-inline">
                 <div class="chat-search-header">
-                    <button class="chat-search-back-btn" id="chat-search-back-btn" title="Back">
+                    <button class="chat-search-back-btn" id="chat-search-back-btn" title="${this.t("common.back", "Back")}">
                         <i data-lucide="arrow-left"></i>
                     </button>
-                    <span class="chat-search-title">Search</span>
+                    <span class="chat-search-title">${this.t("chat.search.title", "Search")}</span>
                 </div>
                 <div class="chat-search-input-wrapper">
                     <i data-lucide="search" class="chat-search-icon"></i>
-                    <input type="text" class="chat-search-input" id="chat-search-input" placeholder="Search in conversation..." autocomplete="off">
+                    <input type="text" class="chat-search-input" id="chat-search-input" placeholder="${this.t("chat.search.placeholder", "Search in conversation...")}" autocomplete="off">
                     <span class="chat-search-count hidden" id="chat-search-count"></span>
-                    <button class="chat-search-clear-btn hidden" id="chat-search-clear-btn" title="Clear">
+                    <button class="chat-search-clear-btn hidden" id="chat-search-clear-btn" title="${this.t("common.clear", "Clear")}">
                         <i data-lucide="x"></i>
                     </button>
                 </div>
                 <div class="chat-search-results" id="chat-search-results">
                     <div class="chat-search-empty">
                         <i data-lucide="search" style="width: 40px; height: 40px; opacity: 0.18;"></i>
-                        <p>Enter keywords to search</p>
+                        <p>${this.t("chat.search.empty_prompt", "Enter keywords to search")}</p>
                     </div>
                 </div>
             </div>
@@ -3691,7 +3903,13 @@ const ChatPage = {
       if (hasNicknameField) return false;
       if (
         Number.isFinite(action) &&
-        (action === 9 || action === 10 || action === 11)
+        (action === 4 ||
+          action === 7 ||
+          action === 9 ||
+          action === 10 ||
+          action === 11 ||
+          action === 12 ||
+          action === 13)
       ) {
         return false;
       }
@@ -3707,6 +3925,10 @@ const ChatPage = {
     if (
       rawContent.includes("set nickname for") ||
       rawContent.includes("removed nickname for") ||
+      rawContent.includes("created this group") ||
+      rawContent.includes("changed the group name") ||
+      rawContent.includes("updated the group avatar") ||
+      rawContent.includes("removed the group avatar") ||
       rawContent.includes("changed the chat theme") ||
       rawContent.includes("reset the chat theme") ||
       rawContent.includes("pinned a message") ||
@@ -3917,10 +4139,15 @@ const ChatPage = {
 
     return {
       accountId,
-      username: username || displayNameRaw || "unknown",
+      username: username || displayNameRaw || this.getUnknownUsernameLabel(),
       fullName,
       nickname: nickname || "",
-      displayName: nickname || displayNameRaw || username || fullName || "User",
+      displayName:
+        nickname ||
+        displayNameRaw ||
+        username ||
+        fullName ||
+        this.getUnknownUserLabel(),
       avatarUrl:
         raw?.avatarUrl || raw?.AvatarUrl || window.APP_CONFIG?.DEFAULT_AVATAR,
       role: Number(raw?.role ?? raw?.Role ?? 0) === 1 ? 1 : 0,
@@ -4143,7 +4370,11 @@ const ChatPage = {
 
     const myId = (localStorage.getItem("accountId") || "").toLowerCase();
     if (normalizedTargetId === myId) {
-      if (window.toastInfo) window.toastInfo("This is your account.");
+      if (window.toastInfo) {
+        window.toastInfo(
+          this.t("chat.members.this_is_you", "This is your account."),
+        );
+      }
       return false;
     }
 
@@ -4168,7 +4399,12 @@ const ChatPage = {
     if (!conversationId) {
       if (!window.API?.Conversations?.createPrivateConversation) {
         if (window.toastInfo)
-          window.toastInfo("Message action is unavailable right now.");
+          window.toastInfo(
+            this.t(
+              "errors.chat.message_action_unavailable",
+              "Can't message right now",
+            ),
+          );
         return false;
       }
 
@@ -4197,7 +4433,10 @@ const ChatPage = {
         if (!conversationId) {
           const message = await this._readConversationApiErrorMessage(
             createRes,
-            "Failed to open private conversation",
+            this.t(
+              "errors.chat.open_private_conversation_failed",
+              "Failed to open private conversation",
+            ),
           );
           if (window.toastError) window.toastError(message);
           return false;
@@ -4214,7 +4453,12 @@ const ChatPage = {
 
     if (!conversationId) {
       if (window.toastError)
-        window.toastError("Cannot resolve private conversation");
+        window.toastError(
+          this.t(
+            "errors.chat.private_conversation_not_found",
+            "Cannot resolve private conversation",
+          ),
+        );
       return false;
     }
 
@@ -4292,13 +4536,23 @@ const ChatPage = {
     );
     if (!isGroup) {
       if (window.toastInfo)
-        window.toastInfo("Add member is only available for group chats");
+        window.toastInfo(
+          this.t(
+            "chat.members.add_group_only",
+            "Add member is only available for group chats",
+          ),
+        );
       return;
     }
 
     if (!this.isCurrentUserGroupAdmin(this.currentMetaData)) {
       if (window.toastError)
-        window.toastError("Only group admins can add members.");
+        window.toastError(
+          this.t(
+            "chat.members.add_admin_only",
+            "Only group admins can add members",
+          ),
+        );
       return;
     }
 
@@ -4307,7 +4561,12 @@ const ChatPage = {
       typeof window.ChatCommon.showAddGroupMembersModal !== "function"
     ) {
       if (window.toastError)
-        window.toastError("Add member modal is unavailable");
+        window.toastError(
+          this.t(
+            "errors.chat.add_member_modal_unavailable",
+            "Add member modal is unavailable",
+          ),
+        );
       return;
     }
 
@@ -4355,7 +4614,14 @@ const ChatPage = {
           "Failed to open private conversation in chat-page:",
           error,
         );
-        if (window.toastError) window.toastError("Failed to open conversation");
+        if (window.toastError) {
+          window.toastError(
+            this.t(
+              "errors.chat.open_conversation_failed",
+              "Failed to open conversation",
+            ),
+          );
+        }
       }
       return;
     }
@@ -4365,26 +4631,42 @@ const ChatPage = {
       if (!conversationId) return;
       if (!window.API?.Conversations?.kickMember) {
         if (window.toastError)
-          window.toastError("Kick member API is unavailable");
+          window.toastError(
+            this.t(
+              "errors.chat.kick_member_api_unavailable",
+              "Kick member is unavailable right now",
+            ),
+          );
         return;
       }
 
       const targetLabel =
-        (username || displayName || "member").toString().trim() || "member";
+        (username || displayName || this.getUnknownUserLabel())
+          .toString()
+          .trim() || this.getUnknownUserLabel();
       if (
         !window.ChatCommon ||
         typeof window.ChatCommon.showConfirm !== "function"
       ) {
         if (window.toastInfo)
-          window.toastInfo("Confirmation popup is unavailable.");
+          window.toastInfo(
+            this.t(
+              "errors.chat.confirm_unavailable",
+              "Confirmation popup isn't available",
+            ),
+          );
         return;
       }
 
       window.ChatCommon.showConfirm({
-        title: "Kick member?",
-        message: `Remove @${targetLabel} from this group?`,
-        confirmText: "Kick",
-        cancelText: "Cancel",
+        title: this.t("chat.members.kick_confirm_title", "Kick member?"),
+        message: this.t(
+          "chat.members.kick_confirm_message",
+          "Remove @{name} from this group?",
+          { name: targetLabel },
+        ),
+        confirmText: this.t("chat.members.actions.kick", "Kick"),
+        cancelText: this.t("common.buttons.cancel", "Cancel"),
         isDanger: true,
         onConfirm: async () => {
           try {
@@ -4395,7 +4677,7 @@ const ChatPage = {
             if (!res.ok) {
               const message = await this._readConversationApiErrorMessage(
                 res,
-                "Failed to kick member",
+                this.t("errors.chat.kick_member_failed", "Failed to kick member"),
               );
               if (window.toastError) window.toastError(message);
               return;
@@ -4409,10 +4691,18 @@ const ChatPage = {
             ) {
               window.ChatWindow.refreshMembersModal(conversationId);
             }
-            if (window.toastSuccess) window.toastSuccess("Member kicked");
+            if (window.toastSuccess) {
+              window.toastSuccess(
+                this.t("chat.members.kick_success", "Member kicked"),
+              );
+            }
           } catch (error) {
             console.error("Failed to kick member:", error);
-            if (window.toastError) window.toastError("Failed to kick member");
+            if (window.toastError) {
+              window.toastError(
+                this.t("errors.chat.kick_member_failed", "Failed to kick member"),
+              );
+            }
           }
         },
       });
@@ -4424,26 +4714,42 @@ const ChatPage = {
       if (!conversationId) return;
       if (!window.API?.Conversations?.assignAdmin) {
         if (window.toastError)
-          window.toastError("Assign admin API is unavailable");
+          window.toastError(
+            this.t(
+              "errors.chat.assign_admin_api_unavailable",
+              "Assign admin is unavailable right now",
+            ),
+          );
         return;
       }
 
       const targetLabel =
-        (username || displayName || "member").toString().trim() || "member";
+        (username || displayName || this.getUnknownUserLabel())
+          .toString()
+          .trim() || this.getUnknownUserLabel();
       if (
         !window.ChatCommon ||
         typeof window.ChatCommon.showConfirm !== "function"
       ) {
         if (window.toastInfo)
-          window.toastInfo("Confirmation popup is unavailable.");
+          window.toastInfo(
+            this.t(
+              "errors.chat.confirm_unavailable",
+              "Confirmation popup isn't available",
+            ),
+          );
         return;
       }
 
       window.ChatCommon.showConfirm({
-        title: "Assign as admin?",
-        message: `Grant admin role to @${targetLabel}?`,
-        confirmText: "Assign",
-        cancelText: "Cancel",
+        title: this.t("chat.members.assign_admin_title", "Assign as admin?"),
+        message: this.t(
+          "chat.members.assign_admin_message",
+          "Grant admin role to @{name}?",
+          { name: targetLabel },
+        ),
+        confirmText: this.t("chat.members.actions.assign_admin", "Assign as admin"),
+        cancelText: this.t("common.buttons.cancel", "Cancel"),
         onConfirm: async () => {
           try {
             const res = await window.API.Conversations.assignAdmin(
@@ -4453,7 +4759,7 @@ const ChatPage = {
             if (!res.ok) {
               const message = await this._readConversationApiErrorMessage(
                 res,
-                "Failed to assign admin",
+                this.t("errors.chat.assign_admin_failed", "Failed to assign admin"),
               );
               if (window.toastError) window.toastError(message);
               return;
@@ -4468,10 +4774,19 @@ const ChatPage = {
               window.ChatWindow.refreshMembersModal(conversationId);
             }
             if (window.toastSuccess)
-              window.toastSuccess("Member promoted to admin");
+              window.toastSuccess(
+                this.t(
+                  "chat.members.assign_admin_success",
+                  "Member promoted to admin",
+                ),
+              );
           } catch (error) {
             console.error("Failed to assign admin:", error);
-            if (window.toastError) window.toastError("Failed to assign admin");
+            if (window.toastError) {
+              window.toastError(
+                this.t("errors.chat.assign_admin_failed", "Failed to assign admin"),
+              );
+            }
           }
         },
       });
@@ -4483,26 +4798,42 @@ const ChatPage = {
       if (!conversationId) return;
       if (!window.API?.Conversations?.revokeAdmin) {
         if (window.toastError)
-          window.toastError("Revoke admin API is unavailable");
+          window.toastError(
+            this.t(
+              "errors.chat.revoke_admin_api_unavailable",
+              "Revoke admin is unavailable right now",
+            ),
+          );
         return;
       }
 
       const targetLabel =
-        (username || displayName || "member").toString().trim() || "member";
+        (username || displayName || this.getUnknownUserLabel())
+          .toString()
+          .trim() || this.getUnknownUserLabel();
       if (
         !window.ChatCommon ||
         typeof window.ChatCommon.showConfirm !== "function"
       ) {
         if (window.toastInfo)
-          window.toastInfo("Confirmation popup is unavailable.");
+          window.toastInfo(
+            this.t(
+              "errors.chat.confirm_unavailable",
+              "Confirmation popup isn't available",
+            ),
+          );
         return;
       }
 
       window.ChatCommon.showConfirm({
-        title: "Revoke admin role?",
-        message: `Remove admin role from @${targetLabel}?`,
-        confirmText: "Revoke",
-        cancelText: "Cancel",
+        title: this.t("chat.members.revoke_admin_title", "Revoke admin role?"),
+        message: this.t(
+          "chat.members.revoke_admin_message",
+          "Remove admin role from @{name}?",
+          { name: targetLabel },
+        ),
+        confirmText: this.t("chat.members.actions.revoke_admin", "Revoke admin"),
+        cancelText: this.t("common.buttons.cancel", "Cancel"),
         isDanger: true,
         onConfirm: async () => {
           try {
@@ -4513,7 +4844,7 @@ const ChatPage = {
             if (!res.ok) {
               const message = await this._readConversationApiErrorMessage(
                 res,
-                "Failed to revoke admin",
+                this.t("errors.chat.revoke_admin_failed", "Failed to revoke admin"),
               );
               if (window.toastError) window.toastError(message);
               return;
@@ -4527,10 +4858,18 @@ const ChatPage = {
             ) {
               window.ChatWindow.refreshMembersModal(conversationId);
             }
-            if (window.toastSuccess) window.toastSuccess("Admin role revoked");
+            if (window.toastSuccess) {
+              window.toastSuccess(
+                this.t("chat.members.revoke_admin_success", "Admin role revoked"),
+              );
+            }
           } catch (error) {
             console.error("Failed to revoke admin:", error);
-            if (window.toastError) window.toastError("Failed to revoke admin");
+            if (window.toastError) {
+              window.toastError(
+                this.t("errors.chat.revoke_admin_failed", "Failed to revoke admin"),
+              );
+            }
           }
         },
       });
@@ -4542,26 +4881,48 @@ const ChatPage = {
       if (!conversationId) return;
       if (!window.API?.Conversations?.transferOwner) {
         if (window.toastError)
-          window.toastError("Transfer owner API is unavailable");
+          window.toastError(
+            this.t(
+              "errors.chat.transfer_owner_api_unavailable",
+              "Transfer ownership is unavailable right now",
+            ),
+          );
         return;
       }
 
       const targetLabel =
-        (username || displayName || "member").toString().trim() || "member";
+        (username || displayName || this.getUnknownUserLabel())
+          .toString()
+          .trim() || this.getUnknownUserLabel();
       if (
         !window.ChatCommon ||
         typeof window.ChatCommon.showConfirm !== "function"
       ) {
         if (window.toastInfo)
-          window.toastInfo("Confirmation popup is unavailable.");
+          window.toastInfo(
+            this.t(
+              "errors.chat.confirm_unavailable",
+              "Confirmation popup isn't available",
+            ),
+          );
         return;
       }
 
       window.ChatCommon.showConfirm({
-        title: "Transfer ownership?",
-        message: `Transfer group ownership to @${targetLabel}?`,
-        confirmText: "Transfer",
-        cancelText: "Cancel",
+        title: this.t(
+          "chat.members.transfer_owner_title",
+          "Transfer ownership?",
+        ),
+        message: this.t(
+          "chat.members.transfer_owner_message",
+          "Transfer group ownership to @{name}?",
+          { name: targetLabel },
+        ),
+        confirmText: this.t(
+          "chat.members.actions.transfer_owner",
+          "Transfer ownership",
+        ),
+        cancelText: this.t("common.buttons.cancel", "Cancel"),
         isDanger: true,
         onConfirm: async () => {
           try {
@@ -4572,7 +4933,10 @@ const ChatPage = {
             if (!res.ok) {
               const message = await this._readConversationApiErrorMessage(
                 res,
-                "Failed to transfer ownership",
+                this.t(
+                  "errors.chat.transfer_owner_failed",
+                  "Failed to transfer ownership",
+                ),
               );
               if (window.toastError) window.toastError(message);
               return;
@@ -4593,11 +4957,22 @@ const ChatPage = {
               window.ChatWindow.refreshMembersModal(conversationId);
             }
             if (window.toastSuccess)
-              window.toastSuccess("Group ownership transferred");
+              window.toastSuccess(
+                this.t(
+                  "chat.members.transfer_owner_success",
+                  "Group ownership transferred",
+                ),
+              );
           } catch (error) {
             console.error("Failed to transfer ownership:", error);
-            if (window.toastError)
-              window.toastError("Failed to transfer ownership");
+            if (window.toastError) {
+              window.toastError(
+                this.t(
+                  "errors.chat.transfer_owner_failed",
+                  "Failed to transfer ownership",
+                ),
+              );
+            }
           }
         },
       });
@@ -4705,7 +5080,7 @@ const ChatPage = {
       resultsEl.innerHTML = `
                 <div class="chat-members-loading-state">
                     <div class="spinner chat-spinner"></div>
-                    <p>Loading members...</p>
+                    <p>${this.t("chat.members.loading", "Loading members...")}</p>
                 </div>
             `;
       paginationEl.innerHTML = "";
@@ -4717,7 +5092,7 @@ const ChatPage = {
       resultsEl.innerHTML = `
                 <div class="chat-members-empty-state">
                     <i data-lucide="users"></i>
-                    <p>${state.adminOnly ? "No admins found in this group." : "No members found."}</p>
+                    <p>${state.adminOnly ? this.t("chat.members.empty_admins", "No admins found in this group.") : this.t("chat.members.empty", "No members found.")}</p>
                 </div>
             `;
       paginationEl.innerHTML = "";
@@ -4732,7 +5107,9 @@ const ChatPage = {
         const safeAvatar = escapeHtml(
           member.avatarUrl || window.APP_CONFIG?.DEFAULT_AVATAR || "",
         );
-        const safeUsername = escapeHtml(member.username || "unknown");
+        const safeUsername = escapeHtml(
+          member.username || this.getUnknownUsernameLabel(),
+        );
         const safeNickname = escapeHtml(member.nickname || "");
         const memberId = (member.accountId || "").toString().toLowerCase();
         const isAdmin = this._isGroupMemberAdmin(member);
@@ -4750,12 +5127,13 @@ const ChatPage = {
             !isOwner &&
             !isAdmin &&
             !isSelf;
-        const actionDisplayName = safeUsername || safeNickname || "user";
+        const actionDisplayName =
+          safeUsername || safeNickname || this.getUnknownUserLabel();
 
         const roleBadgeHtml = isOwner
-          ? '<span class="chat-members-role owner">Owner</span>'
+          ? `<span class="chat-members-role owner">${this.t("chat.members.role.owner", "Owner")}</span>`
           : isAdmin
-            ? '<span class="chat-members-role">Admin</span>'
+            ? `<span class="chat-members-role">${this.t("chat.members.role.admin", "Admin")}</span>`
             : "";
 
         return `
@@ -4777,16 +5155,16 @@ const ChatPage = {
                         }
                     </div>
                     <div class="chat-members-actions">
-                        <button type="button" class="chat-members-more-btn" title="More actions">
+                        <button type="button" class="chat-members-more-btn" title="${this.t("chat.members.actions.more", "More actions")}">
                             <i data-lucide="ellipsis"></i>
                         </button>
                         <div class="chat-members-actions-menu">
-                            <button type="button" class="chat-members-action-btn" data-action="profile" data-account-id="${safeAccountId}" data-display-name="${actionDisplayName}" data-username="${safeUsername}"><i data-lucide="user"></i><span>Profile</span></button>
-                            <button type="button" class="chat-members-action-btn" data-action="message" data-account-id="${safeAccountId}" data-display-name="${actionDisplayName}" data-username="${safeUsername}"><i data-lucide="send"></i><span>Message</span></button>
-                            ${canAssignAdmin ? `<button type="button" class="chat-members-action-btn" data-action="assign-admin" data-account-id="${safeAccountId}" data-display-name="${actionDisplayName}" data-username="${safeUsername}"><i data-lucide="shield-check"></i><span>Assign as admin</span></button>` : ""}
-                            ${canRevokeAdmin ? `<button type="button" class="chat-members-action-btn" data-action="revoke-admin" data-account-id="${safeAccountId}" data-display-name="${actionDisplayName}" data-username="${safeUsername}"><i data-lucide="shield-minus"></i><span>Revoke admin</span></button>` : ""}
-                            ${canTransferOwner ? `<button type="button" class="chat-members-action-btn" data-action="transfer-owner" data-account-id="${safeAccountId}" data-display-name="${actionDisplayName}" data-username="${safeUsername}"><i data-lucide="crown"></i><span>Transfer ownership</span></button>` : ""}
-                            ${canKick ? `<button type="button" class="chat-members-action-btn danger" data-action="kick" data-account-id="${safeAccountId}" data-display-name="${actionDisplayName}" data-username="${safeUsername}"><i data-lucide="user-x"></i><span>Kick</span></button>` : ""}
+                            <button type="button" class="chat-members-action-btn" data-action="profile" data-account-id="${safeAccountId}" data-display-name="${actionDisplayName}" data-username="${safeUsername}"><i data-lucide="user"></i><span>${this.t("chat.members.actions.profile", "Profile")}</span></button>
+                            <button type="button" class="chat-members-action-btn" data-action="message" data-account-id="${safeAccountId}" data-display-name="${actionDisplayName}" data-username="${safeUsername}"><i data-lucide="send"></i><span>${this.t("chat.members.actions.message", "Message")}</span></button>
+                            ${canAssignAdmin ? `<button type="button" class="chat-members-action-btn" data-action="assign-admin" data-account-id="${safeAccountId}" data-display-name="${actionDisplayName}" data-username="${safeUsername}"><i data-lucide="shield-check"></i><span>${this.t("chat.members.actions.assign_admin", "Assign as admin")}</span></button>` : ""}
+                            ${canRevokeAdmin ? `<button type="button" class="chat-members-action-btn" data-action="revoke-admin" data-account-id="${safeAccountId}" data-display-name="${actionDisplayName}" data-username="${safeUsername}"><i data-lucide="shield-minus"></i><span>${this.t("chat.members.actions.revoke_admin", "Revoke admin")}</span></button>` : ""}
+                            ${canTransferOwner ? `<button type="button" class="chat-members-action-btn" data-action="transfer-owner" data-account-id="${safeAccountId}" data-display-name="${actionDisplayName}" data-username="${safeUsername}"><i data-lucide="crown"></i><span>${this.t("chat.members.actions.transfer_owner", "Transfer ownership")}</span></button>` : ""}
+                            ${canKick ? `<button type="button" class="chat-members-action-btn danger" data-action="kick" data-account-id="${safeAccountId}" data-display-name="${actionDisplayName}" data-username="${safeUsername}"><i data-lucide="user-x"></i><span>${this.t("chat.members.actions.kick", "Kick")}</span></button>` : ""}
                         </div>
                     </div>
                 </div>
@@ -4801,6 +5179,15 @@ const ChatPage = {
       statusText = `${statusText} · Loading more members...`;
     } else if (!state.hasMore) {
       statusText = `${statusText} · All members loaded`;
+    }
+
+    statusText = this.t("chat.members.count", "{count} members", {
+      count: this.formatCount(totalMembers),
+    });
+    if (state.isLoading && items.length > 0) {
+      statusText = `${statusText} · ${this.t("chat.members.loading_more", "Loading more members...")}`;
+    } else if (!state.hasMore) {
+      statusText = `${statusText} · ${this.t("chat.members.all_loaded", "All members loaded")}`;
     }
 
     paginationEl.textContent = statusText;
@@ -4863,13 +5250,11 @@ const ChatPage = {
       );
 
       if (!res.ok) {
-        let message = "Failed to load members";
-        try {
-          const errorData = await res.json();
-          message = errorData?.message || message;
-        } catch (_) {
-          // ignore json parse errors
-        }
+        const message = await this.readFriendlyApiError(res, {
+          action: "load-members",
+          fallbackKey: "errors.chat.load_members_failed",
+          fallbackMessage: "Failed to load members",
+        });
         if (window.toastError) window.toastError(message);
         if (reset) {
           state.items = [];
@@ -4942,7 +5327,11 @@ const ChatPage = {
       state.page = responsePage + 1;
     } catch (error) {
       console.error("Failed to load group members:", error);
-      if (window.toastError) window.toastError("Failed to load members");
+      if (window.toastError) {
+        window.toastError(
+          this.t("errors.chat.load_members_failed", "Failed to load members"),
+        );
+      }
       if (reset) {
         state.items = [];
         state.totalItems = 0;
@@ -4985,7 +5374,12 @@ const ChatPage = {
     );
     if (!isGroup) {
       if (window.toastInfo)
-        window.toastInfo("Members list is only available for group chats");
+        window.toastInfo(
+          this.t(
+            "chat.members.group_only",
+            "Members list is only available for group chats",
+          ),
+        );
       return;
     }
 
@@ -5005,19 +5399,19 @@ const ChatPage = {
     infoContent.innerHTML = `
             <div class="chat-members-panel-inline">
                 <div class="chat-members-header">
-                    <button class="chat-members-back-btn" id="chat-members-back-btn" title="Back">
+                    <button class="chat-members-back-btn" id="chat-members-back-btn" title="${this.t("common.back", "Back")}">
                         <i data-lucide="arrow-left"></i>
                     </button>
-                    <span class="chat-members-title">Members</span>
+                    <span class="chat-members-title">${this.t("chat.members.title", "Members")}</span>
                 </div>
                 <div class="chat-members-toolbar">
                     <button type="button" class="chat-members-filter-btn" id="chat-members-admin-filter-btn">
                         <i data-lucide="shield"></i>
-                        <span>Admins only</span>
+                        <span>${this.t("chat.members.role.admin", "Admin")}</span>
                     </button>
                     <button type="button" class="chat-members-add-btn" id="chat-members-add-btn">
                         <i data-lucide="user-plus"></i>
-                        <span>Add member</span>
+                        <span>${this.t("chat.members.actions.add_member", "Add member")}</span>
                     </button>
                 </div>
                 <div class="chat-members-results" id="chat-members-results"></div>
@@ -5046,7 +5440,10 @@ const ChatPage = {
       addBtn.disabled = !canAddMembers;
       addBtn.classList.toggle("disabled", !canAddMembers);
       if (!canAddMembers) {
-        addBtn.title = "Only group admins can add members";
+        addBtn.title = this.t(
+          "chat.members.add_admin_only",
+          "Only group admins can add members",
+        );
       } else {
         addBtn.removeAttribute("title");
       }
@@ -5234,7 +5631,7 @@ const ChatPage = {
         resultsTarget.innerHTML = `
                     <div class="chat-search-empty">
                         <i data-lucide="search" style="width: 40px; height: 40px; opacity: 0.18;"></i>
-                        <p>Enter keywords to search</p>
+                        <p>${this.t("chat.search.empty_prompt", "Enter keywords to search")}</p>
                     </div>
                 `;
         if (window.lucide) lucide.createIcons({ container: resultsTarget });
@@ -5256,7 +5653,7 @@ const ChatPage = {
         resultsTarget.innerHTML = `
                     <div class="chat-search-loading">
                         <div class="spinner chat-spinner"></div>
-                        <p>Searching...</p>
+                        <p>${this.t("chat.search.loading", "Searching...")}</p>
                     </div>
                 `;
       }
@@ -5275,11 +5672,18 @@ const ChatPage = {
         this.hasMoreSearch = data.hasNextPage;
         this.renderSearchResults(data.items, data.totalItems, isLoadMore);
       } else {
-        window.toastError?.("Search failed");
+        const message = await this.readFriendlyApiError(res, {
+          action: "search-messages",
+          fallbackKey: "errors.chat.search_failed",
+          fallbackMessage: "Search failed",
+        });
+        window.toastError?.(message);
       }
     } catch (err) {
       console.error("Search error:", err);
-      window.toastError?.("Search error");
+      window.toastError?.(
+        this.t("errors.chat.search_failed", "Search failed"),
+      );
     } finally {
       this.isSearching = false;
     }
@@ -5293,7 +5697,11 @@ const ChatPage = {
     const countEl = document.getElementById("chat-search-count");
     if (countEl) {
       if (totalCount > 0) {
-        countEl.textContent = `${totalCount} result${totalCount > 1 ? "s" : ""}`;
+        countEl.textContent = this.t(
+          "chat.search.results_count",
+          "{count} results",
+          { count: this.formatCount(totalCount) },
+        );
         countEl.classList.remove("hidden");
       } else {
         countEl.textContent = "";
@@ -5313,7 +5721,11 @@ const ChatPage = {
       resultsTarget.innerHTML = `
                 <div class="chat-search-empty">
                     <i data-lucide="frown" style="width: 40px; height: 40px; opacity: 0.18;"></i>
-                    <p>No results for "${escapeHtml(this.searchKeyword)}"</p>
+                    <p>${escapeHtml(
+                      this.t('chat.search.no_results', 'No results for "{keyword}"', {
+                        keyword: this.searchKeyword,
+                      }),
+                    )}</p>
                 </div>
             `;
       if (window.lucide) lucide.createIcons({ container: resultsTarget });
@@ -5329,7 +5741,7 @@ const ChatPage = {
 
       const sender = msg.sender || msg.Sender || {};
       const avatar = sender.avatarUrl || window.APP_CONFIG?.DEFAULT_AVATAR;
-      const name = sender.username || sender.fullName || "User";
+      const name = sender.username || sender.fullName || this.getUnknownUserLabel();
       const messageId = (
         msg.messageId ||
         msg.MessageId ||
@@ -5339,7 +5751,13 @@ const ChatPage = {
       )
         .toString()
         .toLowerCase();
-      const messageContent = msg.content ?? msg.Content ?? "";
+      const messageContent =
+        window.ChatCommon &&
+        typeof window.ChatCommon.isSystemMessage === "function" &&
+        typeof window.ChatCommon.getSystemMessageText === "function" &&
+        window.ChatCommon.isSystemMessage(msg)
+          ? window.ChatCommon.getSystemMessageText(msg)
+          : msg.content ?? msg.Content ?? "";
       const messageSentAt = msg.sentAt || msg.SentAt;
 
       // Build smart snippet with keyword highlighted
@@ -5348,9 +5766,7 @@ const ChatPage = {
         this.searchKeyword,
       );
 
-      const timeLabel = window.PostUtils?.timeAgo
-        ? window.PostUtils.timeAgo(messageSentAt)
-        : "";
+      const timeLabel = this.formatRelativeTime(messageSentAt);
 
       item.innerHTML = `
                 <img class="chat-search-item-avatar" src="${avatar}" alt="" onerror="this.src='${window.APP_CONFIG?.DEFAULT_AVATAR}'">
@@ -5364,7 +5780,12 @@ const ChatPage = {
       item.onclick = () => {
         if (!messageId) {
           window.toastInfo &&
-            window.toastInfo("Could not locate this message.");
+            window.toastInfo(
+              this.t(
+                "errors.chat.message_not_found",
+                "Could not locate this message.",
+              ),
+            );
           return;
         }
         if (
@@ -5383,16 +5804,24 @@ const ChatPage = {
     if (window.lucide) lucide.createIcons({ container: resultsTarget });
   },
 
-  _ensureEditableGroupConversation(
-    actionName = "Group settings",
-    options = {},
-  ) {
+  _ensureEditableGroupConversation(actionName = "", options = {}) {
     if (!this.currentChatId || !this.currentMetaData) return null;
     const requireAdmin = !!options.requireAdmin;
+    const actionLabel =
+      (actionName || "").toString().trim() ||
+      this.t("chat.group.action.settings", "Group settings");
+    const actionVerb =
+      (options.actionVerb || "").toString().trim() || actionLabel;
 
     if (!(this.currentMetaData?.isGroup ?? this.currentMetaData?.IsGroup)) {
       if (window.toastInfo)
-        window.toastInfo(`${actionName} is only available for group chats`);
+        window.toastInfo(
+          this.t(
+            "chat.group.only_for_groups",
+            "{action} is only available for group chats",
+            { action: actionLabel },
+          ),
+        );
       return null;
     }
 
@@ -5404,14 +5833,24 @@ const ChatPage = {
     if (!isGuid) {
       if (window.toastInfo)
         window.toastInfo(
-          `${actionName} can be changed after the group is created`,
+          this.t(
+            "chat.group.available_after_create",
+            "{action} can be changed after the group is created",
+            { action: actionLabel },
+          ),
         );
       return null;
     }
 
     if (requireAdmin && !this.isCurrentUserGroupAdmin(this.currentMetaData)) {
       if (window.toastError)
-        window.toastError(`Only group admins can ${actionName.toLowerCase()}.`);
+        window.toastError(
+          this.t(
+            "chat.group.admin_only_action",
+            "Only group admins can {action}.",
+            { action: actionVerb },
+          ),
+        );
       return null;
     }
 
@@ -5426,7 +5865,7 @@ const ChatPage = {
       this.currentMetaData?.DisplayName ??
       "";
     const normalized = String(rawName || "").trim();
-    return normalized || "Group chat";
+    return normalized || this.getGroupChatLabel();
   },
 
   _syncGroupInfoForConversation(conversationId, payload = {}) {
@@ -5453,40 +5892,37 @@ const ChatPage = {
     }
   },
 
-  async _readConversationApiErrorMessage(
-    res,
-    fallbackMessage = "Request failed",
-  ) {
-    if (!res) return fallbackMessage;
-
-    const jsonSource = typeof res.clone === "function" ? res.clone() : res;
-    try {
-      const data = await jsonSource.json();
-      const message = data?.message || data?.title;
-      if (typeof message === "string" && message.trim().length > 0) {
-        return message.trim();
-      }
-    } catch (_) {}
-
-    try {
-      const text = await res.text();
-      if (typeof text === "string" && text.trim().length > 0) {
-        return text.trim();
-      }
-    } catch (_) {}
-
-    return fallbackMessage;
+  async _readConversationApiErrorMessage(res, fallbackMessage = "") {
+    const safeFallback =
+      typeof fallbackMessage === "string" && fallbackMessage.trim().length > 0
+        ? fallbackMessage
+        : this.t("errors.chat.generic", "Something went wrong. Please try again.");
+    return this.readFriendlyApiError(res, {
+      action: "conversation-action",
+      fallbackMessage: safeFallback,
+    });
   },
 
   async promptEditGroupNameCurrentConversation() {
-    const conversationId = this._ensureEditableGroupConversation("Group name", {
+    const actionLabel = this.t("chat.group.action.name", "Group name");
+    const actionVerb = this.t(
+      "chat.group.action.edit_name",
+      "edit the group name",
+    );
+    const conversationId = this._ensureEditableGroupConversation(actionLabel, {
       requireAdmin: true,
+      actionVerb,
     });
     if (!conversationId) return;
 
     if (!window.API?.Conversations?.updateGroupInfo) {
       if (window.toastError)
-        window.toastError("Update group API is unavailable");
+        window.toastError(
+          this.t(
+            "errors.chat.update_group_info_api_unavailable",
+            "Update group is unavailable right now",
+          ),
+        );
       return;
     }
 
@@ -5494,7 +5930,11 @@ const ChatPage = {
       !window.ChatCommon ||
       typeof window.ChatCommon.showPrompt !== "function"
     ) {
-      if (window.toastError) window.toastError("Prompt is unavailable");
+      if (window.toastError) {
+        window.toastError(
+          this.t("errors.chat.prompt_unavailable", "Prompt is unavailable"),
+        );
+      }
       return;
     }
 
@@ -5503,12 +5943,16 @@ const ChatPage = {
     const currentName = this._getCurrentGroupName();
 
     window.ChatCommon.showPrompt({
-      title: "Edit group name",
-      message: `Group name must be at least ${minLength} characters.`,
-      placeholder: "Enter group name",
+      title: this.t("chat.group.edit_name", "Edit group name"),
+      message: this.t(
+        "chat.group.name_min_length",
+        "Group name must be at least {count} characters.",
+        { count: this.formatCount(minLength) },
+      ),
+      placeholder: this.t("chat.group.name_placeholder", "Enter group name"),
       value: currentName,
-      confirmText: "Save",
-      cancelText: "Cancel",
+      confirmText: this.t("common.buttons.save", "Save"),
+      cancelText: this.t("common.buttons.cancel", "Cancel"),
       maxLength,
       validate: (val) => {
         const trimmed = (val || "").trim();
@@ -5542,35 +5986,55 @@ const ChatPage = {
             });
             const message = await this._readConversationApiErrorMessage(
               res,
-              "Failed to update group name",
+              this.t("errors.chat.group_name_update_failed", "Failed to update group name"),
             );
             if (window.toastError) window.toastError(message);
             return;
           }
 
-          if (window.toastSuccess) window.toastSuccess("Group name updated");
+          if (window.toastSuccess) {
+            window.toastSuccess(
+              this.t("chat.group.name_updated", "Group name updated"),
+            );
+          }
         } catch (error) {
           console.error("Failed to update group name:", error);
           this._syncGroupInfoForConversation(conversationId, {
             conversationName: currentName,
           });
-          if (window.toastError)
-            window.toastError("Failed to update group name");
+          if (window.toastError) {
+            window.toastError(
+              this.t(
+                "errors.chat.group_name_update_failed",
+                "Failed to update group name",
+              ),
+            );
+          }
         }
       },
     });
   },
 
   promptEditGroupAvatarCurrentConversation() {
-    const conversationId = this._ensureEditableGroupConversation(
-      "Group avatar",
-      { requireAdmin: true },
+    const actionLabel = this.t("chat.group.action.avatar", "Group avatar");
+    const actionVerb = this.t(
+      "chat.group.action.edit_avatar",
+      "edit the group avatar",
     );
+    const conversationId = this._ensureEditableGroupConversation(actionLabel, {
+      requireAdmin: true,
+      actionVerb,
+    });
     if (!conversationId) return;
 
     if (!window.API?.Conversations?.updateGroupInfo) {
       if (window.toastError)
-        window.toastError("Update group API is unavailable");
+        window.toastError(
+          this.t(
+            "errors.chat.update_group_info_api_unavailable",
+            "Update group is unavailable right now",
+          ),
+        );
       return;
     }
 
@@ -5608,7 +6072,7 @@ const ChatPage = {
       "chat-common-confirm-popup chat-group-avatar-editor-popup";
     popup.innerHTML = `
             <div class="chat-nicknames-header">
-                <h3>Edit group avatar</h3>
+                <h3>${this.t("chat.group.edit_avatar", "Edit group avatar")}</h3>
                 <div class="chat-nicknames-close" id="chat-group-avatar-editor-close-btn">
                     <i data-lucide="x"></i>
                 </div>
@@ -5617,18 +6081,18 @@ const ChatPage = {
                 <div class="cg-avatar-section">
                     <div class="cg-avatar-circle" id="chat-group-avatar-circle">
                         <i data-lucide="users" class="cg-avatar-icon" id="chat-group-avatar-icon"></i>
-                        <img id="chat-group-avatar-preview" class="cg-avatar-img hidden" alt="Group avatar">
+                        <img id="chat-group-avatar-preview" class="cg-avatar-img hidden" alt="${this.t("chat.group.avatar_alt", "Group avatar")}">
                         <button type="button" class="cg-avatar-remove hidden" id="chat-group-avatar-remove-btn">
                             <i data-lucide="x" size="12"></i>
                         </button>
                     </div>
-                    <span class="cg-avatar-label" id="chat-group-avatar-upload-label">Upload Group Photo</span>
+                    <span class="cg-avatar-label" id="chat-group-avatar-upload-label">${this.t("chat.group.upload_photo", "Upload Group Photo")}</span>
                 </div>
                 <div class="chat-group-avatar-editor-note" id="chat-group-avatar-editor-note"></div>
             </div>
             <div class="chat-group-avatar-editor-actions">
-                <button type="button" class="chat-group-avatar-editor-action" id="chat-group-avatar-editor-cancel-btn">Cancel</button>
-                <button type="button" class="chat-group-avatar-editor-action primary" id="chat-group-avatar-editor-save-btn">Save</button>
+                <button type="button" class="chat-group-avatar-editor-action" id="chat-group-avatar-editor-cancel-btn">${this.t("common.buttons.cancel", "Cancel")}</button>
+                <button type="button" class="chat-group-avatar-editor-action primary" id="chat-group-avatar-editor-save-btn">${this.t("common.buttons.save", "Save")}</button>
             </div>
         `;
 
@@ -5694,17 +6158,32 @@ const ChatPage = {
         avatarPreviewImg.src = selectedPreviewUrl;
         avatarPreviewImg.classList.remove("hidden");
         avatarIcon.style.display = "none";
-        if (noteEl) noteEl.textContent = "New avatar preview";
+        if (noteEl) {
+          noteEl.textContent = this.t(
+            "chat.group.avatar_preview_new",
+            "New avatar preview",
+          );
+        }
       } else if (showCurrent) {
         avatarPreviewImg.src = currentAvatar;
         avatarPreviewImg.classList.remove("hidden");
         avatarIcon.style.display = "none";
-        if (noteEl) noteEl.textContent = "Current group avatar";
+        if (noteEl) {
+          noteEl.textContent = this.t(
+            "chat.group.avatar_preview_current",
+            "Current group avatar",
+          );
+        }
       } else {
         avatarPreviewImg.src = "";
         avatarPreviewImg.classList.add("hidden");
         avatarIcon.style.display = "";
-        if (noteEl) noteEl.textContent = "Default group avatar";
+        if (noteEl) {
+          noteEl.textContent = this.t(
+            "chat.group.avatar_preview_default",
+            "Default group avatar",
+          );
+        }
       }
 
       const canSave =
@@ -5731,14 +6210,22 @@ const ChatPage = {
       const maxSizeBytes = maxSizeMb * 1024 * 1024;
       if (file.size > maxSizeBytes) {
         if (window.toastError)
-          window.toastError(`Image too large (max ${maxSizeMb}MB)`);
+          window.toastError(
+            this.t(
+              "chat.group.avatar_too_large",
+              "Image too large (max {size}MB)",
+              { size: this.formatCount(maxSizeMb) },
+            ),
+          );
         input.value = "";
         return;
       }
 
       if (file.type && !file.type.toLowerCase().startsWith("image/")) {
         if (window.toastWarning)
-          window.toastWarning("Please choose an image file");
+          window.toastWarning(
+            this.t("chat.group.image_only", "Please choose an image file"),
+          );
         input.value = "";
         return;
       }
@@ -5799,7 +6286,7 @@ const ChatPage = {
         }
 
         isSubmitting = true;
-        saveBtn.textContent = "Saving...";
+        saveBtn.textContent = this.t("common.saving", "Saving...");
         renderPreview();
 
         try {
@@ -5817,7 +6304,10 @@ const ChatPage = {
           if (!res.ok) {
             const message = await this._readConversationApiErrorMessage(
               res,
-              "Failed to update group avatar",
+              this.t(
+                "errors.chat.group_avatar_update_failed",
+                "Failed to update group avatar",
+              ),
             );
             if (window.toastError) window.toastError(message);
             return;
@@ -5830,23 +6320,31 @@ const ChatPage = {
             });
           }
 
-          if (window.toastSuccess) {
-            window.toastSuccess(
-              hasRemove ? "Group avatar removed" : "Group avatar updated",
-            );
-          }
-          closeModal();
-        } catch (error) {
-          console.error("Failed to update group avatar:", error);
-          if (window.toastError)
-            window.toastError("Failed to update group avatar");
-        } finally {
-          isSubmitting = false;
-          if (!isClosed && saveBtn) {
-            saveBtn.textContent = "Save";
-            renderPreview();
-          }
+        if (window.toastSuccess) {
+          window.toastSuccess(
+              hasRemove
+                ? this.t("chat.group.avatar_removed", "Group avatar removed")
+                : this.t("chat.group.avatar_updated", "Group avatar updated"),
+          );
         }
+        closeModal();
+      } catch (error) {
+        console.error("Failed to update group avatar:", error);
+        if (window.toastError) {
+          window.toastError(
+            this.t(
+              "errors.chat.group_avatar_update_failed",
+              "Failed to update group avatar",
+            ),
+          );
+        }
+      } finally {
+        isSubmitting = false;
+        if (!isClosed && saveBtn) {
+          saveBtn.textContent = this.t("common.buttons.save", "Save");
+          renderPreview();
+        }
+      }
       };
     }
 
@@ -5880,7 +6378,12 @@ const ChatPage = {
       );
     if (!isGuid) {
       if (window.toastInfo)
-        window.toastInfo("Theme can be changed after conversation is created");
+        window.toastInfo(
+          this.t(
+            "chat.theme.available_after_create",
+            "Theme can be changed after conversation is created",
+          ),
+        );
       return;
     }
 
@@ -5903,12 +6406,19 @@ const ChatPage = {
       !window.ChatCommon ||
       typeof window.ChatCommon.showThemePicker !== "function"
     ) {
-      if (window.toastError) window.toastError("Theme picker is unavailable");
+      if (window.toastError) {
+        window.toastError(
+          this.t(
+            "errors.chat.theme_picker_unavailable",
+            "Theme picker is unavailable",
+          ),
+        );
+      }
       return;
     }
 
     window.ChatCommon.showThemePicker({
-      title: "Change theme",
+      title: this.t("chat.theme.change_title", "Change theme"),
       currentTheme: previousTheme,
       onSelect: async (nextTheme) => {
         const normalizedNextTheme = getNormalizedTheme(nextTheme);
@@ -5953,10 +6463,18 @@ const ChatPage = {
             ) {
               window.ChatWindow.setThemeStatus(conversationId, previousTheme);
             }
-            if (window.toastError) window.toastError("Failed to update theme");
+            const message = await this._readConversationApiErrorMessage(
+              res,
+              this.t("errors.chat.theme_update_failed", "Failed to update theme"),
+            );
+            if (window.toastError) window.toastError(message);
             return;
           }
-          if (window.toastSuccess) window.toastSuccess("Theme updated");
+          if (window.toastSuccess) {
+            window.toastSuccess(
+              this.t("chat.theme.updated", "Theme updated"),
+            );
+          }
         } catch (error) {
           console.error("Failed to update theme:", error);
           this.applyThemeStatus(conversationId, previousTheme);
@@ -5972,7 +6490,11 @@ const ChatPage = {
           ) {
             window.ChatWindow.setThemeStatus(conversationId, previousTheme);
           }
-          if (window.toastError) window.toastError("Failed to update theme");
+          if (window.toastError) {
+            window.toastError(
+              this.t("errors.chat.theme_update_failed", "Failed to update theme"),
+            );
+          }
         }
       },
     });
@@ -5983,19 +6505,27 @@ const ChatPage = {
     const conversationId = this.currentChatId;
 
     ChatCommon.showConfirm({
-      title: "Delete chat history?",
-      message:
+      title: this.t("chat.delete_history_title", "Delete chat history?"),
+      message: this.t(
+        "chat.delete_history_message",
         "This will remove the conversation from your list. Other members will still see the history.",
-      confirmText: "Delete",
-      cancelText: "Cancel",
+      ),
+      confirmText: this.t("common.buttons.delete", "Delete"),
+      cancelText: this.t("common.buttons.cancel", "Cancel"),
       isDanger: true,
       onConfirm: async () => {
         try {
           const res =
             await window.API.Conversations.deleteHistory(conversationId);
           if (!res.ok) {
-            if (window.toastError)
-              window.toastError("Failed to delete conversation");
+            const message = await this._readConversationApiErrorMessage(
+              res,
+              this.t(
+                "errors.chat.delete_conversation_failed",
+                "Failed to delete conversation",
+              ),
+            );
+            if (window.toastError) window.toastError(message);
             return;
           }
 
@@ -6017,23 +6547,39 @@ const ChatPage = {
             scheduleGlobalUnreadRefresh();
           }
           if (window.toastSuccess)
-            window.toastSuccess("Conversation removed from your sidebar");
+            window.toastSuccess(
+              this.t(
+                "chat.delete_history_success",
+                "Conversation removed from your sidebar",
+              ),
+            );
         } catch (error) {
           console.error("Failed to soft delete conversation:", error);
           if (window.toastError)
-            window.toastError("Failed to delete conversation");
+            window.toastError(
+              this.t(
+                "errors.chat.delete_conversation_failed",
+                "Failed to delete conversation",
+              ),
+            );
         }
       },
     });
   },
 
   async leaveCurrentGroupConversation() {
-    const conversationId = this._ensureEditableGroupConversation("Leave group");
+    const actionLabel = this.t("chat.group.action.leave", "Leave group");
+    const conversationId = this._ensureEditableGroupConversation(actionLabel);
     if (!conversationId) return;
 
     if (!window.API?.Conversations?.leaveGroup) {
       if (window.toastError)
-        window.toastError("Leave group API is unavailable");
+        window.toastError(
+          this.t(
+            "errors.chat.leave_group_api_unavailable",
+            "Leave group is unavailable right now",
+          ),
+        );
       return;
     }
 
@@ -6042,15 +6588,23 @@ const ChatPage = {
       typeof window.ChatCommon.showConfirm !== "function"
     ) {
       if (window.toastInfo)
-        window.toastInfo("Confirmation popup is unavailable.");
+        window.toastInfo(
+          this.t(
+            "errors.chat.confirm_unavailable",
+            "Confirmation popup isn't available",
+          ),
+        );
       return;
     }
 
     window.ChatCommon.showConfirm({
-      title: "Leave group?",
-      message: "You will no longer receive messages from this group.",
-      confirmText: "Leave",
-      cancelText: "Cancel",
+      title: this.t("chat.group.leave_title", "Leave group?"),
+      message: this.t(
+        "chat.group.leave_message",
+        "You will no longer receive messages from this group.",
+      ),
+      confirmText: this.t("chat.group.leave", "Leave"),
+      cancelText: this.t("common.buttons.cancel", "Cancel"),
       isDanger: true,
       onConfirm: async () => {
         try {
@@ -6058,9 +6612,20 @@ const ChatPage = {
           if (!res.ok) {
             const message = await this._readConversationApiErrorMessage(
               res,
-              "Failed to leave group",
+              this.t("errors.chat.leave_group_failed", "Failed to leave group"),
             );
-            if (window.toastError) window.toastError(message);
+            const ownerRestrictedMessage = this.t(
+              "chat.group.leave_owner_restricted",
+              "Transfer ownership or assign another admin before leaving this group.",
+            );
+            const shouldUseOwnerHint =
+              this.isCurrentUserGroupOwner(this.currentMetaData || null) &&
+              (res.status === 400 || res.status === 403);
+            if (window.toastError) {
+              window.toastError(
+                shouldUseOwnerHint ? ownerRestrictedMessage : message,
+              );
+            }
             return;
           }
 
@@ -6081,10 +6646,18 @@ const ChatPage = {
           if (typeof scheduleGlobalUnreadRefresh === "function") {
             scheduleGlobalUnreadRefresh();
           }
-          if (window.toastSuccess) window.toastSuccess("You left the group");
+          if (window.toastSuccess) {
+            window.toastSuccess(
+              this.t("chat.group.leave_success", "You left the group"),
+            );
+          }
         } catch (error) {
           console.error("Failed to leave group:", error);
-          if (window.toastError) window.toastError("Failed to leave group");
+          if (window.toastError) {
+            window.toastError(
+              this.t("errors.chat.leave_group_failed", "Failed to leave group"),
+            );
+          }
         }
       },
     });
@@ -6092,7 +6665,7 @@ const ChatPage = {
 
   async promptEditNickname(
     accountId,
-    displayName = "User",
+    displayName = this.getUnknownUserLabel(),
     currentNickname = null,
   ) {
     if (!this.currentChatId || !accountId) return;
@@ -6123,15 +6696,22 @@ const ChatPage = {
     };
     const nicknameMaxLength = window.APP_CONFIG?.MAX_CHAT_NICKNAME_LENGTH || 50;
     const currentLabel = normalizeNickname(currentNickname) || "";
-    const promptDisplayName = truncateDisplayText(displayName || "User", 40);
+    const promptDisplayName = truncateDisplayText(
+      displayName || this.getUnknownUserLabel(),
+      40,
+    );
 
     ChatCommon.showPrompt({
-      title: `Edit nickname for ${promptDisplayName}`,
-      placeholder: "Enter nickname...",
+      title: this.t(
+        "chat.nickname.edit_for",
+        "Edit nickname for {name}",
+        { name: promptDisplayName },
+      ),
+      placeholder: this.t("chat.nickname.input_placeholder", "Enter nickname..."),
       value: currentLabel,
       maxLength: nicknameMaxLength,
-      confirmText: "Save",
-      cancelText: "Cancel",
+      confirmText: this.t("common.buttons.save", "Save"),
+      cancelText: this.t("common.buttons.cancel", "Cancel"),
       validate: (val) => {
         const next = normalizeNickname(val) || "";
         return next !== currentLabel;
@@ -6149,8 +6729,14 @@ const ChatPage = {
             payload,
           );
           if (!res.ok) {
-            if (window.toastError)
-              window.toastError("Failed to update nickname");
+            const message = await this._readConversationApiErrorMessage(
+              res,
+              this.t(
+                "errors.chat.nickname_update_failed",
+                "Failed to update nickname",
+              ),
+            );
+            if (window.toastError) window.toastError(message);
             return;
           }
           this.applyNicknameUpdate(
@@ -6178,10 +6764,21 @@ const ChatPage = {
               payload.nickname,
             );
           }
-          if (window.toastSuccess) window.toastSuccess("Nickname updated");
+          if (window.toastSuccess) {
+            window.toastSuccess(
+              this.t("chat.nickname.updated", "Nickname updated"),
+            );
+          }
         } catch (error) {
           console.error("Failed to update nickname:", error);
-          if (window.toastError) window.toastError("Failed to update nickname");
+          if (window.toastError) {
+            window.toastError(
+              this.t(
+                "errors.chat.nickname_update_failed",
+                "Failed to update nickname",
+              ),
+            );
+          }
         }
       },
     });
@@ -6191,7 +6788,7 @@ const ChatPage = {
     if (!this.currentChatId || !this.currentMetaData) return;
 
     const myId = (localStorage.getItem("accountId") || "").toLowerCase();
-    const myName = localStorage.getItem("fullname") || "You";
+    const myName = localStorage.getItem("fullname") || this.getYouLabel();
     const myUsername = localStorage.getItem("username") || "";
     const myAvatar =
       localStorage.getItem("avatarUrl") || window.APP_CONFIG?.DEFAULT_AVATAR;
@@ -6258,7 +6855,9 @@ const ChatPage = {
             fallbackUsernameToDisplayName: true,
           },
         );
-        if (!normalizedOther.displayName) normalizedOther.displayName = "User";
+        if (!normalizedOther.displayName) {
+          normalizedOther.displayName = this.getUnknownUserLabel();
+        }
         members.push(normalizedOther);
       }
     }
@@ -6281,7 +6880,7 @@ const ChatPage = {
     }
 
     ChatCommon.showNicknamesModal({
-      title: "Nicknames",
+      title: this.t("chat.nickname.modal_title", "Nicknames"),
       conversationId: this.currentChatId,
       members: members,
       onNicknameUpdated: (accountId, nickname) => {
@@ -6321,11 +6920,13 @@ const ChatPage = {
     const isGroup = !!(meta.isGroup ?? meta.IsGroup);
     const canManageGroupInfo = isGroup && this.isCurrentUserGroupAdmin(meta);
     const isMuted = !!(meta.isMuted ?? meta.IsMuted ?? false);
-    const muteLabel = isMuted ? "Unmute" : "Mute";
+    const muteLabel = isMuted
+      ? this.t("chat.mute.unmute", "Unmute")
+      : this.t("chat.mute.mute", "Mute");
     const muteIcon = isMuted ? "bell" : "bell-off";
     const muteDescription = isMuted
-      ? "Unmute notifications"
-      : "Mute notifications";
+      ? this.t("chat.mute.unmute_notifications", "Unmute notifications")
+      : this.t("chat.mute.mute_notifications", "Mute notifications");
     const themeLabel =
       window.ChatCommon &&
       typeof window.ChatCommon.getConversationThemeLabel === "function"
@@ -6333,14 +6934,11 @@ const ChatPage = {
             meta.theme ?? meta.Theme,
             { fallbackToDefault: true },
           )
-        : "Default";
+        : this.t("chat.theme.default", "Default");
     const privateTargetId =
       meta.otherMember?.accountId || meta.otherMemberId || "";
     const privateTargetUsername =
       meta.otherMember?.username || meta.otherMember?.Username || "";
-    const privateTargetName =
-      meta.otherMember?.fullName || meta.otherMember?.username || "User";
-    const privateTargetNickname = meta.otherMember?.nickname || "";
     const presenceStatus = !isGroup ? this.getPresenceStatus(meta) : null;
 
     let statusHtml = "";
@@ -6352,10 +6950,18 @@ const ChatPage = {
         : Array.isArray(meta.Members)
           ? meta.Members
           : [];
-      statusHtml = `${memberList.length} Members`;
+      statusHtml = this.getGroupMembersLabel(memberList.length);
     }
 
     const profileTarget = privateTargetUsername || privateTargetId;
+    const profileUnavailableText = this.t(
+      "errors.chat.profile_unavailable",
+      "Profile is unavailable",
+    );
+    const featureComingSoonText = this.t(
+      "common.feature_coming_soon",
+      "Feature coming soon",
+    );
     const html = `
             <div class="chat-info-header">
                 <div class="chat-info-avatar">
@@ -6372,13 +6978,13 @@ const ChatPage = {
                     ? `
                 <button class="chat-info-quick-btn" id="chat-info-open-members-quick-btn">
                     <div class="chat-info-quick-icon"><i data-lucide="users"></i></div>
-                    <span>Members</span>
+                    <span>${this.t("chat.members.title", "Members")}</span>
                 </button>
                 `
                     : `
-                <button class="chat-info-quick-btn" onclick="${profileTarget ? `ChatPage.minimizeToBubble(); (window.ChatCommon && typeof window.ChatCommon.goToProfile === 'function' ? window.ChatCommon.goToProfile('${privateTargetId}', '${privateTargetUsername}') : (window.location.hash = '#/' + encodeURIComponent('${profileTarget}')))` : "window.toastInfo('Profile is unavailable')"}">
+                <button class="chat-info-quick-btn" onclick="${profileTarget ? `ChatPage.minimizeToBubble(); (window.ChatCommon && typeof window.ChatCommon.goToProfile === 'function' ? window.ChatCommon.goToProfile('${privateTargetId}', '${privateTargetUsername}') : (window.location.hash = '#/' + encodeURIComponent('${profileTarget}')))` : `window.toastInfo('${profileUnavailableText.replace(/'/g, "\\'")}')`}">
                     <div class="chat-info-quick-icon"><i data-lucide="user"></i></div>
-                    <span>Profile</span>
+                    <span>${this.t("chat.members.actions.profile", "Profile")}</span>
                 </button>
                 `
                 }
@@ -6388,27 +6994,27 @@ const ChatPage = {
                 </button>
                 <button class="chat-info-quick-btn" onclick="ChatPage.openSearchPanel()">
                     <div class="chat-info-quick-icon"><i data-lucide="search"></i></div>
-                    <span>Search</span>
+                    <span>${this.t("chat.search.title", "Search")}</span>
                 </button>
             </div>
 
             <div class="chat-info-sections">
                 <div class="chat-info-section">
                     <div class="chat-info-section-title" onclick="ChatPage.toggleInfoSection(this)">
-                        <span>Chat info</span>
+                        <span>${this.t("chat.info.section.info", "Chat info")}</span>
                         <i data-lucide="chevron-down" class="chevron"></i>
                     </div>
                     <div class="chat-info-section-content">
                         <div class="chat-info-item" id="chat-info-view-pinned-btn">
                             <i data-lucide="pin"></i>
-                            <span>View pinned messages</span>
+                            <span>${this.t("chat.pinned.view", "View pinned messages")}</span>
                         </div>
                         ${
                           isGroup
                             ? `
                         <div class="chat-info-item" id="chat-info-open-members-btn">
                             <i data-lucide="users"></i>
-                            <span>Members</span>
+                            <span>${this.t("chat.members.title", "Members")}</span>
                         </div>
                         `
                             : ""
@@ -6418,28 +7024,28 @@ const ChatPage = {
 
                 <div class="chat-info-section">
                     <div class="chat-info-section-title" onclick="ChatPage.toggleInfoSection(this)">
-                        <span>Customize chat</span>
+                        <span>${this.t("chat.info.section.customize", "Customize chat")}</span>
                         <i data-lucide="chevron-down" class="chevron"></i>
                     </div>
                     <div class="chat-info-section-content">
                         <div class="chat-info-item" id="chat-info-change-theme-btn">
                             <i data-lucide="palette"></i>
-                            <span>Change theme (${escapeHtml(themeLabel)})</span>
+                            <span>${escapeHtml(this.t("chat.theme.change_with_label", "Change theme ({theme})", { theme: themeLabel }))}</span>
                         </div>
                         <div class="chat-info-item" id="chat-info-edit-nicknames-btn">
                             <i data-lucide="at-sign"></i>
-                            <span>Edit nicknames</span>
+                            <span>${this.t("chat.nickname.edit", "Edit nicknames")}</span>
                         </div>
                         ${
                           canManageGroupInfo
                             ? `
                         <div class="chat-info-item" id="chat-info-edit-group-name-btn">
                             <i data-lucide="type"></i>
-                            <span>Edit group name</span>
+                            <span>${this.t("chat.group.edit_name", "Edit group name")}</span>
                         </div>
                         <div class="chat-info-item" id="chat-info-edit-group-avatar-btn">
                             <i data-lucide="image"></i>
-                            <span>Edit group avatar</span>
+                            <span>${this.t("chat.group.edit_avatar", "Edit group avatar")}</span>
                         </div>
                         `
                             : ""
@@ -6449,24 +7055,24 @@ const ChatPage = {
 
                 <div class="chat-info-section">
                     <div class="chat-info-section-title" onclick="ChatPage.toggleInfoSection(this)">
-                        <span>Media & files</span>
+                        <span>${this.t("chat.info.section.media_files", "Media & files")}</span>
                         <i data-lucide="chevron-down" class="chevron"></i>
                     </div>
                     <div class="chat-info-section-content">
                         <div class="chat-info-item" id="chat-info-open-media-btn">
                             <i data-lucide="image"></i>
-                            <span>Media</span>
+                            <span>${this.t("chat.media.media_files", "Media files")}</span>
                         </div>
                         <div class="chat-info-item" id="chat-info-open-files-btn">
                             <i data-lucide="file-text"></i>
-                            <span>Files</span>
+                            <span>${this.t("chat.files.files_tab", "Files")}</span>
                         </div>
                     </div>
                 </div>
 
                 <div class="chat-info-section">
                     <div class="chat-info-section-title" onclick="ChatPage.toggleInfoSection(this)">
-                        <span>Privacy & support</span>
+                        <span>${this.t("chat.info.section.privacy", "Privacy & support")}</span>
                         <i data-lucide="chevron-down" class="chevron"></i>
                     </div>
                     <div class="chat-info-section-content">
@@ -6479,19 +7085,19 @@ const ChatPage = {
                             ? `
                         <div class="chat-info-item danger" id="chat-info-leave-group-btn">
                             <i data-lucide="log-out"></i>
-                            <span>Leave group</span>
+                            <span>${this.t("chat.group.leave", "Leave group")}</span>
                         </div>
                         `
                             : `
-                        <div class="chat-info-item danger" onclick="window.toastInfo('Feature coming soon')">
+                        <div class="chat-info-item danger" onclick="window.toastInfo('${featureComingSoonText.replace(/'/g, "\\'")}')">
                             <i data-lucide="slash"></i>
-                            <span>Block user</span>
+                            <span>${this.t("chat.privacy.block_user", "Block user")}</span>
                         </div>
                         `
                         }
                         <div class="chat-info-item danger" id="chat-info-delete-conversation-btn">
                             <i data-lucide="trash-2"></i>
-                            <span>Delete chat history</span>
+                            <span>${this.t("chat.delete_history", "Delete chat history")}</span>
                         </div>
                     </div>
                 </div>
@@ -6607,6 +7213,10 @@ const ChatPage = {
     this.isLoading = true;
     let isSuccess = false;
     const oldScrollHeight = msgContainer.scrollHeight;
+    const loadMessagesErrorText = this.t(
+      "errors.chat.load_messages_failed",
+      "Couldn't load messages",
+    );
 
     if (!isLoadMore) {
       msgContainer.innerHTML =
@@ -6622,7 +7232,6 @@ const ChatPage = {
 
       // Stale check: if user switched conversations while awaiting, discard results
       if (this._loadGeneration !== gen) {
-        console.log("Discarding stale loadMessages response for", id);
         return false;
       }
 
@@ -6740,13 +7349,13 @@ const ChatPage = {
         isSuccess = true;
       } else if (!isLoadMore) {
         msgContainer.innerHTML =
-          '<div style="text-align:center; padding:20px;">Error loading messages</div>';
+          `<div style="text-align:center; padding:20px;">${loadMessagesErrorText}</div>`;
       }
     } catch (error) {
       console.error("Failed to load messages:", error);
       if (!isLoadMore)
         msgContainer.innerHTML =
-          '<div style="text-align:center; padding:20px;">Error loading messages</div>';
+          `<div style="text-align:center; padding:20px;">${loadMessagesErrorText}</div>`;
     } finally {
       this.isLoading = false;
     }
@@ -6759,8 +7368,10 @@ const ChatPage = {
       return false;
     }
 
-    const fallbackMessage =
-      "This conversation is no longer available or you don't have permission to view it.";
+    const fallbackMessage = this.t(
+      "errors.chat.conversation_unavailable",
+      "This conversation is no longer available or you don't have permission to view it",
+    );
     const message = await this._readConversationApiErrorMessage(
       res,
       fallbackMessage,
@@ -6978,7 +7589,7 @@ const ChatPage = {
     isOwnReplyAuthor = false,
   ) {
     this._replyToMessageId = messageId;
-    this._replySenderName = senderName || "User";
+    this._replySenderName = senderName || this.getUnknownUserLabel();
     this._replyContentPreview = contentPreview || "";
     this._replySenderId = (senderId || "").toString().toLowerCase() || null;
     this._replyIsOwn = !!isOwnReplyAuthor;
@@ -6992,10 +7603,10 @@ const ChatPage = {
     bar.className = "chat-reply-bar";
     bar.innerHTML = `
             <div class="chat-reply-bar-content">
-                <div class="chat-reply-bar-label">Replying to <strong>${escapeHtml(senderName || "User")}</strong></div>
+                <div class="chat-reply-bar-label">${escapeHtml(this.t("chat.reply.replying_to", "Replying to"))} <strong>${escapeHtml(senderName || this.getUnknownUserLabel())}</strong></div>
                 <div class="chat-reply-bar-preview">${escapeHtml(contentPreview || "")}</div>
             </div>
-            <button class="chat-reply-bar-close" title="Cancel reply">
+            <button class="chat-reply-bar-close" title="${this.t("chat.reply.cancel", "Cancel reply")}">
                 <i data-lucide="x"></i>
             </button>
         `;
@@ -7059,7 +7670,7 @@ const ChatPage = {
           replySenderId: this._replySenderId || "",
           sender: {
             accountId: this._replySenderId || "",
-            displayName: this._replySenderName || "User",
+            displayName: this._replySenderName || this.getUnknownUserLabel(),
             username: "",
           },
         }
@@ -7235,7 +7846,7 @@ const ChatPage = {
 
         return `
           <div class="mention-picker-item-main">
-            <img class="mention-picker-avatar" src="${escape(avatarUrl)}" alt="avatar" />
+            <img class="mention-picker-avatar" src="${escape(avatarUrl)}" alt="" />
             <div class="mention-picker-meta">
               <span class="mention-picker-primary">${escape(username)}</span>
               <span class="mention-picker-secondary">${escape(secondary)}</span>
@@ -7296,7 +7907,7 @@ const ChatPage = {
     return {
       accountId: "mention-all",
       username: allKeyword || "all",
-      fullName: "Mention everyone",
+      fullName: this.t("chat.mentions.everyone", "Mention everyone"),
       nickname: "",
       avatarUrl: window.APP_CONFIG?.DEFAULT_AVATAR || "",
       isAllMention: true,
@@ -7478,7 +8089,11 @@ const ChatPage = {
 
     if (currentCount + files.length > maxFiles) {
       if (window.toastError)
-        window.toastError(`Maximum ${maxFiles} files allowed`);
+        window.toastError(
+          this.t("chat.attachments.max_files", "Maximum {count} files allowed", {
+            count: this.formatCount(maxFiles),
+          }),
+        );
       return;
     }
 
@@ -7487,19 +8102,38 @@ const ChatPage = {
       if (file.size > maxSizeMB * 1024 * 1024) {
         if (window.toastError)
           window.toastError(
-            `Attachment "${file.name}" is too large (Max ${maxSizeMB}MB)`,
+            this.t(
+              "chat.attachments.file_too_large",
+              'Attachment "{name}" is too large (Max {size}MB)',
+              {
+                name: file.name,
+                size: this.formatCount(maxSizeMB),
+              },
+            ),
           );
         continue;
       }
       const mediaType = this.getPendingMediaType(file);
       if (documentOnly && mediaType !== 3) {
         if (window.toastError)
-          window.toastError(`"${file.name}" is not a supported document file`);
+          window.toastError(
+            this.t(
+              "chat.attachments.unsupported_document",
+              '"{name}" is not a supported document file',
+              { name: file.name },
+            ),
+          );
         continue;
       }
       if (!documentOnly && mediaType === 3) {
         if (window.toastInfo)
-          window.toastInfo(`Use the File button to send "${file.name}"`);
+          window.toastInfo(
+            this.t(
+              "chat.attachments.use_file_button",
+              'Use the File button to send "{name}"',
+              { name: file.name },
+            ),
+          );
         continue;
       }
       validFiles.push(file);
@@ -7529,7 +8163,9 @@ const ChatPage = {
         isVideo || isImage
           ? this.trackBlobUrl(URL.createObjectURL(file), "preview")
           : "";
-      const safeName = escapeHtml(file.name || "Document");
+      const safeName = escapeHtml(
+        file.name || this.t("chat.attachments.document", "Document"),
+      );
       const sizeText = this.formatFileSize(file.size);
 
       const item = document.createElement("div");
@@ -7544,7 +8180,7 @@ const ChatPage = {
                 `;
       } else if (isImage) {
         item.innerHTML = `
-                    <img src="${url}" alt="preview">
+                    <img src="${url}" alt="">
                     <div class="chat-preview-remove" onclick="ChatPage.removeAttachment(${index})">
                         <i data-lucide="x"></i>
                     </div>
@@ -7555,7 +8191,7 @@ const ChatPage = {
                         <div class="chat-preview-file-icon"><i data-lucide="file-text"></i></div>
                         <div class="chat-preview-file-meta">
                             <div class="chat-preview-file-name">${safeName}</div>
-                            <div class="chat-preview-file-size">${escapeHtml(sizeText || "File")}</div>
+                            <div class="chat-preview-file-size">${escapeHtml(sizeText || this.t("chat.files.files_tab", "Files"))}</div>
                         </div>
                     </div>
                     <div class="chat-preview-remove" onclick="ChatPage.removeAttachment(${index})">
@@ -7696,10 +8332,13 @@ const ChatPage = {
         '<span class="msg-loading-dots"><span class="msg-loading-dot"></span><span class="msg-loading-dot"></span><span class="msg-loading-dot"></span></span>';
     } else if (status === "sent") {
       statusEl.className += " msg-status-sent";
-      statusEl.textContent = "Sent";
+      statusEl.textContent = this.t("chat.message.status.sent", "Sent");
     } else if (status === "failed") {
       statusEl.className += " msg-status-failed";
-      statusEl.textContent = "Failed to send. Click to retry.";
+      statusEl.textContent = this.t(
+        "chat.message.status.failed_retry",
+        "Send failed, tap to retry",
+      );
       statusEl.onclick = () => this.retryMessage(tempId, content);
     }
 

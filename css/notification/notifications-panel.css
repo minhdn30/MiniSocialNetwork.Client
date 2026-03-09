@@ -349,12 +349,17 @@ body.notifications-panel-open #sidebar.expanded ~ .main-content {
 
 .notifications-item-time {
   margin-left: auto;
-  width: 42px;
-  min-width: 42px;
+  width: auto;
+  min-width: 0;
+  max-width: 96px;
   flex-shrink: 0;
   font-size: 12px;
+  line-height: 1.2;
   color: var(--text-tertiary);
-  white-space: nowrap;
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
   text-align: right;
 }
 

@@ -13,6 +13,30 @@ let currentPostGroup = null;
 let joinInFlightPromise = null;
 let joinInFlightPostId = null;
 
+function postHubT(key, params = {}, fallback = '') {
+    return window.I18n?.t ? window.I18n.t(key, params, fallback || key) : (fallback || key);
+}
+
+function postHubEscapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function getPostHubBase() {
+  if (window.API?.getCurrentHubBase) {
+    const currentHubBase = window.API.getCurrentHubBase();
+    if (currentHubBase) {
+      return currentHubBase;
+    }
+  }
+
+  return window.APP_CONFIG?.HUB_BASE || "http://localhost:5000";
+}
+
 /* =========================
    CONNECTION MANAGEMENT
 ========================= */
@@ -29,7 +53,7 @@ async function initPostHub() {
     }
 
     postHubConnection = new signalR.HubConnectionBuilder()
-      .withUrl(`${window.APP_CONFIG.HUB_BASE}/postHub`, {
+      .withUrl(`${getPostHubBase()}/postHub`, {
         accessTokenFactory: () => window.AuthStore?.getAccessToken?.() || "",
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000])
@@ -40,12 +64,12 @@ async function initPostHub() {
 
     // Start connection
     await postHubConnection.start();
-    console.log("âœ… PostHub connected");
+    console.log("PostHub connected");
 
     // Export globally
     window.postHubConnection = postHubConnection;
   } catch (error) {
-    console.error("âŒ PostHub connection failed:", error);
+    console.error("PostHub connection failed:", error);
     
     // Retry on 401 (token expired)
     if (error?.message?.includes("401")) {
@@ -53,7 +77,7 @@ async function initPostHub() {
         await window.refreshAccessToken();
         await initPostHub(); // Retry after refresh
       } catch {
-        console.warn("ðŸ” Refresh token failed - PostHub disabled");
+        console.warn("Refresh token failed - PostHub disabled");
       }
     }
   }
@@ -67,18 +91,18 @@ function setupPostHubHandlers() {
 
   // Handle reconnecting
   postHubConnection.onreconnecting(() => {
-    console.warn("ðŸ”„ PostHub reconnecting...");
+    console.warn("PostHub reconnecting...");
   });
 
   // Handle reconnected - rejoin current group if any
   postHubConnection.onreconnected(async () => {
-    console.log("âœ… PostHub reconnected");
+    console.log("PostHub reconnected");
     
     // Rejoin current post group if we were in one
     if (currentPostGroup) {
       try {
         await postHubConnection.invoke("JoinPostGroup", currentPostGroup);
-        console.log(`ðŸ”„ Rejoined Post-${currentPostGroup}`);
+        console.log(`Rejoined Post-${currentPostGroup}`);
       } catch (error) {
         console.error("Failed to rejoin post group:", error);
       }
@@ -87,7 +111,7 @@ function setupPostHubHandlers() {
 
   // Handle connection closed
   postHubConnection.onclose(async (error) => {
-    console.error("âŒ PostHub closed", error);
+    console.error("PostHub closed", error);
     
     // Try to refresh token and reconnect
     if (error?.message?.includes("401")) {
@@ -95,26 +119,26 @@ function setupPostHubHandlers() {
         await window.refreshAccessToken();
         await initPostHub();
       } catch {
-        console.warn("ðŸ” PostHub disabled due to auth failure");
+        console.warn("PostHub disabled due to auth failure");
       }
     }
   });
 
   // Listen for react count updates
   postHubConnection.on("ReceiveReactUpdate", (postId, newReactCount) => {
-    console.log(`ðŸ“Š React update for post ${postId}: ${newReactCount}`);
+    console.log(`React update for post ${postId}: ${newReactCount}`);
     updatePostReactCount(postId, newReactCount);
   });
 
   // Listen for comment count updates
   postHubConnection.on("ReceiveCommentUpdate", (postId, newCommentCount) => {
-    console.log(`ðŸ’¬ Comment update for post ${postId}: ${newCommentCount}`);
+    console.log(`Comment update for post ${postId}: ${newCommentCount}`);
     updatePostCommentCount(postId, newCommentCount);
   });
 
   // Listen for real-time new comments (Consolidated)
   postHubConnection.on("ReceiveNewComment", (comment, parentReplyCount) => {
-    console.log(`ðŸ†• New comment/reply received:`, comment);
+    console.log(`New comment/reply received:`, comment);
     
     // 1. Update total post comment count (info is inside comment object)
     updatePostCommentCount(comment.postId, comment.totalCommentCount);
@@ -136,13 +160,13 @@ function setupPostHubHandlers() {
 
   // Listen for comment react updates
   postHubConnection.on("ReceiveCommentReactUpdate", (commentId, newReactCount) => {
-    console.log(`â¤ï¸ Comment react update ${commentId}: ${newReactCount}`);
+    console.log(`Comment react update ${commentId}: ${newReactCount}`);
     updateCommentReactCount(commentId, newReactCount);
   });
 
   // Listen for updated comments
   postHubConnection.on("ReceiveUpdatedComment", (comment) => {
-    console.log(`ðŸ“ Comment updated:`, comment);
+    console.log(`Comment updated:`, comment);
     if (window.CommentModule) {
       window.CommentModule.injectUpdatedComment(comment);
     }
@@ -150,7 +174,7 @@ function setupPostHubHandlers() {
 
   // Listen for deleted comments
   postHubConnection.on("ReceiveDeletedComment", (commentId, parentCommentId, totalCommentCount, parentReplyCount, postId) => {
-      console.log(`ðŸ—‘ï¸ Comment deleted:`, commentId);
+      console.log(`Comment deleted:`, commentId);
 
       // 1. Update total post comment count
       if (totalCommentCount !== undefined && totalCommentCount !== null) {
@@ -170,19 +194,19 @@ function setupPostHubHandlers() {
 
   // Listen for post content updates (Caption & Privacy)
   postHubConnection.on("ReceiveUpdatedPostContent", (updatedPost) => {
-      console.log("ðŸ“ Post Content Updated:", updatedPost);
+      console.log("Post Content Updated:", updatedPost);
       handlePostUpdate(updatedPost);
   });
 
   // Listen for full post updates
   postHubConnection.on("ReceiveUpdatedPost", (updatedPost) => {
-      console.log("ðŸ“ Post Updated:", updatedPost);
+      console.log("Post Updated:", updatedPost);
       handlePostUpdate(updatedPost);
   });
 
   // Listen for deleted posts
   postHubConnection.on("ReceiveDeletedPost", (postId) => {
-      console.log("ðŸ—‘ï¸ Post Deleted:", postId);
+      console.log("Post Deleted:", postId);
       // Wait a bit to ensure smooth UX if user is the one deleting (race condition)
       // Actually PostUtils.hidePost handles it gracefully if already closed
       if (window.PostUtils) {
@@ -199,7 +223,7 @@ function handlePostUpdate(updatedPost) {
 
     // 1. Check Privacy First
     if (!checkPrivacyAccess(updatedPost.privacy)) {
-        console.warn("ðŸš« Access lost due to privacy change");
+        console.warn("Access lost due to privacy change");
         // PostUtils.hidePost handles closing modal, hiding from feed, and showing toast
         PostUtils.hidePost(updatedPost.postId);
         return;
@@ -229,11 +253,17 @@ function handlePostUpdate(updatedPost) {
          const createdAt = timeEl.dataset.createdAt;
          
          if (createdAt) {
-             let timeHTML = `${PostUtils.timeAgo(createdAt)} <span>â€¢</span> ${PostUtils.renderPrivacyBadge(updatedPost.privacy)}`;
+             let timeHTML = `${PostUtils.timeAgo(createdAt)} <span>&middot;</span> ${PostUtils.renderPrivacyBadge(updatedPost.privacy)}`;
              
              if (updatedPost.updatedAt) {
                  const editedTime = PostUtils.formatFullDateTime(updatedPost.updatedAt);
-                 timeHTML += ` <span>â€¢</span> <span class="post-edited-indicator" title="Edited: ${editedTime}">edited</span>`;
+                 const editedTitle = postHubEscapeHtml(
+                     postHubT("post.comments.editedAt", { time: editedTime }, "Edited at {time}"),
+                 );
+                 const editedLabel = postHubEscapeHtml(
+                     postHubT("post.comments.editedLabel", {}, "edited"),
+                 );
+                 timeHTML += ` <span>&middot;</span> <span class="post-edited-indicator" title="${editedTitle}">${editedLabel}</span>`;
              }
              
              timeEl.innerHTML = timeHTML;
@@ -418,7 +448,7 @@ function updateCommentReactCount(commentId, newReactCount) {
   // Support both Main Comments (data-comment-id) and Replies (data-reply-id)
   const commentEl = document.querySelector(`.comment-item[data-comment-id="${commentId}"], .reply-item[data-reply-id="${commentId}"]`);
   if (commentEl) {
-    console.log(`âœ¨ Updating react count for ${commentEl.classList.contains('reply-item') ? 'reply' : 'comment'}: ${commentId}`);
+    console.log(`Updating react count for ${commentEl.classList.contains('reply-item') ? 'reply' : 'comment'}: ${commentId}`);
     const reactCountEl = commentEl.querySelector(".react-count");
     if (reactCountEl) {
         const displayValue = newReactCount > 0 ? newReactCount : "";
@@ -494,5 +524,5 @@ window.animateValue = animateValue;
 if (typeof signalR !== "undefined") {
   initPostHub();
 } else {
-  console.warn("âš ï¸ SignalR library not loaded - PostHub disabled");
+  console.warn("SignalR library not loaded - PostHub disabled");
 }

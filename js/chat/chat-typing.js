@@ -7,6 +7,13 @@
     const EMIT_DEBOUNCE_MS = 3000;  // After 3s of no keystrokes, send typing=false
     const TYPING_TRUE_HEARTBEAT_MS = 1000;
 
+    function t(key, fallback = "") {
+        if (global.I18n && typeof global.I18n.t === "function") {
+            return global.I18n.t(key, {}, fallback);
+        }
+        return fallback;
+    }
+
     // Per-conversation timer state: conversationId -> { emitTimeout, isTyping, lastTrueEmitAt }
     const timerMap = new Map();
 
@@ -59,13 +66,15 @@
 
     function buildIndicatorHtml(defaultAvatar) {
         const avatar = defaultAvatar || '';
+        const avatarAlt = t('chat.typing.avatar_alt', 'Typing avatar');
+        const typingLabel = t('chat.typing.label', 'Typing');
         return `
             <div class="typing-message-shell received msg-group-single">
                 <div class="msg-row">
                     <div class="msg-avatar">
-                        <img class="typing-avatar" src="${avatar}" alt="typing avatar">
+                        <img class="typing-avatar" src="${avatar}" alt="${avatarAlt}">
                     </div>
-                    <div class="msg-bubble typing-bubble" aria-label="Typing">
+                    <div class="msg-bubble typing-bubble" aria-label="${typingLabel}">
                         <span class="typing-dots">
                             <span class="typing-dot"></span>
                             <span class="typing-dot"></span>
@@ -228,7 +237,7 @@
                 global.APP_CONFIG?.DEFAULT_AVATAR ||
                 '';
             avatarEl.src = avatar;
-            avatarEl.alt = 'typing avatar';
+            avatarEl.alt = t('chat.typing.avatar_alt', 'Typing avatar');
         }
 
         el.classList.add('active');

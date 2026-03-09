@@ -30,7 +30,8 @@
     border-bottom: 1px solid var(--border-primary) !important;
     display: flex !important;
     align-items: center !important;
-    justify-content: space-between !important;
+    justify-content: center !important;
+    position: relative;
     flex-shrink: 0;
 }
 
@@ -40,10 +41,13 @@
     color: var(--text-primary) !important;
     background: none !important;
     -webkit-text-fill-color: unset !important;
+    text-align: center;
 }
 
 .cg-header .modal-back-btn {
     order: 2;
+    position: absolute;
+    right: 24px;
 }
 
 /* ===== Body: Two-Column ===== */
@@ -155,8 +159,8 @@
     width: 22px;
     height: 22px;
     border-radius: 50%;
-    background: var(--bg-primary);
-    color: var(--text-tertiary);
+    background: var(--danger, #ed4956);
+    color: #fff;
     border: 2px solid var(--border-primary);
     display: flex;
     align-items: center;
@@ -171,6 +175,11 @@
     background: var(--danger, #ed4956);
     color: #fff;
     border-color: var(--danger, #ed4956);
+}
+
+.cg-avatar-remove i,
+.cg-avatar-remove svg {
+    color: #fff !important;
 }
 
 .cg-avatar-remove.hidden {
@@ -562,9 +571,10 @@
 .chat-add-members-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     padding: 16px 18px;
     border-bottom: 1px solid var(--border-primary);
+    position: relative;
 }
 
 .chat-add-members-header h3 {
@@ -572,9 +582,12 @@
     font-size: 18px;
     font-weight: 700;
     color: var(--text-primary);
+    text-align: center;
 }
 
 .chat-add-members-close-btn {
+    position: absolute;
+    right: 18px;
     width: 30px;
     height: 30px;
     border: none;

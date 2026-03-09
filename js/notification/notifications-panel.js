@@ -96,6 +96,20 @@
     return (value || "").toString().trim().toLowerCase();
   }
 
+  function npT(key, params = {}, fallback = "") {
+    return global.I18n?.t ? global.I18n.t(key, params, fallback) : fallback;
+  }
+
+  function npTranslateLiteral(value) {
+    const raw = (value || "").toString().trim();
+    if (!raw) return "";
+    return global.I18n?.translateServerText
+      ? global.I18n.translateServerText(raw)
+      : global.I18n?.translateLiteral
+        ? global.I18n.translateLiteral(raw)
+      : raw;
+  }
+
   function isRequestsFilter(filter = state.filter) {
     return (filter || "").toString().trim().toLowerCase() === NOTIFICATION_FILTER.REQUESTS;
   }
@@ -163,19 +177,30 @@
 
   function getTimeAgoDisplay(value) {
     if (!value) return "";
-    if (global.PostUtils && typeof global.PostUtils.timeAgo === "function") {
-      return global.PostUtils.timeAgo(value, true);
-    }
-
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "";
     const diffMs = Date.now() - date.getTime();
-    if (diffMs < 60 * 1000) return "just now";
-    if (diffMs < 60 * 60 * 1000) return `${Math.floor(diffMs / (60 * 1000))}m`;
-    if (diffMs < 24 * 60 * 60 * 1000) {
-      return `${Math.floor(diffMs / (60 * 60 * 1000))}h`;
+    const lang = (
+      global.I18n?.getLanguage?.() ||
+      localStorage.getItem("appLanguage") ||
+      "en"
+    )
+      .toString()
+      .trim()
+      .toLowerCase();
+    if (diffMs < 60 * 1000) {
+      return npT("notifications.time.justNow", {}, "just now");
     }
-    return `${Math.floor(diffMs / (24 * 60 * 60 * 1000))}d`;
+    if (diffMs < 60 * 60 * 1000) {
+      const minutes = Math.floor(diffMs / (60 * 1000));
+      return npT("notifications.time.minuteShort", { count: minutes }, "{count}m");
+    }
+    if (diffMs < 24 * 60 * 60 * 1000) {
+      const hours = Math.floor(diffMs / (60 * 60 * 1000));
+      return npT("notifications.time.hourShort", { count: hours }, "{count}h");
+    }
+    const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+    return npT("notifications.time.dayShort", { count: days }, "{count}d");
   }
 
   function resolvePanelWidthPx() {
@@ -225,21 +250,21 @@
     return `
       <div class="notifications-panel-header">
         <div class="notifications-header-title-area">
-          <h2>Notifications</h2>
-          <button class="chat-icon-btn notifications-panel-settings-btn" id="notifications-panel-settings-btn" title="Notification settings">
+          <h2>${escapeHtml(npT("notification.panel.title"))}</h2>
+          <button class="chat-icon-btn notifications-panel-settings-btn" id="notifications-panel-settings-btn" title="${escapeHtml(npT("notification.panel.settingsTitle"))}">
             <i data-lucide="settings" size="19"></i>
           </button>
         </div>
-        <button class="chat-icon-btn notifications-panel-close-btn" id="notifications-panel-close-btn" title="Close notifications">
+        <button class="chat-icon-btn notifications-panel-close-btn" id="notifications-panel-close-btn" title="${escapeHtml(npT("notification.panel.closeTitle"))}">
           <i data-lucide="x" size="22"></i>
         </button>
       </div>
       <div class="notifications-panel-tabs" id="notifications-panel-tabs">
         <div class="notifications-tabs-list">
-          <button type="button" class="notifications-tab active" data-filter="${NOTIFICATION_FILTER.ALL}">All</button>
-          <button type="button" class="notifications-tab" data-filter="${NOTIFICATION_FILTER.UNREAD}">Unread</button>
+          <button type="button" class="notifications-tab active" data-filter="${NOTIFICATION_FILTER.ALL}">${escapeHtml(npT("notification.panel.tabAll"))}</button>
+          <button type="button" class="notifications-tab" data-filter="${NOTIFICATION_FILTER.UNREAD}">${escapeHtml(npT("notification.panel.tabUnread"))}</button>
           <button type="button" class="notifications-tab" data-filter="${NOTIFICATION_FILTER.REQUESTS}">
-            <span class="notifications-tab-label">Requests</span>
+            <span class="notifications-tab-label">${escapeHtml(npT("notification.panel.tabRequests"))}</span>
             <span class="notifications-tab-badge" data-tab-badge="requests" hidden></span>
           </button>
           <div class="notifications-tabs-indicator" id="notifications-tabs-indicator" aria-hidden="true"></div>
@@ -248,7 +273,7 @@
       <div class="notifications-panel-list" id="notifications-panel-list">
         <div class="notifications-panel-loader">
           <div class="spinner spinner-medium"></div>
-          <p>Loading notifications...</p>
+          <p>${escapeHtml(npT("notification.panel.loadingNotifications"))}</p>
         </div>
       </div>
       <div class="notifications-panel-more-loader" id="notifications-panel-more-loader" style="display:none;">
@@ -295,12 +320,38 @@
     updateFollowRequestTabBadge();
   }
 
+  function refreshPanelLocalization() {
+    if (!state.dom.panel) return;
+
+    const previousScrollTop = state.dom.list ? Number(state.dom.list.scrollTop) || 0 : 0;
+    state.dom.panel.innerHTML = buildPanelHtml();
+    ensurePanel();
+    updateTabUi();
+
+    if (state.dom.list) {
+      state.dom.list.scrollTop = Math.max(0, previousScrollTop);
+    }
+
+    if (state.isLoading && !state.items.length && state.dom.list) {
+      state.dom.list.innerHTML = `
+        <div class="notifications-panel-loader">
+          <div class="spinner spinner-medium"></div>
+          <p>${escapeHtml(getLoadingLabel())}</p>
+        </div>
+      `;
+    } else {
+      renderItems();
+    }
+
+    setMoreLoaderVisible(state.isLoading && state.hasMore);
+  }
+
   function bindPanelEvents() {
     if (state.dom.settingsBtn && !state.dom.settingsBtn.dataset.bound) {
       state.dom.settingsBtn.dataset.bound = "1";
       state.dom.settingsBtn.addEventListener("click", () => {
         if (global.toastInfo) {
-          global.toastInfo("Notification settings coming soon");
+          global.toastInfo(npT("notification.settingsComingSoon"));
         }
       });
     }
@@ -551,17 +602,19 @@
   }
 
   function getLoadingLabel() {
-    return isRequestsFilter() ? "Loading follow requests..." : "Loading notifications...";
+    return isRequestsFilter()
+      ? npT("notification.panel.loadingRequests")
+      : npT("notification.panel.loadingNotifications");
   }
 
   function getEmptyLabel() {
     if (state.filter === NOTIFICATION_FILTER.UNREAD) {
-      return "No unread notifications.";
+      return npT("notification.panel.emptyUnread");
     }
     if (isRequestsFilter()) {
-      return "No pending follow requests.";
+      return npT("notification.panel.emptyRequests");
     }
-    return "No notifications yet.";
+    return npT("notification.panel.emptyAll");
   }
 
   function loadCurrentFilter(isLoadMore = false, options = {}) {
@@ -743,7 +796,8 @@
         readNumber(raw, ["eventCount", "EventCount"], 0),
         0,
       ),
-      text: readString(raw, "text", "Text") || "You have a new notification",
+      text:
+        readString(raw, "text", "Text") || npT("notification.fallback.newNotification"),
       targetKind: parseIntSafe(
         readNumber(raw, ["targetKind", "TargetKind"], 0),
         0,
@@ -776,7 +830,7 @@
       isRead: true,
       actorCount: 1,
       eventCount: 1,
-      text: "wants to follow you",
+      text: npT("notification.fallback.followRequestAction"),
       targetKind: NOTIFICATION_TARGET_KIND.ACCOUNT,
       targetId: requesterId,
       targetPostCode: "",
@@ -811,12 +865,16 @@
   }
 
   function getActorDisplayUsername(item) {
-    return item.actor.username || item.actor.fullName || "Someone";
+    return (
+      item.actor.username ||
+      item.actor.fullName ||
+      npT("notification.actorFallback")
+    );
   }
 
   function truncateActorName(name) {
     const raw = (name || "").toString().trim();
-    if (!raw) return "Someone";
+    if (!raw) return npT("notification.actorFallback");
 
     const truncateThreshold = 15;
     const visibleLength = 14;
@@ -833,14 +891,26 @@
       primaryName,
       othersText:
         otherCount > 0
-          ? `and ${otherCount} ${otherCount === 1 ? "other" : "others"}`
+          ? otherCount === 1
+            ? npT("notification.panel.actorOthers.one")
+            : npT("notification.panel.actorOthers.many", { count: otherCount })
           : "",
     };
   }
 
   function buildNotificationActionText(item) {
+    const actionFromType = buildActionTextFromType(item?.type);
+    if (actionFromType && actionFromType !== npT("notification.actions.generic")) {
+      return actionFromType;
+    }
+
     const rawText = (item?.text || "").toString().trim();
-    if (!rawText) return "You have a new notification";
+    if (!rawText) return npT("notification.fallback.newNotification");
+
+    const translatedLiteral = npTranslateLiteral(rawText);
+    if (translatedLiteral && translatedLiteral !== rawText) {
+      return translatedLiteral;
+    }
 
     // remove duplicated actor phrase; keep only action sentence
     const actionMatch = rawText.match(
@@ -864,7 +934,7 @@
       }
     }
 
-    return rawText;
+    return npTranslateLiteral(rawText) || rawText;
   }
 
   function hasUnavailableMessage(item) {
@@ -906,27 +976,27 @@
     const normalizedType = parseIntSafe(type, -1);
     switch (normalizedType) {
       case NOTIFICATION_TYPE.FOLLOW:
-        return "followed you";
+        return npT("notification.actions.followedYou");
       case NOTIFICATION_TYPE.POST_COMMENT:
-        return "commented on your post";
+        return npT("notification.actions.commentedPost");
       case NOTIFICATION_TYPE.COMMENT_REPLY:
-        return "replied to your comment";
+        return npT("notification.actions.repliedComment");
       case NOTIFICATION_TYPE.POST_TAG:
-        return "tagged you in a post";
+        return npT("notification.actions.taggedPost");
       case NOTIFICATION_TYPE.COMMENT_MENTION:
-        return "mentioned you in a comment";
+        return npT("notification.actions.mentionedComment");
       case NOTIFICATION_TYPE.STORY_REPLY:
-        return "replied to your story";
+        return npT("notification.actions.repliedStory");
       case NOTIFICATION_TYPE.POST_REACT:
-        return "reacted to your post";
+        return npT("notification.actions.reactedPost");
       case NOTIFICATION_TYPE.STORY_REACT:
-        return "reacted to your story";
+        return npT("notification.actions.reactedStory");
       case NOTIFICATION_TYPE.FOLLOW_REQUEST:
-        return "wants to follow you";
+        return npT("notification.actions.followRequest");
       case NOTIFICATION_TYPE.FOLLOW_REQUEST_ACCEPTED:
-        return "accepted your follow request";
+        return npT("notification.actions.followRequestAccepted");
       default:
-        return "sent a notification";
+        return npT("notification.actions.generic");
     }
   }
 
@@ -954,13 +1024,6 @@
     return parsedAction;
   }
 
-  function ensureSentencePunctuation(text) {
-    const raw = (text || "").toString().trim();
-    if (!raw) return raw;
-    if (/[.!?]$/.test(raw)) return raw;
-    return `${raw}.`;
-  }
-
   function getFollowRequestActorId(item) {
     const actor = item?.actor || {};
     const actorId = readString(actor, "accountId", "AccountId");
@@ -978,27 +1041,26 @@
   }
 
   function resolveFollowRequestActionErrorMessage(status, isAccept) {
-    if (status === 401)
-      return "Your session has expired. Please sign in again.";
+    if (status === 401) return npT("notification.requests.sessionExpired");
     if (status === 403) {
       return isAccept
-        ? "You do not have permission to accept this follow request."
-        : "You do not have permission to remove this follow request.";
+        ? npT("notification.requests.permissionAccept")
+        : npT("notification.requests.permissionRemove");
     }
     if (status === 404 || status === 410) {
-      return "This follow request is no longer available.";
+      return npT("notification.requests.unavailable");
     }
     if (status === 409) {
-      return "Follow request state changed. Please refresh and try again.";
+      return npT("notification.requests.stateChanged");
     }
     if (status === 400) {
       return isAccept
-        ? "Could not accept this follow request right now."
-        : "Could not remove this follow request right now.";
+        ? npT("notification.requests.acceptUnavailable")
+        : npT("notification.requests.removeUnavailable");
     }
     return isAccept
-      ? "Could not accept this follow request. Please try again."
-      : "Could not remove this follow request. Please try again.";
+      ? npT("notification.requests.acceptFailed")
+      : npT("notification.requests.removeFailed");
   }
 
   async function readFollowRequestActionResponseMessage(res) {
@@ -1031,7 +1093,7 @@
 
     const requesterId = getFollowRequestActorId(item);
     if (!requesterId) {
-      if (global.toastError) global.toastError("Invalid follow request.");
+      if (global.toastError) global.toastError(npT("notification.requests.invalid"));
       return;
     }
 
@@ -1045,7 +1107,7 @@
       : global.API?.Follows?.removeRequest;
     if (typeof actionApi !== "function") {
       if (global.toastError)
-        global.toastError("Follow request API is unavailable.");
+        global.toastError(npT("notification.requests.apiUnavailable"));
       return;
     }
 
@@ -1087,12 +1149,12 @@
 
       if (isAccept) {
         if (global.toastSuccess) {
-          global.toastSuccess("Follow request accepted.");
+          global.toastSuccess(npT("notification.requests.accepted"));
         } else if (global.toastInfo) {
-          global.toastInfo("Follow request accepted.");
+          global.toastInfo(npT("notification.requests.accepted"));
         }
       } else if (global.toastInfo) {
-        global.toastInfo("Follow request removed.");
+        global.toastInfo(npT("notification.requests.removed"));
       }
 
       await loadCurrentFilter(false, {
@@ -1106,10 +1168,11 @@
       }
     } catch (error) {
       if (global.toastError) {
-        const message =
+        const messageRaw =
           error instanceof Error && error.message
             ? error.message
             : resolveFollowRequestActionErrorMessage(0, isAccept);
+        const message = npTranslateLiteral(messageRaw) || messageRaw;
         global.toastError(message);
       }
     } finally {
@@ -1235,9 +1298,7 @@
     const actorAvatar = item.actor.avatarUrl || resolveDefaultAvatarUrl();
     const actorUsername = getActorDisplayUsername(item);
     const actorTitle = getActorTitleParts(item);
-    const actionText = ensureSentencePunctuation(
-      buildDisplayActionText(item, isUnavailable),
-    );
+    const actionText = buildDisplayActionText(item, isUnavailable);
     const thumbnailMediaKind = resolveThumbnailMediaKind(item);
     const timeLabel = getTimeAgoDisplay(item.lastEventAt || item.createdAt);
     const unreadClass = item.isRead ? "" : " unread";
@@ -1251,8 +1312,8 @@
     const followRequestActionsHtml = showFollowRequestActions
       ? `
         <div class="notifications-item-actions">
-          <button type="button" class="notifications-request-btn accept" data-request-action="accept">Accept</button>
-          <button type="button" class="notifications-request-btn remove" data-request-action="remove">Remove</button>
+          <button type="button" class="notifications-request-btn accept" data-request-action="accept">${escapeHtml(npT("common.buttons.accept", {}, "Accept"))}</button>
+          <button type="button" class="notifications-request-btn remove" data-request-action="remove">${escapeHtml(npT("common.buttons.remove", {}, "Remove"))}</button>
         </div>
       `
       : "";
@@ -1279,7 +1340,7 @@
             </span>
             ${
               showThumbnail
-                ? `<img class="notifications-item-thumbnail" src="${escapeHtml(item.thumbnailUrl)}" alt="thumbnail" data-media-kind="${thumbnailMediaKind}" data-media-fallback-ignore="true">`
+                ? `<img class="notifications-item-thumbnail" src="${escapeHtml(item.thumbnailUrl)}" alt="${escapeHtml(npT("notification.panel.thumbnailAlt"))}" data-media-kind="${thumbnailMediaKind}" data-media-fallback-ignore="true">`
                 : ""
             }
             <span class="notifications-item-time">${escapeHtml(timeLabel)}</span>
@@ -1461,7 +1522,7 @@
 
       if (!res?.ok) {
         if (!isLoadMore && !silentMode && global.toastError) {
-          global.toastError("Failed to load notifications.");
+          global.toastError(npT("notification.panel.loadNotificationsFailed"));
         }
         return;
       }
@@ -1528,7 +1589,7 @@
     } catch (_) {
       if (!isActiveListLoad(requestToken, requestFilter)) return;
       if (!isLoadMore && !silentMode && global.toastError) {
-        global.toastError("Failed to load notifications.");
+        global.toastError(npT("notification.panel.loadNotificationsFailed"));
       }
     } finally {
       if (!isActiveListLoad(requestToken, requestFilter)) return;
@@ -1584,7 +1645,7 @@
 
       if (!res?.ok) {
         if (!isLoadMore && !silentMode && global.toastError) {
-          global.toastError("Failed to load follow requests.");
+          global.toastError(npT("notification.panel.loadRequestsFailed"));
         }
         return;
       }
@@ -1644,7 +1705,7 @@
       if (!isActiveListLoad(requestToken, requestFilter)) return;
       shouldRestoreItems = true;
       if (!isLoadMore && !silentMode && global.toastError) {
-        global.toastError("Failed to load follow requests.");
+        global.toastError(npT("notification.panel.loadRequestsFailed"));
       }
     } finally {
       if (!isActiveListLoad(requestToken, requestFilter)) return;
@@ -1678,7 +1739,8 @@
     state.staleToastCount += 1;
 
     if (global.toastInfo) {
-      global.toastInfo(message || "This content is no longer available");
+      const translated = npTranslateLiteral(message);
+      global.toastInfo(translated || npT("notification.fallback.unavailable"));
     }
   }
 
@@ -1692,12 +1754,13 @@
     if (state.staleToastCount >= state.staleToastMax) return;
     state.staleToastCount += 1;
 
+    const translated = npTranslateLiteral(message);
     if (global.toastError) {
-      global.toastError(message || "Failed to open this content.");
+      global.toastError(translated || npT("notification.fallback.openFailed"));
       return;
     }
     if (global.toastInfo) {
-      global.toastInfo(message || "Failed to open this content.");
+      global.toastInfo(translated || npT("notification.fallback.openFailed"));
     }
   }
 
@@ -1711,10 +1774,10 @@
 
   function getUnavailableMessageByStatus(status) {
     if (status === 401 || status === 403) {
-      return "You no longer have permission to view this content";
+      return npT("notification.fallback.noPermission");
     }
     if (status === 400 || status === 404 || status === 410) {
-      return "This content is no longer available";
+      return npT("notification.fallback.unavailable");
     }
     return "";
   }
@@ -1763,7 +1826,7 @@
     if (!global.API?.Accounts) {
       return {
         ok: false,
-        message: "This content is no longer available",
+        message: npT("notification.fallback.unavailable"),
       };
     }
 
@@ -1785,7 +1848,7 @@
           }
           return {
             ok: false,
-            message: "This content is no longer available",
+            message: npT("notification.fallback.unavailable"),
           };
         }
 
@@ -1793,9 +1856,9 @@
         if (unavailableMessage) {
           return { ok: false, message: unavailableMessage };
         }
-        fallbackMessage = "Failed to open this profile.";
+        fallbackMessage = npT("notification.fallback.profileOpenFailed");
       } catch (_) {
-        fallbackMessage = "Failed to open this profile.";
+        fallbackMessage = npT("notification.fallback.profileOpenFailed");
       }
     }
 
@@ -1817,7 +1880,7 @@
           }
           return {
             ok: false,
-            message: "This content is no longer available",
+            message: npT("notification.fallback.unavailable"),
           };
         }
 
@@ -1825,15 +1888,15 @@
         if (unavailableMessage) {
           return { ok: false, message: unavailableMessage };
         }
-        fallbackMessage = "Failed to open this profile.";
+        fallbackMessage = npT("notification.fallback.profileOpenFailed");
       } catch (_) {
-        fallbackMessage = "Failed to open this profile.";
+        fallbackMessage = npT("notification.fallback.profileOpenFailed");
       }
     }
 
     return {
       ok: false,
-      message: fallbackMessage || "This content is no longer available",
+      message: fallbackMessage || npT("notification.fallback.unavailable"),
     };
   }
 
@@ -1845,7 +1908,7 @@
         showRateLimitedOpenFailedToast(resolved.message);
       } else {
         showRateLimitedUnavailableToast(
-          resolved?.message || "This content is no longer available",
+          resolved?.message || npT("notification.fallback.unavailable"),
         );
       }
       return false;
@@ -1868,7 +1931,7 @@
   async function openPostTarget(item) {
     const postCode = (item.targetPostCode || "").toString().trim();
     if (!postCode) {
-      showRateLimitedUnavailableToast("This content is no longer available");
+      showRateLimitedUnavailableToast(npT("notification.fallback.unavailable"));
       return false;
     }
 
@@ -1883,7 +1946,7 @@
     }
 
     if (!global.API?.Posts?.getByPostCode) {
-      showRateLimitedOpenFailedToast("Failed to open this post.");
+      showRateLimitedOpenFailedToast(npT("notification.fallback.postOpenFailed"));
       return false;
     }
 
@@ -1894,12 +1957,12 @@
         if (unavailableMessage) {
           showRateLimitedUnavailableToast(unavailableMessage);
         } else {
-          showRateLimitedOpenFailedToast("Failed to open this post.");
+          showRateLimitedOpenFailedToast(npT("notification.fallback.postOpenFailed"));
         }
         return false;
       }
     } catch (_) {
-      showRateLimitedOpenFailedToast("Failed to open this post.");
+      showRateLimitedOpenFailedToast(npT("notification.fallback.postOpenFailed"));
       return false;
     }
 
@@ -1918,7 +1981,7 @@
   async function openStoryTarget(item) {
     const storyId = (item.targetId || "").toString().trim();
     if (!storyId) {
-      showRateLimitedUnavailableToast("This content is no longer available");
+      showRateLimitedUnavailableToast(npT("notification.fallback.unavailable"));
       return false;
     }
 
@@ -1937,7 +2000,7 @@
     }
 
     if (!global.API?.Stories?.resolveByStoryId) {
-      showRateLimitedOpenFailedToast("Failed to open this story.");
+      showRateLimitedOpenFailedToast(npT("notification.fallback.storyOpenFailed"));
       return false;
     }
 
@@ -1948,12 +2011,12 @@
         if (unavailableMessage) {
           showRateLimitedUnavailableToast(unavailableMessage);
         } else {
-          showRateLimitedOpenFailedToast("Failed to open this story.");
+          showRateLimitedOpenFailedToast(npT("notification.fallback.storyOpenFailed"));
         }
         return false;
       }
     } catch (_) {
-      showRateLimitedOpenFailedToast("Failed to open this story.");
+      showRateLimitedOpenFailedToast(npT("notification.fallback.storyOpenFailed"));
       return false;
     }
 
@@ -1976,7 +2039,7 @@
       }
       const message = hasUnavailableMessage(item)
         ? item.text
-        : "This content is no longer available";
+        : npT("notification.fallback.unavailable");
       showRateLimitedUnavailableToast(message);
       return;
     }
@@ -1989,7 +2052,7 @@
     } else if (item.targetKind === NOTIFICATION_TARGET_KIND.STORY) {
       opened = await openStoryTarget(item);
     } else {
-      showRateLimitedUnavailableToast("This content is no longer available");
+      showRateLimitedUnavailableToast(npT("notification.fallback.unavailable"));
       return;
     }
 
@@ -2226,6 +2289,14 @@
     }
 
     state.initialized = true;
+  }
+
+  if (global.I18n?.onChange) {
+    global.I18n.onChange(() => {
+      if (!state.initialized) return;
+      applyPanelWidthVariable();
+      refreshPanelLocalization();
+    });
   }
 
   global.NotificationsPanel = {

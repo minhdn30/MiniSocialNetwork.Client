@@ -234,12 +234,14 @@ body.is-chat-page #chat-panel .chat-header-actions {
   transform: translateX(4px);
 }
 
-.chat-popup-item i {
+.chat-popup-item i,
+.chat-popup-item svg {
   color: var(--text-secondary);
   transition: color 0.2s;
 }
 
-.chat-popup-item:hover i {
+.chat-popup-item:hover i,
+.chat-popup-item:hover svg {
   color: var(--accent-primary);
 }
 

@@ -354,6 +354,7 @@ body.is-dragging-chat .chat-box * {
 
 /* Bubble Styling (Chat Heads) */
 .chat-bubble {
+  --chat-bubble-exit-duration: 240ms;
   width: 48px;
   height: 48px;
   border-radius: 50%;
@@ -363,6 +364,8 @@ body.is-dragging-chat .chat-box * {
   background: var(--bg-primary);
   box-shadow: var(--shadow-lg);
   transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transform-origin: center center;
+  will-change: transform, opacity;
 }
 
 @keyframes bubbleAppear {
@@ -382,18 +385,27 @@ body.is-dragging-chat .chat-box * {
 
 @keyframes bubbleExit {
   from {
-    transform: scale(1);
+    transform: scale(1.1);
     opacity: 1;
   }
+  55% {
+    transform: scale(0.68);
+    opacity: 0.7;
+  }
   to {
-    transform: scale(0.2);
+    transform: scale(0);
     opacity: 0;
   }
 }
 
 .chat-bubble.is-exiting {
-  animation: bubbleExit 0.18s ease forwards;
+  animation: bubbleExit var(--chat-bubble-exit-duration) cubic-bezier(0.4, 0, 1, 1) forwards;
   pointer-events: none;
+  transition: none;
+}
+
+.chat-bubble.is-exiting:hover {
+  transform: none;
 }
 
 .chat-bubble:hover {
@@ -485,6 +497,15 @@ body.is-dragging-chat .chat-box * {
   background: #ef4444;
   color: white !important;
   transform: scale(1.1);
+}
+
+.chat-bubble-close:hover i,
+.chat-bubble-close:hover svg {
+  color: white !important;
+}
+
+.chat-bubble-close:hover svg {
+  stroke: white !important;
 }
 
 .chat-bubble-unread {

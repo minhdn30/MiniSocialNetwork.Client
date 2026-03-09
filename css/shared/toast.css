@@ -13,7 +13,7 @@
   border-radius: 12px;
   font-size: 15px;
   font-weight: 500;
-  z-index: 20000;
+  z-index: 2147483000;
   opacity: 0;
   transform: translateX(400px);
   transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);

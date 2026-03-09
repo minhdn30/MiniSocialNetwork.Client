@@ -1,7 +1,16 @@
-const { HUB_BASE, API_BASE } = window.APP_CONFIG;
-
 let chatConnection = null;
 let isStarting = false;
+
+function getHubBase() {
+  if (window.API?.getCurrentHubBase) {
+    const currentHubBase = window.API.getCurrentHubBase();
+    if (currentHubBase) {
+      return currentHubBase;
+    }
+  }
+
+  return window.APP_CONFIG?.HUB_BASE || "http://localhost:5000";
+}
 
 /* =========================
    TOKEN HELPERS
@@ -45,7 +54,7 @@ async function startChatHub() {
   }
 
   chatConnection = new signalR.HubConnectionBuilder()
-    .withUrl(`${HUB_BASE}/chatHub`, {
+    .withUrl(`${getHubBase()}/chatHub`, {
       accessTokenFactory: () => getAccessToken() || "",
     })
     .withAutomaticReconnect([0, 2000, 5000, 10000])

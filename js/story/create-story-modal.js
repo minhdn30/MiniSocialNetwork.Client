@@ -27,6 +27,59 @@ const STORY_TEXT_CONFIG_FALLBACK = {
   },
 };
 
+const csT = (key, params = {}, fallback = "") =>
+  window.I18n?.t ? window.I18n.t(key, params, fallback || key) : (fallback || key);
+
+const csUiError = (action, status, rawMessage, fallbackKey) => {
+  if (window.UIErrors?.resolveMessage) {
+    return window.UIErrors.resolveMessage(
+      "story",
+      action,
+      status,
+      rawMessage,
+      fallbackKey,
+      csT(fallbackKey, {}, fallbackKey),
+    );
+  }
+
+  const resolved = window.UIErrors?.format?.("story", action, status, rawMessage);
+  return resolved?.message || csT(fallbackKey, {}, fallbackKey);
+};
+
+function csResolveStyleLabel(key, optionLabel) {
+  const normalizedKey = (key || "").toString().trim().toLowerCase();
+  const fallbackLabel = (optionLabel || key || "").toString().trim();
+  const keyBasedTranslation = normalizedKey
+    ? csT(`story.create.styleLabels.${normalizedKey}`, {}, "")
+    : "";
+
+  if (keyBasedTranslation && keyBasedTranslation !== `story.create.styleLabels.${normalizedKey}`) {
+    return keyBasedTranslation;
+  }
+
+  switch (normalizedKey) {
+    case "accent":
+      return csT("story.create.styleLabelAccent", {}, fallbackLabel || "Accent");
+    case "light":
+      return csT("story.create.styleLabelLight", {}, fallbackLabel || "Light");
+    case "ink":
+      return csT("story.create.styleLabelInk", {}, fallbackLabel || "Ink");
+    default: {
+      if (window.I18n?.translateLiteral) {
+        const translatedLabel = window.I18n.translateLiteral(fallbackLabel);
+        if (
+          typeof translatedLabel === "string" &&
+          translatedLabel.trim() &&
+          translatedLabel !== fallbackLabel
+        ) {
+          return translatedLabel;
+        }
+      }
+      return fallbackLabel;
+    }
+  }
+}
+
 function csIsPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -205,6 +258,7 @@ const createStoryModalState = {
   activeDropdown: null,
   lastTextSelectionRange: null,
 };
+let csLanguageUnsubscribe = null;
 
 function csGetElements() {
   return {
@@ -432,7 +486,9 @@ function csReleasePreviewObjectUrl() {
 }
 
 function csReadSelectedFileName(file) {
-  if (!file || !file.name) return "No file selected";
+  if (!file || !file.name) {
+    return csT("story.create.noFileSelected", {}, "No file selected");
+  }
   const maxLength = 34;
   if (file.name.length <= maxLength) return file.name;
   return `${file.name.slice(0, maxLength - 3)}...`;
@@ -440,9 +496,17 @@ function csReadSelectedFileName(file) {
 
 function csGetPreviewHintByMode() {
   if (createStoryModalState.storyMode === "text") {
-    return "Type directly on preview to compose your story.";
+    return csT(
+      "story.create.typeOnPreview",
+      {},
+      "Type directly on preview to compose your story.",
+    );
   }
-  return "Upload image or video to preview your story.";
+  return csT(
+    "story.create.uploadToPreview",
+    {},
+    "Upload image or video to preview your story.",
+  );
 }
 
 function csCloseAllDropdowns() {
@@ -522,11 +586,16 @@ function csEnsurePalettesRendered() {
   const bgFragment = document.createDocumentFragment();
   Object.entries(STORY_TEXT_STYLE_OPTIONS.backgrounds).forEach(
     ([key, option]) => {
+      const localizedLabel = csResolveStyleLabel(key, option.label || key);
       bgFragment.appendChild(
         csCreatePaletteButton({
           className: "create-story-bg-btn",
           key,
-          title: `${option.label || key} background`,
+          title: csT(
+            "story.create.backgroundSwatchTitle",
+            { label: localizedLabel },
+            `${localizedLabel} background`,
+          ),
           cssValue: option.css,
           dataKeyName: "bgKey",
           onClick: () => window.selectCreateStoryBackground(key),
@@ -540,11 +609,16 @@ function csEnsurePalettesRendered() {
   const textFragment = document.createDocumentFragment();
   Object.entries(STORY_TEXT_STYLE_OPTIONS.textColors).forEach(
     ([key, option]) => {
+      const localizedLabel = csResolveStyleLabel(key, option.label || key);
       textFragment.appendChild(
         csCreatePaletteButton({
           className: "create-story-color-btn",
           key,
-          title: `${option.label || key} text`,
+          title: csT(
+            "story.create.textColorSwatchTitle",
+            { label: localizedLabel },
+            `${localizedLabel} text`,
+          ),
           cssValue: option.css,
           dataKeyName: "textColorKey",
           onClick: () => window.selectCreateStoryTextColor(key),
@@ -566,11 +640,16 @@ function csEnsureMediaBgPaletteRendered() {
   const fragment = document.createDocumentFragment();
   Object.entries(STORY_TEXT_STYLE_OPTIONS.backgrounds).forEach(
     ([key, option]) => {
+      const localizedLabel = csResolveStyleLabel(key, option.label || key);
       fragment.appendChild(
         csCreatePaletteButton({
           className: "create-story-media-bg-btn",
           key,
-          title: `${option.label || key} background`,
+          title: csT(
+            "story.create.backgroundSwatchTitle",
+            { label: localizedLabel },
+            `${localizedLabel} background`,
+          ),
           cssValue: option.css,
           dataKeyName: "mediaBgKey",
           onClick: () => window.selectCreateStoryMediaBg(key),
@@ -674,8 +753,21 @@ function csClearTextContent() {
   csSetTextCount();
 }
 
+function csSyncTextEditorPlaceholder() {
+  const { textEditor } = csGetElements();
+  if (!textEditor) {
+    return;
+  }
+
+  textEditor.dataset.placeholder = csT(
+    "story.create.textPlaceholder",
+    {},
+    "Type your story...",
+  );
+}
+
 function csApplyStoryModeUI() {
-  const { textSection, mediaSection, previewHint, modeChoiceButtons } =
+  const { textSection, mediaSection, previewHint, modeChoiceButtons, textEditor } =
     csGetElements();
 
   modeChoiceButtons.forEach((button) => {
@@ -706,6 +798,10 @@ function csApplyStoryModeUI() {
 
   if (previewHint) {
     previewHint.textContent = csGetPreviewHintByMode();
+  }
+
+  if (textEditor) {
+    csSyncTextEditorPlaceholder();
   }
 
   csRenderPreview();
@@ -860,14 +956,26 @@ function csToggleMediaToolsGroup(visible) {
 function csValidateBeforeSubmit(showToast = false) {
   if (createStoryModalState.currentStep !== "editor") {
     if (showToast && window.toastError) {
-      toastError("Please choose Text or Media first.");
+      toastError(
+        csT(
+          "story.create.chooseStoryModeFirst",
+          {},
+          "Please choose Text or Media first.",
+        ),
+      );
     }
     return false;
   }
 
   if (!createStoryModalState.storyMode) {
     if (showToast && window.toastError) {
-      toastError("Please choose Text or Media for your story.");
+      toastError(
+        csT(
+          "story.create.chooseStoryMode",
+          {},
+          "Please choose Text or Media for your story.",
+        ),
+      );
     }
     return false;
   }
@@ -876,7 +984,13 @@ function csValidateBeforeSubmit(showToast = false) {
     const text = csGetTrimmedTextContent();
     if (!text) {
       if (showToast && window.toastError) {
-        toastError("Text content is required for text story.");
+        toastError(
+          csT(
+            "story.create.textRequired",
+            {},
+            "Text content is required for text story.",
+          ),
+        );
       }
       return false;
     }
@@ -888,7 +1002,13 @@ function csValidateBeforeSubmit(showToast = false) {
     createStoryModalState.mediaContentType === null
   ) {
     if (showToast && window.toastError) {
-      toastError("Please upload an image or video first.");
+      toastError(
+        csT(
+          "story.create.uploadMediaFirst",
+          {},
+          "Please upload an image or video first.",
+        ),
+      );
     }
     return false;
   }
@@ -958,9 +1078,13 @@ function csSetSubmitting(isSubmitting) {
 
   if (submitBtn) {
     const defaultText =
-      submitBtn.dataset.defaultText || submitBtn.textContent || "Share Story";
+      submitBtn.dataset.defaultText ||
+      submitBtn.textContent ||
+      csT("story.create.shareAction", {}, "Share Story");
     submitBtn.dataset.defaultText = defaultText;
-    submitBtn.textContent = isSubmitting ? "Sharing..." : defaultText;
+    submitBtn.textContent = isSubmitting
+      ? csT("story.create.sharing", {}, "Sharing...")
+      : defaultText;
 
     if (window.LoadingUtils?.setButtonLoading) {
       window.LoadingUtils.setButtonLoading(submitBtn, isSubmitting);
@@ -1016,34 +1140,47 @@ function csResetForm() {
   csApplyStoryModeUI();
 }
 
-async function csReadErrorMessage(res, fallback = "Failed to create story.") {
-  let message = fallback;
+async function csReadErrorMessage(
+  res,
+  action = "create",
+  fallbackKey = "errors.story.create",
+) {
+  const fallbackMessage = csT(
+    fallbackKey,
+    {},
+    action === "create"
+      ? "Couldn't create story"
+      : "Couldn't load story",
+  );
+  if (!res) return fallbackMessage;
+
+  let rawMessage = "";
 
   try {
     const data = await res.json();
     if (typeof data?.message === "string" && data.message.trim()) {
-      return data.message.trim();
-    }
-    if (typeof data?.title === "string" && data.title.trim()) {
-      return data.title.trim();
-    }
-    if (data?.errors && typeof data.errors === "object") {
+      rawMessage = data.message.trim();
+    } else if (typeof data?.title === "string" && data.title.trim()) {
+      rawMessage = data.title.trim();
+    } else if (data?.errors && typeof data.errors === "object") {
       const firstKey = Object.keys(data.errors)[0];
       const firstValue = firstKey ? data.errors[firstKey] : null;
       if (Array.isArray(firstValue) && firstValue.length > 0) {
-        return String(firstValue[0]);
+        rawMessage = String(firstValue[0] || "").trim();
       }
     }
   } catch (_) {}
 
-  try {
-    const text = await res.text();
-    if (typeof text === "string" && text.trim()) {
-      message = text.trim();
-    }
-  } catch (_) {}
+  if (!rawMessage) {
+    try {
+      const text = await res.text();
+      if (typeof text === "string" && text.trim()) {
+        rawMessage = text.trim();
+      }
+    } catch (_) {}
+  }
 
-  return message;
+  return csUiError(action, res.status, rawMessage, fallbackKey);
 }
 
 function csDetectMediaContentType(file) {
@@ -1073,7 +1210,13 @@ async function csHandleMediaChange(event) {
   const maxBytes = maxSizeMb * 1024 * 1024;
   if (file.size > maxBytes) {
     if (window.toastError) {
-      toastError(`File is too large. Maximum size is ${maxSizeMb}MB.`);
+      toastError(
+        csT(
+          "story.create.fileTooLarge",
+          { size: maxSizeMb },
+          `File is too large. Maximum size is ${maxSizeMb}MB.`,
+        ),
+      );
     }
     if (mediaInput) {
       mediaInput.value = "";
@@ -1084,7 +1227,13 @@ async function csHandleMediaChange(event) {
   // contentType already detected above
   if (contentType === null) {
     if (window.toastError) {
-      toastError("Only image or video files are supported.");
+      toastError(
+        csT(
+          "story.create.unsupportedMedia",
+          {},
+          "Only image or video files are supported.",
+        ),
+      );
     }
     if (mediaInput) {
       mediaInput.value = "";
@@ -1119,7 +1268,11 @@ async function csHandleMediaChange(event) {
       if (Number.isFinite(duration) && duration > maxDuration) {
         if (window.toastError) {
           toastError(
-            `Video is too long (${Math.round(duration)}s). Maximum is ${maxDuration}s.`,
+            csT(
+              "story.create.videoTooLong",
+              { duration: Math.round(duration), max: maxDuration },
+              `Video is too long (${Math.round(duration)}s). Maximum is ${maxDuration}s.`,
+            ),
           );
         }
         csClearMediaSelection();
@@ -1230,6 +1383,36 @@ function csBindEvents() {
   });
 
   createStoryModalState.isInitialized = true;
+}
+
+function csRefreshLocalizedUi() {
+  const { modal } = csGetElements();
+  if (!modal) {
+    return;
+  }
+
+  window.I18n?.translateDom?.(modal);
+  csSyncTextEditorPlaceholder();
+
+  if (!modal.classList.contains("show")) {
+    return;
+  }
+
+  window.StoryMediaEditor?.refreshLocalization?.();
+  csApplyStoryModeUI();
+  window.csSelectPrivacy(createStoryModalState.privacy);
+  window.csSelectExpires(createStoryModalState.expires);
+  csUpdateSubmitState();
+}
+
+function csEnsureLanguageSubscription() {
+  if (csLanguageUnsubscribe || !window.I18n?.onChange) {
+    return;
+  }
+
+  csLanguageUnsubscribe = window.I18n.onChange(() => {
+    csRefreshLocalizedUi();
+  });
 }
 
 function csBindDocumentEvents() {
@@ -1434,7 +1617,13 @@ window.toggleCreateStoryEmojiPicker = async function (event) {
 
   if (!window.EmojiUtils?.togglePicker) {
     if (window.toastError) {
-      toastError("Emoji picker is unavailable.");
+      toastError(
+        csT(
+          "story.create.emojiUnavailable",
+          {},
+          "Can't open the emoji picker right now",
+        ),
+      );
     }
     return;
   }
@@ -1448,6 +1637,7 @@ window.openCreateStoryModal = function () {
   const { modal } = csGetElements();
   if (!modal) return;
 
+  csEnsureLanguageSubscription();
   csBindEvents();
   csBindDocumentEvents();
   csResetForm();
@@ -1456,6 +1646,7 @@ window.openCreateStoryModal = function () {
   if (window.lockScroll) {
     window.lockScroll();
   }
+  csRefreshLocalizedUi();
 
   if (window.lucide) {
     lucide.createIcons();
@@ -1504,15 +1695,21 @@ window.csShowDiscardConfirmation = function () {
 
   popup.innerHTML = `
       <div class="post-options-header">
-          <h3>Discard story?</h3>
-          <p>If you leave, your edits won't be saved.</p>
+          <h3>${csT("story.create.discardTitle", {}, "Discard story?")}</h3>
+          <p>${csT(
+            "story.create.discardDescription",
+            {},
+            "If you leave, your edits won't be saved.",
+          )}</p>
       </div>
-      <button class="post-option post-option-danger" onclick="csConfirmDiscard()">
-          Discard
-      </button>
-      <button class="post-option post-option-cancel" onclick="csCancelDiscard()">
-          Cancel
-      </button>
+      <div class="post-options-actions">
+          <button class="post-option post-option-cancel" onclick="csCancelDiscard()">
+              ${csT("common.buttons.cancel", {}, "Cancel")}
+          </button>
+          <button class="post-option post-option-danger" onclick="csConfirmDiscard()">
+              ${csT("common.buttons.discard", {}, "Discard")}
+          </button>
+      </div>
   `;
 
   overlay.appendChild(popup);
@@ -1602,9 +1799,18 @@ window.csSelectPrivacy = function (rawValue) {
   createStoryModalState.privacy = value;
 
   const iconMap = {
-    0: { icon: "globe", text: "Public" },
-    1: { icon: "users", text: "Followers Only" },
-    2: { icon: "lock", text: "Private" },
+    0: {
+      icon: "globe",
+      text: csT("story.create.publicLabel", {}, "Public"),
+    },
+    1: {
+      icon: "users",
+      text: csT("story.create.followersOnlyLabel", {}, "Followers Only"),
+    },
+    2: {
+      icon: "lock",
+      text: csT("story.create.privateLabel", {}, "Private"),
+    },
   };
   const selected = iconMap[value];
 
@@ -1640,9 +1846,18 @@ window.csSelectExpires = function (rawValue) {
   createStoryModalState.expires = value;
 
   const iconMap = {
-    6: { icon: "clock-1", text: "6 hours" },
-    12: { icon: "clock-2", text: "12 hours" },
-    24: { icon: "clock-3", text: "24 hours" },
+    6: {
+      icon: "clock-1",
+      text: csT("story.create.expires6Hours", {}, "6 hours"),
+    },
+    12: {
+      icon: "clock-2",
+      text: csT("story.create.expires12Hours", {}, "12 hours"),
+    },
+    24: {
+      icon: "clock-3",
+      text: csT("story.create.expires24Hours", {}, "24 hours"),
+    },
   };
   const selected = iconMap[value];
 
@@ -1677,7 +1892,9 @@ window.submitCreateStory = async function () {
 
   if (!window.API?.Stories?.create) {
     if (window.toastError) {
-      toastError("Story API is unavailable.");
+      toastError(
+        csT("story.create.apiUnavailable", {}, "Story API isn't available"),
+      );
     }
     return;
   }
@@ -1705,7 +1922,13 @@ window.submitCreateStory = async function () {
     const mediaContentType = createStoryModalState.mediaContentType;
     if (!mediaFile || mediaContentType === null) {
       if (window.toastError) {
-        toastError("Please upload an image or video first.");
+        toastError(
+            csT(
+              "story.create.uploadMediaFirst",
+              {},
+              "Please upload an image or video first",
+            ),
+          );
       }
       csSetSubmitting(false);
       if (typeof window.hideGlobalLoader === "function") {
@@ -1729,7 +1952,13 @@ window.submitCreateStory = async function () {
       } catch (exportErr) {
         console.error("StoryMediaEditor export failed:", exportErr);
         if (window.toastError) {
-          toastError("Failed to process image. Uploading original.");
+          toastError(
+            csT(
+              "story.create.processImageFailed",
+              {},
+              "Couldn't process the image. Uploading the original",
+            ),
+          );
         }
         // Fallback to original file
       }
@@ -1750,7 +1979,11 @@ window.submitCreateStory = async function () {
   try {
     const res = await window.API.Stories.create(formData);
     if (!res.ok) {
-      const message = await csReadErrorMessage(res, "Failed to create story.");
+      const message = await csReadErrorMessage(
+        res,
+        "create",
+        "errors.story.create",
+      );
       if (window.toastError) {
         toastError(message);
       }
@@ -1759,7 +1992,13 @@ window.submitCreateStory = async function () {
 
     const story = await res.json().catch(() => null);
     if (window.toastSuccess) {
-      toastSuccess("Story created successfully.");
+      toastSuccess(
+        csT(
+          "story.create.createSuccess",
+          {},
+          "Story created successfully",
+        ),
+      );
     }
 
     window.closeCreateStoryModal(true);
@@ -1767,7 +2006,13 @@ window.submitCreateStory = async function () {
   } catch (error) {
     console.error("submitCreateStory failed:", error);
     if (window.toastError) {
-      toastError("Could not connect to server.");
+      toastError(
+        csT(
+          "story.create.serverUnavailable",
+          {},
+          "Can't connect to the server",
+        ),
+      );
     }
   } finally {
     if (typeof window.hideGlobalLoader === "function") {

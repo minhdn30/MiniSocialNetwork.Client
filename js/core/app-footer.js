@@ -19,13 +19,15 @@
 
   function buildFallbackFooter() {
     const year = new Date().getFullYear();
+    const footerT = (key, fallback) =>
+      window.I18n?.t ? window.I18n.t(key, {}, fallback) : fallback;
     return `
-      <footer class="app-footer" aria-label="Application Footer">
-        <nav class="app-footer-links" aria-label="Footer Navigation">
-          <span class="app-footer-link">Home</span>
-          <span class="app-footer-link">Search</span>
-          <span class="app-footer-link">Explore</span>
-          <span class="app-footer-link">Reels</span>
+      <footer class="app-footer" aria-label="${footerT("footer.ariaFooter", "Application Footer")}">
+        <nav class="app-footer-links" aria-label="${footerT("footer.ariaNav", "Footer Navigation")}">
+          <span class="app-footer-link">${footerT("footer.home", "Home")}</span>
+          <span class="app-footer-link">${footerT("footer.search", "Search")}</span>
+          <span class="app-footer-link">${footerT("footer.explore", "Explore")}</span>
+          <span class="app-footer-link">${footerT("footer.reels", "Reels")}</span>
         </nav>
         <div class="app-footer-copy">&copy; ${year} CloudM</div>
       </footer>
@@ -46,6 +48,9 @@
 
     container.innerHTML = template || buildFallbackFooter();
     applyFooterYear(container);
+    if (window.I18n?.translateDom) {
+      window.I18n.translateDom(container);
+    }
     return true;
   }
 

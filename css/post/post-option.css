@@ -111,6 +111,29 @@
   text-align: center;
 }
 
+.post-options-actions {
+  display: flex;
+  border-top: 1px solid var(--border-secondary);
+}
+
+.post-options-actions .post-option {
+  flex: 1;
+  width: auto;
+  border-bottom: none;
+  border-right: 1px solid var(--border-secondary);
+}
+
+.post-options-actions .post-option:last-child {
+  border-right: none;
+}
+
+.post-options-actions .post-option-cancel,
+.post-options-actions .post-option-danger {
+  justify-content: center;
+  display: flex;
+  grid-template-columns: unset;
+}
+
 /* ===== Mobile ===== */
 @media (max-width: 768px) {
   .post-options-overlay {

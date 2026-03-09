@@ -1883,6 +1883,8 @@ body.light-mode {
   font-size: 18px;
   font-weight: 600;
   margin: 0 0 8px 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .chat-common-confirm-content p {
@@ -1890,6 +1892,8 @@ body.light-mode {
   font-size: 14px;
   margin: 0;
   line-height: 1.4;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .chat-common-confirm-actions {
@@ -2277,6 +2281,17 @@ body.light-mode {
 .chat-group-avatar-editor-action:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.chat-group-avatar-editor-popup .cg-avatar-remove {
+  background: var(--danger, #ed4956);
+  color: #fff;
+  border-color: var(--danger, #ed4956);
+}
+
+.chat-group-avatar-editor-popup .cg-avatar-remove i,
+.chat-group-avatar-editor-popup .cg-avatar-remove svg {
+  color: #fff !important;
 }
 
 /* --- Chat Window Header Menu --- */

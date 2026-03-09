@@ -1,4 +1,11 @@
 (function (global) {
+  function presenceUiT(key, params = {}, fallback = "") {
+    if (global.I18n?.t) {
+      return global.I18n.t(key, params, fallback);
+    }
+    return fallback;
+  }
+
   function normalizeAccountId(value) {
     return (value || "").toString().trim().toLowerCase();
   }
@@ -36,7 +43,9 @@
       canShowStatus: legacyIsOnline,
       isOnline: legacyIsOnline,
       showDot: legacyIsOnline,
-      text: legacyIsOnline ? "Online" : "",
+      text: legacyIsOnline
+        ? presenceUiT("chat.presence.online", {}, "Online")
+        : "",
     };
   }
 
@@ -112,4 +121,3 @@
     syncDot,
   };
 })(window);
-

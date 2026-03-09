@@ -8,6 +8,10 @@
 (function (global) {
   "use strict";
 
+  function smeT(key, params = {}, fallback = "") {
+    return global.I18n?.t ? global.I18n.t(key, params, fallback || key) : (fallback || key);
+  }
+
   /* ===== Constants ===== */
   const EXPORT_QUALITY = 0.88;
   const EXPORT_TYPE = "image/jpeg";
@@ -24,6 +28,7 @@
 
   const STICKER_CATALOG = [
     {
+      labelKey: "story.mediaEditor.stickers.categories.smileys",
       name: "Smileys",
       stickers: [
         { id: "grin", emoji: "😀" }, { id: "laugh", emoji: "😂" },
@@ -39,6 +44,7 @@
       ],
     },
     {
+      labelKey: "story.mediaEditor.stickers.categories.heartsLove",
       name: "Hearts & Love",
       stickers: [
         { id: "red_heart", emoji: "❤️" }, { id: "orange_heart", emoji: "🧡" },
@@ -51,6 +57,7 @@
       ],
     },
     {
+      labelKey: "story.mediaEditor.stickers.categories.handsPeople",
       name: "Hands & People",
       stickers: [
         { id: "thumbsup", emoji: "👍" }, { id: "thumbsdown", emoji: "👎" },
@@ -63,6 +70,7 @@
       ],
     },
     {
+      labelKey: "story.mediaEditor.stickers.categories.animals",
       name: "Animals",
       stickers: [
         { id: "dog", emoji: "🐶" }, { id: "cat", emoji: "🐱" },
@@ -74,6 +82,7 @@
       ],
     },
     {
+      labelKey: "story.mediaEditor.stickers.categories.foodDrink",
       name: "Food & Drink",
       stickers: [
         { id: "pizza", emoji: "🍕" }, { id: "burger", emoji: "🍔" },
@@ -85,6 +94,7 @@
       ],
     },
     {
+      labelKey: "story.mediaEditor.stickers.categories.activities",
       name: "Activities",
       stickers: [
         { id: "party", emoji: "🎉" }, { id: "gift", emoji: "🎁" },
@@ -96,6 +106,7 @@
       ],
     },
     {
+      labelKey: "story.mediaEditor.stickers.categories.travelWeather",
       name: "Travel & Weather",
       stickers: [
         { id: "airplane", emoji: "✈️" }, { id: "rocket", emoji: "🚀" },
@@ -108,6 +119,7 @@
       ],
     },
     {
+      labelKey: "story.mediaEditor.stickers.categories.symbolsDecorations",
       name: "Symbols & Decorations",
       stickers: [
         { id: "star", emoji: "⭐" }, { id: "sparkles", emoji: "✨" },
@@ -123,20 +135,20 @@
   ];
 
   const FONT_OPTIONS = [
-    { label: "Modern", value: "'Segoe UI', 'Inter', system-ui, sans-serif" },
-    { label: "Classic", value: "Georgia, 'Times New Roman', serif" },
-    { label: "Rounded", value: "'Trebuchet MS', 'Segoe UI', sans-serif" },
-    { label: "Mono", value: "'Consolas', 'Courier New', monospace" },
-    { label: "Elegant", value: "'Palatino Linotype', 'Book Antiqua', Palatino, serif" },
-    { label: "Display", value: "Impact, 'Arial Black', sans-serif" },
-    { label: "Script", value: "'Brush Script MT', 'Segoe Script', cursive" },
-    { label: "Handwriting", value: "'Lucida Handwriting', 'Segoe Script', cursive" },
-    { label: "Slab", value: "Rockwell, 'Courier New', serif" },
-    { label: "Condensed", value: "'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif" },
-    { label: "Geometric", value: "'Century Gothic', Futura, 'Trebuchet MS', sans-serif" },
-    { label: "Humanist", value: "'Gill Sans', Calibri, 'Segoe UI', sans-serif" },
-    { label: "Clean", value: "Verdana, Geneva, sans-serif" },
-    { label: "Serif Modern", value: "Cambria, 'Times New Roman', serif" },
+    { label: "Modern", labelKey: "story.create.fontModern", value: "'Segoe UI', 'Inter', system-ui, sans-serif" },
+    { label: "Classic", labelKey: "story.create.fontClassic", value: "Georgia, 'Times New Roman', serif" },
+    { label: "Rounded", labelKey: "story.create.fontRounded", value: "'Trebuchet MS', 'Segoe UI', sans-serif" },
+    { label: "Mono", labelKey: "story.create.fontMono", value: "'Consolas', 'Courier New', monospace" },
+    { label: "Elegant", labelKey: "story.create.fontElegant", value: "'Palatino Linotype', 'Book Antiqua', Palatino, serif" },
+    { label: "Display", labelKey: "story.create.fontDisplay", value: "Impact, 'Arial Black', sans-serif" },
+    { label: "Script", labelKey: "story.create.fontScript", value: "'Brush Script MT', 'Segoe Script', cursive" },
+    { label: "Handwriting", labelKey: "story.create.fontHandwriting", value: "'Lucida Handwriting', 'Segoe Script', cursive" },
+    { label: "Slab", labelKey: "story.create.fontSlab", value: "Rockwell, 'Courier New', serif" },
+    { label: "Condensed", labelKey: "story.create.fontCondensed", value: "'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif" },
+    { label: "Geometric", labelKey: "story.create.fontGeometric", value: "'Century Gothic', Futura, 'Trebuchet MS', sans-serif" },
+    { label: "Humanist", labelKey: "story.create.fontHumanist", value: "'Gill Sans', Calibri, 'Segoe UI', sans-serif" },
+    { label: "Clean", labelKey: "story.create.fontClean", value: "Verdana, Geneva, sans-serif" },
+    { label: "Serif Modern", labelKey: "story.create.fontSerifModern", value: "Cambria, 'Times New Roman', serif" },
   ];
 
   const COLOR_PRESETS = [
@@ -152,10 +164,31 @@
       const active = c.toLowerCase() === defaultColor.toLowerCase() ? ' sme-color-active' : '';
       html += `<div class="sme-color-swatch${active}" data-sme-color="${c}" data-sme-color-target="${inputId}" style="background:${c}" title="${c}"></div>`;
     }
-    html += `<div class="sme-color-swatch sme-color-custom" data-sme-color-custom="${inputId}" title="Custom color">+</div>`;
+    html += `<div class="sme-color-swatch sme-color-custom" data-sme-color-custom="${inputId}" data-sme-i18n-title="story.mediaEditor.options.customColor" title="${smeT("story.mediaEditor.options.customColor", {}, "Custom color")}">+</div>`;
     html += `<input type="color" class="sme-color-input-hidden" id="${inputId}" value="${defaultColor}" />`;
     html += '</div>';
     return html;
+  }
+
+  function smeRefreshLocalization() {
+    const toolbar = editorState.toolbar;
+    if (!toolbar) return;
+
+    toolbar.querySelectorAll("[data-sme-i18n-title]").forEach((el) => {
+      const key = el.getAttribute("data-sme-i18n-title") || "";
+      const fallback = el.getAttribute("data-sme-i18n-fallback") || key;
+      const text = smeT(key, {}, fallback);
+      el.setAttribute("title", text);
+      if (el.classList.contains("sme-toolbar-btn")) {
+        el.setAttribute("aria-label", text);
+      }
+    });
+
+    toolbar.querySelectorAll("[data-sme-i18n-text]").forEach((el) => {
+      const key = el.getAttribute("data-sme-i18n-text") || "";
+      const fallback = el.getAttribute("data-sme-i18n-fallback") || key;
+      el.textContent = smeT(key, {}, fallback);
+    });
   }
 
   /* ===== Editor State ===== */
@@ -285,33 +318,33 @@
     const toolbar = document.createElement("div");
     toolbar.className = "sme-toolbar";
     toolbar.innerHTML = `
-      <button type="button" class="sme-toolbar-btn" data-sme-tool="select" title="Select / Move">
+      <button type="button" class="sme-toolbar-btn" data-sme-tool="select" data-sme-i18n-title="story.mediaEditor.toolbar.selectMove" data-sme-i18n-fallback="Select / Move" title="${smeT("story.mediaEditor.toolbar.selectMove", {}, "Select / Move")}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="M13 13l6 6"/></svg>
       </button>
-      <button type="button" class="sme-toolbar-btn" data-sme-tool="draw" title="Draw">
+      <button type="button" class="sme-toolbar-btn" data-sme-tool="draw" data-sme-i18n-title="story.mediaEditor.toolbar.draw" data-sme-i18n-fallback="Draw" title="${smeT("story.mediaEditor.toolbar.draw", {}, "Draw")}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
       </button>
-      <button type="button" class="sme-toolbar-btn" data-sme-tool="text" title="Add Text">
+      <button type="button" class="sme-toolbar-btn" data-sme-tool="text" data-sme-i18n-title="story.mediaEditor.toolbar.addText" data-sme-i18n-fallback="Add Text" title="${smeT("story.mediaEditor.toolbar.addText", {}, "Add Text")}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
       </button>
-      <button type="button" class="sme-toolbar-btn" data-sme-tool="sticker" title="Stickers">
+      <button type="button" class="sme-toolbar-btn" data-sme-tool="sticker" data-sme-i18n-title="story.mediaEditor.toolbar.stickers" data-sme-i18n-fallback="Stickers" title="${smeT("story.mediaEditor.toolbar.stickers", {}, "Stickers")}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
       </button>
-      <button type="button" class="sme-toolbar-btn" data-sme-action="fitImage" title="Fit Inside Frame">
+      <button type="button" class="sme-toolbar-btn" data-sme-action="fitImage" data-sme-i18n-title="story.mediaEditor.toolbar.fitInsideFrame" data-sme-i18n-fallback="Fit Inside Frame" title="${smeT("story.mediaEditor.toolbar.fitInsideFrame", {}, "Fit Inside Frame")}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v5H3M21 8h-5V3M3 16h5v5M16 21v-5h5"/></svg>
       </button>
-      <button type="button" class="sme-toolbar-btn" data-sme-action="fillImage" title="Fill Entire Frame">
+      <button type="button" class="sme-toolbar-btn" data-sme-action="fillImage" data-sme-i18n-title="story.mediaEditor.toolbar.fillEntireFrame" data-sme-i18n-fallback="Fill Entire Frame" title="${smeT("story.mediaEditor.toolbar.fillEntireFrame", {}, "Fill Entire Frame")}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
       </button>
       <div class="sme-toolbar-divider"></div>
-      <button type="button" class="sme-toolbar-btn" data-sme-action="undo" title="Undo">
+      <button type="button" class="sme-toolbar-btn" data-sme-action="undo" data-sme-i18n-title="story.mediaEditor.toolbar.undo" data-sme-i18n-fallback="Undo" title="${smeT("story.mediaEditor.toolbar.undo", {}, "Undo")}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 00-4-4H4"/></svg>
       </button>
-      <button type="button" class="sme-toolbar-btn" data-sme-action="redo" title="Redo">
+      <button type="button" class="sme-toolbar-btn" data-sme-action="redo" data-sme-i18n-title="story.mediaEditor.toolbar.redo" data-sme-i18n-fallback="Redo" title="${smeT("story.mediaEditor.toolbar.redo", {}, "Redo")}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 014-4h12"/></svg>
       </button>
       <div class="sme-toolbar-divider"></div>
-      <button type="button" class="sme-toolbar-btn sme-btn-danger" data-sme-action="delete" title="Delete Selected">
+      <button type="button" class="sme-toolbar-btn sme-btn-danger" data-sme-action="delete" data-sme-i18n-title="story.mediaEditor.toolbar.deleteSelected" data-sme-i18n-fallback="Delete Selected" title="${smeT("story.mediaEditor.toolbar.deleteSelected", {}, "Delete Selected")}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
       </button>
     `;
@@ -325,11 +358,11 @@
     drawOpts.className = "sme-draw-options";
     drawOpts.innerHTML = `
       <div class="sme-option-group">
-        <label>Color</label>
+        <label data-sme-i18n-text="story.mediaEditor.options.color" data-sme-i18n-fallback="Color">${smeT("story.mediaEditor.options.color", {}, "Color")}</label>
         ${smeColorSwatchesHtml("smeDrawColor", DEFAULT_DRAW_COLOR)}
       </div>
       <div class="sme-option-group">
-        <label>Size</label>
+        <label data-sme-i18n-text="story.mediaEditor.options.size" data-sme-i18n-fallback="Size">${smeT("story.mediaEditor.options.size", {}, "Size")}</label>
         <span class="sme-size-val" id="smeDrawSizeVal">${DEFAULT_DRAW_SIZE}</span>
         <input type="range" class="sme-size-slider" id="smeDrawSize" min="1" max="20" value="${DEFAULT_DRAW_SIZE}" />
       </div>
@@ -341,20 +374,20 @@
     const textOpts = document.createElement("div");
     textOpts.className = "sme-text-options";
     const fontHtml = FONT_OPTIONS.map(
-      (f) => `<option value="${f.value}" style="font-family:${f.value}">${f.label}</option>`,
+      (f) => `<option value="${f.value}" data-sme-i18n-text="${f.labelKey || ""}" data-sme-i18n-fallback="${f.label}" style="font-family:${f.value}">${smeT(f.labelKey || "", {}, f.label)}</option>`,
     ).join("");
     textOpts.innerHTML = `
       <div class="sme-option-group">
-        <label>Color</label>
+        <label data-sme-i18n-text="story.mediaEditor.options.color" data-sme-i18n-fallback="Color">${smeT("story.mediaEditor.options.color", {}, "Color")}</label>
         ${smeColorSwatchesHtml("smeTextColor", DEFAULT_TEXT_COLOR)}
       </div>
       <div class="sme-option-group">
-        <label>Size</label>
+        <label data-sme-i18n-text="story.mediaEditor.options.size" data-sme-i18n-fallback="Size">${smeT("story.mediaEditor.options.size", {}, "Size")}</label>
         <span class="sme-size-val" id="smeTextSizeVal">${DEFAULT_TEXT_SIZE}</span>
         <input type="range" class="sme-size-slider" id="smeTextSize" min="12" max="72" value="${DEFAULT_TEXT_SIZE}" />
       </div>
       <div class="sme-option-group">
-        <label>Font</label>
+        <label data-sme-i18n-text="story.mediaEditor.options.font" data-sme-i18n-fallback="Font">${smeT("story.mediaEditor.options.font", {}, "Font")}</label>
         <select class="sme-font-select" id="smeTextFont">${fontHtml}</select>
       </div>
     `;
@@ -366,7 +399,7 @@
     stickerPicker.className = "sme-sticker-picker";
     let sHtml = "";
     for (const cat of STICKER_CATALOG) {
-      sHtml += `<p class="sme-sticker-category-title">${cat.name}</p><div class="sme-sticker-grid">`;
+      sHtml += `<p class="sme-sticker-category-title" data-sme-i18n-text="${cat.labelKey || ""}" data-sme-i18n-fallback="${cat.name}">${smeT(cat.labelKey || "", {}, cat.name)}</p><div class="sme-sticker-grid">`;
       for (const s of cat.stickers) {
         sHtml += `<button type="button" class="sme-sticker-item" data-sme-sticker="${s.emoji}" title="${s.id}">${s.emoji}</button>`;
       }
@@ -387,6 +420,7 @@
     editorState._addImageInput = addImgInput;
 
     smeBindToolbarEvents(toolbar);
+    smeRefreshLocalization();
   }
 
   /* ===== Toolbar Events ===== */
@@ -1611,6 +1645,7 @@
   global.StoryMediaEditor = {
     init: smeInit,
     destroy: smeDestroy,
+    refreshLocalization: smeRefreshLocalization,
     isActive: () => editorState.active,
     exportBlob: smeExportBlob,
     hasEdits: () => editorState.hasAnyEdit,

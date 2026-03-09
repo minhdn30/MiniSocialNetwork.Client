@@ -1,5 +1,5 @@
 <!-- Post Detail Modal -->
-<div id="postDetailModal" class="modal-overlay">
+<div id="postDetailModal" class="modal-overlay" data-i18n-auto>
     <div class="modal-backdrop" onclick="closePostDetailModal()"></div>
     
     <!-- Post Navigation Buttons (Profile only) -->
@@ -41,14 +41,30 @@
                             <div class="user-meta">
                                 <div class="user-name-row">
                                     <a id="detailUsernameLink" href="#" style="text-decoration: none; color: inherit;">
-                                        <span id="detailUsername" class="username"></span>
+                                        <span
+                                          id="detailUsername"
+                                          class="username"
+                                          data-i18n-user-content
+                                        ></span>
                                     </a>
                                 </div>
                                 <div class="user-tag-row hidden">
-                                    <span id="detailTaggedSummary" class="post-tag-summary hidden"></span>
+                                    <span
+                                      id="detailTaggedSummary"
+                                      class="post-tag-summary hidden"
+                                      data-i18n-user-content
+                                    ></span>
                                 </div>
-                                <span id="detailTime" class="post-time"></span>
-                                <span id="detailLocation" class="location"></span>
+                                <span
+                                  id="detailTime"
+                                  class="post-time"
+                                  data-i18n-user-content
+                                ></span>
+                                <span
+                                  id="detailLocation"
+                                  class="location"
+                                  data-i18n-user-content
+                                ></span>
                             </div>
                         </div>
                         <button class="more-options-btn">
@@ -60,11 +76,15 @@
                     <div class="detail-body custom-scrollbar" id="detailBody">
                         <!-- Caption Section -->
                         <div class="caption-section" id="detailCaptionItem">
-                            <div id="detailCaptionText" class="caption-text"></div>
+                            <div
+                              id="detailCaptionText"
+                              class="caption-text"
+                              data-i18n-user-content
+                            ></div>
                         </div>
 
                         <!-- Comments Section (Loaded from comment.html) -->
-                        <div id="commentSectionContainer"></div>
+                        <div id="commentSectionContainer" data-i18n-user-content></div>
                     </div>
 
                     <!-- Footer: Actions & Input -->
@@ -98,7 +118,7 @@
                             <div class="emoji-trigger" onclick="toggleDetailEmojiPicker(event)">
                                 <i data-lucide="smile"></i>
                             </div>
-                            <textarea id="detailCommentInput" placeholder="Add a comment..." autocomplete="off" rows="1"></textarea>
+                            <textarea id="detailCommentInput" placeholder="Add a comment..." data-i18n-placeholder="post.comments.addComment" autocomplete="off" rows="1"></textarea>
                             <button id="postCommentBtn" class="post-btn" disabled>
                                 <i data-lucide="arrow-up-circle"></i>
                             </button>
@@ -115,18 +135,18 @@
                         <button class="modal-back-btn" onclick="cancelEditPost()">
                             <i data-lucide="arrow-left"></i>
                         </button>
-                        <h2 class="modal-title">Edit Post</h2>
-                        <button class="modal-next-btn" id="saveEditPostBtn" onclick="saveEditPost()">Done</button>
+                        <h2 class="modal-title" data-i18n="post.edit.title">Edit Post</h2>
+                        <button class="modal-next-btn" id="saveEditPostBtn" onclick="saveEditPost()" data-i18n="common.buttons.save">Save</button>
                     </div>
 
                     <div class="edit-panel-body custom-scrollbar">
                         <div class="create-post-user-info">
-                            <img id="edit-user-avatar" src="" alt="avatar" class="user-avatar" />
+                            <img id="edit-user-avatar" src="" alt="" class="user-avatar" />
                             <div class="user-info-details">
-                                <span id="edit-user-name" class="user-name">User</span>
+                                <span id="edit-user-name" class="user-name" data-i18n="common.labels.user">User</span>
                                 <div class="privacy-selector edit-privacy-selector-trigger" onclick="toggleEditPrivacyDropdown(event)">
                                     <i data-lucide="globe" class="privacy-icon" id="editPrivacyIcon"></i>
-                                    <span class="privacy-text" id="editPrivacyText">Public</span>
+                                    <span class="privacy-text" id="editPrivacyText" data-i18n="common.labels.public">Public</span>
                                     <i data-lucide="chevron-right" class="privacy-chevron"></i>
                                 </div>
                             </div>
@@ -137,8 +157,8 @@
                                     <div class="privacy-option-left">
                                         <i data-lucide="globe"></i>
                                         <div>
-                                            <span class="privacy-option-title">Public</span>
-                                            <span class="privacy-option-desc">Anyone can see this post</span>
+                                            <span class="privacy-option-title" data-i18n="common.labels.public">Public</span>
+                                            <span class="privacy-option-desc" data-i18n="post.privacy.publicDescription">Anyone can see this post</span>
                                         </div>
                                     </div>
                                     <i data-lucide="check" class="privacy-check"></i>
@@ -147,8 +167,8 @@
                                     <div class="privacy-option-left">
                                         <i data-lucide="users"></i>
                                         <div>
-                                            <span class="privacy-option-title">Followers Only</span>
-                                            <span class="privacy-option-desc">Only your followers can see</span>
+                                            <span class="privacy-option-title" data-i18n="common.labels.followersOnly">Followers Only</span>
+                                            <span class="privacy-option-desc" data-i18n="post.privacy.followersOnlyDescription">Only your followers can see</span>
                                         </div>
                                     </div>
                                     <i data-lucide="check" class="privacy-check"></i>
@@ -157,8 +177,8 @@
                                     <div class="privacy-option-left">
                                         <i data-lucide="lock"></i>
                                         <div>
-                                            <span class="privacy-option-title">Private</span>
-                                            <span class="privacy-option-desc">Only you can see this post</span>
+                                            <span class="privacy-option-title" data-i18n="common.labels.private">Private</span>
+                                            <span class="privacy-option-desc" data-i18n="post.privacy.privateDescription">Only you can see this post</span>
                                         </div>
                                     </div>
                                     <i data-lucide="check" class="privacy-check"></i>
@@ -168,7 +188,13 @@
     
                         <!-- Caption Input -->
                         <div class="post-caption-container">
-                            <textarea id="editPostTextarea" class="post-caption-input" placeholder="Write a caption..." maxlength="3000"></textarea>
+                            <textarea
+                              id="editPostTextarea"
+                              class="post-caption-input"
+                              placeholder="Write a caption..."
+                              data-i18n-placeholder="post.create.captionPlaceholder"
+                              maxlength="3000"
+                            ></textarea>
                             <div class="post-caption-tools">
                                 <div class="char-count"><span id="editCharCount">0</span>/<span id="editMaxCharCount">3000</span></div>
                                 <button
@@ -177,6 +203,7 @@
                                   class="post-caption-emoji-btn"
                                   onclick="toggleEditPostEmojiPicker(event)"
                                   aria-label="Add emoji"
+                                  data-i18n-aria-label="post.create.addEmojiAria"
                                 >
                                     <i data-lucide="smile-plus"></i>
                                 </button>
@@ -189,7 +216,7 @@
                             <div class="section-header" id="editPeopleHeader" onclick="toggleEditSection('people')">
                                 <div class="section-left">
                                     <i data-lucide="users" class="section-icon"></i>
-                                    <span class="section-title">Tag People</span>
+                                    <span class="section-title" data-i18n="post.create.tagPeople">Tag People</span>
                                 </div>
                                 <i data-lucide="chevron-right" class="chevron-icon" id="editPeopleChevron"></i>
                             </div>
@@ -201,6 +228,7 @@
                                             id="editPostTagSearchInput"
                                             class="collaborator-input"
                                             placeholder="Search users..."
+                                            data-i18n-placeholder="post.create.searchUsersPlaceholder"
                                             autocomplete="off"
                                         />
                                         <div
@@ -214,7 +242,11 @@
                                         id="editPostTagSelectedChips"
                                     ></div>
                                     <div class="post-tag-meta">
-                                        <span id="editPostTagSelectedCount">0 selected</span>
+                                        <span
+                                          id="editPostTagSelectedCount"
+                                          data-i18n="post.editTagging.selectedCount"
+                                          data-i18n-params='{"count":0}'
+                                        >0 selected</span>
                                     </div>
                                 </div>
                             </div>
@@ -225,12 +257,12 @@
                             <div class="section-header" id="editLocationHeader" onclick="toggleEditSection('location')">
                                 <div class="section-left">
                                     <i data-lucide="map-pin" class="section-icon"></i>
-                                    <span class="section-title">Add Location</span>
+                                    <span class="section-title" data-i18n="post.create.addLocation">Add Location</span>
                                 </div>
                                 <i data-lucide="chevron-right" class="chevron-icon" id="editLocationChevron"></i>
                             </div>
                             <div class="section-content" id="editLocationContent">
-                                <div class="location-placeholder">Add location feature coming soon...</div>
+                                <div class="location-placeholder" data-i18n="post.edit.locationComingSoon">Add location feature coming soon...</div>
                             </div>
                         </div>
     
@@ -239,12 +271,12 @@
                             <div class="section-header" id="editAccessibilityHeader" onclick="toggleEditSection('accessibility')">
                                 <div class="section-left">
                                     <i data-lucide="accessibility" class="section-icon"></i>
-                                    <span class="section-title">Accessibility</span>
+                                    <span class="section-title" data-i18n="post.create.accessibility">Accessibility</span>
                                 </div>
                                 <i data-lucide="chevron-right" class="chevron-icon" id="editAccessibilityChevron"></i>
                             </div>
                             <div class="section-content" id="editAccessibilityContent">
-                                 <div class="accessibility-placeholder">Accessibility settings coming soon...</div>
+                                 <div class="accessibility-placeholder" data-i18n="post.edit.accessibilityComingSoon">Accessibility settings coming soon...</div>
                             </div>
                         </div>
     
@@ -253,12 +285,12 @@
                             <div class="section-header" id="editAdvancedHeader" onclick="toggleEditSection('advanced')">
                                 <div class="section-left">
                                     <i data-lucide="settings-2" class="section-icon"></i>
-                                    <span class="section-title">Advanced Settings</span>
+                                    <span class="section-title" data-i18n="post.create.advancedSettings">Advanced Settings</span>
                                 </div>
                                 <i data-lucide="chevron-right" class="chevron-icon" id="editAdvancedChevron"></i>
                             </div>
                             <div class="section-content" id="editAdvancedContent">
-                                 <div class="advanced-settings-placeholder">Advanced settings coming soon...</div>
+                                 <div class="advanced-settings-placeholder" data-i18n="post.edit.advancedSettingsComingSoon">Advanced settings coming soon...</div>
                             </div>
                         </div>
                     </div>

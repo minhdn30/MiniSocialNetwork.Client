@@ -10,7 +10,9 @@
     "linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%)";
 
   const fallbackOverlayMap = new WeakMap();
+  const fallbackTargets = new Set();
   let isInitialized = false;
+  let mediaFallbackLanguageBound = false;
 
   function toLowerText(value) {
     return (value || "").toString().trim().toLowerCase();
@@ -156,7 +158,15 @@
 
   function createFallbackOverlay(kind, compact) {
     const iconName = kind === "video" ? "video-off" : "image-off";
-    const label = `this ${kind} could not be loaded`;
+    const i18n = global.I18n;
+    const key =
+      kind === "video"
+        ? "common.media.videoUnavailable"
+        : "common.media.imageUnavailable";
+    const fallback =
+      kind === "video" ? "Video unavailable" : "Image unavailable";
+    const label =
+      i18n && typeof i18n.t === "function" ? i18n.t(key, {}, fallback) : fallback;
     const overlay = document.createElement("div");
     overlay.className = `${FALLBACK_OVERLAY_CLASS} sn-media-load-fallback--${kind}${compact ? " sn-media-load-fallback--compact" : ""}`;
     overlay.setAttribute("aria-hidden", "true");
@@ -165,6 +175,43 @@
       <div class="sn-media-load-fallback-text">${label}</div>
     `;
     return overlay;
+  }
+
+  function refreshFallbackOverlayText(target) {
+    const overlay = fallbackOverlayMap.get(target);
+    if (!overlay) return;
+
+    const isVideo = target instanceof HTMLVideoElement;
+    const key = isVideo
+      ? "common.media.videoUnavailable"
+      : "common.media.imageUnavailable";
+    const fallback = isVideo ? "Video unavailable" : "Image unavailable";
+    const label =
+      global.I18n && typeof global.I18n.t === "function"
+        ? global.I18n.t(key, {}, fallback)
+        : fallback;
+    const textEl = overlay.querySelector(".sn-media-load-fallback-text");
+    if (textEl) {
+      textEl.textContent = label;
+    }
+  }
+
+  function refreshActiveFallbackOverlays() {
+    fallbackTargets.forEach((target) => {
+      if (!target?.isConnected || target.getAttribute(FALLBACK_APPLIED_ATTR) !== "true") {
+        fallbackTargets.delete(target);
+        return;
+      }
+      refreshFallbackOverlayText(target);
+    });
+  }
+
+  function bindMediaFallbackLanguageChange() {
+    if (mediaFallbackLanguageBound || !global.I18n?.onChange) return;
+    mediaFallbackLanguageBound = true;
+    global.I18n.onChange(() => {
+      refreshActiveFallbackOverlays();
+    });
   }
 
   function clearMediaFallback(target) {
@@ -183,6 +230,7 @@
     }
 
     fallbackOverlayMap.delete(target);
+    fallbackTargets.delete(target);
     target.classList.remove(FALLBACK_TARGET_CLASS);
     target.removeAttribute(FALLBACK_APPLIED_ATTR);
 
@@ -195,6 +243,7 @@
   }
 
   function applyMediaFallback(target, kind) {
+    bindMediaFallbackLanguageChange();
     if (target.getAttribute(FALLBACK_APPLIED_ATTR) === "true") return;
 
     const hostEl = resolveHostElement(target);
@@ -207,6 +256,7 @@
     hostEl.appendChild(overlay);
 
     fallbackOverlayMap.set(target, overlay);
+    fallbackTargets.add(target);
     target.classList.add(FALLBACK_TARGET_CLASS);
     target.setAttribute(FALLBACK_APPLIED_ATTR, "true");
 

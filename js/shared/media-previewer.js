@@ -13,18 +13,52 @@ const MediaPreviewer = {
   lastRenderId: 0,
   currentRenderId: 0,
   backdropColorCache: new Map(),
+  languageBound: false,
+
+  t(key, params = {}, fallback = "") {
+    return window.I18n?.t ? window.I18n.t(key, params, fallback || key) : (fallback || key);
+  },
+
+  refreshLocalization() {
+    if (!this.overlay) return;
+    const buttons = this.overlay.querySelectorAll(".preview-tool-btn");
+    const downloadTitle = this.t("common.buttons.download", {}, "Download");
+    const closeTitle = this.t("common.buttons.close", {}, "Close");
+    if (buttons[0]) {
+      buttons[0].title = downloadTitle;
+      buttons[0].setAttribute("aria-label", downloadTitle);
+    }
+    if (buttons[1]) {
+      buttons[1].title = closeTitle;
+      buttons[1].setAttribute("aria-label", closeTitle);
+    }
+  },
+
+  bindLanguageChange() {
+    if (this.languageBound || !window.I18n?.onChange) return;
+    this.languageBound = true;
+    window.I18n.onChange(() => {
+      this.refreshLocalization();
+    });
+  },
 
   init() {
-    if (this.overlay) return;
+    if (this.overlay) {
+      this.bindLanguageChange();
+      this.refreshLocalization();
+      return;
+    }
+    const downloadTitle = this.t("common.buttons.download", {}, "Download");
+    const closeTitle = this.t("common.buttons.close", {}, "Close");
 
     // Create DOM elements
     const html = `
             <div id="media-preview-overlay" class="media-preview-overlay">
                 <div class="media-preview-toolbar">
-                    <button class="preview-tool-btn" onclick="MediaPreviewer.downloadCurrent()" title="Download">
+                    <button class="preview-tool-btn" onclick="MediaPreviewer.downloadCurrent()" title="${downloadTitle}" aria-label="${downloadTitle}">
                         <i data-lucide="download"></i>
                     </button>
-                    <button class="preview-tool-btn" onclick="MediaPreviewer.close()" title="Close">
+                    <button class="preview-tool-btn" onclick="MediaPreviewer.close()" title="${closeTitle}" aria-label="${closeTitle}">
                         <i data-lucide="x"></i>
                     </button>
                 </div>
@@ -53,6 +87,8 @@ const MediaPreviewer = {
     this.overlay = document.getElementById("media-preview-overlay");
     this.body = document.getElementById("media-preview-body");
     this.thumbsContainer = document.getElementById("media-preview-thumbs");
+    this.bindLanguageChange();
+    this.refreshLocalization();
 
     // Close on background click
     this.overlay.addEventListener("click", (e) => {

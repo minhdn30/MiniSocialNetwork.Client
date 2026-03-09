@@ -23,6 +23,13 @@ const APP_ROUTE_PATHS = AppRouteHelper?.PATHS || {
   SETTINGS_SEGMENT: "settings",
 };
 
+function appT(key, params = {}, fallback = "") {
+  if (window.I18n?.t) {
+    return window.I18n.t(key, params, fallback || key);
+  }
+  return fallback || key;
+}
+
 function appBuildHash(path, query) {
   if (AppRouteHelper?.buildHash) {
     return AppRouteHelper.buildHash(path, query);
@@ -494,26 +501,6 @@ function appTryOpenNotificationsPanelRoute(hash, path) {
   return true;
 }
 
-async function appReadApiMessage(res, fallbackMessage) {
-  if (!res) return fallbackMessage;
-  try {
-    const json = await res.clone().json();
-    const message = (json?.message || json?.Message || "").toString().trim();
-    if (message) return message;
-  } catch (_) {
-    // Ignore JSON parse failure and fallback to text.
-  }
-
-  try {
-    const text = (await res.clone().text()).toString().trim();
-    if (text) return text;
-  } catch (_) {
-    // Ignore read failure.
-  }
-
-  return fallbackMessage;
-}
-
 function appRestoreAcceptedHashAfterChatDenied(currentHash) {
   const current = (currentHash || "").toString().trim();
   const accepted =
@@ -585,7 +572,9 @@ async function appGuardChatConversationRoute(hash, path) {
   } catch (_) {
     appRestoreAcceptedHashAfterChatDenied(hash);
     if (window.toastError) {
-      window.toastError("failed to verify this conversation");
+      window.toastError(
+        appT("chat.page.openConversationFailed"),
+      );
     }
     return false;
   }
@@ -599,11 +588,8 @@ async function appGuardChatConversationRoute(hash, path) {
   }
 
   if (status === 400 || status === 403) {
-    const message = await appReadApiMessage(
-      res,
-      "you don't have permission to view this conversation",
-    );
     appRestoreAcceptedHashAfterChatDenied(hash);
+    const message = appT("chat.window.conversationUnavailableOrNoPermission");
     if (window.toastInfo) window.toastInfo(message);
     else if (window.toastError) window.toastError(message);
     return false;
@@ -611,12 +597,75 @@ async function appGuardChatConversationRoute(hash, path) {
 
   // Unknown server status: keep current page unchanged for safety.
   appRestoreAcceptedHashAfterChatDenied(hash);
-  if (window.toastError) window.toastError("failed to open conversation");
+  if (window.toastError) {
+    window.toastError(
+      appT("chat.page.openConversationFailed"),
+    );
+  }
   return false;
 }
 
 if (window.APP_CONFIG) {
   APP_CONFIG.CURRENT_USER_ID = localStorage.getItem("accountId");
+}
+
+async function syncLanguagePreferenceFromAccountSettings() {
+  if (!window.I18n) {
+    return;
+  }
+
+  const pendingLanguage = window.I18n.getPendingLanguageSync?.();
+  if (pendingLanguage) {
+    try {
+      if (!window.API?.Accounts?.updateLanguagePreference) {
+        return;
+      }
+
+      const res = await window.API.Accounts.updateLanguagePreference(
+        pendingLanguage,
+      );
+      if (!res?.ok) {
+        return;
+      }
+
+      window.I18n.clearPendingLanguageSync?.(pendingLanguage);
+      window.AccountSettingsPage?.syncLanguageSelection?.(pendingLanguage);
+      return;
+    } catch (error) {
+      console.warn("Failed to retry language preference sync.", error);
+      return;
+    }
+  }
+
+  if (!window.API?.Accounts?.getSettings) {
+    return;
+  }
+
+  try {
+    const res = await window.API.Accounts.getSettings();
+    if (!res?.ok) return;
+
+    const data = await res.json();
+    const serverLanguage = window.I18n.normalizeLanguage(
+      data?.language ?? data?.Language,
+    );
+
+    if (window.I18n.getLanguage() !== serverLanguage) {
+      window.I18n.setLanguage(serverLanguage, { translate: false });
+      const sidebarRoot = document.getElementById("sidebar");
+      const appRoot = document.getElementById("app");
+      if (sidebarRoot && window.I18n.translateDom) {
+        window.I18n.translateDom(sidebarRoot);
+      }
+      if (appRoot && window.I18n.translateDom) {
+        window.I18n.translateDom(appRoot);
+      }
+    }
+
+    window.AccountSettingsPage?.syncLanguageSelection?.(serverLanguage);
+  } catch (error) {
+    console.warn("Failed to sync language preference from account settings.", error);
+  }
 }
 
 /* =========================
@@ -643,6 +692,9 @@ async function loadPage(pageName) {
   const res = await fetch(`pages/${pageName}.html`);
   if (!res.ok) return;
   app.innerHTML = await res.text();
+  if (window.I18n?.translateDom) {
+    window.I18n.translateDom(app);
+  }
   if (window.lucide) {
     lucide.createIcons();
   }
@@ -915,7 +967,9 @@ async function router() {
 
     if (routeUsername && currentUsername && routeUsername !== currentUsername) {
       if (window.toastError) {
-        toastError("you can only access your own settings");
+        toastError(
+          appT("app.accountSettingsSelfOnly"),
+        );
       }
       const selfSettingsPath = appResolveSelfSettingsPath();
       if (AppRouteHelper?.goTo) {
@@ -1148,7 +1202,10 @@ async function router() {
 
   switch (path) {
     case APP_ROUTE_PATHS.ERROR_404:
-      showErrorPage("404", "Sorry, the page you are looking for doesn't exist or has been removed.");
+      showErrorPage(
+        appT("error.notFound"),
+        appT("error.message"),
+      );
       break;
 
     case APP_ROUTE_PATHS.ROOT:
@@ -1157,19 +1214,22 @@ async function router() {
       break;
 
     case APP_ROUTE_PATHS.SEARCH:
-      loadPlaceholder("Search", "search");
+      loadPlaceholder(appT("common.navigation.search"), "search");
       break;
 
     case APP_ROUTE_PATHS.EXPLORE:
-      loadPlaceholder("Explore", "compass");
+      loadPlaceholder(appT("common.navigation.explore"), "compass");
       break;
 
     case APP_ROUTE_PATHS.REELS:
-      loadPlaceholder("Reels", "clapperboard");
+      loadPlaceholder(appT("common.navigation.reels"), "clapperboard");
       break;
 
     case APP_ROUTE_PATHS.NOTIFICATIONS:
-      loadPlaceholder("Notifications", "bell");
+      loadPlaceholder(
+        appT("common.navigation.notifications"),
+        "bell",
+      );
       break;
 
     default:
@@ -1187,7 +1247,7 @@ async function showErrorPage(title, message) {
     const titleEl = document.getElementById("error-title");
     const msgEl = document.getElementById("error-message");
     
-    if (titleEl) titleEl.innerText = title === "404" ? "Page not found" : title;
+    if (titleEl) titleEl.innerText = title;
     if (msgEl) msgEl.innerText = message;
     
     if (window.lucide) lucide.createIcons();
@@ -1202,9 +1262,9 @@ function loadPlaceholder(title, iconName) {
                 <div class="placeholder-icon">
                     <i data-lucide="${iconName}"></i>
                 </div>
-                <h1>${title} coming soon</h1>
-                <p>We're working hard to bring this feature to you. Stay tuned!</p>
-                <button class="placeholder-btn" onclick="window.location.hash='${homeHash}'">Go back Home</button>
+                <h1>${appT("app.placeholder.title", { title })}</h1>
+                <p>${appT("app.placeholder.description")}</p>
+                <button class="placeholder-btn" onclick="window.location.hash='${homeHash}'">${appT("common.buttons.backToHome")}</button>
             </div>
         </div>
     `;
@@ -1234,12 +1294,18 @@ async function loadAccountSettings() {
 }
 
 async function reloadPage() {
-    console.log("Forcing Page Reload...");
-    const key = getCacheKey(window.location.hash);
-    PageCache.clear(key);
-    // Force router to bypass same-route short-circuit (especially profile surface preserve).
-    lastHash = null;
-    runRouter();
+    if (window.__appReloadInFlight) return;
+    window.__appReloadInFlight = true;
+    try {
+      console.log("Forcing Page Reload...");
+      const key = getCacheKey(window.location.hash);
+      PageCache.clear(key);
+      // Force router to bypass same-route short-circuit (especially profile surface preserve).
+      lastHash = null;
+      await runRouter();
+    } finally {
+      window.__appReloadInFlight = false;
+    }
 }
 window.reloadPage = reloadPage;
 window.reloadHome = reloadPage;
@@ -1322,10 +1388,11 @@ window.logout = async function() {
    BOOTSTRAP
    ========================= */
 (async function bootstrap() {
-  try {
-    await loadSidebar();
-    if (typeof initProfilePreview === "function") await initProfilePreview();
-  } catch (err) {
-    console.error("Bootstrap failed", err);
-  }
+    try {
+      await loadSidebar();
+      await syncLanguagePreferenceFromAccountSettings();
+      if (typeof initProfilePreview === "function") await initProfilePreview();
+    } catch (err) {
+      console.error("Bootstrap failed", err);
+    }
 })();

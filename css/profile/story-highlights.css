@@ -817,8 +817,8 @@
   height: 22px;
   border-radius: 50%;
   border: 2px solid var(--border-primary);
-  background: var(--bg-primary);
-  color: var(--text-tertiary);
+  background: rgba(0, 0, 0, 0.7);
+  color: #ffffff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -844,6 +844,7 @@
 .profile-highlight-cover-circle-remove svg {
   width: 12px;
   height: 12px;
+  color: #ffffff;
 }
 
 .profile-highlight-cover-upload-label {

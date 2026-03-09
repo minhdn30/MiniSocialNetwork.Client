@@ -23,38 +23,88 @@
     return (value || "").toString().trim().toLowerCase();
   }
 
+  function followT(key, params = {}, fallback = "") {
+    if (global.I18n?.t) {
+      return global.I18n.t(key, params, fallback);
+    }
+    return fallback;
+  }
+
   function resolveFollowActionErrorMessage(
     status,
     action,
     isRequested = false,
   ) {
-    if (status === 401)
-      return "Your session has expired. Please sign in again.";
+    if (status === 401) {
+      return followT(
+        "common.auth.sessionExpired",
+        {},
+        "Your session has expired, please sign in again",
+      );
+    }
     if (status === 403) {
       return action === "follow"
-        ? "You do not have permission to follow this account."
-        : "You do not have permission to update this follow state.";
+        ? followT(
+          "profile.follow.errors.permissionFollow",
+          {},
+          "You don't have permission to follow this account",
+        )
+        : followT(
+            "profile.follow.errors.permissionUpdate",
+            {},
+            "You don't have permission to update this follow state",
+          );
     }
     if (status === 404 || status === 410) {
-      return "This account is no longer available.";
+      return followT(
+        "notification.fallback.unavailable",
+        {},
+        "This account is no longer available",
+      );
     }
     if (status === 409) {
-      return action === "follow"
-        ? "Follow state changed. Please refresh and try again."
-        : "Follow state changed. Please refresh and try again.";
+      return followT(
+        "notification.requests.stateChanged",
+        {},
+        "Follow state changed, please refresh and try again",
+      );
     }
     if (status === 400) {
       return action === "follow"
-        ? "Could not follow this account right now."
+        ? followT(
+            "profile.follow.errors.followUnavailable",
+            {},
+            "Can't follow this account right now",
+          )
         : isRequested
-          ? "Could not discard this follow request right now."
-          : "Could not unfollow this account right now.";
+          ? followT(
+              "notification.requests.removeUnavailable",
+              {},
+              "Can't discard this follow request right now",
+            )
+          : followT(
+              "profile.follow.errors.unfollowUnavailable",
+              {},
+              "Can't unfollow this account right now",
+            );
     }
     return action === "follow"
-      ? "Could not follow this account. Please try again."
+      ? followT(
+          "profile.follow.errors.followFailed",
+          {},
+          "Couldn't follow this account, please try again",
+        )
       : isRequested
-        ? "Could not discard this follow request. Please try again."
-        : "Could not unfollow this account. Please try again.";
+        ? followT(
+            "notification.requests.removeFailed",
+            {},
+            "Couldn't discard this follow request, please try again",
+          )
+        : followT(
+            "profile.follow.errors.unfollowFailed",
+            {},
+            "Couldn't unfollow this account, please try again",
+          );
   }
 
   function pickValue(source, keys = []) {
@@ -371,7 +421,13 @@
 
     if (relation.isFollowing) {
       btn.className = "follow-btn following";
-      btn.innerHTML = '<i data-lucide="check"></i> <span>Following</span>';
+      btn.innerHTML = `<i data-lucide="check"></i> <span>${followT(
+        "common.buttons.following",
+        {},
+        "Following",
+      )}</span>`;
+      const label = btn.querySelector("span");
+      if (label) label.setAttribute("data-i18n", "common.buttons.following");
       if (accountId) {
         btn.onclick = () => FollowModule.showUnfollowConfirm(accountId, btn);
       }
@@ -380,7 +436,13 @@
 
     if (relation.isRequested) {
       btn.className = "follow-btn requested";
-      btn.innerHTML = '<i data-lucide="clock-3"></i> <span>Request Sent</span>';
+      btn.innerHTML = `<i data-lucide="clock-3"></i> <span>${followT(
+        "common.buttons.requestSent",
+        {},
+        "Request sent",
+      )}</span>`;
+      const label = btn.querySelector("span");
+      if (label) label.setAttribute("data-i18n", "common.buttons.requestSent");
       if (accountId) {
         btn.onclick = () => FollowModule.showUnfollowConfirm(accountId, btn);
       }
@@ -388,7 +450,13 @@
     }
 
     btn.className = "follow-btn";
-    btn.innerHTML = '<i data-lucide="user-plus"></i> <span>Follow</span>';
+    btn.innerHTML = `<i data-lucide="user-plus"></i> <span>${followT(
+      "common.buttons.follow",
+      {},
+      "Follow",
+    )}</span>`;
+    const label = btn.querySelector("span");
+    if (label) label.setAttribute("data-i18n", "common.buttons.follow");
     if (accountId) {
       btn.onclick = function () {
         FollowModule.followUser(accountId, btn);
@@ -401,7 +469,13 @@
 
     if (relation.isFollowing) {
       btn.className = "profile-preview-btn profile-preview-btn-following";
-      btn.innerHTML = '<i data-lucide="check"></i><span>Following</span>';
+      btn.innerHTML = `<i data-lucide="check"></i><span>${followT(
+        "common.buttons.following",
+        {},
+        "Following",
+      )}</span>`;
+      const label = btn.querySelector("span");
+      if (label) label.setAttribute("data-i18n", "common.buttons.following");
       btn.onclick = (event) => {
         if (typeof global.toggleFollowMenu === "function") {
           global.toggleFollowMenu(event, accountId);
@@ -414,13 +488,25 @@
 
     if (relation.isRequested) {
       btn.className = "profile-preview-btn profile-preview-btn-requested";
-      btn.innerHTML = '<i data-lucide="clock-3"></i><span>Request Sent</span>';
+      btn.innerHTML = `<i data-lucide="clock-3"></i><span>${followT(
+        "common.buttons.requestSent",
+        {},
+        "Request sent",
+      )}</span>`;
+      const label = btn.querySelector("span");
+      if (label) label.setAttribute("data-i18n", "common.buttons.requestSent");
       btn.onclick = () => FollowModule.showUnfollowConfirm(accountId, btn);
       return;
     }
 
     btn.className = "profile-preview-btn profile-preview-btn-follow";
-    btn.innerHTML = '<i data-lucide="user-plus"></i><span>Follow</span>';
+    btn.innerHTML = `<i data-lucide="user-plus"></i><span>${followT(
+      "common.buttons.follow",
+      {},
+      "Follow",
+    )}</span>`;
+    const label = btn.querySelector("span");
+    if (label) label.setAttribute("data-i18n", "common.buttons.follow");
     btn.onclick = () => FollowModule.followUser(accountId, btn);
   }
 
@@ -429,7 +515,13 @@
 
     if (relation.isFollowing) {
       btn.className = "profile-btn profile-btn-following";
-      btn.innerHTML = '<i data-lucide="check"></i><span>Following</span>';
+      btn.innerHTML = `<i data-lucide="check"></i><span>${followT(
+        "common.buttons.following",
+        {},
+        "Following",
+      )}</span>`;
+      const label = btn.querySelector("span");
+      if (label) label.setAttribute("data-i18n", "common.buttons.following");
       btn.onclick = (event) =>
         FollowModule.showUnfollowConfirm(accountId, event.currentTarget);
       return;
@@ -437,14 +529,26 @@
 
     if (relation.isRequested) {
       btn.className = "profile-btn profile-btn-requested";
-      btn.innerHTML = '<i data-lucide="clock-3"></i><span>Request Sent</span>';
+      btn.innerHTML = `<i data-lucide="clock-3"></i><span>${followT(
+        "common.buttons.requestSent",
+        {},
+        "Request sent",
+      )}</span>`;
+      const label = btn.querySelector("span");
+      if (label) label.setAttribute("data-i18n", "common.buttons.requestSent");
       btn.onclick = (event) =>
         FollowModule.showUnfollowConfirm(accountId, event.currentTarget);
       return;
     }
 
     btn.className = "profile-btn profile-btn-follow";
-    btn.innerHTML = '<i data-lucide="user-plus"></i><span>Follow</span>';
+    btn.innerHTML = `<i data-lucide="user-plus"></i><span>${followT(
+      "common.buttons.follow",
+      {},
+      "Follow",
+    )}</span>`;
+    const label = btn.querySelector("span");
+    if (label) label.setAttribute("data-i18n", "common.buttons.follow");
     btn.onclick = () => FollowModule.followUser(accountId, btn);
   }
 
@@ -581,9 +685,15 @@
       }
       setRelationOverride(accountId, relation);
       if (relation.isRequested) {
-        if (global.toastInfo) global.toastInfo("Follow request sent");
+        if (global.toastInfo) {
+          global.toastInfo(
+            followT("common.buttons.requestSent", {}, "Follow request sent"),
+          );
+        }
       } else if (global.toastSuccess) {
-        global.toastSuccess("Following");
+        global.toastSuccess(
+          followT("follow.toast.following", {}, "Following"),
+        );
       }
 
       applyVisibleRelationButtons(accountId, relation, btn);
@@ -646,9 +756,17 @@
       }
 
       if (wasRequested) {
-        if (global.toastInfo) global.toastInfo("Follow request discarded");
+        if (global.toastInfo) {
+          global.toastInfo(
+            followT(
+              "notification.requests.removed",
+              {},
+              "Follow request discarded",
+            ),
+          );
+        }
       } else if (global.toastInfo) {
-        global.toastInfo("Unfollowed");
+        global.toastInfo(followT("follow.toast.unfollowed", {}, "Unfollowed"));
       }
 
       const relation = normalizeFollowPayload(data, false);
@@ -731,14 +849,36 @@
       status?.targetFollowPrivacy === FOLLOW_PRIVACY.PRIVATE;
 
     const title = isRequested
-      ? "Stop following this account?"
-      : "Unfollow this account?";
+      ? followT(
+          "profile.follow.discardRequestTitle",
+          {},
+          "Cancel follow request?",
+        )
+      : followT(
+          "profile.follow.unfollowTitle",
+          {},
+          "Stop following this account?",
+        );
     const description = isRequested
-      ? "If your request is still pending, it will be removed. If it was already accepted, you will unfollow this account."
+      ? followT(
+          "profile.follow.unfollowDescriptionRequested",
+          {},
+          "If your request is still pending, it will be removed. If it was already accepted, you will unfollow this account.",
+        )
       : isPrivateTarget
-        ? "If you follow again later, you will need this account to approve your request."
-        : "You can always follow them again later.";
-    const confirmText = isRequested ? "Confirm" : "Unfollow";
+        ? followT(
+            "profile.follow.unfollowDescriptionPrivate",
+            {},
+            "If you follow again later, you will need this account to approve your request.",
+          )
+        : followT(
+            "profile.follow.unfollowDescriptionPublic",
+            {},
+            "You can always follow them again later.",
+          );
+    const confirmText = isRequested
+      ? followT("common.buttons.confirm", {}, "Confirm")
+      : followT("common.buttons.unfollow", {}, "Unfollow");
 
     const overlay = document.createElement("div");
     overlay.className = "unfollow-overlay";
@@ -752,7 +892,11 @@
       </div>
       <div class="unfollow-actions">
         <button class="unfollow-btn unfollow-confirm" id="unfollowConfirm">${confirmText}</button>
-        <button class="unfollow-btn unfollow-cancel" id="unfollowCancel">Cancel</button>
+        <button class="unfollow-btn unfollow-cancel" id="unfollowCancel">${followT(
+          "common.buttons.cancel",
+          {},
+          "Cancel",
+        )}</button>
       </div>
     `;
 
@@ -812,12 +956,28 @@
     popup.className = "unfollow-popup";
     popup.innerHTML = `
       <div class="unfollow-content">
-        <h3>Remove this follower?</h3>
-        <p>They will no longer follow you, but you can still follow them if you want.</p>
+        <h3>${followT(
+          "profile.follow.removeFollowerTitle",
+          {},
+          "Remove this follower?",
+        )}</h3>
+        <p>${followT(
+          "profile.follow.removeFollowerDescription",
+          {},
+          "They will no longer follow you, but you can still follow them if you want.",
+        )}</p>
       </div>
       <div class="unfollow-actions">
-        <button class="unfollow-btn unfollow-confirm" id="removeFollowerConfirm">Remove</button>
-        <button class="unfollow-btn unfollow-cancel" id="removeFollowerCancel">Cancel</button>
+        <button class="unfollow-btn unfollow-confirm" id="removeFollowerConfirm">${followT(
+          "common.buttons.remove",
+          {},
+          "Remove",
+        )}</button>
+        <button class="unfollow-btn unfollow-cancel" id="removeFollowerCancel">${followT(
+          "common.buttons.cancel",
+          {},
+          "Cancel",
+        )}</button>
       </div>
     `;
 

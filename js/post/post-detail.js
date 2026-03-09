@@ -3,12 +3,40 @@ const POST_DETAIL_CANONICAL_PREFIX = "/posts/";
 const POST_DETAIL_LEGACY_PREFIX = "/p/";
 let currentPostId = null;
 let currentPostCreatedAt = null;
+let postDetailLanguageBound = false;
 
 // Navigation context for profile post navigation (next/prev)
 let navigationContext = null; // { source, postList, currentIndex, accountId, hasMore }
 
 // Track state of all posts viewed during navigation session (for profile sync)
 let viewedPostsState = new Map(); // postId -> { reactCount, isReacted, commentCount, createdAt, fullContent, privacyVal, taggedAccounts, totalTaggedAccounts }
+
+const pdT = (key, params = {}, fallback = "") =>
+    window.I18n?.t ? window.I18n.t(key, params, fallback || key) : (fallback || key);
+
+function bindPostDetailLanguageChange() {
+    if (postDetailLanguageBound || !window.I18n?.onChange) return;
+    postDetailLanguageBound = true;
+    window.I18n.onChange(() => {
+        const modal = document.getElementById(POST_DETAIL_MODAL_ID);
+        if (!modal || !modal.classList.contains("show")) return;
+
+        if (window.I18n?.translateDom) {
+            window.I18n.translateDom(modal);
+        }
+
+        if (window.currentPostDetailData) {
+            renderPostDetail(window.currentPostDetailData);
+        }
+
+        if (
+            window.PostEdit &&
+            typeof window.PostEdit.refreshLocalizedUi === "function"
+        ) {
+            window.PostEdit.refreshLocalizedUi();
+        }
+    });
+}
 
 function pdParseHashPath(rawHash = window.location.hash || "") {
     if (window.RouteHelper && typeof window.RouteHelper.parseHash === "function") {
@@ -60,27 +88,47 @@ function pdBuildProfileHash(profileTarget) {
 }
 
 async function pdReadApiMessage(res, fallbackMessage) {
-    let message = fallbackMessage || "request failed";
-    if (!res) return message;
+    const fallback =
+        window.I18n?.translateLiteral?.(fallbackMessage || "request failed") ||
+        fallbackMessage ||
+        "request failed";
+    if (!res) return fallback;
 
+    let rawMessage = "";
     try {
         const data = await res.clone().json();
         if (data && typeof data === "object") {
-            const m = (data.message || data.Message || "").toString().trim();
-            if (m) return m;
+            rawMessage = (data.message || data.Message || data.title || data.Title || "")
+                .toString()
+                .trim();
         }
     } catch (_) {
         // Ignore parse failures.
     }
 
-    try {
-        const text = (await res.clone().text()).toString().trim();
-        if (text) return text;
-    } catch (_) {
-        // Ignore read failures.
+    if (!rawMessage) {
+        try {
+            rawMessage = (await res.clone().text()).toString().trim();
+        } catch (_) {
+            // Ignore read failures.
+        }
     }
 
-    return message;
+    if (window.I18n?.translateServerText) {
+        const translatedServerText = window.I18n.translateServerText(rawMessage);
+        if (translatedServerText && translatedServerText !== rawMessage) {
+            return translatedServerText;
+        }
+    }
+
+    if (window.I18n?.translateLiteral) {
+        const translatedLiteral = window.I18n.translateLiteral(rawMessage);
+        if (translatedLiteral && translatedLiteral !== rawMessage) {
+            return translatedLiteral;
+        }
+    }
+
+    return rawMessage || fallback;
 }
 
 
@@ -168,6 +216,7 @@ if (!window.PostEdit) {
 // Open Modal
 // navigateDirection: 'next' | 'prev' | null - used for auto-skip when post is invalid
 async function openPostDetail(postId, postCode = null, navContext = null, navigateDirection = null) {
+    bindPostDetailLanguageChange();
     // Store navigation context if provided (from profile grid)
     navigationContext = navContext;
     // Capture the current safe hash before we mess with the URL
@@ -214,12 +263,26 @@ async function openPostDetail(postId, postCode = null, navContext = null, naviga
 
                 // Show a single toast for direct open, keep existing auto-skip toast for next/prev navigation.
                 if (!isProfileAutoSkip && window.toastInfo) {
-                    toastInfo("This post is no longer available or you don't have permission to view it.");
+                    toastInfo(
+                        pdT(
+                            "post.detail.unavailableOrNoPermission",
+                            {},
+                            "This post is no longer available or you don't have permission to view it.",
+                        ),
+                    );
                 }
                 
                 // AUTO-SKIP: If navigating from profile, try to skip to next/prev post
                 if (isProfileAutoSkip) {
-                    if (window.toastInfo) toastInfo("Post unavailable, skipping...");
+                    if (window.toastInfo) {
+                        toastInfo(
+                            pdT(
+                                "post.detail.unavailableSkipping",
+                                {},
+                                "Post unavailable, skipping...",
+                            ),
+                        );
+                    }
                     
                     // Remove invalid post from list
                     const invalidIndex = navigationContext.currentIndex;
@@ -252,7 +315,15 @@ async function openPostDetail(postId, postCode = null, navContext = null, naviga
                     }
                     
                     // No more posts, close modal
-                    if (window.toastInfo) toastInfo("No more posts available");
+                    if (window.toastInfo) {
+                        toastInfo(
+                            pdT(
+                                "post.detail.noMorePosts",
+                                {},
+                                "No more posts available",
+                            ),
+                        );
+                    }
                 }
                 
                 if (mainLoader) mainLoader.style.display = "none";
@@ -332,7 +403,13 @@ async function openPostDetailByCode(postCode, options = null) {
                         window.location.hash = "#/404";
                     }
                 } else if (window.toastInfo) {
-                    toastInfo("This post is no longer available or you don't have permission to view it.");
+                    toastInfo(
+                        pdT(
+                            "post.detail.unavailableOrNoPermission",
+                            {},
+                            "This post is no longer available or you don't have permission to view it.",
+                        ),
+                    );
                 }
                 if (typeof window.forceClosePostDetail === "function") forceClosePostDetail();
                 else closePostDetailModal();
@@ -340,7 +417,14 @@ async function openPostDetailByCode(postCode, options = null) {
             }
 
             if (res.status === 403) {
-                const message = await pdReadApiMessage(res, "You don't have permission to view this post.");
+                const message = await pdReadApiMessage(
+                    res,
+                    pdT(
+                        "post.detail.unavailableOrNoPermission",
+                        {},
+                        "You don't have permission to view this post.",
+                    ),
+                );
                 if (window.toastInfo) toastInfo(message);
                 else if (window.toastError) toastError(message);
 
@@ -355,7 +439,11 @@ async function openPostDetailByCode(postCode, options = null) {
                 return false;
             }
 
-            if (window.toastError) toastError("Failed to open this post.");
+            if (window.toastError) {
+                toastError(
+                    pdT("post.detail.openFailed", {}, "Couldn't open this post"),
+                );
+            }
             if (isRouteDriven) {
                 const targetHash = (window._returnToHash || window._lastAcceptedHashForRouter || window._lastSafeHash || "#/").toString();
                 history.replaceState(null, "", targetHash);
@@ -388,7 +476,11 @@ async function openPostDetailByCode(postCode, options = null) {
         if (mainLoader) mainLoader.style.display = "none";
         console.error(err);
 
-        if (window.toastError) toastError("Failed to open this post.");
+        if (window.toastError) {
+            toastError(
+                    pdT("post.detail.openFailed", {}, "Couldn't open this post"),
+            );
+        }
         if (isRouteDriven) {
             const targetHash = (window._returnToHash || window._lastAcceptedHashForRouter || window._lastSafeHash || "#/").toString();
             history.replaceState(null, "", targetHash);
@@ -406,6 +498,10 @@ async function loadPostDetailHTML() {
         if (!response.ok) throw new Error("Failed to load template");
         const html = await response.text();
         document.body.insertAdjacentHTML('beforeend', html);
+        const modalRoot = document.getElementById(POST_DETAIL_MODAL_ID);
+        if (modalRoot && window.I18n?.translateDom) {
+            window.I18n.translateDom(modalRoot);
+        }
         
         // Initialize icons for the new content
         if(window.lucide) lucide.createIcons();
@@ -450,15 +546,17 @@ function showDiscardCommentConfirmation() {
 
     popup.innerHTML = `
         <div class="post-options-header">
-            <h3>Discard comment?</h3>
-            <p>If you leave, your comment won't be saved.</p>
+            <h3>${pdT("post.comments.discardTitle", {}, "Discard comment?")}</h3>
+            <p>${pdT("post.comments.discardDescription", {}, "If you leave, your comment won't be saved.")}</p>
         </div>
-        <button class="post-option post-option-danger" onclick="confirmDiscardComment()">
-            Discard
-        </button>
-        <button class="post-option post-option-cancel" onclick="cancelDiscardComment()">
-            Cancel
-        </button>
+        <div class="post-options-actions">
+            <button class="post-option post-option-cancel" onclick="cancelDiscardComment()">
+                ${pdT("common.buttons.cancel", {}, "Cancel")}
+            </button>
+            <button class="post-option post-option-danger" onclick="confirmDiscardComment()">
+                ${pdT("common.buttons.discard", {}, "Discard")}
+            </button>
+        </div>
     `;
 
     overlay.appendChild(popup);
@@ -489,18 +587,32 @@ function showDiscardEditConfirmation() {
 
     const popup = document.createElement("div");
     popup.className = "post-options-popup";
+    const discardTitle = pdT(
+        "post.edit.discardTitle",
+        {},
+        "Discard changes?",
+    );
+    const discardDescription = pdT(
+        "post.edit.discardDescription",
+        {},
+        "You have unsent changes. Are you sure you want to discard them?",
+    );
+    const discardText = pdT("common.buttons.discard", {}, "Discard");
+    const cancelText = pdT("common.buttons.cancel", {}, "Cancel");
 
     popup.innerHTML = `
         <div class="post-options-header">
-            <h3>Discard changes?</h3>
-            <p>If you leave, your changes won't be saved.</p>
+            <h3>${escapeHtml(discardTitle)}</h3>
+            <p>${escapeHtml(discardDescription)}</p>
         </div>
-        <button class="post-option post-option-danger" onclick="confirmDiscardEdit()">
-            Discard
-        </button>
-        <button class="post-option post-option-cancel" onclick="cancelDiscardEdit()">
-            Cancel
-        </button>
+        <div class="post-options-actions">
+            <button class="post-option post-option-cancel" onclick="cancelDiscardEdit()">
+                ${escapeHtml(cancelText)}
+            </button>
+            <button class="post-option post-option-danger" onclick="confirmDiscardEdit()">
+                ${escapeHtml(discardText)}
+            </button>
+        </div>
     `;
 
     overlay.appendChild(popup);
@@ -566,10 +678,11 @@ function captureCurrentPostState() {
         const privacyBadge = document.querySelector("#detailTime .privacy-selector");
         let privacyVal = undefined;
         if (privacyBadge) {
-            const title = privacyBadge.getAttribute("title");
-            if (title === "Public") privacyVal = 0;
-            else if (title.includes("Follower")) privacyVal = 1; // "Followers Only" or "Followers"
-            else if (title === "Private") privacyVal = 2;
+            const rawPrivacy = privacyBadge.getAttribute("data-privacy");
+            const parsedPrivacy = Number(rawPrivacy);
+            if (Number.isFinite(parsedPrivacy) && parsedPrivacy >= 0 && parsedPrivacy <= 2) {
+                privacyVal = parsedPrivacy;
+            }
         }
 
         viewedPostsState.set(currentPostId, {
@@ -631,10 +744,11 @@ function performClosePostDetail() {
                  const privacyBadge = document.querySelector("#detailTime .privacy-selector");
                  let privacyVal = undefined;
                  if (privacyBadge) {
-                     const title = privacyBadge.getAttribute("title");
-                     if (title === "Public") privacyVal = 0;
-                     else if (title.includes("Follower")) privacyVal = 1;
-                     else if (title === "Private") privacyVal = 2;
+                     const rawPrivacy = privacyBadge.getAttribute("data-privacy");
+                     const parsedPrivacy = Number(rawPrivacy);
+                     if (Number.isFinite(parsedPrivacy) && parsedPrivacy >= 0 && parsedPrivacy <= 2) {
+                         privacyVal = parsedPrivacy;
+                     }
                  }
 
                  const taggedAccounts = Array.isArray(window.currentPostDetailData?.taggedAccounts)
@@ -1061,10 +1175,17 @@ function renderPostDetail(post, navigateDirection = null) {
         // Edited Indicator
         if (post.updatedAt) {
             const editedTime = PostUtils.formatFullDateTime(post.updatedAt);
-            timeEl.innerHTML += ` <span>•</span> <span class="post-edited-indicator" title="Edited: ${editedTime}">edited</span>`;
+            const editedTitle = pdT(
+                "post.comments.editedAt",
+                { time: editedTime },
+                `Edited at ${editedTime}`,
+            );
+            const editedLabel = pdT("post.comments.editedLabel", {}, "edited");
+            timeEl.innerHTML += ` <span>•</span> <span class="post-edited-indicator" title="${escapeHtmlAttr(editedTitle)}">${editedLabel}</span>`;
         }
 
-        timeEl.title = `Posted: ${PostUtils.formatFullDateTime(post.createdAt)}`;
+        const postedTime = PostUtils.formatFullDateTime(post.createdAt);
+        timeEl.title = pdT("post.detail.postedAt", { time: postedTime }, `Posted: ${postedTime}`);
         timeEl.dataset.createdAt = post.createdAt;
     }
     
@@ -1189,7 +1310,13 @@ function renderPostDetail(post, navigateDirection = null) {
                 return;
             }
             if (window.toastError) {
-                toastError("Share is unavailable right now.");
+                toastError(
+                    pdT(
+                        "post.detail.shareUnavailable",
+                        {},
+                        "Share is unavailable right now.",
+                    ),
+                );
             }
         };
     }
@@ -1296,7 +1423,15 @@ async function handleLikePost(postId, btn, iconRef, countEl) {
         const res = await apiFetch(`/Posts/${postId}/react`, { method: "POST" });
         if (res.status === 403 || res.status === 400) {
             PostUtils.hidePost(postId);
-            if (window.toastInfo) toastInfo("This post is no longer available.");
+            if (window.toastInfo) {
+                toastInfo(
+                    pdT(
+                        "post.detail.unavailable",
+                        {},
+                        "This post is no longer available.",
+                    ),
+                );
+            }
             return;
         }
         if (!res.ok) throw new Error("React failed");

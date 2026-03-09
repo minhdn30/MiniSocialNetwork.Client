@@ -35,6 +35,13 @@
     return Array.isArray(value) ? value : [];
   }
 
+  function presenceT(key, params = {}, fallback = "") {
+    if (global.I18n?.t) {
+      return global.I18n.t(key, params, fallback);
+    }
+    return fallback;
+  }
+
   function uniqueNormalizedIds(values) {
     const out = [];
     const seen = new Set();
@@ -167,11 +174,19 @@
 
     if (ageMs < HOUR_MS) {
       const minutes = Math.max(1, Math.floor(ageMs / MINUTE_MS));
-      return `Active ${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+      return presenceT(
+        "presence.activeMinutesAgo",
+        { count: minutes, suffix: minutes === 1 ? "" : "s" },
+        `Active ${minutes} minute${minutes === 1 ? "" : "s"} ago`,
+      );
     }
 
     const hours = Math.max(1, Math.floor(ageMs / HOUR_MS));
-    return `Active ${hours} hour${hours === 1 ? "" : "s"} ago`;
+    return presenceT(
+      "presence.activeHoursAgo",
+      { count: hours, suffix: hours === 1 ? "" : "s" },
+      `Active ${hours} hour${hours === 1 ? "" : "s"} ago`,
+    );
   }
 
   function buildStatusFromState(state, legacyIsOnline = false, nowMs = Date.now()) {
@@ -190,7 +205,7 @@
           canShowStatus: true,
           isOnline: true,
           showDot: true,
-          text: "Online",
+          text: presenceT("chat.presence.online", {}, "Online"),
         };
       }
 
@@ -217,7 +232,7 @@
         canShowStatus: true,
         isOnline: true,
         showDot: true,
-        text: "Online",
+        text: presenceT("chat.presence.online", {}, "Online"),
       };
     }
 

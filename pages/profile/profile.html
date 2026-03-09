@@ -1,11 +1,11 @@
-<div class="profile-container">
+<div class="profile-container" data-i18n-auto>
   <div class="profile-content-wrapper">
     <!-- Cover Image -->
     <div class="profile-cover">
       <img
         id="profile-cover-img"
         src="assets/gradients/orb-1.png"
-        alt="Cover Image"
+        alt=""
       />
     </div>
 
@@ -16,7 +16,7 @@
           <img
             id="profile-avatar"
             src="assets/default-avatar.png"
-            alt="Profile Picture"
+            alt=""
           />
         </div>
       </div>
@@ -24,11 +24,20 @@
       <div class="profile-info-container">
         <div class="profile-name-row">
           <div class="profile-title-col">
-            <h1 class="profile-username-header" id="profile-username-header">
+            <h1
+              class="profile-username-header"
+              id="profile-username-header"
+              data-i18n-user-content
+            >
               username
             </h1>
-            <div id="profile-fullname" class="profile-fullname-label">
-              Display Name
+            <div
+              id="profile-fullname"
+              class="profile-fullname-label"
+              data-i18n="common.labels.user"
+              data-i18n-user-content
+            >
+              User
             </div>
           </div>
           <div class="profile-actions" id="profile-action-btn">
@@ -37,7 +46,11 @@
         </div>
 
         <div class="profile-bio-section">
-          <div id="profile-bio-text" class="profile-bio-text"></div>
+          <div
+            id="profile-bio-text"
+            class="profile-bio-text"
+            data-i18n-user-content
+          ></div>
         </div>
 
         <div class="profile-details-section">
@@ -47,7 +60,7 @@
             style="display: none"
           >
             <i data-lucide="phone"></i>
-            <span id="profile-detail-phone"></span>
+            <span id="profile-detail-phone" data-i18n-user-content></span>
           </div>
           <div
             class="profile-detail-item"
@@ -55,7 +68,7 @@
             style="display: none"
           >
             <i data-lucide="map-pin"></i>
-            <span id="profile-detail-address"></span>
+            <span id="profile-detail-address" data-i18n-user-content></span>
           </div>
         </div>
       </div>
@@ -65,19 +78,27 @@
     <ul class="profile-stats">
       <li>
         <span class="stat-count" id="profile-posts-count">0</span>
-        <span class="stat-label">posts</span>
+        <span class="stat-label" data-i18n="profile.stats.posts">posts</span>
       </li>
       <li>
         <span class="stat-count" id="profile-followers-count">0</span>
-        <span class="stat-label">followers</span>
+        <span class="stat-label" data-i18n="profile.stats.followers"
+          >followers</span
+        >
       </li>
       <li>
         <span class="stat-count" id="profile-following-count">0</span>
-        <span class="stat-label">following</span>
+        <span class="stat-label" data-i18n="profile.stats.following"
+          >following</span
+        >
       </li>
     </ul>
 
-    <div class="profile-highlights" id="profile-highlights"></div>
+    <div
+      class="profile-highlights"
+      id="profile-highlights"
+      data-i18n-user-content
+    ></div>
 
     <!-- Content Tabs -->
     <div class="profile-tabs" id="profile-tabs">
@@ -85,7 +106,11 @@
     </div>
 
     <!-- Posts Grid -->
-    <div class="profile-posts-grid" id="profile-posts-grid"></div>
+    <div
+      class="profile-posts-grid"
+      id="profile-posts-grid"
+      data-i18n-user-content
+    ></div>
 
     <!-- Load More Loader -->
     <div id="profile-posts-loader" class="feed-loader" style="display: none">
@@ -99,7 +124,7 @@
   <div class="profile-modal-overlay" id="edit-profile-modal">
     <div class="profile-modal-content">
       <div class="profile-modal-header">
-        <h3>Edit Profile</h3>
+        <h3 data-i18n="profile.edit.title">Edit Profile</h3>
         <button class="profile-modal-close" onclick="checkChangesAndClose()">
           <i data-lucide="x"></i>
         </button>
@@ -110,19 +135,20 @@
           <div class="edit-profile-left">
             <!-- Cover Section -->
             <div class="edit-cover-section">
-              <label>Cover Photo</label>
+              <label data-i18n="profile.edit.coverPhoto">Cover Photo</label>
               <div class="edit-cover-container">
                 <img
                   id="edit-cover-preview"
                   src="assets/images/default-cover.jpg"
-                  alt="Cover Preview"
+                  alt=""
                   data-media-fallback-ignore="true"
                 />
                 <div class="edit-cover-overlay">
                   <label
                     for="cover-upload-input"
                     class="cover-action-btn upload-btn"
-                    title="Upload New Cover"
+                    title="Upload cover image"
+                    data-i18n-title="profile.highlights.uploadCoverImage"
                   >
                     <i data-lucide="camera"></i>
                   </label>
@@ -130,7 +156,8 @@
                     type="button"
                     class="cover-action-btn delete-btn"
                     id="delete-cover-btn"
-                    title="Remove Cover"
+                    title="Remove cover"
+                    data-i18n-title="profile.highlights.removeCoverAria"
                   >
                     <i data-lucide="trash-2"></i>
                   </button>
@@ -145,19 +172,21 @@
             </div>
 
             <div class="profile-form-group">
-              <label>Full Name</label>
+              <label data-i18n="profile.edit.fullName">Full Name</label>
               <input
                 type="text"
                 id="edit-fullname"
                 placeholder="Enter your full name"
+                data-i18n-placeholder="profile.edit.fullNamePlaceholder"
               />
             </div>
             <div class="profile-form-group">
-              <label>Bio</label>
+              <label data-i18n="profile.edit.bio">Bio</label>
               <textarea
                 id="edit-bio"
                 rows="4"
                 placeholder="Tell us about yourself..."
+                data-i18n-placeholder="profile.edit.bioPlaceholder"
               ></textarea>
               <div class="bio-char-count">
                 <span id="bioCharCount">0</span> /
@@ -171,18 +200,19 @@
             <!-- Avatar Section -->
             <!-- Avatar Section -->
             <div class="edit-avatar-section">
-              <label>Avatar</label>
+              <label data-i18n="common.labels.avatar">Avatar</label>
               <div class="edit-avatar-container">
                 <img
                   id="edit-profile-preview"
                   src="assets/images/default-avatar.jpg"
-                  alt="Avatar Preview"
+                  alt=""
                 />
                 <div class="edit-avatar-overlay">
                   <label
                     for="avatar-upload-input"
                     class="avatar-action-btn upload-btn"
                     title="Upload New Photo"
+                    data-i18n-title="profile.edit.avatarUploadTitle"
                   >
                     <i data-lucide="camera"></i>
                   </label>
@@ -190,7 +220,8 @@
                     type="button"
                     class="avatar-action-btn delete-btn"
                     id="delete-avatar-btn"
-                    title="Remove Photo"
+                    title="Remove"
+                    data-i18n-title="common.buttons.remove"
                   >
                     <i data-lucide="trash-2"></i>
                   </button>
@@ -204,58 +235,58 @@
               />
             </div>
             <div class="profile-form-group">
-              <label>Phone Number</label>
+              <label data-i18n="profile.edit.phoneNumber">Phone Number</label>
               <div class="privacy-input-wrapper">
                 <input
                   type="text"
                   id="edit-phone"
                   placeholder="+84 123 456 789"
+                  data-i18n-placeholder="profile.edit.phonePlaceholder"
                 />
                 <button
                   type="button"
                   class="privacy-toggle-btn"
                   id="toggle-phone-privacy"
-                  title="Change Phone Privacy"
                 >
                   <i data-lucide="globe"></i>
                 </button>
               </div>
             </div>
             <div class="profile-form-group">
-              <label>Address</label>
+              <label data-i18n="profile.edit.address">Address</label>
               <div class="privacy-input-wrapper">
                 <input
                   type="text"
                   id="edit-address"
                   placeholder="Enter your address"
+                  data-i18n-placeholder="profile.edit.addressPlaceholder"
                 />
                 <button
                   type="button"
                   class="privacy-toggle-btn"
                   id="toggle-address-privacy"
-                  title="Change Address Privacy"
                 >
                   <i data-lucide="globe"></i>
                 </button>
               </div>
             </div>
             <div class="profile-form-group">
-              <label>Gender</label>
+              <label data-i18n="profile.edit.gender">Gender</label>
               <div class="gender-radio-group">
                 <label class="gender-radio-item">
                   <input type="radio" name="gender" value="true" />
                   <span class="radio-custom"></span>
-                  <span>Male</span>
+                  <span data-i18n="common.labels.male">Male</span>
                 </label>
                 <label class="gender-radio-item">
                   <input type="radio" name="gender" value="false" />
                   <span class="radio-custom"></span>
-                  <span>Female</span>
+                  <span data-i18n="common.labels.female">Female</span>
                 </label>
                 <label class="gender-radio-item">
                   <input type="radio" name="gender" value="" checked />
                   <span class="radio-custom"></span>
-                  <span>Other</span>
+                  <span data-i18n="common.labels.other">Other</span>
                 </label>
               </div>
             </div>
@@ -265,7 +296,7 @@
       <div class="profile-modal-footer">
         <button class="profile-btn-primary" onclick="saveProfileChanges()">
           <i data-lucide="check"></i>
-          <span>Save</span>
+          <span data-i18n="common.buttons.save">Save</span>
         </button>
       </div>
     </div>
