@@ -587,8 +587,26 @@ body.is-chat-page #chat-panel .chat-header-actions {
   z-index: 1;
 }
 
+.chat-item.chat-item-reveal {
+  animation: chatSidebarItemReveal 0.38s
+    cubic-bezier(0.175, 0.885, 0.32, 1.08) both;
+  animation-delay: var(--chat-sidebar-item-reveal-delay, 0ms);
+}
+
 .chat-item:hover {
   background: var(--bg-hover);
+}
+
+@keyframes chatSidebarItemReveal {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Active conversation indicator */
@@ -856,6 +874,7 @@ body.is-chat-page #chat-panel .chat-header-actions {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .chat-item.chat-item-reveal,
   .chat-mini-seen-avatar {
     animation: none;
   }

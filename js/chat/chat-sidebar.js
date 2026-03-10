@@ -1552,7 +1552,9 @@ const ChatSidebar = {
           : null;
 
         this.syncPresenceSnapshotForConversations(this.conversations);
-        this.renderConversations(items, isLoadMore);
+        this.renderConversations(items, isLoadMore, {
+          revealItems: !isLoadMore,
+        });
 
         if (
           window.ChatWindow &&
@@ -1611,7 +1613,7 @@ const ChatSidebar = {
     }
   },
 
-  renderConversations(items, isAppend = false) {
+  renderConversations(items, isAppend = false, options = {}) {
     const listContainer = document.getElementById("chat-conversation-list");
 
     if (!isAppend && items.length === 0) {
@@ -1621,6 +1623,9 @@ const ChatSidebar = {
     }
 
     const myId = (localStorage.getItem("accountId") || "").toLowerCase();
+
+    const shouldRevealItems = !isAppend && options?.revealItems === true;
+    let revealOrder = 0;
 
     const html = items
       .map((conv) => {
@@ -1651,6 +1656,11 @@ const ChatSidebar = {
           this.currentActiveId &&
           this.normalizeId(conv.conversationId) ===
             this.normalizeId(this.currentActiveId);
+        const revealClass =
+          shouldRevealItems && revealOrder < 8 ? " chat-item-reveal" : "";
+        const revealStyle = revealClass
+          ? ` style="--chat-sidebar-item-reveal-delay:${revealOrder++ * 36}ms"`
+          : "";
 
         // --- Seen Avatars Logic ---
         let seenHtml = "";
@@ -1684,8 +1694,9 @@ const ChatSidebar = {
         }
 
         return `
-                <div class="chat-item ${unread ? "unread" : ""} ${isActive ? "active" : ""}" 
+                <div class="chat-item ${unread ? "unread" : ""} ${isActive ? "active" : ""}${revealClass}" 
                      data-conversation-id="${conv.conversationId}"
+                     ${revealStyle}
                      draggable="true"
                      onclick="ChatSidebar.openConversation('${conv.conversationId}')"
                     ondragstart="ChatSidebar.handleDragStart(event, '${conv.conversationId}')"

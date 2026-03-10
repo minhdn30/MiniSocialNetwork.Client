@@ -20,6 +20,8 @@
     STORY_REACT: 7,
     FOLLOW_REQUEST: 8,
     FOLLOW_REQUEST_ACCEPTED: 9,
+    COMMENT_REACT: 10,
+    REPLY_REACT: 11,
   });
 
   const NOTIFICATION_TARGET_KIND = Object.freeze({
@@ -35,7 +37,8 @@
     ERROR: "error",
   });
 
-  const NOTIFICATION_UNREAD_SUMMARY_EVENT = "notifications:unread-summary-changed";
+  const NOTIFICATION_UNREAD_SUMMARY_EVENT =
+    "notifications:unread-summary-changed";
   const READ_STATE_DRAFT_STORAGE_PREFIX = "notification-read-draft:";
   const READ_STATE_DRAFT_MAX_KEYS = 8;
 
@@ -139,11 +142,14 @@
       ? global.I18n.translateServerText(raw)
       : global.I18n?.translateLiteral
         ? global.I18n.translateLiteral(raw)
-      : raw;
+        : raw;
   }
 
   function isRequestsFilter(filter = state.filter) {
-    return (filter || "").toString().trim().toLowerCase() === NOTIFICATION_FILTER.REQUESTS;
+    return (
+      (filter || "").toString().trim().toLowerCase() ===
+      NOTIFICATION_FILTER.REQUESTS
+    );
   }
 
   function isSupportedFilter(filter) {
@@ -287,7 +293,9 @@
   }
 
   function hasSummaryValue(source, ...keys) {
-    return pickValue(source, ...(Array.isArray(keys) ? keys : keys)) !== undefined;
+    return (
+      pickValue(source, ...(Array.isArray(keys) ? keys : keys)) !== undefined
+    );
   }
 
   function getReadStateDraftStorageKey(accountId = currentAccountId()) {
@@ -341,13 +349,21 @@
       notificationUnreadCount: hasNotificationUnreadCount
         ? Math.max(
             0,
-            readNumber(summary, ["notificationUnreadCount", "NotificationUnreadCount"], 0),
+            readNumber(
+              summary,
+              ["notificationUnreadCount", "NotificationUnreadCount"],
+              0,
+            ),
           )
         : state.rawNotificationUnreadCount,
       followRequestUnreadCount: hasFollowRequestUnreadCount
         ? Math.max(
             0,
-            readNumber(summary, ["followRequestUnreadCount", "FollowRequestUnreadCount"], 0),
+            readNumber(
+              summary,
+              ["followRequestUnreadCount", "FollowRequestUnreadCount"],
+              0,
+            ),
           )
         : state.rawFollowRequestUnreadCount,
       pendingFollowRequestCount: hasPendingFollowRequestCount
@@ -366,17 +382,28 @@
           )
         : state.followRequestCount,
       lastNotificationsSeenAt:
-        readTimestamp(summary, "lastNotificationsSeenAt", "LastNotificationsSeenAt") ||
-        state.lastNotificationsSeenAt,
+        readTimestamp(
+          summary,
+          "lastNotificationsSeenAt",
+          "LastNotificationsSeenAt",
+        ) || state.lastNotificationsSeenAt,
       lastFollowRequestsSeenAt:
-        readTimestamp(summary, "lastFollowRequestsSeenAt", "LastFollowRequestsSeenAt") ||
-        state.lastFollowRequestsSeenAt,
+        readTimestamp(
+          summary,
+          "lastFollowRequestsSeenAt",
+          "LastFollowRequestsSeenAt",
+        ) || state.lastFollowRequestsSeenAt,
     };
   }
 
-  function computeDisplayedNotificationUnreadCount(rawCount = state.rawNotificationUnreadCount) {
+  function computeDisplayedNotificationUnreadCount(
+    rawCount = state.rawNotificationUnreadCount,
+  ) {
     const safeRaw = Math.max(0, parseIntSafe(rawCount, 0));
-    const hiddenCount = Math.max(0, parseIntSafe(state.pendingNotificationsClearedCount, 0));
+    const hiddenCount = Math.max(
+      0,
+      parseIntSafe(state.pendingNotificationsClearedCount, 0),
+    );
     const visibleCount = Math.max(0, safeRaw - hiddenCount);
     const optimisticUnreadCount = countOptimisticUnreadEntries(
       state.optimisticNotificationUnreadMap,
@@ -389,9 +416,14 @@
     return Math.max(visibleCount, optimisticUnreadCount);
   }
 
-  function computeDisplayedFollowRequestUnreadCount(rawCount = state.rawFollowRequestUnreadCount) {
+  function computeDisplayedFollowRequestUnreadCount(
+    rawCount = state.rawFollowRequestUnreadCount,
+  ) {
     const safeRaw = Math.max(0, parseIntSafe(rawCount, 0));
-    const hiddenCount = Math.max(0, parseIntSafe(state.pendingFollowRequestsClearedCount, 0));
+    const hiddenCount = Math.max(
+      0,
+      parseIntSafe(state.pendingFollowRequestsClearedCount, 0),
+    );
     const visibleCount = Math.max(0, safeRaw - hiddenCount);
     const optimisticUnreadCount = countOptimisticUnreadEntries(
       state.optimisticFollowRequestUnreadMap,
@@ -406,12 +438,14 @@
 
   function applyVisibleUnreadSummaryOverrides(summary = {}) {
     const normalized = { ...(summary || {}) };
-    normalized.notificationUnreadCount = computeDisplayedNotificationUnreadCount(
-      normalized.notificationUnreadCount,
-    );
-    normalized.followRequestUnreadCount = computeDisplayedFollowRequestUnreadCount(
-      normalized.followRequestUnreadCount,
-    );
+    normalized.notificationUnreadCount =
+      computeDisplayedNotificationUnreadCount(
+        normalized.notificationUnreadCount,
+      );
+    normalized.followRequestUnreadCount =
+      computeDisplayedFollowRequestUnreadCount(
+        normalized.followRequestUnreadCount,
+      );
 
     normalized.count =
       Math.max(0, parseIntSafe(normalized.notificationUnreadCount, 0)) +
@@ -463,19 +497,43 @@
       return applyVisibleUnreadSummaryOverrides(rawSummary);
     }
 
-    if (hasSummaryValue(summary, "notificationUnreadCount", "NotificationUnreadCount")) {
+    if (
+      hasSummaryValue(
+        summary,
+        "notificationUnreadCount",
+        "NotificationUnreadCount",
+      )
+    ) {
       state.hasNotificationUnreadCountLoaded = true;
     }
 
-    if (hasSummaryValue(summary, "followRequestUnreadCount", "FollowRequestUnreadCount")) {
+    if (
+      hasSummaryValue(
+        summary,
+        "followRequestUnreadCount",
+        "FollowRequestUnreadCount",
+      )
+    ) {
       state.hasFollowRequestUnreadCountLoaded = true;
     }
 
-    if (hasSummaryValue(summary, "lastNotificationsSeenAt", "LastNotificationsSeenAt")) {
+    if (
+      hasSummaryValue(
+        summary,
+        "lastNotificationsSeenAt",
+        "LastNotificationsSeenAt",
+      )
+    ) {
       state.hasNotificationsSeenStateLoaded = true;
     }
 
-    if (hasSummaryValue(summary, "lastFollowRequestsSeenAt", "LastFollowRequestsSeenAt")) {
+    if (
+      hasSummaryValue(
+        summary,
+        "lastFollowRequestsSeenAt",
+        "LastFollowRequestsSeenAt",
+      )
+    ) {
       state.hasFollowRequestsSeenStateLoaded = true;
     }
 
@@ -496,10 +554,22 @@
     state.rawTotalUnreadCount = rawSummary.count;
     state.rawNotificationUnreadCount = rawSummary.notificationUnreadCount;
     state.rawFollowRequestUnreadCount = rawSummary.followRequestUnreadCount;
-    if (hasSummaryValue(summary, "notificationUnreadCount", "NotificationUnreadCount")) {
+    if (
+      hasSummaryValue(
+        summary,
+        "notificationUnreadCount",
+        "NotificationUnreadCount",
+      )
+    ) {
       state.optimisticNotificationUnreadMap.clear();
     }
-    if (hasSummaryValue(summary, "followRequestUnreadCount", "FollowRequestUnreadCount")) {
+    if (
+      hasSummaryValue(
+        summary,
+        "followRequestUnreadCount",
+        "FollowRequestUnreadCount",
+      )
+    ) {
       state.optimisticFollowRequestUnreadMap.clear();
     }
     pruneOptimisticUnreadState();
@@ -566,7 +636,8 @@
     );
     if (
       !hasLocalReadContext ||
-      (effectiveSeenAt && !isTimestampGreater(normalizedOccurredAt, effectiveSeenAt))
+      (effectiveSeenAt &&
+        !isTimestampGreater(normalizedOccurredAt, effectiveSeenAt))
     ) {
       return false;
     }
@@ -580,7 +651,10 @@
       return false;
     }
 
-    state.optimisticNotificationUnreadMap.set(normalizedId, normalizedOccurredAt);
+    state.optimisticNotificationUnreadMap.set(
+      normalizedId,
+      normalizedOccurredAt,
+    );
     return true;
   }
 
@@ -600,7 +674,8 @@
     );
     if (
       !hasLocalReadContext ||
-      (effectiveSeenAt && !isTimestampGreater(normalizedOccurredAt, effectiveSeenAt))
+      (effectiveSeenAt &&
+        !isTimestampGreater(normalizedOccurredAt, effectiveSeenAt))
     ) {
       return false;
     }
@@ -614,7 +689,10 @@
       return false;
     }
 
-    state.optimisticFollowRequestUnreadMap.set(normalizedId, normalizedOccurredAt);
+    state.optimisticFollowRequestUnreadMap.set(
+      normalizedId,
+      normalizedOccurredAt,
+    );
     return true;
   }
 
@@ -684,8 +762,14 @@
 
         const parsed = JSON.parse(raw);
         const accountId = readString(parsed, "accountId");
-        const notificationsSeenAt = readTimestamp(parsed, "notificationsSeenAt");
-        const followRequestsSeenAt = readTimestamp(parsed, "followRequestsSeenAt");
+        const notificationsSeenAt = readTimestamp(
+          parsed,
+          "notificationsSeenAt",
+        );
+        const followRequestsSeenAt = readTimestamp(
+          parsed,
+          "followRequestsSeenAt",
+        );
         const savedAt = readTimestamp(parsed, "savedAt");
         const savedAtValue = savedAt ? Date.parse(savedAt) : NaN;
         const hasSeenAt = !!(notificationsSeenAt || followRequestsSeenAt);
@@ -858,7 +942,8 @@
       const savedAt = readTimestamp(parsed, "savedAt");
       const expired =
         savedAt &&
-        Date.now() - Date.parse(savedAt) > Math.max(1000, state.readStateDraftTtlMs);
+        Date.now() - Date.parse(savedAt) >
+          Math.max(1000, state.readStateDraftTtlMs);
       const accountId = readString(parsed, "accountId");
       if (expired || (accountId && accountId !== currentAccountId())) {
         localStorage.removeItem(storageKey);
@@ -905,27 +990,39 @@
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "";
     const diffMs = Date.now() - date.getTime();
-    const lang = (
-      global.I18n?.getLanguage?.() ||
-      localStorage.getItem("appLanguage") ||
-      "en"
-    )
-      .toString()
-      .trim()
-      .toLowerCase();
     if (diffMs < 60 * 1000) {
       return npT("notifications.time.justNow", {}, "just now");
     }
     if (diffMs < 60 * 60 * 1000) {
       const minutes = Math.floor(diffMs / (60 * 1000));
-      return npT("notifications.time.minuteShort", { count: minutes }, "{count}m");
+      const minuteKey =
+        minutes === 1
+          ? "notifications.time.minuteOne"
+          : "notifications.time.minuteOther";
+      return npT(minuteKey, { count: minutes }, "{count} mins");
     }
     if (diffMs < 24 * 60 * 60 * 1000) {
       const hours = Math.floor(diffMs / (60 * 60 * 1000));
-      return npT("notifications.time.hourShort", { count: hours }, "{count}h");
+      const hourKey =
+        hours === 1
+          ? "notifications.time.hourOne"
+          : "notifications.time.hourOther";
+      return npT(hourKey, { count: hours }, "{count} hours");
     }
-    const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
-    return npT("notifications.time.dayShort", { count: days }, "{count}d");
+    if (diffMs < 7 * 24 * 60 * 60 * 1000) {
+      const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+      const dayKey =
+        days === 1
+          ? "notifications.time.dayOne"
+          : "notifications.time.dayOther";
+      return npT(dayKey, { count: days }, "{count} days");
+    }
+    const weeks = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
+    const weekKey =
+      weeks === 1
+        ? "notifications.time.weekOne"
+        : "notifications.time.weekOther";
+    return npT(weekKey, { count: weeks }, "{count} weeks");
   }
 
   function resolvePanelWidthPx() {
@@ -1001,19 +1098,25 @@
       <div class="notifications-panel-tabs" id="notifications-panel-tabs">
         <div class="notifications-tabs-list">
           <button type="button" class="notifications-tab active" data-filter="${NOTIFICATION_FILTER.ACTIVITY}">
-            <span class="notifications-tab-label">${escapeHtml(npT("notification.panel.tabActivity"))}</span>
-            <span class="notifications-tab-badge" data-tab-badge="activity" hidden></span>
+            <span class="notifications-tab-content">
+              <span class="notifications-tab-label">${escapeHtml(npT("notification.panel.tabActivity"))}</span>
+              <span class="notifications-tab-badge" data-tab-badge="activity" hidden></span>
+            </span>
           </button>
           <button type="button" class="notifications-tab" data-filter="${NOTIFICATION_FILTER.REQUESTS}">
-            <span class="notifications-tab-label">${escapeHtml(npT("notification.panel.tabRequests"))}</span>
-            <span class="notifications-tab-badge" data-tab-badge="requests" hidden></span>
+            <span class="notifications-tab-content">
+              <span class="notifications-tab-label">${escapeHtml(npT("notification.panel.tabRequests"))}</span>
+              <span class="notifications-tab-badge" data-tab-badge="requests" hidden></span>
+            </span>
           </button>
           <div class="notifications-tabs-indicator" id="notifications-tabs-indicator" aria-hidden="true"></div>
         </div>
       </div>
       <div class="notifications-panel-subheader" id="notifications-panel-subheader" hidden>
-        <span class="notifications-panel-subheader-title">${escapeHtml(npT("notification.panel.totalRequests"))}</span>
-        <span class="notifications-panel-subheader-badge" id="notifications-panel-requests-total-badge" hidden></span>
+        <div class="notifications-panel-subheader-content">
+          <span class="notifications-panel-subheader-title">${escapeHtml(npT("notification.panel.totalRequests"))}</span>
+          <span class="notifications-panel-subheader-badge" id="notifications-panel-requests-total-badge" hidden></span>
+        </div>
       </div>
       <div class="notifications-panel-list" id="notifications-panel-list">
         <div class="notifications-panel-loader">
@@ -1052,7 +1155,9 @@
     state.dom.requestsTabBadge = panel.querySelector(
       '.notifications-tab-badge[data-tab-badge="requests"]',
     );
-    state.dom.requestsSummary = panel.querySelector("#notifications-panel-subheader");
+    state.dom.requestsSummary = panel.querySelector(
+      "#notifications-panel-subheader",
+    );
     state.dom.requestsSummaryBadge = panel.querySelector(
       "#notifications-panel-requests-total-badge",
     );
@@ -1076,7 +1181,9 @@
   function refreshPanelLocalization() {
     if (!state.dom.panel) return;
 
-    const previousScrollTop = state.dom.list ? Number(state.dom.list.scrollTop) || 0 : 0;
+    const previousScrollTop = state.dom.list
+      ? Number(state.dom.list.scrollTop) || 0
+      : 0;
     state.dom.panel.innerHTML = buildPanelHtml();
     ensurePanel();
     updateTabUi();
@@ -1268,7 +1375,9 @@
     );
     updateCountBadgeElement(
       state.dom.requestsTabBadge,
-      computeDisplayedFollowRequestUnreadCount(state.rawFollowRequestUnreadCount),
+      computeDisplayedFollowRequestUnreadCount(
+        state.rawFollowRequestUnreadCount,
+      ),
     );
     requestAnimationFrame(updateTabsIndicator);
   }
@@ -1278,7 +1387,9 @@
       return null;
     }
 
-    const summary = applyVisibleUnreadSummaryOverrides(buildOptimisticUnreadSummary());
+    const summary = applyVisibleUnreadSummaryOverrides(
+      buildOptimisticUnreadSummary(),
+    );
     global.setGlobalNotificationBadge(summary.count);
 
     return summary;
@@ -1311,7 +1422,10 @@
       count: state.rawTotalUnreadCount,
       notificationUnreadCount: state.rawNotificationUnreadCount,
       followRequestUnreadCount: state.rawFollowRequestUnreadCount,
-      pendingFollowRequestCount: Math.max(0, parseIntSafe(state.followRequestCount, 0)),
+      pendingFollowRequestCount: Math.max(
+        0,
+        parseIntSafe(state.followRequestCount, 0),
+      ),
       lastNotificationsSeenAt: state.lastNotificationsSeenAt,
       lastFollowRequestsSeenAt: state.lastFollowRequestsSeenAt,
     };
@@ -1542,19 +1656,26 @@
       }
 
       state.isFollowRequestSkeletonVisible = true;
-      state.dom.list.innerHTML = buildFollowRequestSkeletonHtml(state.items.length);
+      state.dom.list.innerHTML = buildFollowRequestSkeletonHtml(
+        state.items.length,
+      );
     }, 220);
 
     return token;
   }
 
   function endFollowRequestSyncVisual(token, shouldRestoreItems = false) {
-    if (token !== null && token !== undefined && token !== state.followRequestSyncToken) {
+    if (
+      token !== null &&
+      token !== undefined &&
+      token !== state.followRequestSyncToken
+    ) {
       return;
     }
 
     clearFollowRequestSyncPlaceholderTimer();
-    const shouldRenderItems = shouldRestoreItems && state.isFollowRequestSkeletonVisible;
+    const shouldRenderItems =
+      shouldRestoreItems && state.isFollowRequestSkeletonVisible;
     state.isFollowRequestSkeletonVisible = false;
     setFollowRequestSyncing(false);
 
@@ -1643,7 +1764,8 @@
         0,
       ),
       text:
-        readString(raw, "text", "Text") || npT("notification.fallback.newNotification"),
+        readString(raw, "text", "Text") ||
+        npT("notification.fallback.newNotification"),
       targetKind: parseIntSafe(
         readNumber(raw, ["targetKind", "TargetKind"], 0),
         0,
@@ -1704,7 +1826,10 @@
       },
     };
 
-    normalizedItem.isSeen = resolveItemSeenState(normalizedItem, normalizedItem.explicitSeen);
+    normalizedItem.isSeen = resolveItemSeenState(
+      normalizedItem,
+      normalizedItem.explicitSeen,
+    );
     return normalizedItem;
   }
 
@@ -1759,7 +1884,10 @@
 
   function buildNotificationActionText(item) {
     const actionFromType = buildActionTextFromType(item?.type);
-    if (actionFromType && actionFromType !== npT("notification.actions.generic")) {
+    if (
+      actionFromType &&
+      actionFromType !== npT("notification.actions.generic")
+    ) {
       return actionFromType;
     }
 
@@ -1850,6 +1978,10 @@
         return npT("notification.actions.reactedPost");
       case NOTIFICATION_TYPE.STORY_REACT:
         return npT("notification.actions.reactedStory");
+      case NOTIFICATION_TYPE.COMMENT_REACT:
+        return npT("notification.actions.reactedComment");
+      case NOTIFICATION_TYPE.REPLY_REACT:
+        return npT("notification.actions.reactedReply");
       case NOTIFICATION_TYPE.FOLLOW_REQUEST:
         return npT("notification.actions.followRequest");
       case NOTIFICATION_TYPE.FOLLOW_REQUEST_ACCEPTED:
@@ -1952,7 +2084,8 @@
 
     const requesterId = getFollowRequestActorId(item);
     if (!requesterId) {
-      if (global.toastError) global.toastError(npT("notification.requests.invalid"));
+      if (global.toastError)
+        global.toastError(npT("notification.requests.invalid"));
       return;
     }
 
@@ -2147,6 +2280,10 @@
   }
 
   function buildNotificationItemHtml(item, enterIdSet = null) {
+    const notificationId = normalizeId(item.notificationId);
+    const revealIndex =
+      enterIdSet instanceof Map ? enterIdSet.get(notificationId) : undefined;
+    const isRevealSequence = Number.isInteger(revealIndex);
     const isUnavailable = isItemUnavailable(item);
     const showThumbnail =
       !isUnavailable &&
@@ -2163,9 +2300,15 @@
     const unreadClass = item.isSeen ? "" : " unread";
     const unavailableClass = isUnavailable ? " unavailable" : "";
     const enterClass =
-      enterIdSet && enterIdSet.has(normalizeId(item.notificationId))
+      !isRevealSequence &&
+      enterIdSet instanceof Set &&
+      enterIdSet.has(notificationId)
         ? " notifications-item-enter"
         : "";
+    const revealClass = isRevealSequence ? " notifications-item-reveal" : "";
+    const revealStyle = isRevealSequence
+      ? ` style="--notifications-item-enter-delay:${Math.min(revealIndex * 42, 252)}ms"`
+      : "";
     const typeClass = `type-${item.type}`;
     const showFollowRequestActions = canRenderFollowRequestActions(item);
     const followRequestActionsHtml = showFollowRequestActions
@@ -2181,28 +2324,33 @@
       <div
         role="button"
         tabindex="0"
-        class="notifications-item${unreadClass}${unavailableClass}${enterClass} ${typeClass}"
+        class="notifications-item${unreadClass}${unavailableClass}${enterClass}${revealClass} ${typeClass}"
         data-notification-id="${escapeHtml(item.notificationId)}"
+        ${revealStyle}
       >
         <div class="notifications-item-avatar-wrap">
           <img class="notifications-item-avatar" src="${escapeHtml(actorAvatar)}" alt="${escapeHtml(actorUsername)}" data-media-fallback-ignore="true">
         </div>
         <div class="notifications-item-body">
           <div class="notifications-item-top-row">
-            <span class="notifications-item-sentence">
-              <span class="notifications-item-sentence-actor">${escapeHtml(actorTitle.primaryName)}</span>${
-                actorTitle.othersText
-                  ? ` <span class="notifications-item-sentence-others">${escapeHtml(actorTitle.othersText)}</span>`
-                  : ""
-              }
-              <span class="notifications-item-sentence-action"> ${escapeHtml(actionText)}</span>
-            </span>
+            <div class="notifications-item-content">
+              <span class="notifications-item-sentence">
+                <span class="notifications-item-sentence-actor">${escapeHtml(actorTitle.primaryName)}</span>${
+                  actorTitle.othersText
+                    ? ` <span class="notifications-item-sentence-others">${escapeHtml(actorTitle.othersText)}</span>`
+                    : ""
+                }
+                <span class="notifications-item-sentence-action"> ${escapeHtml(actionText)}</span>
+              </span>
+              <div class="notifications-item-meta">
+                <span class="notifications-item-time">${escapeHtml(timeLabel)}</span>
+              </div>
+            </div>
             ${
               showThumbnail
                 ? `<img class="notifications-item-thumbnail" src="${escapeHtml(item.thumbnailUrl)}" alt="${escapeHtml(npT("notification.panel.thumbnailAlt"))}" data-media-kind="${thumbnailMediaKind}" data-media-fallback-ignore="true">`
                 : ""
             }
-            <span class="notifications-item-time">${escapeHtml(timeLabel)}</span>
           </div>
           ${followRequestActionsHtml}
         </div>
@@ -2214,6 +2362,9 @@
     if (!state.dom.list) return;
     const enterIdSet =
       options.enterIdSet instanceof Set ? options.enterIdSet : null;
+    const revealIdMap =
+      options.revealIdMap instanceof Map ? options.revealIdMap : null;
+    const animationTarget = revealIdMap || enterIdSet;
     state.itemMap.clear();
     state.items.forEach((item) => {
       state.itemMap.set(normalizeId(item.notificationId), item);
@@ -2233,7 +2384,7 @@
     }
 
     state.dom.list.innerHTML = state.items
-      .map((item) => buildNotificationItemHtml(item, enterIdSet))
+      .map((item) => buildNotificationItemHtml(item, animationTarget))
       .join("");
     applyImageFallbackHandlers();
   }
@@ -2247,6 +2398,9 @@
 
     const enterIdSet =
       options.enterIdSet instanceof Set ? options.enterIdSet : null;
+    const revealIdMap =
+      options.revealIdMap instanceof Map ? options.revealIdMap : null;
+    const animationTarget = revealIdMap || enterIdSet;
     const previousItemsById =
       options.previousItemsById instanceof Map
         ? options.previousItemsById
@@ -2286,7 +2440,7 @@
 
       if (shouldReplace) {
         const nextNode = createElementFromHtml(
-          buildNotificationItemHtml(item, enterIdSet),
+          buildNotificationItemHtml(item, animationTarget),
         );
         if (!nextNode) return;
 
@@ -2335,6 +2489,19 @@
     applyImageFallbackHandlers();
   }
 
+  function buildRevealIdMap(items = []) {
+    const revealIdMap = new Map();
+    const maxAnimatedItems = 8;
+
+    items.slice(0, maxAnimatedItems).forEach((item, index) => {
+      const id = normalizeId(item?.notificationId);
+      if (!id) return;
+      revealIdMap.set(id, index);
+    });
+
+    return revealIdMap;
+  }
+
   function setMoreLoaderVisible(visible) {
     if (!state.dom.loader) return;
     state.dom.loader.style.display = visible ? "flex" : "none";
@@ -2374,14 +2541,20 @@
 
     if (
       notificationsSeenAt &&
-      compareIsoTimestamps(state.pendingNotificationsSeenAt, notificationsSeenAt) <= 0
+      compareIsoTimestamps(
+        state.pendingNotificationsSeenAt,
+        notificationsSeenAt,
+      ) <= 0
     ) {
       state.pendingNotificationsSeenAt = "";
     }
 
     if (
       followRequestsSeenAt &&
-      compareIsoTimestamps(state.pendingFollowRequestsSeenAt, followRequestsSeenAt) <= 0
+      compareIsoTimestamps(
+        state.pendingFollowRequestsSeenAt,
+        followRequestsSeenAt,
+      ) <= 0
     ) {
       state.pendingFollowRequestsSeenAt = "";
     }
@@ -2413,7 +2586,10 @@
         state.lastNotificationsSeenAt,
         state.pendingNotificationsSeenAt,
       );
-      if (!currentValue || isTimestampGreater(notificationsSeenAt, currentValue)) {
+      if (
+        !currentValue ||
+        isTimestampGreater(notificationsSeenAt, currentValue)
+      ) {
         state.pendingNotificationsSeenAt = pickLatestTimestamp(
           state.pendingNotificationsSeenAt,
           notificationsSeenAt,
@@ -2433,7 +2609,10 @@
         state.lastFollowRequestsSeenAt,
         state.pendingFollowRequestsSeenAt,
       );
-      if (!currentValue || isTimestampGreater(followRequestsSeenAt, currentValue)) {
+      if (
+        !currentValue ||
+        isTimestampGreater(followRequestsSeenAt, currentValue)
+      ) {
         state.pendingFollowRequestsSeenAt = pickLatestTimestamp(
           state.pendingFollowRequestsSeenAt,
           followRequestsSeenAt,
@@ -2491,7 +2670,8 @@
       if (
         requestAccountId &&
         currentAccountAfterResponse &&
-        normalizeId(requestAccountId) !== normalizeId(currentAccountAfterResponse)
+        normalizeId(requestAccountId) !==
+          normalizeId(currentAccountAfterResponse)
       ) {
         resetLocalReadStateState();
         return null;
@@ -2578,7 +2758,8 @@
     if (
       normalizedGlobalSummary &&
       normalizedGlobalSummary.accountId &&
-      normalizeId(normalizedGlobalSummary.accountId) === normalizeId(currentAccountId()) &&
+      normalizeId(normalizedGlobalSummary.accountId) ===
+        normalizeId(currentAccountId()) &&
       Number(globalSummary?.loadedAt) > 0
     ) {
       return normalizedGlobalSummary;
@@ -2671,7 +2852,10 @@
       notificationsSeenAt:
         draft.notificationsSeenAt &&
         (!state.lastNotificationsSeenAt ||
-          isTimestampGreater(draft.notificationsSeenAt, state.lastNotificationsSeenAt))
+          isTimestampGreater(
+            draft.notificationsSeenAt,
+            state.lastNotificationsSeenAt,
+          ))
           ? draft.notificationsSeenAt
           : "",
       followRequestsSeenAt:
@@ -2685,7 +2869,10 @@
           : "",
     };
 
-    if (!replayPayload.notificationsSeenAt && !replayPayload.followRequestsSeenAt) {
+    if (
+      !replayPayload.notificationsSeenAt &&
+      !replayPayload.followRequestsSeenAt
+    ) {
       clearReadStateDraft();
       return null;
     }
@@ -2707,6 +2894,7 @@
     const silentMode = options.silent === true;
     const showLoader = !isLoadMore && options.showLoader !== false;
     const animateNewItems = !isLoadMore && options.animateNewItems === true;
+    const revealItems = !isLoadMore && showLoader;
     const patchDom = !isLoadMore && options.patchDom === true;
     const previousItemIdSet = animateNewItems
       ? new Set(state.items.map((item) => normalizeId(item.notificationId)))
@@ -2790,6 +2978,7 @@
       state.lastLoadedAt = Date.now();
 
       let enterIdSet = null;
+      let revealIdMap = null;
       if (animateNewItems && previousItemIdSet instanceof Set) {
         enterIdSet = new Set();
         state.items.forEach((item) => {
@@ -2798,11 +2987,14 @@
           enterIdSet.add(id);
         });
       }
+      if (revealItems) {
+        revealIdMap = buildRevealIdMap(state.items);
+      }
 
       if (patchDom) {
-        renderItemsPatched({ enterIdSet, previousItemsById });
+        renderItemsPatched({ enterIdSet, revealIdMap, previousItemsById });
       } else {
-        renderItems({ enterIdSet });
+        renderItems({ enterIdSet, revealIdMap });
       }
       queueNotificationsSeenFromItems(state.items);
       state.hasRealtimeDirty = false;
@@ -2830,6 +3022,7 @@
     const silentMode = options.silent === true;
     const showLoader = !isLoadMore && options.showLoader !== false;
     const animateNewItems = !isLoadMore && options.animateNewItems === true;
+    const revealItems = !isLoadMore && showLoader;
     const patchDom = !isLoadMore && options.patchDom === true;
     const previousItemIdSet = animateNewItems
       ? new Set(state.items.map((item) => normalizeId(item.notificationId)))
@@ -2904,10 +3097,13 @@
         "requesterId",
         "RequesterId",
       );
-      state.hasMore = !!(state.cursorRequestCreatedAt && state.cursorRequesterId);
+      state.hasMore = !!(
+        state.cursorRequestCreatedAt && state.cursorRequesterId
+      );
       state.followRequestLastLoadedAt = Date.now();
 
       let enterIdSet = null;
+      let revealIdMap = null;
       if (animateNewItems && previousItemIdSet instanceof Set) {
         enterIdSet = new Set();
         state.items.forEach((item) => {
@@ -2916,11 +3112,14 @@
           enterIdSet.add(id);
         });
       }
+      if (revealItems) {
+        revealIdMap = buildRevealIdMap(state.items);
+      }
 
       if (patchDom) {
-        renderItemsPatched({ enterIdSet, previousItemsById });
+        renderItemsPatched({ enterIdSet, revealIdMap, previousItemsById });
       } else {
-        renderItems({ enterIdSet });
+        renderItems({ enterIdSet, revealIdMap });
       }
       queueFollowRequestsSeenFromItems(state.items);
       state.hasFollowRequestDirty = false;
@@ -3169,7 +3368,9 @@
     }
 
     if (!global.API?.Posts?.getByPostCode) {
-      showRateLimitedOpenFailedToast(npT("notification.fallback.postOpenFailed"));
+      showRateLimitedOpenFailedToast(
+        npT("notification.fallback.postOpenFailed"),
+      );
       return false;
     }
 
@@ -3180,12 +3381,16 @@
         if (unavailableMessage) {
           showRateLimitedUnavailableToast(unavailableMessage);
         } else {
-          showRateLimitedOpenFailedToast(npT("notification.fallback.postOpenFailed"));
+          showRateLimitedOpenFailedToast(
+            npT("notification.fallback.postOpenFailed"),
+          );
         }
         return false;
       }
     } catch (_) {
-      showRateLimitedOpenFailedToast(npT("notification.fallback.postOpenFailed"));
+      showRateLimitedOpenFailedToast(
+        npT("notification.fallback.postOpenFailed"),
+      );
       return false;
     }
 
@@ -3223,7 +3428,9 @@
     }
 
     if (!global.API?.Stories?.resolveByStoryId) {
-      showRateLimitedOpenFailedToast(npT("notification.fallback.storyOpenFailed"));
+      showRateLimitedOpenFailedToast(
+        npT("notification.fallback.storyOpenFailed"),
+      );
       return false;
     }
 
@@ -3234,12 +3441,16 @@
         if (unavailableMessage) {
           showRateLimitedUnavailableToast(unavailableMessage);
         } else {
-          showRateLimitedOpenFailedToast(npT("notification.fallback.storyOpenFailed"));
+          showRateLimitedOpenFailedToast(
+            npT("notification.fallback.storyOpenFailed"),
+          );
         }
         return false;
       }
     } catch (_) {
-      showRateLimitedOpenFailedToast(npT("notification.fallback.storyOpenFailed"));
+      showRateLimitedOpenFailedToast(
+        npT("notification.fallback.storyOpenFailed"),
+      );
       return false;
     }
 
@@ -3361,10 +3572,14 @@
     const normalizedId = normalizeId(notificationId);
     if (!normalizedId) return;
     const nextItems = state.items.length
-      ? state.items.filter((item) => normalizeId(item.notificationId) !== normalizedId)
+      ? state.items.filter(
+          (item) => normalizeId(item.notificationId) !== normalizedId,
+        )
       : state.items;
-    const removedOptimisticUnread = clearOptimisticNotificationUnread(normalizedId);
-    if (nextItems.length === state.items.length && !removedOptimisticUnread) return;
+    const removedOptimisticUnread =
+      clearOptimisticNotificationUnread(normalizedId);
+    if (nextItems.length === state.items.length && !removedOptimisticUnread)
+      return;
     state.items = nextItems;
     renderItems();
     updateTabBadges();
@@ -3448,7 +3663,8 @@
     state.hasRealtimeDirty = true;
     let shouldPublishVisibleSummary = false;
     if (action === "remove" && requesterId) {
-      shouldPublishVisibleSummary = clearOptimisticFollowRequestUnread(requesterId);
+      shouldPublishVisibleSummary =
+        clearOptimisticFollowRequestUnread(requesterId);
     } else if (
       action === "upsert" &&
       requesterId &&
@@ -3684,7 +3900,10 @@
       if (normalizedKind === "activity" || normalizedKind === "notification") {
         return !isRequestsFilter();
       }
-      if (normalizedKind === "requests" || normalizedKind === "follow-request") {
+      if (
+        normalizedKind === "requests" ||
+        normalizedKind === "follow-request"
+      ) {
         return isRequestsFilter();
       }
       return false;
