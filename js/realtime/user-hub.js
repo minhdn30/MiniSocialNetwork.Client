@@ -12,9 +12,26 @@
   const MESSAGE_NOTIFICATION_DEDUPE_WINDOW_MS =
     Number(window.APP_CONFIG?.CHAT_NOTIFICATION_DEDUPE_WINDOW_MS) || 10000;
   const processedMessageNotificationKeys = new Map();
+  const NOTIFICATION_TOAST_DEDUPE_WINDOW_MS =
+    Number(window.APP_CONFIG?.NOTIFICATION_TOAST_DEDUPE_WINDOW_MS) || 10000;
+  const processedNotificationToastKeys = new Map();
   const SYSTEM_MESSAGE_TYPE = 3;
   const SYSTEM_MESSAGE_ACTION_MEMBER_ADDED = 1;
   const SYSTEM_MESSAGE_ACTION_GROUP_CREATED = 7;
+  const NOTIFICATION_TYPE = Object.freeze({
+    FOLLOW: 0,
+    POST_COMMENT: 1,
+    COMMENT_REPLY: 2,
+    POST_TAG: 3,
+    COMMENT_MENTION: 4,
+    STORY_REPLY: 5,
+    POST_REACT: 6,
+    STORY_REACT: 7,
+    FOLLOW_REQUEST: 8,
+    FOLLOW_REQUEST_ACCEPTED: 9,
+    COMMENT_REACT: 10,
+    REPLY_REACT: 11,
+  });
 
   function uhT(key, params = {}, fallback = "") {
     return global.I18n?.t ? global.I18n.t(key, params, fallback) : fallback;
@@ -188,6 +205,64 @@
     }
 
     processedMessageNotificationKeys.set(key, nowMs);
+    return false;
+  }
+
+  function cleanupProcessedNotificationToastKeys(nowMs) {
+    if (processedNotificationToastKeys.size === 0) return;
+    for (const [key, ts] of processedNotificationToastKeys.entries()) {
+      if (nowMs - ts > NOTIFICATION_TOAST_DEDUPE_WINDOW_MS) {
+        processedNotificationToastKeys.delete(key);
+      }
+    }
+  }
+
+  function isDuplicateNotificationToast(data) {
+    const eventId = (
+      data?.EventId ||
+      data?.eventId ||
+      ""
+    )
+      .toString()
+      .trim()
+      .toLowerCase();
+    const type = Number(
+      data?.ToastType ?? data?.toastType ?? data?.Type ?? data?.type ?? -1,
+    );
+    const actorUsername = (
+      data?.ToastActorUsername ||
+      data?.toastActorUsername ||
+      data?.ActorUsername ||
+      data?.actorUsername ||
+      ""
+    )
+      .toString()
+      .trim()
+      .toLowerCase();
+    const occurredAt = (
+      data?.OccurredAt ||
+      data?.occurredAt ||
+      ""
+    )
+      .toString()
+      .trim()
+      .toLowerCase();
+
+    const key = eventId || `${type}:${actorUsername}:${occurredAt}`;
+    if (!key) return false;
+
+    const nowMs = Date.now();
+    cleanupProcessedNotificationToastKeys(nowMs);
+
+    const previousTs = processedNotificationToastKeys.get(key);
+    if (
+      typeof previousTs === "number" &&
+      nowMs - previousTs < NOTIFICATION_TOAST_DEDUPE_WINDOW_MS
+    ) {
+      return true;
+    }
+
+    processedNotificationToastKeys.set(key, nowMs);
     return false;
   }
 
@@ -393,6 +468,8 @@
     // Safety guard: ignore events that are not for this account.
     if (targetAccountId && myId && targetAccountId !== myId) return;
 
+    handleNotificationToast(data);
+
     const shouldSuppressGlobalRefresh =
       window.NotificationsPanel &&
       typeof window.NotificationsPanel.shouldSuppressGlobalUnreadRefresh ===
@@ -415,6 +492,163 @@
     }
   }
 
+  function buildNotificationToastActionText(type) {
+    switch (Number(type)) {
+      case NOTIFICATION_TYPE.FOLLOW:
+        return uhT("notification.toastActions.followedYou", {}, "followed you");
+      case NOTIFICATION_TYPE.POST_COMMENT:
+        return uhT(
+          "notification.toastActions.commentedPost",
+          {},
+          "commented on your post",
+        );
+      case NOTIFICATION_TYPE.COMMENT_REPLY:
+        return uhT(
+          "notification.toastActions.repliedComment",
+          {},
+          "replied to your comment",
+        );
+      case NOTIFICATION_TYPE.POST_TAG:
+        return uhT(
+          "notification.toastActions.taggedPost",
+          {},
+          "tagged you in a post",
+        );
+      case NOTIFICATION_TYPE.COMMENT_MENTION:
+        return uhT(
+          "notification.toastActions.mentionedComment",
+          {},
+          "mentioned you in a comment",
+        );
+      case NOTIFICATION_TYPE.STORY_REPLY:
+        return uhT(
+          "notification.toastActions.repliedStory",
+          {},
+          "replied to your story",
+        );
+      case NOTIFICATION_TYPE.POST_REACT:
+        return uhT(
+          "notification.toastActions.reactedPost",
+          {},
+          "reacted to your post",
+        );
+      case NOTIFICATION_TYPE.STORY_REACT:
+        return uhT(
+          "notification.toastActions.reactedStory",
+          {},
+          "reacted to your story",
+        );
+      case NOTIFICATION_TYPE.FOLLOW_REQUEST:
+        return uhT(
+          "notification.toastActions.followRequest",
+          {},
+          "wants to follow you",
+        );
+      case NOTIFICATION_TYPE.FOLLOW_REQUEST_ACCEPTED:
+        return uhT(
+          "notification.toastActions.followRequestAccepted",
+          {},
+          "accepted your follow request",
+        );
+      case NOTIFICATION_TYPE.COMMENT_REACT:
+        return uhT(
+          "notification.toastActions.reactedComment",
+          {},
+          "reacted to your comment",
+        );
+      case NOTIFICATION_TYPE.REPLY_REACT:
+        return uhT(
+          "notification.toastActions.reactedReply",
+          {},
+          "reacted to your reply",
+        );
+      default:
+        return uhT(
+          "notification.toastActions.generic",
+          {},
+          "sent you a notification",
+        );
+    }
+  }
+
+  function truncateNotificationToastActorName(name) {
+    const raw = (name || "").toString().trim();
+    if (!raw) {
+      return uhT("notification.actorFallback", {}, "Someone");
+    }
+
+    const maxLength = 20;
+    if (raw.length <= maxLength) {
+      return raw;
+    }
+
+    return `${raw.slice(0, maxLength - 3).trimEnd()}...`;
+  }
+
+  function handleNotificationToast(data) {
+    const myId = (localStorage.getItem("accountId") || "").toLowerCase();
+    const targetAccountId = (
+      data?.TargetAccountId ||
+      data?.targetAccountId ||
+      ""
+    )
+      .toString()
+      .toLowerCase();
+    const toastType =
+      data?.ToastType ?? data?.toastType ?? data?.Type ?? data?.type;
+
+    if (targetAccountId && myId && targetAccountId !== myId) return;
+    if (toastType === null || toastType === undefined || toastType === "") return;
+    if (isDuplicateNotificationToast(data)) return;
+
+    const actorUsername = (
+      data?.ToastActorUsername ||
+      data?.toastActorUsername ||
+      data?.ActorUsername ||
+      data?.actorUsername ||
+      ""
+    )
+      .toString()
+      .trim();
+    const actorFullName = (
+      data?.ToastActorFullName ||
+      data?.toastActorFullName ||
+      data?.ActorFullName ||
+      data?.actorFullName ||
+      ""
+    )
+      .toString()
+      .trim();
+    const actorName =
+      truncateNotificationToastActorName(
+        actorUsername ||
+          actorFullName ||
+          uhT("notification.actorFallback", {}, "Someone"),
+      );
+    const actionText = buildNotificationToastActionText(
+      toastType,
+    );
+    const message = `${actorName} ${actionText}`.trim();
+
+    if (window.toastNotification) {
+      window.toastNotification(message, {
+        actorName,
+        actionText,
+        avatarUrl:
+          data?.ToastActorAvatarUrl ||
+          data?.toastActorAvatarUrl ||
+          data?.ActorAvatarUrl ||
+          data?.actorAvatarUrl ||
+          "",
+      });
+      return;
+    }
+
+    if (window.toastInfo) {
+      toastInfo(message);
+    }
+  }
+
   function handleFollowRequestQueueChanged(data) {
     const myId = (localStorage.getItem("accountId") || "").toLowerCase();
     const targetAccountId = (
@@ -426,6 +660,8 @@
       .toLowerCase();
 
     if (targetAccountId && myId && targetAccountId !== myId) return;
+
+    handleNotificationToast(data);
 
     const shouldSuppressGlobalRefresh =
       window.NotificationsPanel &&
@@ -759,15 +995,6 @@
           }
 
           if (msgAction === "follow" && msgCurrentId && msgCurrentId !== myId) {
-            if (window.toastInfo) {
-              toastInfo(
-                uhT(
-                  "notification.toast.newFollower",
-                  {},
-                  "You have a new follower",
-                ),
-              );
-            }
             return;
           }
 
@@ -776,36 +1003,10 @@
             msgCurrentId &&
             msgCurrentId !== myId
           ) {
-            if (window.toastInfo) {
-              toastInfo(
-                uhT(
-                  "notification.toast.newFollowRequest",
-                  {},
-                  "You have a new follow request",
-                ),
-              );
-            }
             return;
           }
 
           if (msgAction === "follow_request_accepted") {
-            if (window.toastSuccess) {
-              toastSuccess(
-                uhT(
-                  "notification.toast.followRequestAccepted",
-                  {},
-                  "Your follow request was accepted",
-                ),
-              );
-            } else if (window.toastInfo) {
-              toastInfo(
-                uhT(
-                  "notification.toast.followRequestAccepted",
-                  {},
-                  "Your follow request was accepted",
-                ),
-              );
-            }
             return;
           }
 

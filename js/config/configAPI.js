@@ -1225,9 +1225,15 @@
     },
   };
 
+  let activeReactivationToast = null;
+
   // Global Reactivation Handler
   async function handleGlobalReactivation(message) {
     if (typeof showToast !== "function") return;
+
+    if (activeReactivationToast?.isConnected && typeof window.closeToast === "function") {
+      window.closeToast(activeReactivationToast);
+    }
 
     const promptMessage = message
       ? window.I18n?.translateServerText?.(message) ||
@@ -1241,12 +1247,12 @@
     const laterLabel =
       window.I18n?.t?.("auth.later", {}, "Later") || "Later";
 
-    showToast(
+    activeReactivationToast = showToast(
       `<div>
             <p style="margin-bottom: 8px;">${promptMessage}</p>
             <div class="toast-actions">
               <button class="toast-btn" onclick="window.reactivateAccountAction()">${reactivateLabel}</button>
-              <button class="toast-btn secondary" onclick="window.closeToast()">${laterLabel}</button>
+              <button class="toast-btn secondary" onclick="window.closeToast(this)">${laterLabel}</button>
             </div>
           </div>`,
       "error",
@@ -1263,7 +1269,10 @@
           toastSuccessKey("errors.account.reactivationSuccess");
         }
         setTimeout(() => {
-          window.closeToast();
+          if (activeReactivationToast?.isConnected && typeof window.closeToast === "function") {
+            window.closeToast(activeReactivationToast);
+          }
+          activeReactivationToast = null;
           if (window.location.pathname.includes("auth.html")) {
             window.location.href = "index.html";
           } else {

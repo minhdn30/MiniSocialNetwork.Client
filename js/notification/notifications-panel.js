@@ -3233,6 +3233,145 @@
       .trim();
   }
 
+  function inferTargetKindFromNotificationType(type) {
+    switch (parseIntSafe(type, 0)) {
+      case NOTIFICATION_TYPE.FOLLOW:
+      case NOTIFICATION_TYPE.FOLLOW_REQUEST:
+      case NOTIFICATION_TYPE.FOLLOW_REQUEST_ACCEPTED:
+        return NOTIFICATION_TARGET_KIND.ACCOUNT;
+      case NOTIFICATION_TYPE.STORY_REPLY:
+      case NOTIFICATION_TYPE.STORY_REACT:
+        return NOTIFICATION_TARGET_KIND.STORY;
+      case NOTIFICATION_TYPE.POST_COMMENT:
+      case NOTIFICATION_TYPE.COMMENT_REPLY:
+      case NOTIFICATION_TYPE.POST_TAG:
+      case NOTIFICATION_TYPE.COMMENT_MENTION:
+      case NOTIFICATION_TYPE.POST_REACT:
+      case NOTIFICATION_TYPE.COMMENT_REACT:
+      case NOTIFICATION_TYPE.REPLY_REACT:
+        return NOTIFICATION_TARGET_KIND.POST;
+      default:
+        return NOTIFICATION_TARGET_KIND.NONE;
+    }
+  }
+
+  function buildRealtimeNavigationItem(raw = {}) {
+    const type = parseIntSafe(
+      readNumber(raw, ["type", "Type", "toastType", "ToastType"], 0),
+      0,
+    );
+    const targetKind = parseIntSafe(
+      readNumber(raw, ["targetKind", "TargetKind", "toastTargetKind", "ToastTargetKind"], 0),
+      0,
+    );
+    const targetId = readString(
+      raw,
+      "targetId",
+      "TargetId",
+      "toastTargetId",
+      "ToastTargetId",
+      "requesterId",
+      "RequesterId",
+    );
+    const targetPostCode = readString(
+      raw,
+      "targetPostCode",
+      "TargetPostCode",
+      "toastTargetPostCode",
+      "ToastTargetPostCode",
+    );
+    const actorAccountId = readString(
+      raw,
+      "actorAccountId",
+      "ActorAccountId",
+      "toastActorAccountId",
+      "ToastActorAccountId",
+      "requesterId",
+      "RequesterId",
+    );
+    const canOpen = readBoolean(
+      raw,
+      ["canOpen", "CanOpen", "toastCanOpen", "ToastCanOpen"],
+      true,
+    );
+    const resolvedTargetKind =
+      targetKind || inferTargetKindFromNotificationType(type);
+    const resolvedTargetId =
+      targetId ||
+      (resolvedTargetKind === NOTIFICATION_TARGET_KIND.ACCOUNT
+        ? actorAccountId
+        : "");
+
+    if (!resolvedTargetKind || (!resolvedTargetId && !targetPostCode)) {
+      return null;
+    }
+
+    return {
+      notificationId:
+        readString(raw, "notificationId", "NotificationId") ||
+        `toast:${resolvedTargetKind}:${resolvedTargetId || targetPostCode}`,
+      type,
+      state: canOpen ? NOTIFICATION_STATE.ACTIVE : NOTIFICATION_STATE.UNAVAILABLE,
+      explicitSeen: true,
+      tracksUnreadState: false,
+      isSeen: true,
+      actorCount: 1,
+      eventCount: 1,
+      text: "",
+      targetKind: resolvedTargetKind,
+      targetId: resolvedTargetId,
+      targetPostCode,
+      thumbnailUrl: "",
+      thumbnailMediaType: -1,
+      thumbnailMediaKind: "",
+      createdAt: "",
+      lastEventAt: "",
+      canOpen,
+      actor: {
+        accountId:
+          readString(
+            raw,
+            "actorAccountId",
+            "ActorAccountId",
+            "toastActorAccountId",
+            "ToastActorAccountId",
+            "requesterId",
+            "RequesterId",
+          ) ||
+          (resolvedTargetKind === NOTIFICATION_TARGET_KIND.ACCOUNT
+            ? resolvedTargetId
+            : ""),
+        username: readString(
+          raw,
+          "toastActorUsername",
+          "ToastActorUsername",
+          "actorUsername",
+          "ActorUsername",
+          "username",
+          "Username",
+        ),
+        fullName: readString(
+          raw,
+          "toastActorFullName",
+          "ToastActorFullName",
+          "actorFullName",
+          "ActorFullName",
+          "fullName",
+          "FullName",
+        ),
+        avatarUrl: readString(
+          raw,
+          "toastActorAvatarUrl",
+          "ToastActorAvatarUrl",
+          "actorAvatarUrl",
+          "ActorAvatarUrl",
+          "avatarUrl",
+          "AvatarUrl",
+        ),
+      },
+    };
+  }
+
   async function resolveProfileNavigationTarget(item) {
     const targetIdRaw = (item?.targetId || "").toString().trim();
     const actorAccountIdRaw = (item?.actor?.accountId || "").toString().trim();
@@ -3322,9 +3461,14 @@
     };
   }
 
-  async function openProfileTarget(item) {
+  async function openProfileTarget(item, options = {}) {
+    const silent = options.silent === true;
+    const preservePanel = options.preservePanel !== false;
     const resolved = await resolveProfileNavigationTarget(item);
     if (!resolved?.ok || !resolved.profileTarget) {
+      if (silent) {
+        return false;
+      }
       const message = (resolved?.message || "").toString().toLowerCase();
       if (message.includes("failed to open")) {
         showRateLimitedOpenFailedToast(resolved.message);
@@ -3338,39 +3482,155 @@
 
     const profileTarget = resolved.profileTarget;
     if (global.RouteHelper?.buildProfilePath && global.RouteHelper?.goTo) {
-      preservePanelOnNextRouteChange();
+      if (preservePanel) {
+        preservePanelOnNextRouteChange();
+      }
       global.RouteHelper.goTo(
         global.RouteHelper.buildProfilePath(profileTarget),
       );
       return true;
     }
 
-    preservePanelOnNextRouteChange();
+    if (preservePanel) {
+      preservePanelOnNextRouteChange();
+    }
     global.location.hash = `#/${encodeURIComponent(profileTarget)}`;
     return true;
   }
 
-  async function openPostTarget(item) {
-    const postCode = (item.targetPostCode || "").toString().trim();
-    if (!postCode) {
-      showRateLimitedUnavailableToast(npT("notification.fallback.unavailable"));
+  function readPostCodeFromPayload(payload) {
+    if (!payload || typeof payload !== "object") return "";
+
+    const directPostCode = readString(payload, "postCode", "PostCode");
+    if (directPostCode) return directPostCode;
+
+    const nestedPost = pickValue(payload, "post", "Post");
+    if (!nestedPost || typeof nestedPost !== "object") return "";
+
+    return readString(nestedPost, "postCode", "PostCode");
+  }
+
+  function navigateToPostRoute(postCode, preservePanel = true) {
+    const normalizedPostCode = (postCode || "").toString().trim();
+    if (!normalizedPostCode) {
       return false;
     }
 
-    if (typeof global.openPostDetailByCode === "function") {
+    if (global.RouteHelper?.buildPostDetailPath && global.RouteHelper?.goTo) {
+      if (preservePanel) {
+        preservePanelOnNextRouteChange();
+      }
+      global.RouteHelper.goTo(
+        global.RouteHelper.buildPostDetailPath(normalizedPostCode),
+      );
+      return true;
+    }
+
+    if (preservePanel) {
       preservePanelOnNextRouteChange();
+    }
+    global.location.hash = `#/posts/${encodeURIComponent(normalizedPostCode)}`;
+    return true;
+  }
+
+  function navigateToStoryRoute(storyId, preservePanel = true) {
+    const normalizedStoryId = (storyId || "").toString().trim();
+    if (!normalizedStoryId) {
+      return false;
+    }
+
+    if (global.RouteHelper?.goTo) {
+      if (preservePanel) {
+        preservePanelOnNextRouteChange();
+      }
+      global.RouteHelper.goTo(`/stories/${encodeURIComponent(normalizedStoryId)}`);
+      return true;
+    }
+
+    if (preservePanel) {
+      preservePanelOnNextRouteChange();
+    }
+    global.location.hash = `#/stories/${encodeURIComponent(normalizedStoryId)}`;
+    return true;
+  }
+
+  async function openPostTarget(item, options = {}) {
+    const silent = options.silent === true;
+    const preservePanel = options.preservePanel !== false;
+    let postCode = (item.targetPostCode || "").toString().trim();
+    const postId = (item.targetId || "").toString().trim();
+
+    if (!postCode) {
+      if (isGuidLike(postId) && typeof global.API?.Posts?.getById === "function") {
+        try {
+          const res = await global.API.Posts.getById(postId);
+          if (res?.ok) {
+            const payload = await res.json().catch(() => null);
+            postCode = readPostCodeFromPayload(payload);
+          } else if (!silent) {
+            const unavailableMessage = getUnavailableMessageByStatus(res?.status);
+            if (unavailableMessage) {
+              showRateLimitedUnavailableToast(unavailableMessage);
+            } else {
+              showRateLimitedOpenFailedToast(
+                npT("notification.fallback.postOpenFailed"),
+              );
+            }
+          }
+        } catch (_) {
+          if (!silent) {
+            showRateLimitedOpenFailedToast(
+              npT("notification.fallback.postOpenFailed"),
+            );
+          }
+        }
+      }
+
+      if (!postCode) {
+        if (!silent) {
+          showRateLimitedUnavailableToast(npT("notification.fallback.unavailable"));
+        }
+        return false;
+      }
+    }
+
+    if (silent) {
+      if (!global.API?.Posts?.getByPostCode) {
+        return false;
+      }
+
+      try {
+        const res = await global.API.Posts.getByPostCode(postCode);
+        if (!res?.ok) {
+          return false;
+        }
+      } catch (_) {
+        return false;
+      }
+
+      return navigateToPostRoute(postCode, preservePanel);
+    }
+
+    if (typeof global.openPostDetailByCode === "function") {
+      if (preservePanel) {
+        preservePanelOnNextRouteChange();
+      }
       const openResult = await global.openPostDetailByCode(postCode);
       if (openResult === false) {
-        global.__keepNotificationsPanelOnNextRoute = false;
+        if (preservePanel) {
+          global.__keepNotificationsPanelOnNextRoute = false;
+        }
         return false;
       }
       return true;
     }
 
     if (!global.API?.Posts?.getByPostCode) {
-      showRateLimitedOpenFailedToast(
-        npT("notification.fallback.postOpenFailed"),
-      );
+      if (!silent) {
+        showRateLimitedOpenFailedToast(
+          npT("notification.fallback.postOpenFailed"),
+        );
+      }
       return false;
     }
 
@@ -3378,9 +3638,9 @@
       const res = await global.API.Posts.getByPostCode(postCode);
       if (!res?.ok) {
         const unavailableMessage = getUnavailableMessageByStatus(res?.status);
-        if (unavailableMessage) {
+        if (!silent && unavailableMessage) {
           showRateLimitedUnavailableToast(unavailableMessage);
-        } else {
+        } else if (!silent) {
           showRateLimitedOpenFailedToast(
             npT("notification.fallback.postOpenFailed"),
           );
@@ -3388,49 +3648,69 @@
         return false;
       }
     } catch (_) {
-      showRateLimitedOpenFailedToast(
-        npT("notification.fallback.postOpenFailed"),
-      );
+      if (!silent) {
+        showRateLimitedOpenFailedToast(
+          npT("notification.fallback.postOpenFailed"),
+        );
+      }
       return false;
     }
 
-    if (global.RouteHelper?.buildPostDetailPath && global.RouteHelper?.goTo) {
-      const path = global.RouteHelper.buildPostDetailPath(postCode);
-      preservePanelOnNextRouteChange();
-      global.RouteHelper.goTo(path);
-      return true;
-    }
-
-    preservePanelOnNextRouteChange();
-    global.location.hash = `#/posts/${encodeURIComponent(postCode)}`;
-    return true;
+    return navigateToPostRoute(postCode, preservePanel);
   }
 
-  async function openStoryTarget(item) {
+  async function openStoryTarget(item, options = {}) {
+    const silent = options.silent === true;
+    const preservePanel = options.preservePanel !== false;
     const storyId = (item.targetId || "").toString().trim();
     if (!storyId) {
-      showRateLimitedUnavailableToast(npT("notification.fallback.unavailable"));
+      if (!silent) {
+        showRateLimitedUnavailableToast(npT("notification.fallback.unavailable"));
+      }
       return false;
+    }
+
+    if (silent) {
+      if (!global.API?.Stories?.resolveByStoryId) {
+        return false;
+      }
+
+      try {
+        const res = await global.API.Stories.resolveByStoryId(storyId);
+        if (!res?.ok) {
+          return false;
+        }
+      } catch (_) {
+        return false;
+      }
+
+      return navigateToStoryRoute(storyId, preservePanel);
     }
 
     if (typeof global.openStoryViewerByStoryId === "function") {
-      preservePanelOnNextRouteChange();
+      if (preservePanel) {
+        preservePanelOnNextRouteChange();
+      }
       const status = await global.openStoryViewerByStoryId(storyId, {
         syncUrl: true,
         redirectOnNotFound: false,
         redirectOnForbidden: false,
       });
       if (status !== STORY_OPEN_STATUS.SUCCESS) {
-        global.__keepNotificationsPanelOnNextRoute = false;
+        if (preservePanel) {
+          global.__keepNotificationsPanelOnNextRoute = false;
+        }
         return false;
       }
       return true;
     }
 
     if (!global.API?.Stories?.resolveByStoryId) {
-      showRateLimitedOpenFailedToast(
-        npT("notification.fallback.storyOpenFailed"),
-      );
+      if (!silent) {
+        showRateLimitedOpenFailedToast(
+          npT("notification.fallback.storyOpenFailed"),
+        );
+      }
       return false;
     }
 
@@ -3438,9 +3718,9 @@
       const res = await global.API.Stories.resolveByStoryId(storyId);
       if (!res?.ok) {
         const unavailableMessage = getUnavailableMessageByStatus(res?.status);
-        if (unavailableMessage) {
+        if (!silent && unavailableMessage) {
           showRateLimitedUnavailableToast(unavailableMessage);
-        } else {
+        } else if (!silent) {
           showRateLimitedOpenFailedToast(
             npT("notification.fallback.storyOpenFailed"),
           );
@@ -3448,49 +3728,55 @@
         return false;
       }
     } catch (_) {
-      showRateLimitedOpenFailedToast(
-        npT("notification.fallback.storyOpenFailed"),
-      );
+      if (!silent) {
+        showRateLimitedOpenFailedToast(
+          npT("notification.fallback.storyOpenFailed"),
+        );
+      }
       return false;
     }
 
-    if (global.RouteHelper?.goTo) {
-      preservePanelOnNextRouteChange();
-      global.RouteHelper.goTo(`/stories/${encodeURIComponent(storyId)}`);
-      return true;
-    }
-
-    preservePanelOnNextRouteChange();
-    global.location.hash = `#/stories/${encodeURIComponent(storyId)}`;
-    return true;
+    return navigateToStoryRoute(storyId, preservePanel);
   }
 
-  async function handleItemNavigation(item) {
+  async function navigateItemTarget(item, options = {}) {
+    const silent = options.silent === true;
+    const preservePanel = options.preservePanel !== false;
+
     if (!item) return;
     if (isItemUnavailable(item)) {
+      if (silent) {
+        return false;
+      }
       if (shouldSilentlyIgnoreUnavailableItem(item)) {
-        return;
+        return false;
       }
       const message = hasUnavailableMessage(item)
         ? item.text
         : npT("notification.fallback.unavailable");
       showRateLimitedUnavailableToast(message);
-      return;
+      return false;
     }
 
     let opened = false;
     if (item.targetKind === NOTIFICATION_TARGET_KIND.ACCOUNT) {
-      opened = await openProfileTarget(item);
+      opened = await openProfileTarget(item, { silent, preservePanel });
     } else if (item.targetKind === NOTIFICATION_TARGET_KIND.POST) {
-      opened = await openPostTarget(item);
+      opened = await openPostTarget(item, { silent, preservePanel });
     } else if (item.targetKind === NOTIFICATION_TARGET_KIND.STORY) {
-      opened = await openStoryTarget(item);
+      opened = await openStoryTarget(item, { silent, preservePanel });
     } else {
-      showRateLimitedUnavailableToast(npT("notification.fallback.unavailable"));
-      return;
+      if (!silent) {
+        showRateLimitedUnavailableToast(npT("notification.fallback.unavailable"));
+      }
+      return false;
     }
 
     return opened;
+  }
+
+  async function handleItemNavigation(item) {
+    return navigateItemTarget(item, { silent: false, preservePanel: true });
   }
 
   function cleanupRealtimeDedupeMap(force = false) {
@@ -3893,6 +4179,14 @@
     },
     handleRealtimeChanged,
     handleFollowRequestQueueChanged,
+    navigateToastTarget(rawItem) {
+      const navigationItem = buildRealtimeNavigationItem(rawItem);
+      if (!navigationItem) return Promise.resolve(false);
+      return navigateItemTarget(navigationItem, {
+        silent: true,
+        preservePanel: false,
+      });
+    },
     adjustUnreadSummaryForVisibleState: applyVisibleUnreadSummaryOverrides,
     shouldSuppressGlobalUnreadRefresh(kind) {
       if (!state.isOpen) return false;
