@@ -59,6 +59,13 @@ function sidebarIsAccountSettingsPath(path) {
   );
 }
 
+function sidebarGetAccountSettingsCacheKey(path) {
+  const subpage = SidebarRouteHelper?.extractAccountSettingsSubpage
+    ? SidebarRouteHelper.extractAccountSettingsSubpage(path)
+    : "";
+  return subpage ? `#/account-settings/${subpage}` : "#/account-settings";
+}
+
 function applySidebarProfileRoutes() {
   const selfProfilePath = sidebarResolveSelfProfilePath();
   const selfSettingsPath = sidebarResolveSelfSettingsPath();
@@ -873,7 +880,9 @@ function navigate(e, route, clickedEl = null) {
     // Clear account settings cache if we are leaving it
     const currentPath = sidebarParseHash(window.location.hash || "").path;
     if (sidebarIsAccountSettingsPath(currentPath)) {
-      if (window.PageCache) PageCache.clear("#/account-settings");
+      if (window.PageCache) {
+        PageCache.clear(sidebarGetAccountSettingsCacheKey(currentPath));
+      }
     }
 
     // Manually update hash since we might have prevented default

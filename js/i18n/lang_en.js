@@ -559,6 +559,99 @@
         loadFailed: "Failed to load settings",
         loadError: "An error occurred while loading settings",
       },
+      passwordSettings: {
+        entryTitle: "Password & Security",
+        entryDescription:
+          "Set or update your password and review linked sign-in methods",
+        openPage: "Open",
+        openPageAria: "Open password and security settings",
+        backAria: "Back to account settings",
+        badge: "Security",
+        title: "Password & Security",
+        subtitle:
+          "Set or update your password and review linked sign-in methods",
+        form: {
+          genericTitle: "Set or change password",
+          genericSubtitle:
+            "Use the same password rules as registration to keep sign-in consistent",
+          changeTitle: "Change password",
+          changeSubtitle:
+            "Enter your current password, then choose a new one",
+          setTitle: "Set password",
+          setSubtitle:
+            "Create a password so you can sign in without relying on an external provider",
+        },
+        fields: {
+          current: "Current password",
+          new: "New password",
+          confirm: "Confirm new password",
+        },
+        placeholders: {
+          current: "Enter your current password",
+          new: "Enter your new password",
+          confirm: "Confirm your new password",
+        },
+        hints: {
+          currentRequired:
+            "Enter your current password to confirm this change",
+          currentOptional:
+            "If you already have a password, enter it here before saving",
+        },
+        showPasswordAria: "Show password",
+        hidePasswordAria: "Hide password",
+        rules: {
+          length: "At least 6 characters",
+          noSpaces: "No spaces",
+          noAccents: "No Vietnamese accents",
+        },
+        progress: {
+          empty: "Your new password needs to meet the rules below",
+          ready: "Your password is ready to save",
+          incomplete: "{count}/{total} password rules completed",
+        },
+        security: {
+          title: "Security status",
+          subtitle: "Review your current sign-in setup before saving",
+          localPasswordLabel: "Local password",
+          localPasswordHint: "Password sign-in for this account",
+          linkedProvidersLabel: "Linked sign-in methods",
+          linkedProvidersHint: "External providers connected to this account",
+          providersTitle: "Connected providers",
+          loadingProviders: "Loading sign-in methods...",
+          noProviders: "No external sign-in methods connected",
+          note:
+            "Your new password will follow the same rules as registration",
+          enabled: "Enabled",
+          notSet: "Not set",
+          checking: "Checking",
+        },
+        actions: {
+          generic: "Save password",
+          set: "Set password",
+          update: "Update password",
+          pending: "Saving...",
+        },
+        success: {
+          changed: "Password updated",
+          set: "Password set",
+        },
+        errors: {
+          loadFailed: "Couldn't load your password settings right now",
+          loadError:
+            "Something went wrong while loading your password settings",
+          saveFailed: "Couldn't save your password right now",
+          saveError:
+            "Something went wrong while saving your password",
+          currentRequired: "Enter your current password",
+          currentIncorrect: "Your current password is incorrect",
+          confirmRequired: "Confirm your new password",
+        },
+        discard: {
+          title: "Discard changes?",
+          description:
+            "You have unsaved password changes. Are you sure you want to discard them?",
+        },
+      },
       highlights: {
         apiUnavailable: "Highlights aren't available right now",
         loadFailed: "Failed to load highlights",

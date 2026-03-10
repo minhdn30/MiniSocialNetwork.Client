@@ -55,6 +55,10 @@
     ...(config.REGEX || {}),
   });
 
+  const ACCOUNT_SETTINGS_SUBPAGES = Object.freeze({
+    PASSWORD: "password",
+  });
+
   const RESERVED_PROFILE_ROOTS = Object.freeze(
     new Set([
       "",
@@ -246,6 +250,15 @@
 
     const segments = getPathSegments(normalizedPath);
     if (!segments.length) return false;
+
+    if (
+      segments.length > 1 &&
+      safeDecode(segments[1]).toLowerCase() ===
+        String(PATHS.SETTINGS_SEGMENT || "settings").toLowerCase() &&
+      !isAccountSettingsPath(normalizedPath)
+    ) {
+      return false;
+    }
 
     const firstSegment = safeDecode(segments[0]);
     if (isReservedProfileRootSegment(firstSegment)) return false;
@@ -445,28 +458,65 @@
     return buildHash(buildProfileHighlightPath(profileTarget, groupId), query);
   }
 
-  function extractAccountSettingsUsername(rawPath) {
+  function normalizeAccountSettingsSubpage(rawSubpage) {
+    const normalized = (rawSubpage || "").toString().trim().toLowerCase();
+    if (!normalized) return "";
+    if (normalized === ACCOUNT_SETTINGS_SUBPAGES.PASSWORD) {
+      return ACCOUNT_SETTINGS_SUBPAGES.PASSWORD;
+    }
+    return "";
+  }
+
+  function extractAccountSettingsContext(rawPath) {
     const normalizedPath = normalizePath(rawPath);
+
+    if (normalizedPath === LEGACY_PATHS.ACCOUNT_SETTINGS) {
+      return { username: "", subpage: "" };
+    }
+
+    if (normalizedPath.startsWith(`${LEGACY_PATHS.ACCOUNT_SETTINGS}/`)) {
+      const subpage = normalizeAccountSettingsSubpage(
+        normalizedPath.slice(LEGACY_PATHS.ACCOUNT_SETTINGS.length + 1),
+      );
+      if (!subpage) return null;
+      return { username: "", subpage };
+    }
+
     const segments = getPathSegments(normalizedPath);
-    if (segments.length !== 2) return "";
+    if (segments.length < 2) return null;
 
     const username = safeDecode(segments[0]);
     const trailing = safeDecode(segments[1]).toLowerCase();
     if (trailing !== String(PATHS.SETTINGS_SEGMENT || "settings").toLowerCase()) {
-      return "";
+      return null;
     }
 
     if (!isValidProfileTarget(username) || isReservedProfileRootSegment(username)) {
-      return "";
+      return null;
     }
 
-    return username;
+    if (segments.length === 2) {
+      return { username, subpage: "" };
+    }
+
+    const subpage = normalizeAccountSettingsSubpage(
+      segments.slice(2).map((segment) => safeDecode(segment)).join("/"),
+    );
+    if (!subpage) return null;
+
+    return { username, subpage };
+  }
+
+  function extractAccountSettingsUsername(rawPath) {
+    return extractAccountSettingsContext(rawPath)?.username || "";
+  }
+
+  function extractAccountSettingsSubpage(rawPath) {
+    return extractAccountSettingsContext(rawPath)?.subpage || "";
   }
 
   function isAccountSettingsPath(rawPath) {
-    const normalizedPath = normalizePath(rawPath);
-    if (normalizedPath === LEGACY_PATHS.ACCOUNT_SETTINGS) return true;
-    return !!extractAccountSettingsUsername(normalizedPath);
+    return !!extractAccountSettingsContext(rawPath);
   }
 
   function buildAccountSettingsPath(profileTarget) {
@@ -480,6 +530,20 @@
 
   function buildAccountSettingsHash(profileTarget, query) {
     return buildHash(buildAccountSettingsPath(profileTarget), query);
+  }
+
+  function buildAccountSettingsSubPath(profileTarget, subpage) {
+    const normalizedSubpage = normalizeAccountSettingsSubpage(subpage);
+    if (!normalizedSubpage) {
+      return buildAccountSettingsPath(profileTarget);
+    }
+
+    const basePath = normalizePath(buildAccountSettingsPath(profileTarget));
+    return `${basePath}/${normalizedSubpage}`;
+  }
+
+  function buildAccountSettingsSubHash(profileTarget, subpage, query) {
+    return buildHash(buildAccountSettingsSubPath(profileTarget, subpage), query);
   }
 
   function extractProfileTargetFromHash(rawHash) {
@@ -713,8 +777,11 @@
     buildProfileHighlightHash,
     buildAccountSettingsPath,
     buildAccountSettingsHash,
+    buildAccountSettingsSubPath,
+    buildAccountSettingsSubHash,
     isAccountSettingsPath,
     extractAccountSettingsUsername,
+    extractAccountSettingsSubpage,
     extractProfileTargetFromHash,
     extractConversationIdFromHash,
     isPostDetailPath,

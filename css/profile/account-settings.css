@@ -54,6 +54,10 @@
   padding: 16px 20px;
 }
 
+.acc-setting-link-label {
+  min-width: 72px;
+}
+
 /* Top Row: [Title] [Button] [Label] */
 .acc-setting-top-row {
   display: flex;

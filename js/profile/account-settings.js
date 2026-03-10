@@ -169,6 +169,16 @@
     return "#/";
   }
 
+  function getPasswordSettingsHash() {
+    if (window.RouteHelper?.buildAccountSettingsSubHash) {
+      return window.RouteHelper.buildAccountSettingsSubHash("", "password");
+    }
+
+    const me = (localStorage.getItem("username") || "").toString().trim();
+    if (me) return `#/${encodeURIComponent(me)}/settings/password`;
+    return "#/account-settings/password";
+  }
+
   function navigateToProfileAfterLanguageChange() {
     const targetHash = getMyProfileHash();
     hasUnsavedChanges = false;
@@ -400,6 +410,31 @@
   }
 
   function setupToggleButtons() {
+    const openPasswordSettingsButton = document.getElementById("open-password-settings-btn");
+    if (openPasswordSettingsButton) {
+      const nextButton = openPasswordSettingsButton.cloneNode(true);
+      openPasswordSettingsButton.parentNode.replaceChild(nextButton, openPasswordSettingsButton);
+      nextButton.addEventListener("click", () => {
+        const navigateToPasswordSettings = () => {
+          hasUnsavedChanges = false;
+          window.onbeforeunload = null;
+          window.location.hash = getPasswordSettingsHash();
+        };
+
+        if (!hasAccountSettingsChanges()) {
+          navigateToPasswordSettings();
+          return;
+        }
+
+        if (window.showDiscardAccountSettingsConfirmation) {
+          window.showDiscardAccountSettingsConfirmation(navigateToPasswordSettings);
+          return;
+        }
+
+        navigateToPasswordSettings();
+      });
+    }
+
     Object.keys(SETTING_KEYS).forEach((key) => {
       if (key === "language") return;
 

@@ -22,6 +22,7 @@ const APP_ROUTE_PATHS = AppRouteHelper?.PATHS || {
   ACCOUNT_SETTINGS: "/account-settings",
   SETTINGS_SEGMENT: "settings",
 };
+const APP_PASSWORD_SETTINGS_SEGMENT = "password";
 
 function appT(key, params = {}, fallback = "") {
   if (window.I18n?.t) {
@@ -125,6 +126,30 @@ function appExtractAccountSettingsUsername(path) {
     return AppRouteHelper.extractAccountSettingsUsername(path);
   }
   return "";
+}
+
+function appExtractAccountSettingsSubpage(path) {
+  if (AppRouteHelper?.extractAccountSettingsSubpage) {
+    return AppRouteHelper.extractAccountSettingsSubpage(path);
+  }
+  return "";
+}
+
+function appBuildAccountSettingsCacheKey(rawPath) {
+  const subpage = appExtractAccountSettingsSubpage(rawPath);
+  return subpage ? `#/account-settings/${subpage}` : "#/account-settings";
+}
+
+function appResolveSelfPasswordSettingsPath() {
+  if (AppRouteHelper?.buildAccountSettingsSubPath) {
+    return AppRouteHelper.buildAccountSettingsSubPath(
+      "",
+      APP_PASSWORD_SETTINGS_SEGMENT,
+    );
+  }
+
+  const basePath = appResolveSelfSettingsPath();
+  return `${basePath}/${APP_PASSWORD_SETTINGS_SEGMENT}`;
 }
 
 function appGoToNotFound(options = {}) {
@@ -298,8 +323,15 @@ function appTryRedirectLegacyProfile(hash, path, params) {
     return false;
   }
 
-  if (normalizedPath === APP_ROUTE_PATHS.ACCOUNT_SETTINGS) {
-    const nextHash = appBuildHash(appResolveSelfSettingsPath());
+  if (
+    normalizedPath === APP_ROUTE_PATHS.ACCOUNT_SETTINGS ||
+    normalizedPath.startsWith(`${APP_ROUTE_PATHS.ACCOUNT_SETTINGS}/`)
+  ) {
+    const subpage = appExtractAccountSettingsSubpage(normalizedPath);
+    const nextPath = subpage
+      ? appResolveSelfPasswordSettingsPath()
+      : appResolveSelfSettingsPath();
+    const nextHash = appBuildHash(nextPath);
     if (nextHash !== hash) {
       window.location.hash = nextHash;
       return true;
@@ -895,7 +927,7 @@ function restoreNotificationsPanelAfterRouteIfNeeded() {
 function getCacheKey(hash) {
     const parsed = appParseHash(hash || "");
     if (!hash || parsed.path === APP_ROUTE_PATHS.ROOT || parsed.path === "/home") return "home";
-    if (appIsAccountSettingsPath(parsed.path)) return "#/account-settings";
+    if (appIsAccountSettingsPath(parsed.path)) return appBuildAccountSettingsCacheKey(parsed.path);
     if (appIsProfilePath(parsed.path)) return appBuildProfileCacheKey(hash);
     if (appIsChatPath(parsed.path)) return "#/chat";
     return hash;
@@ -915,6 +947,7 @@ async function router() {
   const parsed = appParseHash(hash);
   const path = parsed.path;
   const prevPath = appParseHash(lastHash || "").path;
+  const prevAccountSettingsSubpage = appExtractAccountSettingsSubpage(prevPath);
   const hasActiveChatSurface =
     document.body.classList.contains("is-chat-page") &&
     !!document.getElementById("chat-view");
@@ -1076,11 +1109,20 @@ async function router() {
     appGoToNotFound({ replace: true });
     return;
   }
-  
+
+  if (
+    prevPath &&
+    prevPath !== path &&
+    prevAccountSettingsSubpage === APP_PASSWORD_SETTINGS_SEGMENT &&
+    typeof window.disposePasswordSettings === "function"
+  ) {
+    window.disposePasswordSettings();
+  }
+
   const prevKey = getCacheKey(lastHash);
   const nextKey = getCacheKey(hash);
   if (lastHash && prevKey !== nextKey) {
-      if (prevKey !== "#/account-settings") {
+      if (!prevKey.startsWith("#/account-settings")) {
           const pageData = window.getPageData ? window.getPageData() : null;
           PageCache.save(prevKey, app, pageData);
       }
@@ -1199,7 +1241,12 @@ async function router() {
   if (mc) mc.scrollTop = 0;
 
   if (appIsAccountSettingsPath(path)) {
-      loadAccountSettings();
+      const settingsSubpage = appExtractAccountSettingsSubpage(path);
+      if (settingsSubpage === APP_PASSWORD_SETTINGS_SEGMENT) {
+        loadPasswordSettings();
+      } else {
+        loadAccountSettings();
+      }
       setActiveSidebar(path);
       return;
   }
@@ -1320,6 +1367,14 @@ async function loadAccountSettings() {
     await loadPage("profile/account-settings");
     if (window.initAccountSettings) {
         window.initAccountSettings();
+    }
+}
+
+async function loadPasswordSettings() {
+    PageCache.clear("#/account-settings/password");
+    await loadPage("profile/password-settings");
+    if (window.initPasswordSettings) {
+        window.initPasswordSettings();
     }
 }
 

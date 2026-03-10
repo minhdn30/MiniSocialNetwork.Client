@@ -649,6 +649,17 @@
           body: JSON.stringify({ email, code, newPassword, confirmPassword }),
           skipAuth: true,
         }),
+      getPasswordStatus: () => apiFetch("/Auths/password-status"),
+      changePassword: (currentPassword, newPassword, confirmPassword) =>
+        apiFetch("/Auths/change-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            currentPassword,
+            newPassword,
+            confirmPassword,
+          }),
+        }),
       setPassword: (newPassword, confirmPassword) =>
         apiFetch("/Auths/set-password", {
           method: "POST",

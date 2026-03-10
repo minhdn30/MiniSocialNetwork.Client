@@ -492,6 +492,99 @@
         loadError: "Không thể tải cài đặt",
         loadFailed: "Không tải được cài đặt",
       },
+      passwordSettings: {
+        entryTitle: "Mật khẩu & bảo mật",
+        entryDescription:
+          "Thiết lập hoặc cập nhật mật khẩu và xem lại các phương thức đăng nhập đã liên kết",
+        openPage: "Mở",
+        openPageAria: "Mở cài đặt mật khẩu và bảo mật",
+        backAria: "Quay lại cài đặt tài khoản",
+        badge: "Bảo mật",
+        title: "Mật khẩu & bảo mật",
+        subtitle:
+          "Thiết lập hoặc cập nhật mật khẩu và xem lại các phương thức đăng nhập đã liên kết",
+        form: {
+          genericTitle: "Thiết lập hoặc đổi mật khẩu",
+          genericSubtitle:
+            "Dùng đúng bộ quy tắc mật khẩu như lúc đăng ký để giữ trải nghiệm đăng nhập nhất quán",
+          changeTitle: "Đổi mật khẩu",
+          changeSubtitle:
+            "Nhập mật khẩu hiện tại rồi chọn mật khẩu mới",
+          setTitle: "Thiết lập mật khẩu",
+          setSubtitle:
+            "Tạo mật khẩu để bạn có thể đăng nhập mà không phụ thuộc vào nhà cung cấp bên ngoài",
+        },
+        fields: {
+          current: "Mật khẩu hiện tại",
+          new: "Mật khẩu mới",
+          confirm: "Xác nhận mật khẩu mới",
+        },
+        placeholders: {
+          current: "Nhập mật khẩu hiện tại",
+          new: "Nhập mật khẩu mới",
+          confirm: "Xác nhận mật khẩu mới",
+        },
+        hints: {
+          currentRequired:
+            "Nhập mật khẩu hiện tại để xác nhận thay đổi này",
+          currentOptional:
+            "Nếu tài khoản đã có mật khẩu, hãy nhập vào đây trước khi lưu",
+        },
+        showPasswordAria: "Hiện mật khẩu",
+        hidePasswordAria: "Ẩn mật khẩu",
+        rules: {
+          length: "Tối thiểu 6 ký tự",
+          noSpaces: "Không có khoảng trắng",
+          noAccents: "Không có dấu tiếng Việt",
+        },
+        progress: {
+          empty: "Mật khẩu mới cần đáp ứng đủ các điều kiện bên dưới",
+          ready: "Mật khẩu đã sẵn sàng để lưu",
+          incomplete: "Đã đạt {count}/{total} quy tắc mật khẩu",
+        },
+        security: {
+          title: "Trạng thái bảo mật",
+          subtitle: "Xem lại thiết lập đăng nhập hiện tại trước khi lưu",
+          localPasswordLabel: "Mật khẩu nội bộ",
+          localPasswordHint: "Đăng nhập bằng mật khẩu cho tài khoản này",
+          linkedProvidersLabel: "Phương thức đăng nhập liên kết",
+          linkedProvidersHint: "Các nhà cung cấp bên ngoài đã kết nối với tài khoản",
+          providersTitle: "Nhà cung cấp đã kết nối",
+          loadingProviders: "Đang tải phương thức đăng nhập...",
+          noProviders: "Chưa có phương thức đăng nhập bên ngoài nào được liên kết",
+          note:
+            "Mật khẩu mới của bạn sẽ dùng cùng bộ quy tắc như lúc đăng ký",
+          enabled: "Đã bật",
+          notSet: "Chưa đặt",
+          checking: "Đang kiểm tra",
+        },
+        actions: {
+          generic: "Lưu mật khẩu",
+          set: "Thiết lập mật khẩu",
+          update: "Cập nhật mật khẩu",
+          pending: "Đang lưu...",
+        },
+        success: {
+          changed: "Đã cập nhật mật khẩu",
+          set: "Đã thiết lập mật khẩu",
+        },
+        errors: {
+          loadFailed: "Không thể tải cài đặt mật khẩu lúc này",
+          loadError:
+            "Đã xảy ra lỗi khi tải cài đặt mật khẩu",
+          saveFailed: "Không thể lưu mật khẩu lúc này",
+          saveError:
+            "Đã xảy ra lỗi khi lưu mật khẩu",
+          currentRequired: "Vui lòng nhập mật khẩu hiện tại",
+          currentIncorrect: "Mật khẩu hiện tại chưa đúng",
+          confirmRequired: "Vui lòng xác nhận mật khẩu mới",
+        },
+        discard: {
+          title: "Bỏ thay đổi?",
+          description:
+            "Bạn đang có thay đổi mật khẩu chưa lưu. Bạn có chắc muốn bỏ chúng không?",
+        },
+      },
       highlights: {
         save: "Lưu",
         closeAria: "Đóng",
