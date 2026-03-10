@@ -197,6 +197,12 @@
     if (window.AuthStore?.clearAccessToken) {
       window.AuthStore.clearAccessToken("logout");
     }
+    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+      const storageKey = (localStorage.key(index) || "").toString();
+      if (storageKey.startsWith("notification-read-draft:")) {
+        localStorage.removeItem(storageKey);
+      }
+    }
     // Backward compatibility cleanup for legacy storage keys
     localStorage.removeItem("accessToken");
     localStorage.removeItem("accountId");
@@ -1125,9 +1131,15 @@
         return apiFetch(url);
       },
       getUnreadCount: () => apiFetch("/Notifications/unread-count"),
-      markAllRead: () =>
-        apiFetch("/Notifications/mark-all-read", {
+      readState: (data = {}, options = {}) =>
+        apiFetch("/Notifications/read-state", {
           method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            notificationsSeenAt: data?.notificationsSeenAt || null,
+            followRequestsSeenAt: data?.followRequestsSeenAt || null,
+          }),
+          keepalive: options?.keepalive === true,
         }),
     },
 

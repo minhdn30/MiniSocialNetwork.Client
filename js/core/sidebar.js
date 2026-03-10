@@ -262,6 +262,132 @@ function updateGlobalMessageBadge(delta) {
   scheduleGlobalUnreadRefresh();
 }
 
+const NOTIFICATION_UNREAD_SUMMARY_EVENT = "notifications:unread-summary-changed";
+let globalNotificationUnreadSummary = {
+  accountId: "",
+  count: 0,
+  notificationUnreadCount: 0,
+  followRequestUnreadCount: 0,
+  pendingFollowRequestCount: 0,
+  lastNotificationsSeenAt: "",
+  lastFollowRequestsSeenAt: "",
+  loadedAt: 0,
+};
+
+function readNotificationSummaryNumber(source, ...keys) {
+  if (!source || typeof source !== "object") return 0;
+  for (let i = 0; i < keys.length; i += 1) {
+    const value = source[keys[i]];
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return Math.max(0, Math.floor(parsed));
+    }
+  }
+  return 0;
+}
+
+function readNotificationSummaryString(source, ...keys) {
+  if (!source || typeof source !== "object") return "";
+  for (let i = 0; i < keys.length; i += 1) {
+    const value = source[keys[i]];
+    if (value === null || value === undefined) continue;
+    const normalized = value.toString().trim();
+    if (normalized) {
+      return normalized;
+    }
+  }
+  return "";
+}
+
+function normalizeNotificationUnreadSummary(summary = {}, options = {}) {
+  const accountId =
+    readNotificationSummaryString(summary, "accountId", "AccountId") ||
+    (localStorage.getItem("accountId") || "").toString().trim();
+  const optimisticLoadedAt = readNotificationSummaryNumber(
+    summary,
+    "loadedAt",
+    "LoadedAt",
+  );
+  const loadedAt =
+    options.isOptimistic === true
+      ? optimisticLoadedAt
+      : Date.now();
+
+  return {
+    accountId,
+    count: readNotificationSummaryNumber(summary, "count", "Count"),
+    notificationUnreadCount: readNotificationSummaryNumber(
+      summary,
+      "notificationUnreadCount",
+      "NotificationUnreadCount",
+    ),
+    followRequestUnreadCount: readNotificationSummaryNumber(
+      summary,
+      "followRequestUnreadCount",
+      "FollowRequestUnreadCount",
+    ),
+    pendingFollowRequestCount: readNotificationSummaryNumber(
+      summary,
+      "pendingFollowRequestCount",
+      "PendingFollowRequestCount",
+      "followRequestCount",
+      "FollowRequestCount",
+    ),
+    lastNotificationsSeenAt: readNotificationSummaryString(
+      summary,
+      "lastNotificationsSeenAt",
+      "LastNotificationsSeenAt",
+    ),
+    lastFollowRequestsSeenAt: readNotificationSummaryString(
+      summary,
+      "lastFollowRequestsSeenAt",
+      "LastFollowRequestsSeenAt",
+    ),
+    loadedAt,
+  };
+}
+
+function applyGlobalNotificationUnreadSummary(summary = {}, options = {}) {
+  const normalized = normalizeNotificationUnreadSummary(summary, options);
+  let displayedSummary = normalized;
+  if (
+    window.NotificationsPanel &&
+    typeof window.NotificationsPanel.adjustUnreadSummaryForVisibleState ===
+      "function"
+  ) {
+    displayedSummary =
+      window.NotificationsPanel.adjustUnreadSummaryForVisibleState(normalized) ||
+      normalized;
+  }
+  const currentAccountId = (localStorage.getItem("accountId") || "").toString().trim();
+  if (
+    normalized.accountId &&
+    currentAccountId &&
+    normalized.accountId.toLowerCase() !== currentAccountId.toLowerCase()
+  ) {
+    return { ...globalNotificationUnreadSummary };
+  }
+
+  globalNotificationUnreadSummary = { ...normalized };
+  setGlobalNotificationBadge(displayedSummary.count);
+
+  try {
+    window.dispatchEvent(
+      new CustomEvent(NOTIFICATION_UNREAD_SUMMARY_EVENT, {
+        detail: { ...normalized },
+      }),
+    );
+  } catch (_error) {
+    // no-op
+  }
+
+  return displayedSummary;
+}
+
+function getGlobalNotificationUnreadSummary() {
+  return { ...globalNotificationUnreadSummary };
+}
+
 function getNotificationsBadgeCap() {
   const rawCap = Number(window.APP_CONFIG?.NOTIFICATIONS_BADGE_CAP);
   if (Number.isFinite(rawCap) && rawCap > 0) {
@@ -276,7 +402,7 @@ async function loadGlobalNotificationBadge() {
     const res = await window.API.Notifications.getUnreadCount();
     if (res.ok) {
       const data = await res.json();
-      setGlobalNotificationBadge(data?.count ?? 0);
+      applyGlobalNotificationUnreadSummary(data || {});
     }
   } catch (err) {
     console.error("Failed to load global notification badge:", err);
@@ -295,11 +421,11 @@ window.scheduleGlobalNotificationUnreadRefresh =
 
 function setGlobalNotificationBadge(count) {
   const badge = document.getElementById("notifications-badge");
-  if (!badge) return;
-
   const safeCount = Number.isFinite(Number(count))
     ? Math.max(0, Math.floor(Number(count)))
     : 0;
+  if (!badge) return;
+
   if (safeCount > 0) {
     const cap = getNotificationsBadgeCap();
     badge.textContent = safeCount > cap ? `${cap}+` : `${safeCount}`;
@@ -312,6 +438,8 @@ function setGlobalNotificationBadge(count) {
 }
 window.setGlobalNotificationBadge = setGlobalNotificationBadge;
 window.loadGlobalNotificationBadge = loadGlobalNotificationBadge;
+window.applyGlobalNotificationUnreadSummary = applyGlobalNotificationUnreadSummary;
+window.getGlobalNotificationUnreadSummary = getGlobalNotificationUnreadSummary;
 
 // THÊM MỚI: Tự động collapse sidebar khi chuột rời khỏi
 function setupAutoClose() {

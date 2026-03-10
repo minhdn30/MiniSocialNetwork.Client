@@ -393,7 +393,14 @@
     // Safety guard: ignore events that are not for this account.
     if (targetAccountId && myId && targetAccountId !== myId) return;
 
+    const shouldSuppressGlobalRefresh =
+      window.NotificationsPanel &&
+      typeof window.NotificationsPanel.shouldSuppressGlobalUnreadRefresh ===
+        "function" &&
+      window.NotificationsPanel.shouldSuppressGlobalUnreadRefresh("activity");
+
     if (
+      !shouldSuppressGlobalRefresh &&
       window.scheduleGlobalNotificationUnreadRefresh &&
       typeof window.scheduleGlobalNotificationUnreadRefresh === "function"
     ) {
@@ -419,6 +426,20 @@
       .toLowerCase();
 
     if (targetAccountId && myId && targetAccountId !== myId) return;
+
+    const shouldSuppressGlobalRefresh =
+      window.NotificationsPanel &&
+      typeof window.NotificationsPanel.shouldSuppressGlobalUnreadRefresh ===
+        "function" &&
+      window.NotificationsPanel.shouldSuppressGlobalUnreadRefresh("requests");
+
+    if (
+      !shouldSuppressGlobalRefresh &&
+      window.scheduleGlobalNotificationUnreadRefresh &&
+      typeof window.scheduleGlobalNotificationUnreadRefresh === "function"
+    ) {
+      window.scheduleGlobalNotificationUnreadRefresh(60);
+    }
 
     if (
       window.NotificationsPanel &&

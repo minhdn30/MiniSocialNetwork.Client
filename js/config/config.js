@@ -176,6 +176,8 @@
     NOTIFICATION_PANEL_WIDTH: 380, // Notifications panel width in px (slightly wider than chat sidebar)
     NOTIFICATION_RT_DEDUPE_TTL_MS: 6000, // Dedupe TTL for realtime notification update events
     NOTIFICATION_RT_DEDUPE_MAX_ENTRIES: 1000, // Max entries in realtime dedupe map
+    NOTIFICATION_READ_STATE_FLUSH_DEBOUNCE_MS: 3000, // Debounce delay before flushing notification seen state
+    NOTIFICATION_READ_STATE_DRAFT_TTL_MS: 72 * 60 * 60 * 1000, // TTL for pending notification seen-state draft in localStorage
     NOTIFICATION_TOAST_RATE_LIMIT_WINDOW_MS: 5000, // Rate-limit window for stale notification toasts
     NOTIFICATION_TOAST_RATE_LIMIT_MAX: 2, // Max stale notification toasts shown per window
     MAX_CHAT_MESSAGE_LENGTH: 1000, // Số ký tự tối đa cho mỗi tin nhắn chat

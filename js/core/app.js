@@ -1374,6 +1374,20 @@ window.logout = async function() {
   logoutInFlight = true;
 
   try {
+    if (
+      window.NotificationsPanel &&
+      typeof window.NotificationsPanel.flushPendingReadState === "function"
+    ) {
+      try {
+        await window.NotificationsPanel.flushPendingReadState({
+          immediate: true,
+          keepalive: true,
+        });
+      } catch (_error) {
+        // no-op
+      }
+    }
+
     if (window.API?.Auth?.logout) {
       await window.API.Auth.logout();
     }

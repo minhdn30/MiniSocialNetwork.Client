@@ -1,7 +1,6 @@
 (function (global) {
   const NOTIFICATION_FILTER = Object.freeze({
-    ALL: "all",
-    UNREAD: "unread",
+    ACTIVITY: "all",
     REQUESTS: "requests",
   });
 
@@ -36,6 +35,10 @@
     ERROR: "error",
   });
 
+  const NOTIFICATION_UNREAD_SUMMARY_EVENT = "notifications:unread-summary-changed";
+  const READ_STATE_DRAFT_STORAGE_PREFIX = "notification-read-draft:";
+  const READ_STATE_DRAFT_MAX_KEYS = 8;
+
   const state = {
     initialized: false,
     isOpen: false,
@@ -43,7 +46,7 @@
     listLoadSequence: 0,
     activeListLoadToken: 0,
     hasMore: true,
-    filter: NOTIFICATION_FILTER.ALL,
+    filter: NOTIFICATION_FILTER.ACTIVITY,
     pageSize: 20,
     cursorLastEventAt: "",
     cursorNotificationId: "",
@@ -66,6 +69,28 @@
     isFollowRequestSyncing: false,
     isFollowRequestSkeletonVisible: false,
     followRequestCount: 0,
+    rawNotificationUnreadCount: 0,
+    rawFollowRequestUnreadCount: 0,
+    rawTotalUnreadCount: 0,
+    notificationUnreadCount: 0,
+    followRequestUnreadCount: 0,
+    totalUnreadCount: 0,
+    lastNotificationsSeenAt: "",
+    lastFollowRequestsSeenAt: "",
+    hasNotificationUnreadCountLoaded: false,
+    hasFollowRequestUnreadCountLoaded: false,
+    hasNotificationsSeenStateLoaded: false,
+    hasFollowRequestsSeenStateLoaded: false,
+    pendingNotificationsSeenAt: "",
+    pendingFollowRequestsSeenAt: "",
+    pendingNotificationsClearedCount: 0,
+    pendingFollowRequestsClearedCount: 0,
+    optimisticNotificationUnreadMap: new Map(),
+    optimisticFollowRequestUnreadMap: new Map(),
+    readStateFlushDebounceMs: 3000,
+    readStateDraftTtlMs: 72 * 60 * 60 * 1000,
+    readStateFlushTimer: null,
+    isReadStateFlushing: false,
     dedupeCleanupTimer: null,
     listScrollAnimationFrame: null,
     followRequestLastLoadedAt: 0,
@@ -76,14 +101,21 @@
       tabs: null,
       tabsList: null,
       tabsIndicator: null,
+      activityTabBadge: null,
       requestsTab: null,
       requestsTabBadge: null,
+      requestsSummary: null,
+      requestsSummaryBadge: null,
       list: null,
       loader: null,
       settingsBtn: null,
       closeBtn: null,
     },
     onResize: null,
+    onVisibilityChange: null,
+    onPageHide: null,
+    onBeforeUnload: null,
+    onUnreadSummaryChanged: null,
   };
 
   function parseIntSafe(value, fallback) {
@@ -117,8 +149,7 @@
   function isSupportedFilter(filter) {
     const normalized = (filter || "").toString().trim().toLowerCase();
     return (
-      normalized === NOTIFICATION_FILTER.ALL ||
-      normalized === NOTIFICATION_FILTER.UNREAD ||
+      normalized === NOTIFICATION_FILTER.ACTIVITY ||
       normalized === NOTIFICATION_FILTER.REQUESTS
     );
   }
@@ -156,6 +187,700 @@
       if (normalized === "false" || normalized === "0") return false;
     }
     return fallback;
+  }
+
+  function readTimestamp(source, ...keys) {
+    const raw = readString(source, ...keys);
+    if (!raw) return "";
+    return parseIsoTimestampToEpochMicros(raw) === null ? "" : raw.trim();
+  }
+
+  function parseIsoTimestampToEpochMicros(value) {
+    const raw = (value || "").toString().trim();
+    if (!raw) return null;
+
+    const match = raw.match(
+      /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,7}))?(Z|[+-]\d{2}:\d{2})$/,
+    );
+    if (!match) return null;
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const hour = Number(match[4]);
+    const minute = Number(match[5]);
+    const second = Number(match[6]);
+    const fractional = (match[7] || "").padEnd(6, "0").slice(0, 6);
+    const timezone = match[8];
+
+    if (
+      !Number.isInteger(year) ||
+      !Number.isInteger(month) ||
+      !Number.isInteger(day) ||
+      !Number.isInteger(hour) ||
+      !Number.isInteger(minute) ||
+      !Number.isInteger(second)
+    ) {
+      return null;
+    }
+
+    let offsetMinutes = 0;
+    if (timezone !== "Z") {
+      const sign = timezone[0] === "-" ? -1 : 1;
+      const offsetHour = Number(timezone.slice(1, 3));
+      const offsetMinute = Number(timezone.slice(4, 6));
+      if (!Number.isInteger(offsetHour) || !Number.isInteger(offsetMinute)) {
+        return null;
+      }
+
+      offsetMinutes = sign * (offsetHour * 60 + offsetMinute);
+    }
+
+    const utcMilliseconds =
+      Date.UTC(year, month - 1, day, hour, minute, second, 0) -
+      offsetMinutes * 60 * 1000;
+    if (!Number.isFinite(utcMilliseconds)) {
+      return null;
+    }
+
+    return utcMilliseconds * 1000 + Number(fractional);
+  }
+
+  function currentAccountId() {
+    return (localStorage.getItem("accountId") || "").toString().trim();
+  }
+
+  function isPayloadForCurrentAccount(payload = {}) {
+    const payloadAccountId = readString(payload, "accountId", "AccountId");
+    const accountId = currentAccountId();
+    if (!payloadAccountId || !accountId) return true;
+    return normalizeId(payloadAccountId) === normalizeId(accountId);
+  }
+
+  function compareIsoTimestamps(left, right) {
+    const leftValue = parseIsoTimestampToEpochMicros(left);
+    const rightValue = parseIsoTimestampToEpochMicros(right);
+    const leftValid = Number.isFinite(leftValue);
+    const rightValid = Number.isFinite(rightValue);
+
+    if (!leftValid && !rightValid) return 0;
+    if (!leftValid) return -1;
+    if (!rightValid) return 1;
+    if (leftValue === rightValue) return 0;
+    return leftValue > rightValue ? 1 : -1;
+  }
+
+  function isTimestampGreater(left, right) {
+    return compareIsoTimestamps(left, right) > 0;
+  }
+
+  function pickLatestTimestamp(...values) {
+    let latest = "";
+    values.forEach((value) => {
+      const normalized = readTimestamp({ value }, "value");
+      if (!normalized) return;
+      if (!latest || isTimestampGreater(normalized, latest)) {
+        latest = normalized;
+      }
+    });
+    return latest;
+  }
+
+  function hasSummaryValue(source, ...keys) {
+    return pickValue(source, ...(Array.isArray(keys) ? keys : keys)) !== undefined;
+  }
+
+  function getReadStateDraftStorageKey(accountId = currentAccountId()) {
+    const normalizedAccountId = (accountId || "").toString().trim();
+    if (!normalizedAccountId) return "";
+    return `${READ_STATE_DRAFT_STORAGE_PREFIX}${normalizedAccountId}`;
+  }
+
+  function listReadStateDraftStorageKeys() {
+    const keys = [];
+    try {
+      for (let index = 0; index < localStorage.length; index += 1) {
+        const key = localStorage.key(index);
+        if (!key || !key.startsWith(READ_STATE_DRAFT_STORAGE_PREFIX)) continue;
+        keys.push(key);
+      }
+    } catch (_) {
+      return [];
+    }
+
+    return keys;
+  }
+
+  function normalizeUnreadSummary(summary = {}) {
+    const hasCount = hasSummaryValue(summary, "count", "Count");
+    const hasNotificationUnreadCount = hasSummaryValue(
+      summary,
+      "notificationUnreadCount",
+      "NotificationUnreadCount",
+    );
+    const hasFollowRequestUnreadCount = hasSummaryValue(
+      summary,
+      "followRequestUnreadCount",
+      "FollowRequestUnreadCount",
+    );
+    const hasPendingFollowRequestCount = hasSummaryValue(
+      summary,
+      "pendingFollowRequestCount",
+      "PendingFollowRequestCount",
+      "followRequestCount",
+      "FollowRequestCount",
+    );
+
+    return {
+      accountId:
+        readString(summary, "accountId", "AccountId") || currentAccountId(),
+      loadedAt: Math.max(0, readNumber(summary, ["loadedAt", "LoadedAt"], 0)),
+      count: hasCount
+        ? Math.max(0, readNumber(summary, ["count", "Count"], 0))
+        : state.rawTotalUnreadCount,
+      notificationUnreadCount: hasNotificationUnreadCount
+        ? Math.max(
+            0,
+            readNumber(summary, ["notificationUnreadCount", "NotificationUnreadCount"], 0),
+          )
+        : state.rawNotificationUnreadCount,
+      followRequestUnreadCount: hasFollowRequestUnreadCount
+        ? Math.max(
+            0,
+            readNumber(summary, ["followRequestUnreadCount", "FollowRequestUnreadCount"], 0),
+          )
+        : state.rawFollowRequestUnreadCount,
+      pendingFollowRequestCount: hasPendingFollowRequestCount
+        ? Math.max(
+            0,
+            readNumber(
+              summary,
+              [
+                "pendingFollowRequestCount",
+                "PendingFollowRequestCount",
+                "followRequestCount",
+                "FollowRequestCount",
+              ],
+              0,
+            ),
+          )
+        : state.followRequestCount,
+      lastNotificationsSeenAt:
+        readTimestamp(summary, "lastNotificationsSeenAt", "LastNotificationsSeenAt") ||
+        state.lastNotificationsSeenAt,
+      lastFollowRequestsSeenAt:
+        readTimestamp(summary, "lastFollowRequestsSeenAt", "LastFollowRequestsSeenAt") ||
+        state.lastFollowRequestsSeenAt,
+    };
+  }
+
+  function computeDisplayedNotificationUnreadCount(rawCount = state.rawNotificationUnreadCount) {
+    const safeRaw = Math.max(0, parseIntSafe(rawCount, 0));
+    const hiddenCount = Math.max(0, parseIntSafe(state.pendingNotificationsClearedCount, 0));
+    const visibleCount = Math.max(0, safeRaw - hiddenCount);
+    const optimisticUnreadCount = countOptimisticUnreadEntries(
+      state.optimisticNotificationUnreadMap,
+      getEffectiveNotificationsSeenAt(),
+    );
+    if (state.isOpen && !isRequestsFilter()) {
+      return 0;
+    }
+
+    return Math.max(visibleCount, optimisticUnreadCount);
+  }
+
+  function computeDisplayedFollowRequestUnreadCount(rawCount = state.rawFollowRequestUnreadCount) {
+    const safeRaw = Math.max(0, parseIntSafe(rawCount, 0));
+    const hiddenCount = Math.max(0, parseIntSafe(state.pendingFollowRequestsClearedCount, 0));
+    const visibleCount = Math.max(0, safeRaw - hiddenCount);
+    const optimisticUnreadCount = countOptimisticUnreadEntries(
+      state.optimisticFollowRequestUnreadMap,
+      getEffectiveFollowRequestsSeenAt(),
+    );
+    if (state.isOpen && isRequestsFilter()) {
+      return 0;
+    }
+
+    return Math.max(visibleCount, optimisticUnreadCount);
+  }
+
+  function applyVisibleUnreadSummaryOverrides(summary = {}) {
+    const normalized = { ...(summary || {}) };
+    normalized.notificationUnreadCount = computeDisplayedNotificationUnreadCount(
+      normalized.notificationUnreadCount,
+    );
+    normalized.followRequestUnreadCount = computeDisplayedFollowRequestUnreadCount(
+      normalized.followRequestUnreadCount,
+    );
+
+    normalized.count =
+      Math.max(0, parseIntSafe(normalized.notificationUnreadCount, 0)) +
+      Math.max(0, parseIntSafe(normalized.followRequestUnreadCount, 0));
+
+    return normalized;
+  }
+
+  function hasUnreadSummaryData(summary = {}) {
+    return (
+      pickValue(
+        summary,
+        "count",
+        "Count",
+        "notificationUnreadCount",
+        "NotificationUnreadCount",
+        "followRequestUnreadCount",
+        "FollowRequestUnreadCount",
+        "lastNotificationsSeenAt",
+        "LastNotificationsSeenAt",
+        "lastFollowRequestsSeenAt",
+        "LastFollowRequestsSeenAt",
+      ) !== undefined
+    );
+  }
+
+  function syncUnreadSummary(summary = {}) {
+    if (!hasUnreadSummaryData(summary)) {
+      return applyVisibleUnreadSummaryOverrides(
+        normalizeUnreadSummary({
+          accountId: currentAccountId(),
+          count: state.rawTotalUnreadCount,
+          notificationUnreadCount: state.rawNotificationUnreadCount,
+          followRequestUnreadCount: state.rawFollowRequestUnreadCount,
+          pendingFollowRequestCount: state.followRequestCount,
+          lastNotificationsSeenAt: state.lastNotificationsSeenAt,
+          lastFollowRequestsSeenAt: state.lastFollowRequestsSeenAt,
+        }),
+      );
+    }
+
+    const rawSummary = normalizeUnreadSummary(summary);
+    const accountId = currentAccountId();
+    if (
+      rawSummary.accountId &&
+      accountId &&
+      normalizeId(rawSummary.accountId) !== normalizeId(accountId)
+    ) {
+      return applyVisibleUnreadSummaryOverrides(rawSummary);
+    }
+
+    if (hasSummaryValue(summary, "notificationUnreadCount", "NotificationUnreadCount")) {
+      state.hasNotificationUnreadCountLoaded = true;
+    }
+
+    if (hasSummaryValue(summary, "followRequestUnreadCount", "FollowRequestUnreadCount")) {
+      state.hasFollowRequestUnreadCountLoaded = true;
+    }
+
+    if (hasSummaryValue(summary, "lastNotificationsSeenAt", "LastNotificationsSeenAt")) {
+      state.hasNotificationsSeenStateLoaded = true;
+    }
+
+    if (hasSummaryValue(summary, "lastFollowRequestsSeenAt", "LastFollowRequestsSeenAt")) {
+      state.hasFollowRequestsSeenStateLoaded = true;
+    }
+
+    if (rawSummary.lastNotificationsSeenAt) {
+      state.lastNotificationsSeenAt = pickLatestTimestamp(
+        state.lastNotificationsSeenAt,
+        rawSummary.lastNotificationsSeenAt,
+      );
+    }
+
+    if (rawSummary.lastFollowRequestsSeenAt) {
+      state.lastFollowRequestsSeenAt = pickLatestTimestamp(
+        state.lastFollowRequestsSeenAt,
+        rawSummary.lastFollowRequestsSeenAt,
+      );
+    }
+
+    state.rawTotalUnreadCount = rawSummary.count;
+    state.rawNotificationUnreadCount = rawSummary.notificationUnreadCount;
+    state.rawFollowRequestUnreadCount = rawSummary.followRequestUnreadCount;
+    if (hasSummaryValue(summary, "notificationUnreadCount", "NotificationUnreadCount")) {
+      state.optimisticNotificationUnreadMap.clear();
+    }
+    if (hasSummaryValue(summary, "followRequestUnreadCount", "FollowRequestUnreadCount")) {
+      state.optimisticFollowRequestUnreadMap.clear();
+    }
+    pruneOptimisticUnreadState();
+    const normalized = applyVisibleUnreadSummaryOverrides(rawSummary);
+    state.totalUnreadCount = normalized.count;
+    state.notificationUnreadCount = normalized.notificationUnreadCount;
+    state.followRequestUnreadCount = normalized.followRequestUnreadCount;
+    updateTabBadges();
+
+    if (rawSummary.pendingFollowRequestCount >= 0) {
+      setFollowRequestCount(rawSummary.pendingFollowRequestCount);
+    }
+
+    return normalized;
+  }
+
+  function countOptimisticUnreadEntries(map, effectiveSeenAt = "") {
+    if (!(map instanceof Map) || map.size === 0) {
+      return 0;
+    }
+
+    let visibleCount = 0;
+    for (const [entryId, occurredAt] of map.entries()) {
+      if (!occurredAt) {
+        map.delete(entryId);
+        continue;
+      }
+
+      if (effectiveSeenAt && !isTimestampGreater(occurredAt, effectiveSeenAt)) {
+        map.delete(entryId);
+        continue;
+      }
+
+      visibleCount += 1;
+    }
+
+    return visibleCount;
+  }
+
+  function pruneOptimisticUnreadState() {
+    countOptimisticUnreadEntries(
+      state.optimisticNotificationUnreadMap,
+      getEffectiveNotificationsSeenAt(),
+    );
+    countOptimisticUnreadEntries(
+      state.optimisticFollowRequestUnreadMap,
+      getEffectiveFollowRequestsSeenAt(),
+    );
+  }
+
+  function trackOptimisticNotificationUnread(notificationId, occurredAt) {
+    const normalizedId = normalizeId(notificationId);
+    const normalizedOccurredAt = readTimestamp({ occurredAt }, "occurredAt");
+    if (!normalizedId || !normalizedOccurredAt) {
+      return false;
+    }
+
+    const effectiveSeenAt = getEffectiveNotificationsSeenAt();
+    const hasLocalReadContext = !!(
+      effectiveSeenAt ||
+      state.pendingNotificationsClearedCount > 0 ||
+      hasPendingNotificationsSeenSync() ||
+      state.isReadStateFlushing
+    );
+    if (
+      !hasLocalReadContext ||
+      (effectiveSeenAt && !isTimestampGreater(normalizedOccurredAt, effectiveSeenAt))
+    ) {
+      return false;
+    }
+
+    const previousOccurredAt =
+      state.optimisticNotificationUnreadMap.get(normalizedId) || "";
+    if (
+      previousOccurredAt &&
+      !isTimestampGreater(normalizedOccurredAt, previousOccurredAt)
+    ) {
+      return false;
+    }
+
+    state.optimisticNotificationUnreadMap.set(normalizedId, normalizedOccurredAt);
+    return true;
+  }
+
+  function trackOptimisticFollowRequestUnread(requesterId, occurredAt) {
+    const normalizedId = normalizeId(requesterId);
+    const normalizedOccurredAt = readTimestamp({ occurredAt }, "occurredAt");
+    if (!normalizedId || !normalizedOccurredAt) {
+      return false;
+    }
+
+    const effectiveSeenAt = getEffectiveFollowRequestsSeenAt();
+    const hasLocalReadContext = !!(
+      effectiveSeenAt ||
+      state.pendingFollowRequestsClearedCount > 0 ||
+      hasPendingFollowRequestsSeenSync() ||
+      state.isReadStateFlushing
+    );
+    if (
+      !hasLocalReadContext ||
+      (effectiveSeenAt && !isTimestampGreater(normalizedOccurredAt, effectiveSeenAt))
+    ) {
+      return false;
+    }
+
+    const previousOccurredAt =
+      state.optimisticFollowRequestUnreadMap.get(normalizedId) || "";
+    if (
+      previousOccurredAt &&
+      !isTimestampGreater(normalizedOccurredAt, previousOccurredAt)
+    ) {
+      return false;
+    }
+
+    state.optimisticFollowRequestUnreadMap.set(normalizedId, normalizedOccurredAt);
+    return true;
+  }
+
+  function clearOptimisticNotificationUnread(notificationId) {
+    const normalizedId = normalizeId(notificationId);
+    if (!normalizedId) {
+      return false;
+    }
+
+    return state.optimisticNotificationUnreadMap.delete(normalizedId);
+  }
+
+  function clearOptimisticFollowRequestUnread(requesterId) {
+    const normalizedId = normalizeId(requesterId);
+    if (!normalizedId) {
+      return false;
+    }
+
+    return state.optimisticFollowRequestUnreadMap.delete(normalizedId);
+  }
+
+  function getEffectiveNotificationsSeenAt() {
+    return pickLatestTimestamp(
+      state.lastNotificationsSeenAt,
+      state.pendingNotificationsSeenAt,
+    );
+  }
+
+  function getEffectiveFollowRequestsSeenAt() {
+    return pickLatestTimestamp(
+      state.lastFollowRequestsSeenAt,
+      state.pendingFollowRequestsSeenAt,
+    );
+  }
+
+  function hasPendingNotificationsSeenSync() {
+    return !!(
+      state.pendingNotificationsSeenAt &&
+      isTimestampGreater(
+        state.pendingNotificationsSeenAt,
+        state.lastNotificationsSeenAt,
+      )
+    );
+  }
+
+  function hasPendingFollowRequestsSeenSync() {
+    return !!(
+      state.pendingFollowRequestsSeenAt &&
+      isTimestampGreater(
+        state.pendingFollowRequestsSeenAt,
+        state.lastFollowRequestsSeenAt,
+      )
+    );
+  }
+
+  function cleanupReadStateDraftStorage() {
+    const now = Date.now();
+    const validEntries = [];
+
+    listReadStateDraftStorageKeys().forEach((storageKey) => {
+      try {
+        const raw = localStorage.getItem(storageKey);
+        if (!raw) {
+          localStorage.removeItem(storageKey);
+          return;
+        }
+
+        const parsed = JSON.parse(raw);
+        const accountId = readString(parsed, "accountId");
+        const notificationsSeenAt = readTimestamp(parsed, "notificationsSeenAt");
+        const followRequestsSeenAt = readTimestamp(parsed, "followRequestsSeenAt");
+        const savedAt = readTimestamp(parsed, "savedAt");
+        const savedAtValue = savedAt ? Date.parse(savedAt) : NaN;
+        const hasSeenAt = !!(notificationsSeenAt || followRequestsSeenAt);
+        const expired =
+          !Number.isFinite(savedAtValue) ||
+          now - savedAtValue > Math.max(1000, state.readStateDraftTtlMs);
+
+        if (!accountId || !hasSeenAt || expired) {
+          localStorage.removeItem(storageKey);
+          return;
+        }
+
+        validEntries.push({
+          storageKey,
+          savedAtValue,
+        });
+      } catch (_) {
+        localStorage.removeItem(storageKey);
+      }
+    });
+
+    if (validEntries.length <= READ_STATE_DRAFT_MAX_KEYS) {
+      return;
+    }
+
+    validEntries
+      .sort((left, right) => right.savedAtValue - left.savedAtValue)
+      .slice(READ_STATE_DRAFT_MAX_KEYS)
+      .forEach((entry) => {
+        localStorage.removeItem(entry.storageKey);
+      });
+  }
+
+  function resetLocalReadStateState() {
+    state.rawNotificationUnreadCount = 0;
+    state.rawFollowRequestUnreadCount = 0;
+    state.rawTotalUnreadCount = 0;
+    state.notificationUnreadCount = 0;
+    state.followRequestUnreadCount = 0;
+    state.totalUnreadCount = 0;
+    state.followRequestCount = 0;
+    state.lastNotificationsSeenAt = "";
+    state.lastFollowRequestsSeenAt = "";
+    state.hasNotificationUnreadCountLoaded = false;
+    state.hasFollowRequestUnreadCountLoaded = false;
+    state.hasNotificationsSeenStateLoaded = false;
+    state.hasFollowRequestsSeenStateLoaded = false;
+    state.pendingNotificationsSeenAt = "";
+    state.pendingFollowRequestsSeenAt = "";
+    state.pendingNotificationsClearedCount = 0;
+    state.pendingFollowRequestsClearedCount = 0;
+    state.optimisticNotificationUnreadMap.clear();
+    state.optimisticFollowRequestUnreadMap.clear();
+    clearReadStateFlushTimer();
+    updateTabBadges();
+    updateRequestsSummaryHeader();
+  }
+
+  function resolveItemSeenState(item, explicitSeen = null) {
+    if (item?.tracksUnreadState === false) {
+      return true;
+    }
+
+    const relevantSeenAt =
+      parseIntSafe(item?.type, -1) === NOTIFICATION_TYPE.FOLLOW_REQUEST
+        ? getEffectiveFollowRequestsSeenAt()
+        : getEffectiveNotificationsSeenAt();
+    const relevantTimestamp =
+      item?.seenStateTimestamp ||
+      pickLatestTimestamp(item?.lastEventAt, item?.createdAt);
+
+    if (relevantTimestamp && relevantSeenAt) {
+      return !isTimestampGreater(relevantTimestamp, relevantSeenAt);
+    }
+
+    if (typeof explicitSeen === "boolean") {
+      return explicitSeen;
+    }
+
+    if (!relevantTimestamp || !relevantSeenAt) {
+      return true;
+    }
+
+    return !isTimestampGreater(relevantTimestamp, relevantSeenAt);
+  }
+
+  function updateVisibleSeenState() {
+    if (!Array.isArray(state.items) || !state.items.length) return false;
+
+    let hasChanged = false;
+    state.items = state.items.map((item) => {
+      const nextSeen = resolveItemSeenState(item, item.explicitSeen);
+      if (nextSeen === item.isSeen) {
+        return item;
+      }
+
+      hasChanged = true;
+      return {
+        ...item,
+        isSeen: nextSeen,
+      };
+    });
+
+    if (hasChanged) {
+      renderItems();
+    }
+
+    return hasChanged;
+  }
+
+  function getLatestSeenCandidate(items = []) {
+    let latest = "";
+    items.forEach((item) => {
+      if (item?.tracksUnreadState === false) {
+        return;
+      }
+
+      const itemSeenStateTimestamp =
+        item?.seenStateTimestamp ||
+        pickLatestTimestamp(item?.lastEventAt, item?.createdAt);
+      latest = pickLatestTimestamp(latest, itemSeenStateTimestamp);
+    });
+    return latest;
+  }
+
+  function buildReadStateDraft() {
+    const pendingPayload = getPendingReadStatePayload();
+    if (!pendingPayload) return null;
+
+    const accountId = currentAccountId();
+    if (!accountId) return null;
+
+    return {
+      accountId,
+      notificationsSeenAt: pendingPayload.notificationsSeenAt,
+      followRequestsSeenAt: pendingPayload.followRequestsSeenAt,
+      savedAt: new Date().toISOString(),
+    };
+  }
+
+  function clearReadStateDraft() {
+    const storageKey = getReadStateDraftStorageKey();
+    if (!storageKey) return;
+    localStorage.removeItem(storageKey);
+  }
+
+  function persistReadStateDraft() {
+    cleanupReadStateDraftStorage();
+    const storageKey = getReadStateDraftStorageKey();
+    if (!storageKey) return;
+
+    const draft = buildReadStateDraft();
+    if (!draft) {
+      clearReadStateDraft();
+      return;
+    }
+
+    localStorage.setItem(storageKey, JSON.stringify(draft));
+  }
+
+  function readReadStateDraft() {
+    const storageKey = getReadStateDraftStorageKey();
+    if (!storageKey) return null;
+
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return null;
+
+    try {
+      const parsed = JSON.parse(raw);
+      const savedAt = readTimestamp(parsed, "savedAt");
+      const expired =
+        savedAt &&
+        Date.now() - Date.parse(savedAt) > Math.max(1000, state.readStateDraftTtlMs);
+      const accountId = readString(parsed, "accountId");
+      if (expired || (accountId && accountId !== currentAccountId())) {
+        localStorage.removeItem(storageKey);
+        return null;
+      }
+
+      return {
+        accountId,
+        notificationsSeenAt: readTimestamp(parsed, "notificationsSeenAt"),
+        followRequestsSeenAt: readTimestamp(parsed, "followRequestsSeenAt"),
+        savedAt,
+      };
+    } catch (_) {
+      localStorage.removeItem(storageKey);
+      return null;
+    }
+  }
+
+  function clearReadStateFlushTimer() {
+    if (!state.readStateFlushTimer) return;
+    clearTimeout(state.readStateFlushTimer);
+    state.readStateFlushTimer = null;
   }
 
   function escapeHtml(input) {
@@ -243,6 +968,20 @@
       1,
       parseIntSafe(global.APP_CONFIG?.NOTIFICATION_TOAST_RATE_LIMIT_MAX, 2),
     );
+    state.readStateFlushDebounceMs = Math.max(
+      250,
+      parseIntSafe(
+        global.APP_CONFIG?.NOTIFICATION_READ_STATE_FLUSH_DEBOUNCE_MS,
+        3000,
+      ),
+    );
+    state.readStateDraftTtlMs = Math.max(
+      60 * 1000,
+      parseIntSafe(
+        global.APP_CONFIG?.NOTIFICATION_READ_STATE_DRAFT_TTL_MS,
+        72 * 60 * 60 * 1000,
+      ),
+    );
     applyPanelWidthVariable();
   }
 
@@ -261,14 +1000,20 @@
       </div>
       <div class="notifications-panel-tabs" id="notifications-panel-tabs">
         <div class="notifications-tabs-list">
-          <button type="button" class="notifications-tab active" data-filter="${NOTIFICATION_FILTER.ALL}">${escapeHtml(npT("notification.panel.tabAll"))}</button>
-          <button type="button" class="notifications-tab" data-filter="${NOTIFICATION_FILTER.UNREAD}">${escapeHtml(npT("notification.panel.tabUnread"))}</button>
+          <button type="button" class="notifications-tab active" data-filter="${NOTIFICATION_FILTER.ACTIVITY}">
+            <span class="notifications-tab-label">${escapeHtml(npT("notification.panel.tabActivity"))}</span>
+            <span class="notifications-tab-badge" data-tab-badge="activity" hidden></span>
+          </button>
           <button type="button" class="notifications-tab" data-filter="${NOTIFICATION_FILTER.REQUESTS}">
             <span class="notifications-tab-label">${escapeHtml(npT("notification.panel.tabRequests"))}</span>
             <span class="notifications-tab-badge" data-tab-badge="requests" hidden></span>
           </button>
           <div class="notifications-tabs-indicator" id="notifications-tabs-indicator" aria-hidden="true"></div>
         </div>
+      </div>
+      <div class="notifications-panel-subheader" id="notifications-panel-subheader" hidden>
+        <span class="notifications-panel-subheader-title">${escapeHtml(npT("notification.panel.totalRequests"))}</span>
+        <span class="notifications-panel-subheader-badge" id="notifications-panel-requests-total-badge" hidden></span>
       </div>
       <div class="notifications-panel-list" id="notifications-panel-list">
         <div class="notifications-panel-loader">
@@ -298,11 +1043,18 @@
     state.dom.tabsIndicator = panel.querySelector(
       "#notifications-tabs-indicator",
     );
+    state.dom.activityTabBadge = panel.querySelector(
+      '.notifications-tab-badge[data-tab-badge="activity"]',
+    );
     state.dom.requestsTab = panel.querySelector(
       `.notifications-tab[data-filter="${NOTIFICATION_FILTER.REQUESTS}"]`,
     );
     state.dom.requestsTabBadge = panel.querySelector(
       '.notifications-tab-badge[data-tab-badge="requests"]',
+    );
+    state.dom.requestsSummary = panel.querySelector("#notifications-panel-subheader");
+    state.dom.requestsSummaryBadge = panel.querySelector(
+      "#notifications-panel-requests-total-badge",
     );
     state.dom.list = panel.querySelector("#notifications-panel-list");
     state.dom.loader = panel.querySelector("#notifications-panel-more-loader");
@@ -317,7 +1069,8 @@
       global.lucide.createIcons();
     }
 
-    updateFollowRequestTabBadge();
+    updateTabBadges();
+    updateRequestsSummaryHeader();
   }
 
   function refreshPanelLocalization() {
@@ -375,11 +1128,26 @@
           return;
         }
         const wasRequestsFilter = isRequestsFilter();
+        const shouldFlushReadStateOnTabSwitch = wasRequestsFilter
+          ? hasPendingFollowRequestsSeenSync()
+          : hasPendingNotificationsSeenSync();
+        const shouldRefreshUnreadOnTabSwitch = wasRequestsFilter
+          ? state.hasFollowRequestDirty || !!state.followRequestRefreshTimer
+          : state.hasRealtimeDirty || !!state.realtimeRefreshTimer;
         state.filter = nextFilter;
         if (wasRequestsFilter && !isRequestsFilter(nextFilter)) {
           cancelFollowRequestSyncVisual();
         }
         updateTabUi();
+        publishVisibleUnreadSummary();
+        if (shouldRefreshUnreadOnTabSwitch) {
+          refreshUnreadBadge(0);
+        }
+        if (shouldFlushReadStateOnTabSwitch) {
+          flushPendingReadState({ immediate: true }).catch(() => {
+            // no-op
+          });
+        }
         resetCursorAndItems();
         loadCurrentFilter(false, { forceReplace: true, refreshBadge: false });
       });
@@ -467,38 +1235,101 @@
       .forEach((tab) => {
         tab.classList.toggle("active", tab.dataset.filter === state.filter);
       });
-    updateFollowRequestTabBadge();
+    updateTabBadges();
+    updateRequestsSummaryHeader();
     requestAnimationFrame(updateTabsIndicator);
   }
 
-  function formatFollowRequestCountBadge(count) {
+  function formatNotificationBadgeCount(count) {
     const safeCount = Math.max(0, parseIntSafe(count, 0));
     if (safeCount <= 0) return "";
     if (safeCount > 99) return "99+";
     return String(safeCount);
   }
 
-  function updateFollowRequestTabBadge() {
-    const badgeEl = state.dom.requestsTabBadge;
+  function updateCountBadgeElement(badgeEl, count) {
     if (!badgeEl) return;
 
-    const label = formatFollowRequestCountBadge(state.followRequestCount);
+    const label = formatNotificationBadgeCount(count);
     if (!label) {
       badgeEl.textContent = "";
       badgeEl.hidden = true;
-      requestAnimationFrame(updateTabsIndicator);
       return;
     }
 
     badgeEl.hidden = false;
     badgeEl.textContent = label;
+  }
+
+  function updateTabBadges() {
+    updateCountBadgeElement(
+      state.dom.activityTabBadge,
+      computeDisplayedNotificationUnreadCount(state.rawNotificationUnreadCount),
+    );
+    updateCountBadgeElement(
+      state.dom.requestsTabBadge,
+      computeDisplayedFollowRequestUnreadCount(state.rawFollowRequestUnreadCount),
+    );
     requestAnimationFrame(updateTabsIndicator);
+  }
+
+  function publishVisibleUnreadSummary() {
+    if (typeof global.setGlobalNotificationBadge !== "function") {
+      return null;
+    }
+
+    const summary = applyVisibleUnreadSummaryOverrides(buildOptimisticUnreadSummary());
+    global.setGlobalNotificationBadge(summary.count);
+
+    return summary;
+  }
+
+  function updateRequestsSummaryHeader() {
+    const summaryEl = state.dom.requestsSummary;
+    if (!summaryEl) return;
+
+    const shouldShow = isRequestsFilter() && state.followRequestCount > 0;
+    summaryEl.hidden = !shouldShow;
+    if (!shouldShow) return;
+
+    updateCountBadgeElement(
+      state.dom.requestsSummaryBadge,
+      state.followRequestCount,
+    );
   }
 
   function setFollowRequestCount(count) {
     const safeCount = Math.max(0, parseIntSafe(count, 0));
     state.followRequestCount = safeCount;
-    updateFollowRequestTabBadge();
+    updateRequestsSummaryHeader();
+  }
+
+  function buildOptimisticUnreadSummary(partial = {}) {
+    return {
+      accountId: currentAccountId(),
+      loadedAt: 0,
+      count: state.rawTotalUnreadCount,
+      notificationUnreadCount: state.rawNotificationUnreadCount,
+      followRequestUnreadCount: state.rawFollowRequestUnreadCount,
+      pendingFollowRequestCount: Math.max(0, parseIntSafe(state.followRequestCount, 0)),
+      lastNotificationsSeenAt: state.lastNotificationsSeenAt,
+      lastFollowRequestsSeenAt: state.lastFollowRequestsSeenAt,
+    };
+  }
+
+  function applyOptimisticUnreadClear(partial = {}) {
+    const rawSummary = buildOptimisticUnreadSummary(partial);
+    const summary = applyVisibleUnreadSummaryOverrides(rawSummary);
+
+    state.notificationUnreadCount = summary.notificationUnreadCount;
+    state.followRequestUnreadCount = summary.followRequestUnreadCount;
+    state.totalUnreadCount = summary.count;
+    updateTabBadges();
+    updateRequestsSummaryHeader();
+
+    if (typeof global.setGlobalNotificationBadge === "function") {
+      global.setGlobalNotificationBadge(summary.count);
+    }
   }
 
   function scrollNotificationsListToTop() {
@@ -608,13 +1439,10 @@
   }
 
   function getEmptyLabel() {
-    if (state.filter === NOTIFICATION_FILTER.UNREAD) {
-      return npT("notification.panel.emptyUnread");
-    }
     if (isRequestsFilter()) {
       return npT("notification.panel.emptyRequests");
     }
-    return npT("notification.panel.emptyAll");
+    return npT("notification.panel.emptyActivity");
   }
 
   function loadCurrentFilter(isLoadMore = false, options = {}) {
@@ -782,12 +1610,30 @@
       "thumbnailKind",
       "ThumbnailKind",
     ).toLowerCase();
+    const explicitSeenValue = pickValue(
+      raw,
+      "isSeenByCurrentState",
+      "IsSeenByCurrentState",
+      "isRead",
+      "IsRead",
+    );
+    const explicitSeen =
+      explicitSeenValue === undefined
+        ? null
+        : readBoolean({ explicitSeenValue }, "explicitSeenValue", true);
+    const tracksUnreadState = readBoolean(
+      raw,
+      ["tracksUnreadState", "TracksUnreadState"],
+      true,
+    );
 
-    return {
+    const normalizedItem = {
       notificationId,
       type,
       state: notificationState,
-      isRead: readBoolean(raw, ["isRead", "IsRead"], false),
+      explicitSeen,
+      tracksUnreadState,
+      isSeen: true,
       actorCount: parseIntSafe(
         readNumber(raw, ["actorCount", "ActorCount"], 0),
         0,
@@ -807,6 +1653,11 @@
       thumbnailUrl: readString(raw, "thumbnailUrl", "ThumbnailUrl"),
       thumbnailMediaType,
       thumbnailMediaKind,
+      seenStateTimestamp: readTimestamp(
+        raw,
+        "seenStateTimestamp",
+        "SeenStateTimestamp",
+      ),
       createdAt: readString(raw, "createdAt", "CreatedAt"),
       lastEventAt: readString(raw, "lastEventAt", "LastEventAt"),
       canOpen,
@@ -817,17 +1668,22 @@
         avatarUrl: actorAvatarUrl,
       },
     };
+
+    normalizedItem.isSeen = resolveItemSeenState(normalizedItem, explicitSeen);
+    return normalizedItem;
   }
 
   function normalizeFollowRequestItem(raw = {}) {
     const requesterId = readString(raw, "requesterId", "RequesterId");
     if (!isGuidLike(requesterId)) return null;
 
-    return {
+    const normalizedItem = {
       notificationId: `follow-request:${requesterId}`,
       type: NOTIFICATION_TYPE.FOLLOW_REQUEST,
       state: NOTIFICATION_STATE.ACTIVE,
-      isRead: true,
+      explicitSeen: true,
+      tracksUnreadState: true,
+      isSeen: true,
       actorCount: 1,
       eventCount: 1,
       text: npT("notification.fallback.followRequestAction"),
@@ -847,6 +1703,9 @@
         avatarUrl: readString(raw, "avatarUrl", "AvatarUrl"),
       },
     };
+
+    normalizedItem.isSeen = resolveItemSeenState(normalizedItem, normalizedItem.explicitSeen);
+    return normalizedItem;
   }
 
   function mergeUniqueByNotificationId(baseItems = [], incomingItems = []) {
@@ -1227,7 +2086,7 @@
     return [
       item.type,
       item.state,
-      item.isRead ? 1 : 0,
+      item.isSeen ? 1 : 0,
       item.actorCount,
       item.eventCount,
       item.text,
@@ -1301,7 +2160,7 @@
     const actionText = buildDisplayActionText(item, isUnavailable);
     const thumbnailMediaKind = resolveThumbnailMediaKind(item);
     const timeLabel = getTimeAgoDisplay(item.lastEventAt || item.createdAt);
-    const unreadClass = item.isRead ? "" : " unread";
+    const unreadClass = item.isSeen ? "" : " unread";
     const unavailableClass = isUnavailable ? " unavailable" : "";
     const enterClass =
       enterIdSet && enterIdSet.has(normalizeId(item.notificationId))
@@ -1481,6 +2340,364 @@
     state.dom.loader.style.display = visible ? "flex" : "none";
   }
 
+  function getPendingReadStatePayload() {
+    const notificationsSeenAt =
+      state.pendingNotificationsSeenAt &&
+      isTimestampGreater(
+        state.pendingNotificationsSeenAt,
+        state.lastNotificationsSeenAt,
+      )
+        ? state.pendingNotificationsSeenAt
+        : "";
+    const followRequestsSeenAt =
+      state.pendingFollowRequestsSeenAt &&
+      isTimestampGreater(
+        state.pendingFollowRequestsSeenAt,
+        state.lastFollowRequestsSeenAt,
+      )
+        ? state.pendingFollowRequestsSeenAt
+        : "";
+
+    if (!notificationsSeenAt && !followRequestsSeenAt) {
+      return null;
+    }
+
+    return {
+      notificationsSeenAt,
+      followRequestsSeenAt,
+    };
+  }
+
+  function clearPendingReadStateUpTo(payload = {}) {
+    const notificationsSeenAt = readTimestamp(payload, "notificationsSeenAt");
+    const followRequestsSeenAt = readTimestamp(payload, "followRequestsSeenAt");
+
+    if (
+      notificationsSeenAt &&
+      compareIsoTimestamps(state.pendingNotificationsSeenAt, notificationsSeenAt) <= 0
+    ) {
+      state.pendingNotificationsSeenAt = "";
+    }
+
+    if (
+      followRequestsSeenAt &&
+      compareIsoTimestamps(state.pendingFollowRequestsSeenAt, followRequestsSeenAt) <= 0
+    ) {
+      state.pendingFollowRequestsSeenAt = "";
+    }
+  }
+
+  function scheduleReadStateFlush() {
+    if (!getPendingReadStatePayload()) {
+      clearReadStateFlushTimer();
+      persistReadStateDraft();
+      return;
+    }
+
+    clearReadStateFlushTimer();
+    state.readStateFlushTimer = setTimeout(() => {
+      state.readStateFlushTimer = null;
+      flushPendingReadState({ immediate: true }).catch(() => {
+        // no-op
+      });
+    }, state.readStateFlushDebounceMs);
+    persistReadStateDraft();
+  }
+
+  function queueSeenState(partial = {}) {
+    let hasChanged = false;
+
+    const notificationsSeenAt = readTimestamp(partial, "notificationsSeenAt");
+    if (notificationsSeenAt) {
+      const currentValue = pickLatestTimestamp(
+        state.lastNotificationsSeenAt,
+        state.pendingNotificationsSeenAt,
+      );
+      if (!currentValue || isTimestampGreater(notificationsSeenAt, currentValue)) {
+        state.pendingNotificationsSeenAt = pickLatestTimestamp(
+          state.pendingNotificationsSeenAt,
+          notificationsSeenAt,
+        );
+        hasChanged = true;
+      }
+
+      state.pendingNotificationsClearedCount = Math.max(
+        state.pendingNotificationsClearedCount,
+        state.rawNotificationUnreadCount,
+      );
+    }
+
+    const followRequestsSeenAt = readTimestamp(partial, "followRequestsSeenAt");
+    if (followRequestsSeenAt) {
+      const currentValue = pickLatestTimestamp(
+        state.lastFollowRequestsSeenAt,
+        state.pendingFollowRequestsSeenAt,
+      );
+      if (!currentValue || isTimestampGreater(followRequestsSeenAt, currentValue)) {
+        state.pendingFollowRequestsSeenAt = pickLatestTimestamp(
+          state.pendingFollowRequestsSeenAt,
+          followRequestsSeenAt,
+        );
+        hasChanged = true;
+      }
+
+      state.pendingFollowRequestsClearedCount = Math.max(
+        state.pendingFollowRequestsClearedCount,
+        state.rawFollowRequestUnreadCount,
+      );
+    }
+
+    if (!hasChanged) {
+      return false;
+    }
+
+    pruneOptimisticUnreadState();
+    applyOptimisticUnreadClear(partial);
+    updateVisibleSeenState();
+    scheduleReadStateFlush();
+    return true;
+  }
+
+  async function flushPendingReadState(options = {}) {
+    const payload = getPendingReadStatePayload();
+    if (!payload || !global.API?.Notifications?.readState) {
+      persistReadStateDraft();
+      return null;
+    }
+
+    const requestAccountId = currentAccountId();
+
+    if (options.immediate === true) {
+      clearReadStateFlushTimer();
+    }
+
+    if (state.isReadStateFlushing) {
+      persistReadStateDraft();
+      return null;
+    }
+
+    state.isReadStateFlushing = true;
+
+    try {
+      const res = await global.API.Notifications.readState(payload, {
+        keepalive: options.keepalive === true,
+      });
+      if (!res?.ok) {
+        throw new Error("READ_STATE_FLUSH_FAILED");
+      }
+
+      const data = await res.json().catch(() => null);
+      const currentAccountAfterResponse = currentAccountId();
+      if (
+        requestAccountId &&
+        currentAccountAfterResponse &&
+        normalizeId(requestAccountId) !== normalizeId(currentAccountAfterResponse)
+      ) {
+        resetLocalReadStateState();
+        return null;
+      }
+
+      const safeData = isPayloadForCurrentAccount(data || {}) ? data : null;
+      if (data && !safeData) {
+        resetLocalReadStateState();
+        return null;
+      }
+
+      clearPendingReadStateUpTo(payload);
+      state.lastNotificationsSeenAt = pickLatestTimestamp(
+        state.lastNotificationsSeenAt,
+        payload.notificationsSeenAt,
+      );
+      state.lastFollowRequestsSeenAt = pickLatestTimestamp(
+        state.lastFollowRequestsSeenAt,
+        payload.followRequestsSeenAt,
+      );
+      pruneOptimisticUnreadState();
+      if (!hasPendingNotificationsSeenSync()) {
+        state.pendingNotificationsClearedCount = 0;
+      }
+      if (!hasPendingFollowRequestsSeenSync()) {
+        state.pendingFollowRequestsClearedCount = 0;
+      }
+
+      if (safeData) {
+        syncUnreadSummary(safeData);
+        if (typeof global.applyGlobalNotificationUnreadSummary === "function") {
+          global.applyGlobalNotificationUnreadSummary(safeData);
+        }
+      } else {
+        if (payload.notificationsSeenAt) {
+          state.rawNotificationUnreadCount = 0;
+          state.notificationUnreadCount = 0;
+        }
+        if (payload.followRequestsSeenAt) {
+          state.rawFollowRequestUnreadCount = 0;
+          state.followRequestUnreadCount = 0;
+        }
+        state.rawTotalUnreadCount =
+          state.rawNotificationUnreadCount + state.rawFollowRequestUnreadCount;
+        state.totalUnreadCount =
+          state.notificationUnreadCount + state.followRequestUnreadCount;
+        updateTabBadges();
+        if (typeof global.loadGlobalNotificationBadge === "function") {
+          global.loadGlobalNotificationBadge();
+        }
+      }
+
+      updateVisibleSeenState();
+      persistReadStateDraft();
+      return safeData;
+    } catch (_) {
+      persistReadStateDraft();
+      ensureUnreadSummaryLoaded()
+        .then(() => {
+          updateVisibleSeenState();
+        })
+        .catch(() => {
+          // no-op
+        });
+      throw _;
+    } finally {
+      state.isReadStateFlushing = false;
+      if (getPendingReadStatePayload()) {
+        scheduleReadStateFlush();
+      }
+    }
+  }
+
+  async function ensureUnreadSummaryLoaded() {
+    const globalSummary =
+      typeof global.getGlobalNotificationUnreadSummary === "function"
+        ? global.getGlobalNotificationUnreadSummary()
+        : null;
+    const normalizedGlobalSummary =
+      globalSummary && typeof globalSummary === "object"
+        ? syncUnreadSummary(globalSummary)
+        : null;
+
+    if (
+      normalizedGlobalSummary &&
+      normalizedGlobalSummary.accountId &&
+      normalizeId(normalizedGlobalSummary.accountId) === normalizeId(currentAccountId()) &&
+      Number(globalSummary?.loadedAt) > 0
+    ) {
+      return normalizedGlobalSummary;
+    }
+
+    if (!global.API?.Notifications?.getUnreadCount) {
+      return normalizedGlobalSummary;
+    }
+
+    try {
+      const res = await global.API.Notifications.getUnreadCount();
+      if (!res?.ok) {
+        return normalizedGlobalSummary;
+      }
+
+      const data = await res.json().catch(() => null);
+      if (!data) {
+        return normalizedGlobalSummary;
+      }
+      if (!isPayloadForCurrentAccount(data)) {
+        return normalizedGlobalSummary;
+      }
+
+      syncUnreadSummary(data);
+      if (typeof global.applyGlobalNotificationUnreadSummary === "function") {
+        return global.applyGlobalNotificationUnreadSummary(data);
+      }
+
+      return normalizeUnreadSummary(data);
+    } catch (_) {
+      return normalizedGlobalSummary;
+    }
+  }
+
+  function queueNotificationsSeenFromItems(items = state.items) {
+    if (!state.isOpen || isRequestsFilter()) return false;
+
+    const latestSeenAt = getLatestSeenCandidate(items);
+    if (!latestSeenAt) return false;
+
+    const effectiveSeenAt = getEffectiveNotificationsSeenAt();
+    const canUseTimestamp = !!effectiveSeenAt;
+    const hasUnreadByCount = state.rawNotificationUnreadCount > 0;
+    const shouldQueueWithoutWatermark =
+      (state.hasNotificationsSeenStateLoaded && !effectiveSeenAt) ||
+      (!state.hasNotificationsSeenStateLoaded &&
+        !state.hasNotificationUnreadCountLoaded);
+    if (canUseTimestamp) {
+      if (!isTimestampGreater(latestSeenAt, effectiveSeenAt)) {
+        return false;
+      }
+    } else if (!hasUnreadByCount && !shouldQueueWithoutWatermark) {
+      return false;
+    }
+
+    return queueSeenState({ notificationsSeenAt: latestSeenAt });
+  }
+
+  function queueFollowRequestsSeenFromItems(items = state.items) {
+    if (!state.isOpen || !isRequestsFilter()) return false;
+
+    const latestSeenAt = getLatestSeenCandidate(items);
+    if (!latestSeenAt) return false;
+
+    const effectiveSeenAt = getEffectiveFollowRequestsSeenAt();
+    const canUseTimestamp = !!effectiveSeenAt;
+    const hasUnreadByCount = state.rawFollowRequestUnreadCount > 0;
+    const shouldQueueWithoutWatermark =
+      (state.hasFollowRequestsSeenStateLoaded && !effectiveSeenAt) ||
+      (!state.hasFollowRequestsSeenStateLoaded &&
+        !state.hasFollowRequestUnreadCountLoaded);
+    if (canUseTimestamp) {
+      if (!isTimestampGreater(latestSeenAt, effectiveSeenAt)) {
+        return false;
+      }
+    } else if (!hasUnreadByCount && !shouldQueueWithoutWatermark) {
+      return false;
+    }
+
+    return queueSeenState({ followRequestsSeenAt: latestSeenAt });
+  }
+
+  async function replayPendingReadStateDraft() {
+    const draft = readReadStateDraft();
+    if (!draft) return null;
+
+    await ensureUnreadSummaryLoaded();
+
+    const replayPayload = {
+      notificationsSeenAt:
+        draft.notificationsSeenAt &&
+        (!state.lastNotificationsSeenAt ||
+          isTimestampGreater(draft.notificationsSeenAt, state.lastNotificationsSeenAt))
+          ? draft.notificationsSeenAt
+          : "",
+      followRequestsSeenAt:
+        draft.followRequestsSeenAt &&
+        (!state.lastFollowRequestsSeenAt ||
+          isTimestampGreater(
+            draft.followRequestsSeenAt,
+            state.lastFollowRequestsSeenAt,
+          ))
+          ? draft.followRequestsSeenAt
+          : "",
+    };
+
+    if (!replayPayload.notificationsSeenAt && !replayPayload.followRequestsSeenAt) {
+      clearReadStateDraft();
+      return null;
+    }
+
+    queueSeenState(replayPayload);
+    try {
+      return await flushPendingReadState({ immediate: true });
+    } catch (_) {
+      return null;
+    }
+  }
+
   async function loadNotifications(isLoadMore = false, options = {}) {
     if (!global.API?.Notifications?.getNotifications) return;
     const loadContext = beginListLoad(isLoadMore, options);
@@ -1529,6 +2746,8 @@
 
       const data = await res.json().catch(() => null);
       if (!isActiveListLoad(requestToken, requestFilter)) return;
+      if (!isPayloadForCurrentAccount(data || {})) return;
+      syncUnreadSummary(data || {});
       const followRequestCount = readNumber(
         data,
         ["followRequestCount", "FollowRequestCount"],
@@ -1585,6 +2804,7 @@
       } else {
         renderItems({ enterIdSet });
       }
+      queueNotificationsSeenFromItems(state.items);
       state.hasRealtimeDirty = false;
     } catch (_) {
       if (!isActiveListLoad(requestToken, requestFilter)) return;
@@ -1652,6 +2872,8 @@
 
       const data = await res.json().catch(() => null);
       if (!isActiveListLoad(requestToken, requestFilter)) return;
+      if (!isPayloadForCurrentAccount(data || {})) return;
+      syncUnreadSummary(data || {});
       const totalCount = readNumber(data, ["totalCount", "TotalCount"], -1);
       if (totalCount >= 0) {
         setFollowRequestCount(totalCount);
@@ -1700,6 +2922,7 @@
       } else {
         renderItems({ enterIdSet });
       }
+      queueFollowRequestsSeenFromItems(state.items);
       state.hasFollowRequestDirty = false;
     } catch (_) {
       if (!isActiveListLoad(requestToken, requestFilter)) return;
@@ -2136,13 +3359,16 @@
 
   function removeItemLocally(notificationId) {
     const normalizedId = normalizeId(notificationId);
-    if (!normalizedId || !state.items.length) return;
-    const nextItems = state.items.filter(
-      (item) => normalizeId(item.notificationId) !== normalizedId,
-    );
-    if (nextItems.length === state.items.length) return;
+    if (!normalizedId) return;
+    const nextItems = state.items.length
+      ? state.items.filter((item) => normalizeId(item.notificationId) !== normalizedId)
+      : state.items;
+    const removedOptimisticUnread = clearOptimisticNotificationUnread(normalizedId);
+    if (nextItems.length === state.items.length && !removedOptimisticUnread) return;
     state.items = nextItems;
     renderItems();
+    updateTabBadges();
+    publishVisibleUnreadSummary();
   }
 
   function handleRealtimeChanged(payload = {}) {
@@ -2160,16 +3386,42 @@
       "notificationId",
       "NotificationId",
     );
-    const eventKey = `${action}:${normalizeId(notificationId)}`;
+    const eventId = normalizeId(readString(payload, "eventId", "EventId"));
+    const occurredAt = readTimestamp(payload, "occurredAt", "OccurredAt");
+    const affectsUnread = readBoolean(
+      payload,
+      ["affectsUnread", "AffectsUnread"],
+      false,
+    );
+    const eventKey =
+      eventId ||
+      `notification:${action}:${normalizeId(notificationId)}:${occurredAt || ""}`;
     if (isDuplicateRealtimeEvent(eventKey)) return;
     state.hasRealtimeDirty = true;
+    let shouldPublishVisibleSummary = false;
 
     if (action === "remove" && notificationId) {
       removeItemLocally(notificationId);
+      shouldPublishVisibleSummary = true;
+    } else if (
+      action === "upsert" &&
+      notificationId &&
+      occurredAt &&
+      affectsUnread &&
+      (!state.isOpen || isRequestsFilter()) &&
+      trackOptimisticNotificationUnread(notificationId, occurredAt)
+    ) {
+      shouldPublishVisibleSummary = true;
     }
 
     scheduleRealtimeRefresh();
-    refreshUnreadBadge(80);
+    if (!state.isOpen || isRequestsFilter()) {
+      refreshUnreadBadge(80);
+    }
+    if (shouldPublishVisibleSummary) {
+      updateTabBadges();
+      publishVisibleUnreadSummary();
+    }
   }
 
   function handleFollowRequestQueueChanged(payload = {}) {
@@ -2194,10 +3446,79 @@
 
     state.hasFollowRequestDirty = true;
     state.hasRealtimeDirty = true;
+    let shouldPublishVisibleSummary = false;
+    if (action === "remove" && requesterId) {
+      shouldPublishVisibleSummary = clearOptimisticFollowRequestUnread(requesterId);
+    } else if (
+      action === "upsert" &&
+      requesterId &&
+      occurredAt &&
+      (!state.isOpen || !isRequestsFilter()) &&
+      trackOptimisticFollowRequestUnread(requesterId, occurredAt)
+    ) {
+      shouldPublishVisibleSummary = true;
+    }
     if (state.isOpen && !isRequestsFilter()) {
       scheduleRealtimeRefresh();
     }
     scheduleFollowRequestRefresh();
+    if (!state.isOpen || !isRequestsFilter()) {
+      refreshUnreadBadge(80);
+    }
+    if (shouldPublishVisibleSummary) {
+      updateTabBadges();
+      publishVisibleUnreadSummary();
+    }
+  }
+
+  function bindLifecycleEvents() {
+    if (!state.onUnreadSummaryChanged) {
+      state.onUnreadSummaryChanged = (event) => {
+        syncUnreadSummary(event?.detail || {});
+        updateVisibleSeenState();
+      };
+      global.addEventListener(
+        NOTIFICATION_UNREAD_SUMMARY_EVENT,
+        state.onUnreadSummaryChanged,
+      );
+    }
+
+    if (!state.onVisibilityChange) {
+      state.onVisibilityChange = () => {
+        if (document.visibilityState !== "hidden") return;
+        flushPendingReadState({
+          immediate: true,
+          keepalive: true,
+        }).catch(() => {
+          // no-op
+        });
+      };
+      document.addEventListener("visibilitychange", state.onVisibilityChange);
+    }
+
+    if (!state.onPageHide) {
+      state.onPageHide = () => {
+        flushPendingReadState({
+          immediate: true,
+          keepalive: true,
+        }).catch(() => {
+          // no-op
+        });
+      };
+      global.addEventListener("pagehide", state.onPageHide);
+    }
+
+    if (!state.onBeforeUnload) {
+      state.onBeforeUnload = () => {
+        flushPendingReadState({
+          immediate: true,
+          keepalive: true,
+        }).catch(() => {
+          // no-op
+        });
+      };
+      global.addEventListener("beforeunload", state.onBeforeUnload);
+    }
   }
 
   async function open() {
@@ -2217,6 +3538,15 @@
     setSidebarNotificationsActive(true);
 
     updateTabUi();
+    publishVisibleUnreadSummary();
+    ensureUnreadSummaryLoaded()
+      .then(() => {
+        updateVisibleSeenState();
+        publishVisibleUnreadSummary();
+      })
+      .catch(() => {
+        // no-op
+      });
 
     const shouldReload = isRequestsFilter()
       ? state.hasFollowRequestDirty ||
@@ -2230,17 +3560,48 @@
       await loadCurrentFilter(false, { refreshBadge: false });
     } else {
       renderItems();
+      if (isRequestsFilter()) {
+        queueFollowRequestsSeenFromItems(state.items);
+      } else {
+        queueNotificationsSeenFromItems(state.items);
+      }
     }
   }
 
   function close() {
     if (!state.isOpen) return;
     const shouldRestoreChatSidebar = isChatRouteActive();
+    const shouldRefreshUnreadAfterClose =
+      state.hasRealtimeDirty ||
+      state.hasFollowRequestDirty ||
+      !!state.realtimeRefreshTimer ||
+      !!state.followRequestRefreshTimer;
+    flushPendingReadState({ immediate: true }).catch(() => {
+      // no-op
+    });
+    if (state.realtimeRefreshTimer) {
+      clearTimeout(state.realtimeRefreshTimer);
+      state.realtimeRefreshTimer = null;
+    }
+    if (state.followRequestRefreshTimer) {
+      clearTimeout(state.followRequestRefreshTimer);
+      state.followRequestRefreshTimer = null;
+    }
+    clearFollowRequestSyncPlaceholderTimer();
+    if (state.listScrollAnimationFrame) {
+      cancelAnimationFrame(state.listScrollAnimationFrame);
+      state.listScrollAnimationFrame = null;
+    }
 
     state.dom.panel?.classList.remove("show");
     document.body.classList.remove("notifications-panel-open");
     state.isOpen = false;
     setSidebarNotificationsActive(false);
+    if (shouldRefreshUnreadAfterClose) {
+      const refreshDelay =
+        getPendingReadStatePayload() || state.isReadStateFlushing ? 250 : 0;
+      refreshUnreadBadge(refreshDelay);
+    }
 
     if (typeof global.setActiveSidebar === "function") {
       const path = global.RouteHelper?.parseHash
@@ -2272,9 +3633,10 @@
   function init() {
     if (state.initialized) return;
     setupConfigFromApp();
+    cleanupReadStateDraftStorage();
     ensurePanel();
     updateTabUi();
-    updateFollowRequestTabBadge();
+    bindLifecycleEvents();
 
     if (!state.onResize) {
       state.onResize = () => updateTabsIndicator();
@@ -2287,6 +3649,10 @@
         Math.max(2000, Math.floor(state.dedupeTtlMs / 2)),
       );
     }
+
+    replayPendingReadStateDraft().catch(() => {
+      // no-op
+    });
 
     state.initialized = true;
   }
@@ -2304,12 +3670,25 @@
     open,
     close,
     toggle,
+    flushPendingReadState,
     reload: () => {
       resetCursorAndItems();
       return loadCurrentFilter(false, { refreshBadge: false });
     },
     handleRealtimeChanged,
     handleFollowRequestQueueChanged,
+    adjustUnreadSummaryForVisibleState: applyVisibleUnreadSummaryOverrides,
+    shouldSuppressGlobalUnreadRefresh(kind) {
+      if (!state.isOpen) return false;
+      const normalizedKind = (kind || "").toString().trim().toLowerCase();
+      if (normalizedKind === "activity" || normalizedKind === "notification") {
+        return !isRequestsFilter();
+      }
+      if (normalizedKind === "requests" || normalizedKind === "follow-request") {
+        return isRequestsFilter();
+      }
+      return false;
+    },
     get isOpen() {
       return state.isOpen;
     },
