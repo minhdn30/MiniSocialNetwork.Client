@@ -30,6 +30,31 @@ function appT(key, params = {}, fallback = "") {
   return fallback || key;
 }
 
+function appGetStoredSocialEligibility() {
+  if (typeof window.getStoredSocialEligibility === "function") {
+    return window.getStoredSocialEligibility();
+  }
+
+  const rawValue = (localStorage.getItem("isSocialEligible") || "")
+    .toString()
+    .trim()
+    .toLowerCase();
+
+  if (rawValue === "true") {
+    return true;
+  }
+
+  if (rawValue === "false") {
+    return false;
+  }
+
+  return null;
+}
+
+function appHasBlockedSocialSession() {
+  return appGetStoredSocialEligibility() === false;
+}
+
 function appBuildHash(path, query) {
   if (AppRouteHelper?.buildHash) {
     return AppRouteHelper.buildHash(path, query);
@@ -880,6 +905,11 @@ let lastHash = null;
 let routerExecutionToken = 0;
 
 async function router() {
+  if (appHasBlockedSocialSession()) {
+    clearSessionAndRedirect();
+    return;
+  }
+
   const executionToken = ++routerExecutionToken;
   const hash = window.location.hash || appBuildHash(APP_ROUTE_PATHS.ROOT);
   const parsed = appParseHash(hash);
@@ -1359,6 +1389,7 @@ function clearSessionAndRedirect() {
     localStorage.removeItem("fullname");
     localStorage.removeItem("username");
     localStorage.removeItem("accountId");
+    localStorage.removeItem("isSocialEligible");
     localStorage.removeItem("defaultPostPrivacy");
     localStorage.removeItem("SOCIAL_NETWORK_OPEN_CHATS");
   }
@@ -1403,6 +1434,11 @@ window.logout = async function() {
    ========================= */
 (async function bootstrap() {
     try {
+      if (appHasBlockedSocialSession()) {
+        clearSessionAndRedirect();
+        return;
+      }
+
       await loadSidebar();
       await syncLanguagePreferenceFromAccountSettings();
       if (typeof initProfilePreview === "function") await initProfilePreview();

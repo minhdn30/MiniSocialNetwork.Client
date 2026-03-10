@@ -213,6 +213,7 @@
       completeProfileDescription:
         "Chọn tên người dùng và họ tên để hoàn tất đăng nhập",
       forgotPasswordResetPrompt: "Tạo mật khẩu mới cho tài khoản của bạn",
+      socialAccessUnavailable: "Tài khoản này chỉ dùng trong cổng quản trị",
       googleNotConfigured: "Đăng nhập Google tạm thời chưa dùng được",
       verifySendPrompt:
         "Tài khoản của bạn chưa được xác minh. Nhấn Gửi mã để nhận mã gồm 6 chữ số",

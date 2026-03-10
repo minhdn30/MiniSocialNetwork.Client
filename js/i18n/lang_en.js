@@ -215,6 +215,7 @@
       verifySendPrompt:
         "Your account is not verified yet. Click Send Code to receive a 6-digit code",
       forgotPasswordResetPrompt: "Create a new password for your account",
+      socialAccessUnavailable: "This account can only use the admin portal",
       googleNotConfigured: "Google sign-in is currently unavailable",
       googleCanceled: "Couldn't sign in with Google, please try again",
       googleInitializing:

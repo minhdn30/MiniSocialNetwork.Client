@@ -175,6 +175,7 @@
     const fullname = data.fullname ?? data.Fullname;
     const username = data.username ?? data.Username;
     const avatarUrl = data.avatarUrl ?? data.AvatarUrl;
+    const isSocialEligible = data.isSocialEligible ?? data.IsSocialEligible;
 
     if (accountId) {
       localStorage.setItem("accountId", accountId);
@@ -191,6 +192,62 @@
     if (avatarUrl !== undefined && avatarUrl !== null) {
       localStorage.setItem("avatarUrl", avatarUrl);
     }
+    if (typeof isSocialEligible === "boolean") {
+      localStorage.setItem("isSocialEligible", isSocialEligible ? "true" : "false");
+    }
+  }
+
+  function getStoredSocialEligibility() {
+    const rawValue = (localStorage.getItem("isSocialEligible") || "").trim().toLowerCase();
+    if (rawValue === "true") {
+      return true;
+    }
+    if (rawValue === "false") {
+      return false;
+    }
+    return null;
+  }
+
+  let blockedSocialSessionRedirected = false;
+
+  function isBlockedSocialEligibilityValue(value) {
+    return typeof value === "boolean" && value === false;
+  }
+
+  function isBlockedSocialResponse(data) {
+    return isBlockedSocialEligibilityValue(
+      data?.isSocialEligible ?? data?.IsSocialEligible,
+    );
+  }
+
+  function isSocialAccessBlockedMessage(message) {
+    const normalizedMessage = (message || "").toString().trim().toLowerCase();
+    if (!normalizedMessage) {
+      return false;
+    }
+
+    return (
+      normalizedMessage.includes("social features") ||
+      normalizedMessage.includes("admin portal")
+    );
+  }
+
+  function redirectBlockedSocialSession() {
+    if (window.location.pathname.includes("auth.html")) {
+      return;
+    }
+
+    if (blockedSocialSessionRedirected) {
+      return;
+    }
+
+    blockedSocialSessionRedirected = true;
+    window.location.href = "auth.html?reason=social";
+  }
+
+  function handleBlockedSocialSession() {
+    clearClientSession();
+    redirectBlockedSocialSession();
   }
 
   function clearClientSession() {
@@ -209,6 +266,7 @@
     localStorage.removeItem("fullname");
     localStorage.removeItem("username");
     localStorage.removeItem("avatarUrl");
+    localStorage.removeItem("isSocialEligible");
     localStorage.removeItem("defaultPostPrivacy");
     localStorage.removeItem("SOCIAL_NETWORK_OPEN_CHATS");
   }
@@ -218,7 +276,8 @@
     return (
       message.includes("REFRESH_EXPIRED_OR_FORBIDDEN") ||
       message.includes("REFRESH_FAILED_STATUS_401") ||
-      message.includes("REFRESH_FAILED_STATUS_403")
+      message.includes("REFRESH_FAILED_STATUS_403") ||
+      message.includes("REFRESH_SOCIAL_ACCESS_BLOCKED")
     );
   }
 
@@ -246,8 +305,14 @@
           if (!data.accessToken) {
             throw new Error("REFRESH_NO_ACCESS_TOKEN_IN_RESPONSE");
           }
-          setAccessToken(data.accessToken);
           syncAuthProfileFromResponse(data);
+
+          if (isBlockedSocialResponse(data)) {
+            handleBlockedSocialSession();
+            throw new Error("REFRESH_SOCIAL_ACCESS_BLOCKED");
+          }
+
+          setAccessToken(data.accessToken);
           return data.accessToken;
         })
         .catch((err) => {
@@ -279,17 +344,22 @@
       const clonedRes = res.clone();
       try {
         const data = await clonedRes.json();
+        const message = data?.message || data?.Message || "";
         // If the message contains status info, it's likely our AccountStatusMiddleware
         if (
-          data.message &&
-          (data.message.toLowerCase().includes("status") ||
-            data.message.toLowerCase().includes("reactivate"))
+          isSocialAccessBlockedMessage(message) ||
+          (message &&
+            (message.toLowerCase().includes("status") ||
+              message.toLowerCase().includes("reactivate")))
         ) {
           console.warn("🚫 Account restricted, logging out...");
-          clearClientSession();
-
-          if (!window.location.pathname.includes("auth.html")) {
-            window.location.href = "auth.html?reason=restricted";
+          if (isSocialAccessBlockedMessage(message)) {
+            handleBlockedSocialSession();
+          } else {
+            clearClientSession();
+            if (!window.location.pathname.includes("auth.html")) {
+              window.location.href = "auth.html?reason=restricted";
+            }
           }
         }
       } catch (e) {
@@ -1341,6 +1411,7 @@
   window.apiFetch = apiFetch;
   window.refreshAccessToken = refreshAccessToken;
   window.clearClientSession = clearClientSession;
+  window.getStoredSocialEligibility = getStoredSocialEligibility;
   // Export
   window.uploadFormDataWithProgress = uploadFormDataWithProgress;
 })();

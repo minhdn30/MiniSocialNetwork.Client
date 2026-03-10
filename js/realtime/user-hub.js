@@ -37,6 +37,18 @@
     return global.I18n?.t ? global.I18n.t(key, params, fallback) : fallback;
   }
 
+  function isBlockedSocialSession() {
+    if (typeof global.getStoredSocialEligibility === "function") {
+      return global.getStoredSocialEligibility() === false;
+    }
+
+    const rawValue = (localStorage.getItem("isSocialEligible") || "")
+      .toString()
+      .trim()
+      .toLowerCase();
+    return rawValue === "false";
+  }
+
   function stopHeartbeatLoop() {
     if (heartbeatTimer) {
       clearInterval(heartbeatTimer);
@@ -60,6 +72,30 @@
     heartbeatTimer = setInterval(() => {
       sendHeartbeat();
     }, HEARTBEAT_INTERVAL_MS);
+  }
+
+  async function disconnectForBlockedSocialSession() {
+    stopHeartbeatLoop();
+    pendingAutoOpenConversations.clear();
+    processedMessageNotificationKeys.clear();
+    processedNotificationToastKeys.clear();
+
+    const currentConnection = connection;
+    connection = null;
+    isInitializing = false;
+
+    UserHub.pendingJoins.clear();
+    UserHub.joinedGroups.clear();
+
+    if (!currentConnection) {
+      return;
+    }
+
+    try {
+      await currentConnection.stop();
+    } catch (error) {
+      console.warn("[UserHub] Failed to stop connection for blocked session:", error);
+    }
   }
 
   function normalizeConversationId(value) {
@@ -714,6 +750,11 @@
      * Initialize connection
      */
     init: async function () {
+      if (isBlockedSocialSession()) {
+        await disconnectForBlockedSocialSession();
+        return;
+      }
+
       if (connection || isInitializing) return;
       isInitializing = true;
 
@@ -759,6 +800,10 @@
         });
 
         connection.onreconnected(async () => {
+          if (isBlockedSocialSession()) {
+            await disconnectForBlockedSocialSession();
+            return;
+          }
           await UserHub.rejoinTrackedGroups();
           startHeartbeatLoop();
         });
@@ -1543,16 +1588,18 @@
 
   // Auto-init if user is logged in
   document.addEventListener("DOMContentLoaded", () => {
-    UserHub.init();
+    if (!isBlockedSocialSession()) {
+      UserHub.init();
+    }
   });
 
   window.addEventListener(
     window.AuthStore?.EVENT || "auth:token-changed",
     (evt) => {
-      if (evt?.detail?.hasToken) {
+      if (evt?.detail?.hasToken && !isBlockedSocialSession()) {
         UserHub.init();
       } else {
-        stopHeartbeatLoop();
+        void disconnectForBlockedSocialSession();
       }
     },
   );

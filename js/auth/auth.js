@@ -557,7 +557,7 @@ async function handleGoogleCredentialResponse(response) {
       showAuthInfoKey("auth.googleFailed", "error");
       return;
     }
-    handleAuthenticatedRedirect(
+    await handleAuthenticatedRedirect(
       loginData,
       authText("auth.googleSuccess", {}, "Google sign-in successful"),
     );
@@ -588,13 +588,53 @@ function persistSessionFromLoginResponse(data) {
   localStorage.setItem("username", data.username || "");
   localStorage.setItem("avatarUrl", data.avatarUrl || "");
   localStorage.setItem("accountId", data.accountId || "");
+  if (typeof (data.isSocialEligible ?? data.IsSocialEligible) === "boolean") {
+    localStorage.setItem(
+      "isSocialEligible",
+      (data.isSocialEligible ?? data.IsSocialEligible) ? "true" : "false",
+    );
+  }
   localStorage.setItem(
     "defaultPostPrivacy",
     data.defaultPostPrivacy ?? data.DefaultPostPrivacy ?? 0,
   );
 }
 
-function handleAuthenticatedRedirect(loginData, successMessage) {
+function resolveLoginResponseSocialEligibility(loginData) {
+  const value = loginData?.isSocialEligible ?? loginData?.IsSocialEligible;
+  return typeof value === "boolean" ? value : null;
+}
+
+async function rejectNonSocialLoginSession() {
+  try {
+    if (window.API?.Auth?.logout) {
+      await window.API.Auth.logout();
+    }
+  } catch (error) {
+    console.warn("Unable to clear non-social session on server.", error);
+  }
+
+  if (typeof window.clearClientSession === "function") {
+    window.clearClientSession();
+    return;
+  }
+
+  if (
+    window.AuthStore &&
+    typeof window.AuthStore.clearAccessToken === "function"
+  ) {
+    window.AuthStore.clearAccessToken("logout");
+  }
+
+  localStorage.removeItem("fullname");
+  localStorage.removeItem("username");
+  localStorage.removeItem("avatarUrl");
+  localStorage.removeItem("accountId");
+  localStorage.removeItem("isSocialEligible");
+  localStorage.removeItem("defaultPostPrivacy");
+}
+
+async function handleAuthenticatedRedirect(loginData, successMessage) {
   if (!loginData || typeof loginData !== "object") {
     showAuthInfoKey("auth.invalidLoginResponse", "error");
     return false;
@@ -614,6 +654,12 @@ function handleAuthenticatedRedirect(loginData, successMessage) {
 
   if (loginData.status === 5) {
     showAuthInfoKey("auth.emailNotVerifiedLogin", "error");
+    return false;
+  }
+
+  if (resolveLoginResponseSocialEligibility(loginData) === false) {
+    await rejectNonSocialLoginSession();
+    showAuthInfoKey("auth.socialAccessUnavailable", "info");
     return false;
   }
 
@@ -1026,7 +1072,7 @@ async function completeExternalProfile() {
     }
 
     closeExternalProfileModal();
-    handleAuthenticatedRedirect(
+    await handleAuthenticatedRedirect(
       data,
       authText("auth.googleSuccess", {}, "Google sign-in successful"),
     );
@@ -1230,29 +1276,14 @@ async function loginAfterEmailVerification() {
       return false;
     }
 
-    persistSessionFromLoginResponse(data);
-
-    if (data.status === 1) {
-      showToast(
-        buildReactivationToastHtml(authText("errors.account.restricted")),
-        "error",
-        0,
-        true,
-      );
-      return false;
-    }
-
-    if (data.status === 5) {
-      showAuthInfoKey("auth.emailNotVerified", "error");
-      return false;
-    }
-
-    showAuthInfoKey("auth.emailVerifiedLoginSuccess", "success");
-    setTimeout(() => {
-      window.location.href = "index.html";
-    }, 600);
-
-    return true;
+    return await handleAuthenticatedRedirect(
+      data,
+      authText(
+        "auth.emailVerifiedLoginSuccess",
+        {},
+        "Signed in successfully after email verification",
+      ),
+    );
   } catch (err) {
     console.error(err);
     showAuthInfoKey("errors.generic", "error");
@@ -1338,22 +1369,7 @@ loginForm.addEventListener("submit", async (e) => {
       return;
     }
 
-    persistSessionFromLoginResponse(data);
-
-    // Check Account Status
-    if (data.status === 1) {
-      // Inactive
-      showToast(
-        buildReactivationToastHtml(authText("errors.account.restricted")),
-        "error",
-        0, // Persistent
-        true, // HTML
-      );
-      resetSignInButton();
-      return;
-    }
     if (data.status === 5) {
-      // EmailNotVerified
       showAuthInfoKey("auth.emailNotVerifiedLogin", "error");
       setPendingAutoLogin(email, password);
       openVerifyModal({
@@ -1365,11 +1381,14 @@ loginForm.addEventListener("submit", async (e) => {
       return;
     }
 
-    // login thành công — giữ loading xoay cho đến khi redirect
-    showAuthInfoKey("auth.loginSuccess", "success");
-    setTimeout(() => {
-      window.location.href = "index.html";
-    }, 800);
+    const redirected = await handleAuthenticatedRedirect(
+      data,
+      authText("auth.loginSuccess", {}, "Signed in successfully"),
+    );
+
+    if (!redirected) {
+      resetSignInButton();
+    }
   } catch (err) {
     console.error(err);
     showAuthInfoKey("errors.generic", "error");

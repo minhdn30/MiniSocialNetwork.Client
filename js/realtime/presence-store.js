@@ -478,7 +478,11 @@
 
   const authEventName = global.AuthStore?.EVENT || "auth:token-changed";
   global.addEventListener(authEventName, (event) => {
-    if (!event?.detail?.hasToken) {
+    const isBlockedSocialSession =
+      typeof global.getStoredSocialEligibility === "function" &&
+      global.getStoredSocialEligibility() === false;
+
+    if (!event?.detail?.hasToken || isBlockedSocialSession) {
       clearState();
     }
   });
