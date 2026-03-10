@@ -51,6 +51,7 @@
     hasMore: true,
     filter: NOTIFICATION_FILTER.ACTIVITY,
     pageSize: 20,
+    openRevealPending: false,
     cursorLastEventAt: "",
     cursorNotificationId: "",
     items: [],
@@ -90,10 +91,13 @@
     pendingFollowRequestsClearedCount: 0,
     optimisticNotificationUnreadMap: new Map(),
     optimisticFollowRequestUnreadMap: new Map(),
+    recentHighlightById: new Map(),
+    recentHighlightDurationMs: 4000,
     readStateFlushDebounceMs: 3000,
     readStateDraftTtlMs: 72 * 60 * 60 * 1000,
     readStateFlushTimer: null,
     isReadStateFlushing: false,
+    recentHighlightCleanupTimer: null,
     dedupeCleanupTimer: null,
     listScrollAnimationFrame: null,
     followRequestLastLoadedAt: 0,
@@ -823,9 +827,12 @@
     state.pendingFollowRequestsClearedCount = 0;
     state.optimisticNotificationUnreadMap.clear();
     state.optimisticFollowRequestUnreadMap.clear();
+    state.recentHighlightById.clear();
     clearReadStateFlushTimer();
+    clearRecentHighlightCleanupTimer();
     updateTabBadges();
     updateRequestsSummaryHeader();
+    applyRecentHighlightClassesToDom();
   }
 
   function resolveItemSeenState(item, explicitSeen = null) {
@@ -873,8 +880,206 @@
       };
     });
 
+    state.itemMap.clear();
+    state.items.forEach((item) => {
+      state.itemMap.set(normalizeId(item.notificationId), item);
+    });
+
     if (hasChanged) {
-      renderItems();
+      syncVisibleSeenStateDom();
+    }
+
+    return hasChanged;
+  }
+
+  function syncVisibleSeenStateDom() {
+    if (!state.dom.list) return;
+
+    const itemsById = new Map(
+      state.items.map((item) => [normalizeId(item.notificationId), item]),
+    );
+    state.dom.list.querySelectorAll(".notifications-item").forEach((node) => {
+      const notificationId = normalizeId(node.dataset.notificationId);
+      const item = notificationId ? itemsById.get(notificationId) : null;
+      if (!item) return;
+      node.classList.toggle("unread", !item.isSeen);
+    });
+    applyRecentHighlightClassesToDom();
+  }
+
+  function clearRecentHighlightCleanupTimer() {
+    if (!state.recentHighlightCleanupTimer) return;
+    clearTimeout(state.recentHighlightCleanupTimer);
+    state.recentHighlightCleanupTimer = null;
+  }
+
+  function getRecentHighlightExpireAt(notificationId) {
+    const normalizedId = normalizeId(notificationId);
+    if (!normalizedId) return 0;
+    return Number(state.recentHighlightById.get(normalizedId)) || 0;
+  }
+
+  function pruneRecentHighlights(now = Date.now()) {
+    if (
+      !(state.recentHighlightById instanceof Map) ||
+      !state.recentHighlightById.size
+    ) {
+      return false;
+    }
+
+    let hasChanged = false;
+    state.recentHighlightById.forEach((expireAt, notificationId) => {
+      if (!Number.isFinite(expireAt) || expireAt <= now) {
+        state.recentHighlightById.delete(notificationId);
+        hasChanged = true;
+      }
+    });
+
+    return hasChanged;
+  }
+
+  function applyRecentHighlightClassesToDom() {
+    if (!state.dom.list) return;
+
+    const now = Date.now();
+    pruneRecentHighlights(now);
+    state.dom.list.querySelectorAll(".notifications-item").forEach((node) => {
+      const notificationId = normalizeId(node.dataset.notificationId);
+      const expireAt = getRecentHighlightExpireAt(notificationId);
+      node.classList.toggle(
+        "recently-highlighted",
+        !!notificationId && expireAt > now,
+      );
+    });
+  }
+
+  function scheduleRecentHighlightCleanup() {
+    clearRecentHighlightCleanupTimer();
+    pruneRecentHighlights();
+
+    if (
+      !(state.recentHighlightById instanceof Map) ||
+      !state.recentHighlightById.size
+    ) {
+      applyRecentHighlightClassesToDom();
+      return;
+    }
+
+    const now = Date.now();
+    let nextExpireAt = 0;
+    state.recentHighlightById.forEach((expireAt) => {
+      if (!Number.isFinite(expireAt) || expireAt <= now) {
+        return;
+      }
+
+      if (!nextExpireAt || expireAt < nextExpireAt) {
+        nextExpireAt = expireAt;
+      }
+    });
+
+    applyRecentHighlightClassesToDom();
+
+    if (!nextExpireAt) {
+      return;
+    }
+
+    state.recentHighlightCleanupTimer = setTimeout(
+      () => {
+        state.recentHighlightCleanupTimer = null;
+        const hasChanged = pruneRecentHighlights();
+        if (hasChanged) {
+          applyRecentHighlightClassesToDom();
+        }
+        scheduleRecentHighlightCleanup();
+      },
+      Math.max(80, nextExpireAt - now),
+    );
+  }
+
+  function clearRecentHighlight(notificationId) {
+    const normalizedId = normalizeId(notificationId);
+    if (!normalizedId) return false;
+
+    const hasChanged = state.recentHighlightById.delete(normalizedId);
+    if (hasChanged) {
+      scheduleRecentHighlightCleanup();
+    }
+
+    return hasChanged;
+  }
+
+  function getItemHighlightTimestamp(item) {
+    return (
+      item?.seenStateTimestamp ||
+      pickLatestTimestamp(item?.lastEventAt, item?.createdAt)
+    );
+  }
+
+  function canHighlightRecentItem(item) {
+    if (!item || typeof item !== "object") return false;
+    if (!state.isOpen) return false;
+    if (item.tracksUnreadState === false) return false;
+    if (item.isSeen) return false;
+    if (isItemUnavailable(item)) return false;
+    return !!normalizeId(item.notificationId);
+  }
+
+  function shouldHighlightRecentItem(item, previousItem = null) {
+    if (!canHighlightRecentItem(item)) return false;
+    if (!previousItem) return true;
+
+    if (previousItem.tracksUnreadState === false) {
+      return true;
+    }
+
+    if (previousItem.isSeen && !item.isSeen) {
+      return true;
+    }
+
+    const currentTimestamp = getItemHighlightTimestamp(item);
+    const previousTimestamp = getItemHighlightTimestamp(previousItem);
+    if (!currentTimestamp) {
+      return false;
+    }
+
+    if (!previousTimestamp) {
+      return true;
+    }
+
+    return isTimestampGreater(currentTimestamp, previousTimestamp);
+  }
+
+  function markRecentHighlightsFromItems(
+    items = state.items,
+    previousItemsById = null,
+  ) {
+    if (!state.isOpen || !Array.isArray(items) || !items.length) {
+      return false;
+    }
+
+    const now = Date.now();
+    let hasChanged = pruneRecentHighlights(now);
+    items.forEach((item) => {
+      const notificationId = normalizeId(item?.notificationId);
+      if (!notificationId) return;
+
+      const previousItem =
+        previousItemsById instanceof Map
+          ? previousItemsById.get(notificationId) || null
+          : null;
+      if (!shouldHighlightRecentItem(item, previousItem)) {
+        return;
+      }
+
+      state.recentHighlightById.set(
+        notificationId,
+        now + state.recentHighlightDurationMs,
+      );
+      hasChanged = true;
+    });
+
+    if (hasChanged) {
+      scheduleRecentHighlightCleanup();
     }
 
     return hasChanged;
@@ -1033,6 +1238,16 @@
     return Math.max(320, configured || 380);
   }
 
+  function resolveRecentHighlightDurationMs() {
+    return Math.max(
+      1000,
+      parseIntSafe(
+        global.APP_CONFIG?.NOTIFICATION_RECENT_HIGHLIGHT_DURATION_MS,
+        4000,
+      ),
+    );
+  }
+
   function applyPanelWidthVariable() {
     const widthPx = resolvePanelWidthPx();
     document.documentElement.style.setProperty(
@@ -1079,6 +1294,7 @@
         72 * 60 * 60 * 1000,
       ),
     );
+    state.recentHighlightDurationMs = resolveRecentHighlightDurationMs();
     applyPanelWidthVariable();
   }
 
@@ -1771,16 +1987,8 @@
         0,
       ),
       targetId: readString(raw, "targetId", "TargetId"),
-      targetCommentId: readString(
-        raw,
-        "targetCommentId",
-        "TargetCommentId",
-      ),
-      parentCommentId: readString(
-        raw,
-        "parentCommentId",
-        "ParentCommentId",
-      ),
+      targetCommentId: readString(raw, "targetCommentId", "TargetCommentId"),
+      parentCommentId: readString(raw, "parentCommentId", "ParentCommentId"),
       targetPostCode: readString(raw, "targetPostCode", "TargetPostCode"),
       thumbnailUrl: readString(raw, "thumbnailUrl", "ThumbnailUrl"),
       thumbnailMediaType,
@@ -2223,6 +2431,118 @@
     return template.content.firstElementChild;
   }
 
+  function shouldReduceNotificationMotion() {
+    return !!global.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  }
+
+  function captureNotificationItemRects(listEl) {
+    if (!listEl) return new Map();
+
+    const rects = new Map();
+    listEl.querySelectorAll(".notifications-item").forEach((node) => {
+      const notificationId = normalizeId(node.dataset.notificationId);
+      if (!notificationId) return;
+      rects.set(notificationId, node.getBoundingClientRect());
+    });
+    return rects;
+  }
+
+  function animatePatchedListLayout(listEl, previousRects) {
+    if (
+      !listEl ||
+      shouldReduceNotificationMotion() ||
+      !(previousRects instanceof Map) ||
+      !previousRects.size
+    ) {
+      return;
+    }
+
+    const animatedNodes = [];
+    listEl.querySelectorAll(".notifications-item").forEach((node) => {
+      const notificationId = normalizeId(node.dataset.notificationId);
+      if (!notificationId) return;
+
+      const previousRect = previousRects.get(notificationId);
+      if (!previousRect) return;
+
+      const nextRect = node.getBoundingClientRect();
+      const deltaY = previousRect.top - nextRect.top;
+      if (Math.abs(deltaY) < 1) return;
+
+      node.style.transition = "none";
+      node.style.transform = `translateY(${Math.round(deltaY)}px)`;
+      animatedNodes.push(node);
+    });
+
+    if (!animatedNodes.length) {
+      return;
+    }
+
+    void listEl.offsetHeight;
+
+    requestAnimationFrame(() => {
+      animatedNodes.forEach((node) => {
+        let cleanedUp = false;
+        const cleanup = () => {
+          if (cleanedUp) return;
+          cleanedUp = true;
+          node.style.transition = "";
+          node.style.transform = "";
+          node.removeEventListener("transitionend", cleanup);
+        };
+
+        node.style.transition = "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)";
+        node.style.transform = "translateY(0)";
+        node.addEventListener("transitionend", cleanup, { once: true });
+        setTimeout(cleanup, 360);
+      });
+    });
+  }
+
+  function animateInsertedNotificationNodes(insertedNodes = []) {
+    if (
+      shouldReduceNotificationMotion() ||
+      !Array.isArray(insertedNodes) ||
+      !insertedNodes.length
+    ) {
+      return;
+    }
+
+    insertedNodes.forEach((node) => {
+      if (!(node instanceof HTMLElement)) return;
+
+      if (typeof node.animate === "function") {
+        node.classList.remove("notifications-item-enter");
+        const animation = node.animate(
+          [
+            {
+              opacity: 0,
+              transform: "translateY(-12px) scale(0.985)",
+            },
+            {
+              opacity: 1,
+              transform: "translateY(0) scale(1)",
+            },
+          ],
+          {
+            duration: 340,
+            easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+            fill: "both",
+          },
+        );
+        animation?.addEventListener?.("finish", () => {
+          node.style.opacity = "";
+          node.style.transform = "";
+        });
+        return;
+      }
+
+      node.classList.remove("notifications-item-enter");
+      void node.offsetWidth;
+      node.classList.add("notifications-item-enter");
+    });
+  }
+
   function getItemRenderSignature(item) {
     if (!item || typeof item !== "object") return "";
     const actor = item.actor || {};
@@ -2291,9 +2611,10 @@
 
   function buildNotificationItemHtml(item, enterIdSet = null) {
     const notificationId = normalizeId(item.notificationId);
-    const revealIndex =
+    const revealDelayMs =
       enterIdSet instanceof Map ? enterIdSet.get(notificationId) : undefined;
-    const isRevealSequence = Number.isInteger(revealIndex);
+    const isRevealSequence =
+      Number.isFinite(revealDelayMs) && revealDelayMs >= 0;
     const isUnavailable = isItemUnavailable(item);
     const showThumbnail =
       !isUnavailable &&
@@ -2308,6 +2629,10 @@
     const thumbnailMediaKind = resolveThumbnailMediaKind(item);
     const timeLabel = getTimeAgoDisplay(item.lastEventAt || item.createdAt);
     const unreadClass = item.isSeen ? "" : " unread";
+    const recentHighlightClass =
+      getRecentHighlightExpireAt(notificationId) > Date.now()
+        ? " recently-highlighted"
+        : "";
     const unavailableClass = isUnavailable ? " unavailable" : "";
     const enterClass =
       !isRevealSequence &&
@@ -2317,7 +2642,7 @@
         : "";
     const revealClass = isRevealSequence ? " notifications-item-reveal" : "";
     const revealStyle = isRevealSequence
-      ? ` style="--notifications-item-enter-delay:${Math.min(revealIndex * 42, 252)}ms"`
+      ? ` style="--notifications-item-enter-delay:${Math.max(0, Math.floor(revealDelayMs))}ms"`
       : "";
     const typeClass = `type-${item.type}`;
     const showFollowRequestActions = canRenderFollowRequestActions(item);
@@ -2334,7 +2659,7 @@
       <div
         role="button"
         tabindex="0"
-        class="notifications-item${unreadClass}${unavailableClass}${enterClass}${revealClass} ${typeClass}"
+        class="notifications-item${unreadClass}${recentHighlightClass}${unavailableClass}${enterClass}${revealClass} ${typeClass}"
         data-notification-id="${escapeHtml(item.notificationId)}"
         ${revealStyle}
       >
@@ -2370,6 +2695,7 @@
 
   function renderItems(options = {}) {
     if (!state.dom.list) return;
+    pruneRecentHighlights();
     const enterIdSet =
       options.enterIdSet instanceof Set ? options.enterIdSet : null;
     const revealIdMap =
@@ -2397,6 +2723,7 @@
       .map((item) => buildNotificationItemHtml(item, animationTarget))
       .join("");
     applyImageFallbackHandlers();
+    applyRecentHighlightClassesToDom();
   }
 
   function renderItemsPatched(options = {}) {
@@ -2405,6 +2732,8 @@
       renderItems(options);
       return;
     }
+
+    pruneRecentHighlights();
 
     const enterIdSet =
       options.enterIdSet instanceof Set ? options.enterIdSet : null;
@@ -2422,6 +2751,7 @@
     });
 
     const listEl = state.dom.list;
+    const previousRects = captureNotificationItemRects(listEl);
     listEl
       .querySelectorAll(":scope > :not(.notifications-item)")
       .forEach((node) => node.remove());
@@ -2435,6 +2765,7 @@
 
     const desiredNodes = [];
     const desiredIdSet = new Set();
+    const insertedNodes = [];
 
     state.items.forEach((item) => {
       const id = normalizeId(item.notificationId);
@@ -2456,6 +2787,8 @@
 
         if (existingNode && existingNode.parentElement === listEl) {
           existingNode.replaceWith(nextNode);
+        } else {
+          insertedNodes.push(nextNode);
         }
 
         existingById.set(id, nextNode);
@@ -2497,16 +2830,20 @@
     }
 
     applyImageFallbackHandlers();
+    applyRecentHighlightClassesToDom();
+    animateInsertedNotificationNodes(insertedNodes);
+    animatePatchedListLayout(listEl, previousRects);
   }
 
-  function buildRevealIdMap(items = []) {
+  function buildRevealIdMap(items = [], baseDelayMs = 0) {
     const revealIdMap = new Map();
     const maxAnimatedItems = 8;
+    const safeBaseDelayMs = Math.max(0, parseIntSafe(baseDelayMs, 0));
 
     items.slice(0, maxAnimatedItems).forEach((item, index) => {
       const id = normalizeId(item?.notificationId);
       if (!id) return;
-      revealIdMap.set(id, index);
+      revealIdMap.set(id, safeBaseDelayMs + Math.min(index * 42, 252));
     });
 
     return revealIdMap;
@@ -2515,6 +2852,15 @@
   function setMoreLoaderVisible(visible) {
     if (!state.dom.loader) return;
     state.dom.loader.style.display = visible ? "flex" : "none";
+  }
+
+  function consumeOpenRevealBaseDelayMs() {
+    if (!state.openRevealPending) {
+      return 0;
+    }
+
+    state.openRevealPending = false;
+    return 160;
   }
 
   function getPendingReadStatePayload() {
@@ -2905,6 +3251,10 @@
     const showLoader = !isLoadMore && options.showLoader !== false;
     const animateNewItems = !isLoadMore && options.animateNewItems === true;
     const revealItems = !isLoadMore && showLoader;
+    const revealBaseDelayMs = Math.max(
+      0,
+      parseIntSafe(options.revealBaseDelayMs, 0),
+    );
     const patchDom = !isLoadMore && options.patchDom === true;
     const previousItemIdSet = animateNewItems
       ? new Set(state.items.map((item) => normalizeId(item.notificationId)))
@@ -2998,7 +3348,10 @@
         });
       }
       if (revealItems) {
-        revealIdMap = buildRevealIdMap(state.items);
+        revealIdMap = buildRevealIdMap(state.items, revealBaseDelayMs);
+      }
+      if (!isLoadMore) {
+        markRecentHighlightsFromItems(state.items, previousItemsById);
       }
 
       if (patchDom) {
@@ -3033,6 +3386,10 @@
     const showLoader = !isLoadMore && options.showLoader !== false;
     const animateNewItems = !isLoadMore && options.animateNewItems === true;
     const revealItems = !isLoadMore && showLoader;
+    const revealBaseDelayMs = Math.max(
+      0,
+      parseIntSafe(options.revealBaseDelayMs, 0),
+    );
     const patchDom = !isLoadMore && options.patchDom === true;
     const previousItemIdSet = animateNewItems
       ? new Set(state.items.map((item) => normalizeId(item.notificationId)))
@@ -3123,7 +3480,10 @@
         });
       }
       if (revealItems) {
-        revealIdMap = buildRevealIdMap(state.items);
+        revealIdMap = buildRevealIdMap(state.items, revealBaseDelayMs);
+      }
+      if (!isLoadMore) {
+        markRecentHighlightsFromItems(state.items, previousItemsById);
       }
 
       if (patchDom) {
@@ -3271,7 +3631,11 @@
       0,
     );
     const targetKind = parseIntSafe(
-      readNumber(raw, ["targetKind", "TargetKind", "toastTargetKind", "ToastTargetKind"], 0),
+      readNumber(
+        raw,
+        ["targetKind", "TargetKind", "toastTargetKind", "ToastTargetKind"],
+        0,
+      ),
       0,
     );
     const targetId = readString(
@@ -3321,7 +3685,9 @@
         readString(raw, "notificationId", "NotificationId") ||
         `toast:${resolvedTargetKind}:${resolvedTargetId || targetPostCode}`,
       type,
-      state: canOpen ? NOTIFICATION_STATE.ACTIVE : NOTIFICATION_STATE.UNAVAILABLE,
+      state: canOpen
+        ? NOTIFICATION_STATE.ACTIVE
+        : NOTIFICATION_STATE.UNAVAILABLE,
       explicitSeen: true,
       tracksUnreadState: false,
       isSeen: true,
@@ -3553,7 +3919,9 @@
       if (preservePanel) {
         preservePanelOnNextRouteChange();
       }
-      global.RouteHelper.goTo(`/stories/${encodeURIComponent(normalizedStoryId)}`);
+      global.RouteHelper.goTo(
+        `/stories/${encodeURIComponent(normalizedStoryId)}`,
+      );
       return true;
     }
 
@@ -3571,14 +3939,19 @@
     const postId = (item.targetId || "").toString().trim();
 
     if (!postCode) {
-      if (isGuidLike(postId) && typeof global.API?.Posts?.getById === "function") {
+      if (
+        isGuidLike(postId) &&
+        typeof global.API?.Posts?.getById === "function"
+      ) {
         try {
           const res = await global.API.Posts.getById(postId);
           if (res?.ok) {
             const payload = await res.json().catch(() => null);
             postCode = readPostCodeFromPayload(payload);
           } else if (!silent) {
-            const unavailableMessage = getUnavailableMessageByStatus(res?.status);
+            const unavailableMessage = getUnavailableMessageByStatus(
+              res?.status,
+            );
             if (unavailableMessage) {
               showRateLimitedUnavailableToast(unavailableMessage);
             } else {
@@ -3598,7 +3971,9 @@
 
       if (!postCode) {
         if (!silent) {
-          showRateLimitedUnavailableToast(npT("notification.fallback.unavailable"));
+          showRateLimitedUnavailableToast(
+            npT("notification.fallback.unavailable"),
+          );
         }
         return false;
       }
@@ -3678,7 +4053,9 @@
     const storyId = (item.targetId || "").toString().trim();
     if (!storyId) {
       if (!silent) {
-        showRateLimitedUnavailableToast(npT("notification.fallback.unavailable"));
+        showRateLimitedUnavailableToast(
+          npT("notification.fallback.unavailable"),
+        );
       }
       return false;
     }
@@ -3780,7 +4157,9 @@
       opened = await openStoryTarget(item, { silent, preservePanel });
     } else {
       if (!silent) {
-        showRateLimitedUnavailableToast(npT("notification.fallback.unavailable"));
+        showRateLimitedUnavailableToast(
+          npT("notification.fallback.unavailable"),
+        );
       }
       return false;
     }
@@ -3880,6 +4259,7 @@
     if (nextItems.length === state.items.length && !removedOptimisticUnread)
       return;
     state.items = nextItems;
+    clearRecentHighlight(normalizedId);
     renderItems();
     updateTabBadges();
     publishVisibleUnreadSummary();
@@ -4050,6 +4430,7 @@
     state.dom.panel?.classList.add("show");
     document.body.classList.add("notifications-panel-open");
     state.isOpen = true;
+    state.openRevealPending = true;
     setSidebarNotificationsActive(true);
 
     updateTabUi();
@@ -4072,9 +4453,18 @@
         Date.now() - state.lastLoadedAt > 15000;
     if (shouldReload) {
       resetCursorAndItems();
-      await loadCurrentFilter(false, { refreshBadge: false });
+      await loadCurrentFilter(false, {
+        refreshBadge: false,
+        revealBaseDelayMs: consumeOpenRevealBaseDelayMs(),
+      });
     } else {
-      renderItems();
+      markRecentHighlightsFromItems(state.items);
+      renderItems({
+        revealIdMap: buildRevealIdMap(
+          state.items,
+          consumeOpenRevealBaseDelayMs(),
+        ),
+      });
       if (isRequestsFilter()) {
         queueFollowRequestsSeenFromItems(state.items);
       } else {
