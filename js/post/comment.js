@@ -4,12 +4,14 @@
  */
 
 const CommentModule = (function () {
-  let commentPage = 1;
   const commentPageSize = window.APP_CONFIG?.COMMENTS_PAGE_SIZE || 10;
   let commentHasNext = false;
+  let commentCursorCreatedAt = null;
+  let commentCursorCommentId = null;
   let isCommentsLoading = false;
   let currentPostOwnerId = null;
   let commentLanguageBound = false;
+  const replyPagingStates = new Map();
 
   // Race condition prevention: Request ID validation
   let currentLoadRequestId = 0;
@@ -78,7 +80,7 @@ const CommentModule = (function () {
 
       loadComments(
         postId,
-        1,
+        true,
         window.currentPostOwnerId || currentPostOwnerId || null,
       );
     });
@@ -199,10 +201,12 @@ const CommentModule = (function () {
    * Initialize or reset comment state for a new post
    */
   function resetState() {
-    commentPage = 1;
     commentHasNext = false;
+    commentCursorCreatedAt = null;
+    commentCursorCommentId = null;
     isCommentsLoading = false;
     currentPostOwnerId = null;
+    replyPagingStates.clear();
 
     // Invalidate any in-flight requests
     currentLoadRequestId++;
@@ -210,6 +214,103 @@ const CommentModule = (function () {
     // Clear DOM if exists
     const list = document.getElementById("detailCommentsList");
     if (list) list.innerHTML = "";
+  }
+
+  function resolveCommentCursor(data) {
+    const nextCursor = data?.nextCursor || data?.NextCursor || null;
+    const createdAt = (nextCursor?.createdAt || nextCursor?.CreatedAt || "")
+      .toString()
+      .trim();
+    const commentId = (nextCursor?.commentId || nextCursor?.CommentId || "")
+      .toString()
+      .trim();
+
+    return {
+      createdAt: createdAt || null,
+      commentId: commentId || null,
+      hasMore: !!(createdAt && commentId),
+    };
+  }
+
+  function createReplyPagingState() {
+    return {
+      cursorCreatedAt: null,
+      cursorCommentId: null,
+      hasMore: false,
+      isLoading: false,
+      totalCount: 0,
+    };
+  }
+
+  function getReplyPagingState(commentId) {
+    const key = (commentId || "").toString().trim();
+    if (!key) return createReplyPagingState();
+    if (!replyPagingStates.has(key)) {
+      replyPagingStates.set(key, createReplyPagingState());
+    }
+    return replyPagingStates.get(key);
+  }
+
+  function resetReplyPagingState(commentId) {
+    const key = (commentId || "").toString().trim();
+    const state = createReplyPagingState();
+    if (key) {
+      replyPagingStates.set(key, state);
+    }
+    return state;
+  }
+
+  function clearReplyListAuxiliaryNodes(repliesList) {
+    if (!repliesList) return;
+    repliesList
+      .querySelectorAll(
+        ".replies-loading, .load-more-replies, .hide-replies-btn",
+      )
+      .forEach((node) => node.remove());
+  }
+
+  function renderRepliesPaginationControl(commentId, repliesList, pagingState) {
+    if (!repliesList || !pagingState) return;
+
+    clearReplyListAuxiliaryNodes(repliesList);
+
+    const replyItems = repliesList.querySelectorAll(".reply-item");
+    if (pagingState.hasMore) {
+      const moreBtn = document.createElement("div");
+      moreBtn.className = "load-more-comments load-more-replies";
+      moreBtn.textContent = cmtT(
+        "post.comments.viewMoreReplies",
+        {},
+        "View more",
+      );
+      moreBtn.onclick = (e) => {
+        e.stopPropagation();
+        loadReplies(commentId, false);
+      };
+
+      const firstSessionReply = repliesList.querySelector(".session-reply");
+      if (firstSessionReply) {
+        repliesList.insertBefore(moreBtn, firstSessionReply);
+      } else {
+        repliesList.appendChild(moreBtn);
+      }
+      return;
+    }
+
+    if (replyItems.length > 0) {
+      const hideBtn = document.createElement("div");
+      hideBtn.className = "load-more-comments hide-replies-btn";
+      hideBtn.textContent = cmtT(
+        "post.comments.hideReplies",
+        {},
+        "Hide replies",
+      );
+      hideBtn.onclick = (e) => {
+        e.stopPropagation();
+        handleReplyToggle(commentId, true);
+      };
+      repliesList.appendChild(hideBtn);
+    }
   }
 
   /**
@@ -235,7 +336,7 @@ const CommentModule = (function () {
   /**
    * Fetch and render comments for a post
    */
-  async function loadComments(postId, page = 1, postOwnerId = null) {
+  async function loadComments(postId, reset = true, postOwnerId = null) {
     bindCommentLanguageChange();
     if (isCommentsLoading) return;
 
@@ -246,13 +347,16 @@ const CommentModule = (function () {
 
     if (!commentsList) return;
 
-    if (page === 1) {
+    const shouldReset = reset === true || Number(reset) === 1;
+
+    if (shouldReset) {
       commentsList.innerHTML = "";
       resetState();
       // Set owner AFTER reset
       if (postOwnerId) currentPostOwnerId = postOwnerId;
       setupScrollListener(postId);
     } else {
+      if (!commentHasNext) return;
       // Update if provided on subsequent calls (rare but safe)
       if (postOwnerId) currentPostOwnerId = postOwnerId;
     }
@@ -262,14 +366,19 @@ const CommentModule = (function () {
     // Capture request ID for race condition validation
     const requestId = currentLoadRequestId;
 
-    if (page === 1) {
+    if (shouldReset) {
       showSkeletons(commentsList, 3);
     } else if (loader) {
       loader.style.display = "flex";
     }
 
     try {
-      const res = await API.Comments.getByPostId(postId, page, commentPageSize);
+      const res = await API.Comments.getByPostId(
+        postId,
+        commentPageSize,
+        shouldReset ? null : commentCursorCreatedAt,
+        shouldReset ? null : commentCursorCommentId,
+      );
 
       // RACE CONDITION FIX: Check if this request is still valid
       if (requestId !== currentLoadRequestId) {
@@ -289,6 +398,7 @@ const CommentModule = (function () {
 
       const data = await res.json();
       const comments = data.items || [];
+      const nextCursor = resolveCommentCursor(data);
 
       // Final check before rendering
       if (requestId !== currentLoadRequestId) return;
@@ -306,8 +416,9 @@ const CommentModule = (function () {
         commentsList.appendChild(item);
       });
 
-      commentPage = data.page;
-      commentHasNext = data.hasNextPage;
+      commentCursorCreatedAt = nextCursor.createdAt;
+      commentCursorCommentId = nextCursor.commentId;
+      commentHasNext = nextCursor.hasMore;
 
       // If no scrollbar appeared but we have more, load again automatically
       if (commentHasNext) {
@@ -340,7 +451,7 @@ const CommentModule = (function () {
 
       // If content height is less than or near container height, load more
       if (detailBody.scrollHeight <= detailBody.clientHeight + 100) {
-        loadComments(postId, commentPage + 1);
+        loadComments(postId, false);
       }
     }, 100);
   }
@@ -363,7 +474,7 @@ const CommentModule = (function () {
         detailBody.scrollTop + detailBody.clientHeight >=
         detailBody.scrollHeight - 50;
       if (nearBottom) {
-        loadComments(postId, commentPage + 1);
+        loadComments(postId, false);
       }
     };
   }
@@ -539,7 +650,7 @@ const CommentModule = (function () {
         renderReplyInput(commentId, formContainer);
         if (repliesContainer) {
           repliesContainer.style.display = "flex";
-          loadReplies(commentId, 1);
+          loadReplies(commentId, true);
         }
       }
     } else {
@@ -653,6 +764,7 @@ const CommentModule = (function () {
     const input = container.querySelector(".reply-input");
 
     if (!btn || !input) return;
+    let shouldRefocus = false;
 
     // Disable during submission
     btn.disabled = true;
@@ -694,7 +806,6 @@ const CommentModule = (function () {
       }
 
       const result = await response.json();
-      container.innerHTML = ""; // Close form
 
       const commentItem = container.closest(".comment-item");
       const repliesContainer = commentItem?.querySelector(
@@ -705,6 +816,10 @@ const CommentModule = (function () {
         repliesContainer.style.display = "flex";
         injectNewReply(result);
       }
+
+      input.value = "";
+      input.style.height = "auto";
+      shouldRefocus = true;
     } catch (err) {
       console.error(err);
       if (window.toastError) {
@@ -713,8 +828,12 @@ const CommentModule = (function () {
             cmtUiError("create", 0, "", "post.comments.createReplyFailed"),
         );
       }
-      btn.disabled = false;
+    } finally {
       input.disabled = false;
+      btn.disabled = input.value.trim().length === 0;
+      if (shouldRefocus) {
+        input.focus({ preventScroll: true });
+      }
     }
   }
 
@@ -763,13 +882,13 @@ const CommentModule = (function () {
       return;
     }
 
-    loadReplies(commentId, 1);
+    loadReplies(commentId, true);
   }
 
   /**
    * Load replies for a comment
    */
-  async function loadReplies(commentId, page = 1) {
+  async function loadReplies(commentId, reset = true) {
     const item = document.querySelector(
       `.comment-item[data-comment-id="${commentId}"]`,
     );
@@ -778,14 +897,33 @@ const CommentModule = (function () {
     const container = item.querySelector(".replies-list-container");
     const repliesList = item.querySelector(".replies-list");
     const pageSize = window.APP_CONFIG?.REPLIES_PAGE_SIZE || 3;
+    const shouldReset = reset === true || Number(reset) === 1;
+    const pagingState = shouldReset
+      ? resetReplyPagingState(commentId)
+      : getReplyPagingState(commentId);
+
+    if (pagingState.isLoading) return;
+    if (!shouldReset && !pagingState.hasMore) return;
 
     container.style.display = "flex";
+    pagingState.isLoading = true;
 
-    if (page === 1)
+    if (shouldReset)
       repliesList.innerHTML = `<div class="feed-loader replies-loading"><div class="spinner spinner-small"></div></div>`;
+    else if (!repliesList.querySelector(".replies-loading")) {
+      repliesList.insertAdjacentHTML(
+        "beforeend",
+        `<div class="feed-loader replies-loading"><div class="spinner spinner-small"></div></div>`,
+      );
+    }
 
     try {
-      const res = await API.Comments.getReplies(commentId, page, pageSize);
+      const res = await API.Comments.getReplies(
+        commentId,
+        pageSize,
+        shouldReset ? null : pagingState.cursorCreatedAt,
+        shouldReset ? null : pagingState.cursorCommentId,
+      );
       if (res.status === 403) {
         PostUtils.hidePost(window.currentPostId);
         return;
@@ -796,9 +934,14 @@ const CommentModule = (function () {
 
       const data = await res.json();
       const replies = data.items || [];
+      const nextCursor = resolveCommentCursor(data);
+      const totalCount = Number(data.totalCount ?? data.TotalCount ?? 0);
+      pagingState.totalCount = Number.isFinite(totalCount) ? totalCount : 0;
 
-      if (page === 1) repliesList.innerHTML = "";
+      if (shouldReset) repliesList.innerHTML = "";
       else repliesList.querySelector(".replies-loading")?.remove();
+
+      clearReplyListAuxiliaryNodes(repliesList);
 
       replies.forEach((reply) => {
         // Prevent duplicates (e.g. from SignalR)
@@ -836,49 +979,11 @@ const CommentModule = (function () {
       });
 
       container.classList.add("loaded");
+      pagingState.cursorCreatedAt = nextCursor.createdAt;
+      pagingState.cursorCommentId = nextCursor.commentId;
+      pagingState.hasMore = nextCursor.hasMore;
 
-      if (data.hasNextPage) {
-        const moreBtn = document.createElement("div");
-        moreBtn.className = "load-more-comments load-more-replies";
-        const totalCount = data.totalCount;
-        const countText =
-          totalCount && totalCount > 0 ? ` (${totalCount})` : "";
-        moreBtn.textContent = cmtT(
-          "post.comments.viewMoreReplies",
-          { count: countText },
-          `View more replies${countText}`,
-        );
-        moreBtn.onclick = (e) => {
-          e.stopPropagation();
-          moreBtn.remove();
-          loadReplies(commentId, page + 1);
-        };
-
-        // Insert before session replies so it stays at the end of history
-        const firstSessionReplyAfterBatch =
-          repliesList.querySelector(".session-reply");
-        if (firstSessionReplyAfterBatch) {
-          repliesList.insertBefore(moreBtn, firstSessionReplyAfterBatch);
-        } else {
-          repliesList.appendChild(moreBtn);
-        }
-      } else if (page > 1 || replies.length > 0) {
-        // If we've reached the end, show a "Hide" button
-        const hideBtn = document.createElement("div");
-        hideBtn.className = "load-more-comments hide-replies-btn";
-        hideBtn.textContent = cmtT(
-          "post.comments.hideReplies",
-          {},
-          "Hide replies",
-        );
-        hideBtn.onclick = (e) => {
-          e.stopPropagation();
-          handleReplyToggle(commentId, true); // Toggle closes it when open
-        };
-
-        // Hide button should always be at the absolute bottom
-        repliesList.appendChild(hideBtn);
-      }
+      renderRepliesPaginationControl(commentId, repliesList, pagingState);
 
       if (window.lucide) lucide.createIcons();
     } catch (err) {
@@ -887,6 +992,9 @@ const CommentModule = (function () {
       if (window.toastError) {
         toastError(cmtT("post.comments.loadFailed", {}, "Failed to load comments"));
       }
+    } finally {
+      pagingState.isLoading = false;
+      repliesList.querySelector(".replies-loading")?.remove();
     }
   }
 
@@ -981,12 +1089,13 @@ const CommentModule = (function () {
       injectNewComment(result);
 
       // Clear main input
-      const mainInput = document.getElementById("commentInput");
+      const mainInput = document.getElementById("detailCommentInput");
       if (mainInput) {
         mainInput.value = "";
         mainInput.style.height = "auto";
         const postBtn = document.getElementById("postCommentBtn");
         if (postBtn) postBtn.disabled = true;
+        mainInput.focus({ preventScroll: true });
       }
 
       // Show success toast
@@ -1628,6 +1737,9 @@ const CommentModule = (function () {
       if (isReply) {
         const repliesList = el.closest(".replies-list");
         if (repliesList) {
+          const parentId = (repliesList.dataset.parentId || "")
+            .toString()
+            .trim();
           // Wait for DOM update
           setTimeout(() => {
             const remainingItems = repliesList.querySelectorAll(".reply-item");
@@ -1639,10 +1751,15 @@ const CommentModule = (function () {
                 container.classList.remove("loaded"); // Reset loaded state so it fetches again if new replies appear
                 // Also clear contents (remove buttons)
                 repliesList.innerHTML = "";
+                if (parentId) replyPagingStates.delete(parentId);
               }
             }
           }, 0);
         }
+      }
+
+      if (!isReply) {
+        replyPagingStates.delete((commentId || "").toString().trim());
       }
 
       el.remove();

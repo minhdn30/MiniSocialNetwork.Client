@@ -1171,7 +1171,7 @@
         reportUnavailable: "Report feature unavailable",
         deletedWhileReplying:
           "The comment you were replying to has been deleted",
-        viewMoreReplies: "View more replies{count}",
+        viewMoreReplies: "View more",
         hideReplies: "Hide replies",
         discardTitle: "Discard comment?",
         discardDescription: "If you leave, your comment won't be saved",

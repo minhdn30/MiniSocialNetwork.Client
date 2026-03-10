@@ -351,9 +351,9 @@ async function openPostDetail(postId, postCode = null, navContext = null, naviga
         renderPostDetail(data, navigateDirection);        
         if (mainLoader) mainLoader.style.display = "none";
 
-        if (window.CommentModule) {
-            CommentModule.loadComments(data.postId, 1, data.owner.accountId);
-        }
+	        if (window.CommentModule) {
+	            CommentModule.loadComments(data.postId, true, data.owner.accountId);
+	        }
 
         if (window.PostHub) await window.PostHub.joinPostGroup(data.postId);
 
@@ -466,9 +466,9 @@ async function openPostDetailByCode(postCode, options = null) {
         renderPostDetail(data);        
         if (mainLoader) mainLoader.style.display = "none";
 
-        if (window.CommentModule) {
-            CommentModule.loadComments(data.postId, 1, data.owner.accountId);
-        }
+	        if (window.CommentModule) {
+	            CommentModule.loadComments(data.postId, true, data.owner.accountId);
+	        }
 
         if (window.PostHub) await window.PostHub.joinPostGroup(data.postId);
         return true;
@@ -1480,6 +1480,7 @@ async function submitComment() {
     
     const content = input.value.trim();
     if (!content) return;
+    let shouldRefocus = false;
     
     // Disable input during submission
     btn.disabled = true;
@@ -1494,10 +1495,14 @@ async function submitComment() {
             input.value = '';
             input.style.height = 'auto';
             btn.disabled = true;
+            shouldRefocus = true;
         }
     } finally {
         input.disabled = false;
         btn.disabled = input.value.trim().length === 0;
+        if (shouldRefocus) {
+            input.focus({ preventScroll: true });
+        }
     }
 }
 

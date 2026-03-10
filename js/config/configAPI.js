@@ -751,12 +751,34 @@
     },
 
     Comments: {
-      getByPostId: (postId, page, pageSize) =>
-        apiFetch(`/Comments/post/${postId}?page=${page}&pageSize=${pageSize}`),
-      getReplies: (commentId, page, pageSize) =>
-        apiFetch(
-          `/Comments/replies/${commentId}?page=${page}&pageSize=${pageSize}`,
-        ),
+      getByPostId: (
+        postId,
+        pageSize,
+        cursorCreatedAt = null,
+        cursorCommentId = null,
+      ) => {
+        let url = `/Comments/post/${encodeURIComponent(postId)}?pageSize=${encodeURIComponent(pageSize)}`;
+        const safeCursorCreatedAt = (cursorCreatedAt || "").toString().trim();
+        const safeCursorCommentId = (cursorCommentId || "").toString().trim();
+        if (safeCursorCreatedAt && safeCursorCommentId) {
+          url += `&cursorCreatedAt=${encodeURIComponent(safeCursorCreatedAt)}&cursorCommentId=${encodeURIComponent(safeCursorCommentId)}`;
+        }
+        return apiFetch(url);
+      },
+      getReplies: (
+        commentId,
+        pageSize,
+        cursorCreatedAt = null,
+        cursorCommentId = null,
+      ) => {
+        let url = `/Comments/replies/${encodeURIComponent(commentId)}?pageSize=${encodeURIComponent(pageSize)}`;
+        const safeCursorCreatedAt = (cursorCreatedAt || "").toString().trim();
+        const safeCursorCommentId = (cursorCommentId || "").toString().trim();
+        if (safeCursorCreatedAt && safeCursorCommentId) {
+          url += `&cursorCreatedAt=${encodeURIComponent(safeCursorCreatedAt)}&cursorCommentId=${encodeURIComponent(safeCursorCommentId)}`;
+        }
+        return apiFetch(url);
+      },
       create: (postId, data) =>
         apiFetch(`/Comments/${postId}`, {
           method: "POST",

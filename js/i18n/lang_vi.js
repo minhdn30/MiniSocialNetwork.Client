@@ -1215,7 +1215,7 @@
         editedAt: "Đã chỉnh sửa lúc {time}",
         deletedWhileReplying: "Bình luận bạn đang trả lời đã bị xóa",
         reportUnavailable: "Không thể báo cáo",
-        viewMoreReplies: "Xem thêm {count} trả lời",
+        viewMoreReplies: "Xem thêm",
         hideReplies: "Ẩn trả lời",
         discardTitle: "Không lưu bình luận?",
         discardDescription: "Nếu rời đi, bình luận của bạn sẽ không được lưu",
