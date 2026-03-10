@@ -756,12 +756,19 @@
         pageSize,
         cursorCreatedAt = null,
         cursorCommentId = null,
+        priorityCommentId = null,
       ) => {
         let url = `/Comments/post/${encodeURIComponent(postId)}?pageSize=${encodeURIComponent(pageSize)}`;
         const safeCursorCreatedAt = (cursorCreatedAt || "").toString().trim();
         const safeCursorCommentId = (cursorCommentId || "").toString().trim();
+        const safePriorityCommentId = (priorityCommentId || "")
+          .toString()
+          .trim();
         if (safeCursorCreatedAt && safeCursorCommentId) {
           url += `&cursorCreatedAt=${encodeURIComponent(safeCursorCreatedAt)}&cursorCommentId=${encodeURIComponent(safeCursorCommentId)}`;
+        }
+        if (safePriorityCommentId) {
+          url += `&priorityCommentId=${encodeURIComponent(safePriorityCommentId)}`;
         }
         return apiFetch(url);
       },
@@ -770,12 +777,17 @@
         pageSize,
         cursorCreatedAt = null,
         cursorCommentId = null,
+        priorityReplyId = null,
       ) => {
         let url = `/Comments/replies/${encodeURIComponent(commentId)}?pageSize=${encodeURIComponent(pageSize)}`;
         const safeCursorCreatedAt = (cursorCreatedAt || "").toString().trim();
         const safeCursorCommentId = (cursorCommentId || "").toString().trim();
+        const safePriorityReplyId = (priorityReplyId || "").toString().trim();
         if (safeCursorCreatedAt && safeCursorCommentId) {
           url += `&cursorCreatedAt=${encodeURIComponent(safeCursorCreatedAt)}&cursorCommentId=${encodeURIComponent(safeCursorCommentId)}`;
+        }
+        if (safePriorityReplyId) {
+          url += `&priorityReplyId=${encodeURIComponent(safePriorityReplyId)}`;
         }
         return apiFetch(url);
       },

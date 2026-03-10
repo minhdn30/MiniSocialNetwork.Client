@@ -1771,6 +1771,16 @@
         0,
       ),
       targetId: readString(raw, "targetId", "TargetId"),
+      targetCommentId: readString(
+        raw,
+        "targetCommentId",
+        "TargetCommentId",
+      ),
+      parentCommentId: readString(
+        raw,
+        "parentCommentId",
+        "ParentCommentId",
+      ),
       targetPostCode: readString(raw, "targetPostCode", "TargetPostCode"),
       thumbnailUrl: readString(raw, "thumbnailUrl", "ThumbnailUrl"),
       thumbnailMediaType,
@@ -3615,7 +3625,10 @@
       if (preservePanel) {
         preservePanelOnNextRouteChange();
       }
-      const openResult = await global.openPostDetailByCode(postCode);
+      const openResult = await global.openPostDetailByCode(postCode, {
+        targetCommentId: item.targetCommentId || "",
+        parentCommentId: item.parentCommentId || "",
+      });
       if (openResult === false) {
         if (preservePanel) {
           global.__keepNotificationsPanelOnNextRoute = false;

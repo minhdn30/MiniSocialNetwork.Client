@@ -12,6 +12,8 @@ const CommentModule = (function () {
   let currentPostOwnerId = null;
   let commentLanguageBound = false;
   const replyPagingStates = new Map();
+  let commentNavigationState = null;
+  let persistedCommentNavigationOptions = null;
 
   // Race condition prevention: Request ID validation
   let currentLoadRequestId = 0;
@@ -78,10 +80,12 @@ const CommentModule = (function () {
         mainInput.value.trim().length > 0;
       if (hasMainDraft || hasUnsavedReply()) return;
 
+      const navigationOptions = getPersistedCommentNavigationOptions();
       loadComments(
         postId,
         true,
         window.currentPostOwnerId || currentPostOwnerId || null,
+        navigationOptions,
       );
     });
   }
@@ -207,6 +211,7 @@ const CommentModule = (function () {
     isCommentsLoading = false;
     currentPostOwnerId = null;
     replyPagingStates.clear();
+    commentNavigationState = null;
 
     // Invalidate any in-flight requests
     currentLoadRequestId++;
@@ -239,7 +244,133 @@ const CommentModule = (function () {
       hasMore: false,
       isLoading: false,
       totalCount: 0,
+      priorityReplyId: null,
+      highlightReplyId: null,
+      hasHighlightedPriorityReply: false,
     };
+  }
+
+  function normalizeCommentNavigationId(value) {
+    const normalized = (value || "").toString().trim();
+    return normalized || null;
+  }
+
+  function createPersistedCommentNavigationOptions(options = {}) {
+    if (!options || typeof options !== "object") return null;
+
+    const targetCommentId = normalizeCommentNavigationId(
+      options.targetCommentId || options.priorityCommentId,
+    );
+    const parentCommentId = normalizeCommentNavigationId(options.parentCommentId);
+
+    if (!targetCommentId) {
+      return null;
+    }
+
+    return {
+      targetCommentId,
+      parentCommentId,
+    };
+  }
+
+  function getPersistedCommentNavigationOptions() {
+    if (!persistedCommentNavigationOptions) return null;
+
+    return {
+      targetCommentId: persistedCommentNavigationOptions.targetCommentId,
+      parentCommentId: persistedCommentNavigationOptions.parentCommentId,
+    };
+  }
+
+  function createCommentNavigationState(options = {}) {
+    if (!options || typeof options !== "object") return null;
+
+    const targetCommentId = normalizeCommentNavigationId(
+      options.targetCommentId || options.priorityCommentId,
+    );
+    const parentCommentId = normalizeCommentNavigationId(options.parentCommentId);
+
+    if (!targetCommentId) {
+      return null;
+    }
+
+    const isReplyTarget =
+      !!parentCommentId && parentCommentId.toLowerCase() !== targetCommentId.toLowerCase();
+    const priorityCommentId = isReplyTarget ? parentCommentId : targetCommentId;
+
+    return {
+      priorityCommentId,
+      highlightCommentId: priorityCommentId,
+      replyParentCommentId: isReplyTarget ? parentCommentId : null,
+      priorityReplyId: isReplyTarget ? targetCommentId : null,
+      highlightReplyId: isReplyTarget ? targetCommentId : null,
+      hasHighlightedComment: false,
+      hasOpenedReplyThread: false,
+    };
+  }
+
+  function getReplyNavigationOptions(commentId) {
+    const normalizedCommentId = normalizeCommentNavigationId(commentId);
+    if (
+      !commentNavigationState ||
+      !normalizedCommentId ||
+      !commentNavigationState.replyParentCommentId ||
+      commentNavigationState.replyParentCommentId.toLowerCase() !==
+        normalizedCommentId.toLowerCase()
+    ) {
+      return null;
+    }
+
+    return {
+      priorityReplyId: commentNavigationState.priorityReplyId,
+      highlightReplyId: commentNavigationState.highlightReplyId,
+    };
+  }
+
+  function applyTemporaryCommentHighlight(element) {
+    if (!element) return;
+    element.style.backgroundColor = "var(--bg-active)";
+    element.style.transition = "background-color 2s ease";
+    setTimeout(() => {
+      element.style.backgroundColor = "transparent";
+    }, 100);
+  }
+
+  function applyCommentNavigationAfterCommentsRender() {
+    if (!commentNavigationState) return;
+
+    if (
+      !commentNavigationState.hasHighlightedComment &&
+      commentNavigationState.highlightCommentId
+    ) {
+      const targetComment = document.querySelector(
+        `.comment-item[data-comment-id="${commentNavigationState.highlightCommentId}"]`,
+      );
+      if (targetComment) {
+        applyTemporaryCommentHighlight(targetComment);
+        commentNavigationState.hasHighlightedComment = true;
+      }
+    }
+
+    if (
+      commentNavigationState.hasOpenedReplyThread ||
+      !commentNavigationState.replyParentCommentId
+    ) {
+      return;
+    }
+
+    const repliesContainer = document.querySelector(
+      `.comment-item[data-comment-id="${commentNavigationState.replyParentCommentId}"] .replies-list-container`,
+    );
+    if (!repliesContainer) return;
+
+    repliesContainer.style.display = "flex";
+    commentNavigationState.hasOpenedReplyThread = true;
+    loadReplies(
+      commentNavigationState.replyParentCommentId,
+      true,
+      getReplyNavigationOptions(commentNavigationState.replyParentCommentId),
+    );
   }
 
   function getReplyPagingState(commentId) {
@@ -336,7 +467,12 @@ const CommentModule = (function () {
   /**
    * Fetch and render comments for a post
    */
-  async function loadComments(postId, reset = true, postOwnerId = null) {
+  async function loadComments(
+    postId,
+    reset = true,
+    postOwnerId = null,
+    options = null,
+  ) {
     bindCommentLanguageChange();
     if (isCommentsLoading) return;
 
@@ -350,8 +486,13 @@ const CommentModule = (function () {
     const shouldReset = reset === true || Number(reset) === 1;
 
     if (shouldReset) {
+      const nextNavigationOptions = createPersistedCommentNavigationOptions(options);
       commentsList.innerHTML = "";
       resetState();
+      persistedCommentNavigationOptions = nextNavigationOptions;
+      commentNavigationState = createCommentNavigationState(
+        persistedCommentNavigationOptions,
+      );
       // Set owner AFTER reset
       if (postOwnerId) currentPostOwnerId = postOwnerId;
       setupScrollListener(postId);
@@ -378,6 +519,7 @@ const CommentModule = (function () {
         commentPageSize,
         shouldReset ? null : commentCursorCreatedAt,
         shouldReset ? null : commentCursorCommentId,
+        commentNavigationState?.priorityCommentId || null,
       );
 
       // RACE CONDITION FIX: Check if this request is still valid
@@ -419,6 +561,7 @@ const CommentModule = (function () {
       commentCursorCreatedAt = nextCursor.createdAt;
       commentCursorCommentId = nextCursor.commentId;
       commentHasNext = nextCursor.hasMore;
+      applyCommentNavigationAfterCommentsRender();
 
       // If no scrollbar appeared but we have more, load again automatically
       if (commentHasNext) {
@@ -650,7 +793,7 @@ const CommentModule = (function () {
         renderReplyInput(commentId, formContainer);
         if (repliesContainer) {
           repliesContainer.style.display = "flex";
-          loadReplies(commentId, true);
+          loadReplies(commentId, true, getReplyNavigationOptions(commentId));
         }
       }
     } else {
@@ -882,13 +1025,13 @@ const CommentModule = (function () {
       return;
     }
 
-    loadReplies(commentId, true);
+    loadReplies(commentId, true, getReplyNavigationOptions(commentId));
   }
 
   /**
    * Load replies for a comment
    */
-  async function loadReplies(commentId, reset = true) {
+  async function loadReplies(commentId, reset = true, options = null) {
     const item = document.querySelector(
       `.comment-item[data-comment-id="${commentId}"]`,
     );
@@ -901,6 +1044,16 @@ const CommentModule = (function () {
     const pagingState = shouldReset
       ? resetReplyPagingState(commentId)
       : getReplyPagingState(commentId);
+
+    if (shouldReset) {
+      pagingState.priorityReplyId = normalizeCommentNavigationId(
+        options?.priorityReplyId,
+      );
+      pagingState.highlightReplyId = normalizeCommentNavigationId(
+        options?.highlightReplyId,
+      );
+      pagingState.hasHighlightedPriorityReply = false;
+    }
 
     if (pagingState.isLoading) return;
     if (!shouldReset && !pagingState.hasMore) return;
@@ -923,6 +1076,7 @@ const CommentModule = (function () {
         pageSize,
         shouldReset ? null : pagingState.cursorCreatedAt,
         shouldReset ? null : pagingState.cursorCommentId,
+        pagingState.priorityReplyId,
       );
       if (res.status === 403) {
         PostUtils.hidePost(window.currentPostId);
@@ -982,6 +1136,20 @@ const CommentModule = (function () {
       pagingState.cursorCreatedAt = nextCursor.createdAt;
       pagingState.cursorCommentId = nextCursor.commentId;
       pagingState.hasMore = nextCursor.hasMore;
+
+      if (
+        pagingState.highlightReplyId &&
+        !pagingState.hasHighlightedPriorityReply
+      ) {
+        const targetReply = repliesList.querySelector(
+          `.reply-item[data-reply-id="${pagingState.highlightReplyId}"]`,
+        );
+        if (targetReply) {
+          applyTemporaryCommentHighlight(targetReply);
+          targetReply.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          pagingState.hasHighlightedPriorityReply = true;
+        }
+      }
 
       renderRepliesPaginationControl(commentId, repliesList, pagingState);
 
@@ -1155,15 +1323,9 @@ const CommentModule = (function () {
     item.classList.add("animate-slide-up");
 
     // Highlight effect
-    item.style.backgroundColor = "var(--bg-active)";
-    item.style.transition = "background-color 2s ease";
-
     list.prepend(item);
 
-    // Fade out highlight
-    setTimeout(() => {
-      item.style.backgroundColor = "transparent";
-    }, 100);
+    applyTemporaryCommentHighlight(item);
 
     if (window.lucide) lucide.createIcons();
 
@@ -1230,11 +1392,7 @@ const CommentModule = (function () {
     }
 
     // Highlight effect to show it was updated
-    el.style.backgroundColor = "var(--bg-active)";
-    el.style.transition = "background-color 2s ease";
-    setTimeout(() => {
-      el.style.backgroundColor = "transparent";
-    }, 100);
+    applyTemporaryCommentHighlight(el);
   }
 
   /**
@@ -1654,9 +1812,6 @@ const CommentModule = (function () {
     item.classList.add("animate-slide-up");
 
     // Effect
-    item.style.backgroundColor = "var(--bg-active)";
-    item.style.transition = "background-color 2s ease";
-
     // Mark as session reply to keep it at the bottom during pagination (buttons logic)
     item.classList.add("session-reply");
 
@@ -1672,9 +1827,7 @@ const CommentModule = (function () {
       }
     }
 
-    setTimeout(() => {
-      item.style.backgroundColor = "transparent";
-    }, 100);
+    applyTemporaryCommentHighlight(item);
 
     if (window.lucide) lucide.createIcons();
 

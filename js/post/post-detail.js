@@ -87,6 +87,23 @@ function pdBuildProfileHash(profileTarget) {
     return `#/${encodeURIComponent(safe)}`;
 }
 
+function pdBuildCommentNavigationOptions(options = null) {
+    const source = options && typeof options === "object" ? options : null;
+    if (!source) return null;
+
+    const targetCommentId = (source.targetCommentId || source.priorityCommentId || "").toString().trim();
+    const parentCommentId = (source.parentCommentId || "").toString().trim();
+
+    if (!targetCommentId) {
+        return null;
+    }
+
+    return {
+        targetCommentId,
+        parentCommentId: parentCommentId || null
+    };
+}
+
 async function pdReadApiMessage(res, fallbackMessage) {
     const fallback =
         window.I18n?.translateLiteral?.(fallbackMessage || "request failed") ||
@@ -352,7 +369,7 @@ async function openPostDetail(postId, postCode = null, navContext = null, naviga
         if (mainLoader) mainLoader.style.display = "none";
 
 	        if (window.CommentModule) {
-	            CommentModule.loadComments(data.postId, true, data.owner.accountId);
+	            CommentModule.loadComments(data.postId, true, data.owner.accountId, null);
 	        }
 
         if (window.PostHub) await window.PostHub.joinPostGroup(data.postId);
@@ -370,6 +387,7 @@ async function openPostDetail(postId, postCode = null, navContext = null, naviga
 
 async function openPostDetailByCode(postCode, options = null) {
     const routeOptions = options && typeof options === "object" ? options : {};
+    const commentNavigationOptions = pdBuildCommentNavigationOptions(routeOptions);
     const isRouteDriven = routeOptions.fromRoute === true;
     if (isRouteDriven) {
         const candidateReturnHash = (routeOptions.returnHash || window._returnToHash || window._lastAcceptedHashForRouter || window._lastSafeHash || "#/").toString();
@@ -467,7 +485,12 @@ async function openPostDetailByCode(postCode, options = null) {
         if (mainLoader) mainLoader.style.display = "none";
 
 	        if (window.CommentModule) {
-	            CommentModule.loadComments(data.postId, true, data.owner.accountId);
+	            CommentModule.loadComments(
+	                data.postId,
+	                true,
+	                data.owner.accountId,
+	                commentNavigationOptions,
+	            );
 	        }
 
         if (window.PostHub) await window.PostHub.joinPostGroup(data.postId);
