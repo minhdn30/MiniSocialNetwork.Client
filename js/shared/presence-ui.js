@@ -38,14 +38,11 @@
       });
     }
 
-    const legacyIsOnline = !!fallbackOnline;
     return {
-      canShowStatus: legacyIsOnline,
-      isOnline: legacyIsOnline,
-      showDot: legacyIsOnline,
-      text: legacyIsOnline
-        ? presenceUiT("chat.presence.online", {}, "Online")
-        : "",
+      canShowStatus: false,
+      isOnline: false,
+      showDot: false,
+      text: "",
     };
   }
 
@@ -61,12 +58,7 @@
     }
 
     const accountId = getPrivateOtherAccountId(conversation);
-    const legacyIsOnline = !!(
-      conversation?.otherMember?.isOnline ??
-      conversation?.otherMember?.IsOnline ??
-      false
-    );
-    return resolveStatusByAccountId(accountId, legacyIsOnline);
+    return resolveStatusByAccountId(accountId, false);
   }
 
   function ensureSnapshotForAccountIds(accountIds, options = {}) {

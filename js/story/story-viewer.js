@@ -1330,28 +1330,44 @@
     }
 
     try {
-      const res = await global.API.Stories.getViewers(
-        story.storyId,
-        viewerState.viewersPage,
-      );
-      if (res.ok) {
+      let shouldContinue = true;
+      while (shouldContinue && viewerState.viewersHasMore) {
+        const nextPage = viewerState.viewersPage;
+        const res = await global.API.Stories.getViewers(story.storyId, nextPage);
+        if (!res.ok) {
+          viewerState.viewersHasMore = false;
+          break;
+        }
+
         const payload = await res.json();
-        const items = payload.items || [];
+        const items = Array.isArray(payload?.items) ? payload.items : [];
+        const pageNumber = Number(payload?.page ?? nextPage) || nextPage;
+        const totalPages = Number(payload?.totalPages ?? 0) || 0;
+        const rawHasMore =
+          typeof payload?.hasNextPage === "boolean"
+            ? payload.hasNextPage
+            : totalPages > 0
+              ? pageNumber < totalPages
+              : items.length >= Number(payload?.pageSize || 20);
 
         // Prevent updating if story changed during async load
         if (viewerState.viewersTargetStoryId === story.storyId) {
-          viewerState.viewersTotalCount = payload.totalItems || 0;
+          viewerState.viewersTotalCount = Number(payload?.totalItems || 0);
           if (viewerState.dom.viewersTotalCount) {
             viewerState.dom.viewersTotalCount.textContent = `(${viewerState.viewersTotalCount})`;
           }
         }
 
-        stRenderViewersListItems(items);
+        viewerState.viewersPage = pageNumber + 1;
+        viewerState.viewersHasMore = rawHasMore;
 
-        viewerState.viewersPage += 1;
-        viewerState.viewersHasMore = items.length >= (payload.pageSize || 20);
-      } else {
-        viewerState.viewersHasMore = false;
+        if (items.length > 0) {
+          stRenderViewersListItems(items);
+          shouldContinue = false;
+          continue;
+        }
+
+        shouldContinue = rawHasMore;
       }
     } catch (err) {
       console.error("Error loading viewers:", err);

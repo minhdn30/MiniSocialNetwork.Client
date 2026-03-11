@@ -316,11 +316,6 @@ const ChatSidebar = {
     }
 
     const accountId = this.getPrivateOtherAccountId(conv);
-    const legacyIsOnline = !!(
-      conv.otherMember?.isOnline ??
-      conv.otherMember?.IsOnline ??
-      false
-    );
     if (
       window.PresenceStore &&
       typeof window.PresenceStore.resolveStatus === "function"
@@ -331,10 +326,10 @@ const ChatSidebar = {
     }
 
     return {
-      canShowStatus: legacyIsOnline,
-      isOnline: legacyIsOnline,
-      showDot: legacyIsOnline,
-      text: legacyIsOnline ? this.t("common.labels.online", "Online") : "",
+      canShowStatus: false,
+      isOnline: false,
+      showDot: false,
+      text: "",
     };
   },
 
@@ -529,7 +524,7 @@ const ChatSidebar = {
   buildLastMessagePreviewDisplay(conv = {}, message = null) {
     const hasExplicitMessageOverride =
       message !== null && message !== undefined;
-    const resolvedMessage =
+    let resolvedMessage =
       message || conv?.lastMessage || conv?.LastMessage || null;
     const meta =
       window.ChatCommon &&
@@ -1326,13 +1321,9 @@ const ChatSidebar = {
     const blockedUsersBtn = menu.querySelector("#chat-menu-blocked-users");
     if (blockedUsersBtn) {
       blockedUsersBtn.onclick = () => {
-        if (window.toastInfo)
-          window.toastInfo(
-            this.t(
-              "chat.sidebar.more.blockedUsersComingSoon",
-              "Blocked list is in progress",
-            ),
-          );
+        if (window.BlockUtils?.openBlockedUsersPage) {
+          window.BlockUtils.openBlockedUsersPage();
+        }
         menu.remove();
       };
     }
@@ -2153,13 +2144,16 @@ const ChatSidebar = {
         conv.unreadCount = (conv.unreadCount || 0) + 1;
       }
       if (message) {
-        conv.lastMessage = message;
+        const maskedMessage = message;
+        conv.lastMessage = maskedMessage;
         conv.lastMessageSentAt =
-          message.sentAt || message.SentAt || new Date().toISOString();
+          maskedMessage.sentAt ||
+          maskedMessage.SentAt ||
+          new Date().toISOString();
         const previewMeta =
           window.ChatCommon &&
           typeof ChatCommon.getLastMsgPreviewMeta === "function"
-            ? ChatCommon.getLastMsgPreviewMeta(conv, { message })
+            ? ChatCommon.getLastMsgPreviewMeta(conv, { message: maskedMessage })
             : null;
         conv.lastMessagePreview = previewMeta?.text || null;
         // Reset seen-by since it's a new message
@@ -2204,7 +2198,7 @@ const ChatSidebar = {
       if (message) {
         const previewData = this.buildLastMessagePreviewDisplay(
           conv || {},
-          message,
+          conv?.lastMessage || message,
         );
         const preview = item.querySelector(".chat-last-msg");
         if (preview) {

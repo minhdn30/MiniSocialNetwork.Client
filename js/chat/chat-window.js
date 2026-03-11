@@ -429,6 +429,9 @@ const ChatWindow = {
         const systemText = window.ChatCommon.getSystemMessageText({
           content: rawContent,
           systemMessageDataJson: rawSystemData,
+        }, {
+          conversation: this.openChats.get(openId)?.data || null,
+          conversationId: openId,
         });
 
         if (typeof linkify === "function") {
@@ -1046,11 +1049,6 @@ const ChatWindow = {
     }
 
     const accountId = this.getPrivateOtherAccountId(conversation);
-    const legacyIsOnline = !!(
-      conversation?.otherMember?.isOnline ??
-      conversation?.otherMember?.IsOnline ??
-      false
-    );
     if (
       window.PresenceStore &&
       typeof window.PresenceStore.resolveStatus === "function"
@@ -1061,10 +1059,10 @@ const ChatWindow = {
     }
 
     return {
-      canShowStatus: legacyIsOnline,
-      isOnline: legacyIsOnline,
-      showDot: legacyIsOnline,
-      text: legacyIsOnline ? this.t("chat.presence.online", "Online") : "",
+      canShowStatus: false,
+      isOnline: false,
+      showDot: false,
+      text: "",
     };
   },
 
@@ -2159,6 +2157,8 @@ const ChatWindow = {
             senderAvatar,
             authorName,
             isWindow: true,
+            conversation: chat.data,
+            conversationId: id,
           });
           self.insertHtmlBeforeTypingIndicator(container, html);
         });
@@ -2952,6 +2952,7 @@ const ChatWindow = {
                 </div>
             </div>
             <div class="chat-input-area" id="chat-input-area-${conv.conversationId}">
+                <div class="chat-blocked-notice" id="chat-blocked-notice-${conv.conversationId}" hidden>${this.t("chat.blocked.privateConversationDisabled", "You can't send new messages in this conversation")}</div>
                 <div class="chat-window-attachment-preview" id="chat-window-preview-${conv.conversationId}"></div>
                 
                 <div class="chat-window-emoji-container" id="chat-emoji-container-${conv.conversationId}"></div>
@@ -3027,6 +3028,7 @@ const ChatWindow = {
     };
     this.openChats.set(conv.conversationId, chatObj);
     this.getRuntimeCtx(conv.conversationId, chatObj);
+    this.applyConversationSendAvailability(conv.conversationId);
 
     const chatInputField = chatBox.querySelector(".chat-input-field");
     if (chatInputField) {
@@ -3564,6 +3566,174 @@ const ChatWindow = {
     iconEl.setAttribute("title", mutedConversationLabel);
     nameRow.appendChild(iconEl);
     if (window.lucide) lucide.createIcons({ container: nameRow });
+  },
+
+  canSendInConversation(meta) {
+    if (window.BlockUtils?.canSendInConversation) {
+      return window.BlockUtils.canSendInConversation(meta);
+    }
+
+    const isGroup = !!(meta?.isGroup ?? meta?.IsGroup ?? false);
+    if (isGroup) return true;
+    return !!(meta?.canSendMessage ?? meta?.CanSendMessage ?? true);
+  },
+
+  applyConversationSendAvailability(id) {
+    const chat = this.openChats.get(id);
+    if (!chat?.element) return false;
+
+    const isGroup = !!(chat.data?.isGroup ?? chat.data?.IsGroup ?? false);
+    const canSend = this.canSendInConversation(chat.data);
+    const isDisabled = !isGroup && !canSend;
+    const inputArea = document.getElementById(`chat-input-area-${id}`);
+    const inputField = chat.element.querySelector(".chat-input-field");
+    const sendBtn = document.getElementById(`send-btn-${id}`);
+    const actionButtons = chat.element.querySelectorAll(
+      ".chat-toggle-actions, .chat-action-btn",
+    );
+    const blockedNotice = document.getElementById(`chat-blocked-notice-${id}`);
+    const blockedHint = this.t(
+      "chat.blocked.privateConversationDisabled",
+      "You can't send new messages in this conversation",
+    );
+
+    if (isDisabled) {
+      if ((chat.pendingFiles?.length || 0) > 0) {
+        chat.pendingFiles = [];
+        this.updateAttachmentPreview(id);
+      }
+      this.clearReplyBar(id);
+      this.resetInput(id);
+    }
+
+    if (inputArea) {
+      inputArea.classList.toggle("chat-input-disabled", isDisabled);
+    }
+
+    if (inputField) {
+      inputField.setAttribute(
+        "placeholder",
+        isDisabled
+          ? ""
+          : this.t("chat.window.messagePlaceholder", "Type a message..."),
+      );
+      inputField.setAttribute("contenteditable", isDisabled ? "false" : "true");
+      inputField.classList.toggle("is-disabled", isDisabled);
+      if (!inputField.textContent?.trim()) {
+        inputField.dataset.placeholderVisible = "true";
+      }
+    }
+
+    actionButtons.forEach((button) => {
+      button.disabled = isDisabled;
+      button.classList.toggle("is-disabled", isDisabled);
+      button.setAttribute("aria-disabled", isDisabled ? "true" : "false");
+    });
+
+    if (blockedNotice) {
+      blockedNotice.hidden = !isDisabled;
+      if (isDisabled) {
+        blockedNotice.innerHTML = `
+          <span class="chat-blocked-notice-icon" aria-hidden="true">
+            <i data-lucide="ban"></i>
+          </span>
+          <span class="chat-blocked-notice-text"></span>
+        `;
+        const textEl = blockedNotice.querySelector(".chat-blocked-notice-text");
+        if (textEl) {
+          textEl.textContent = blockedHint;
+        }
+        if (window.lucide) {
+          window.lucide.createIcons({ container: blockedNotice });
+        }
+      } else {
+        blockedNotice.innerHTML = "";
+      }
+    }
+
+    if (sendBtn && isDisabled) {
+      sendBtn.disabled = true;
+    }
+
+    return !isDisabled;
+  },
+
+  async toggleBlockUser(id) {
+    const openId = this.getOpenChatId(id) || id;
+    const chat = this.openChats.get(openId);
+    if (!chat?.data || (chat.data?.isGroup ?? chat.data?.IsGroup)) return;
+
+    const targetId =
+      chat.data?.otherMember?.accountId ||
+      chat.data?.otherMember?.AccountId ||
+      chat.data?.otherMemberId ||
+      "";
+    if (!targetId || !window.BlockUtils?.toggleBlock) return;
+
+    const targetName =
+      window.BlockUtils.getDisplayName?.(chat.data?.otherMember || {}) ||
+      this.getUnknownUserLabel();
+
+    window.BlockUtils.toggleBlock({
+      targetId,
+      targetName,
+      targetUsername:
+        chat.data?.otherMember?.username || chat.data?.otherMember?.Username || "",
+      targetFullName:
+        chat.data?.otherMember?.fullName || chat.data?.otherMember?.FullName || "",
+      isBlockedByCurrentUser: !!(
+        chat.data?.blockedByCurrentUser ?? chat.data?.BlockedByCurrentUser
+      ),
+      onSuccess: async () => {
+        try {
+          const res = await window.API?.Conversations?.getById?.(openId);
+          if (!res?.ok) return;
+
+          const refreshed = await res.json().catch(() => null);
+          if (!refreshed) return;
+
+          chat.data = refreshed;
+          this.setThemeStatus(openId, refreshed.theme ?? refreshed.Theme ?? null);
+          this.applyConversationSendAvailability(openId);
+
+          const nameEl = chat.element.querySelector(".chat-header-name");
+          if (nameEl) {
+            nameEl.textContent = ChatCommon.getDisplayName(refreshed);
+          }
+
+          const avatarContainer = chat.element.querySelector(".chat-header-avatar");
+          if (avatarContainer) {
+            avatarContainer.innerHTML = ChatCommon.renderAvatar(refreshed, {
+              enableStoryRing: true,
+              storyRingStyle: "--_avatar: 24px;",
+            });
+            if (window.lucide) {
+              lucide.createIcons({ container: avatarContainer });
+            }
+          }
+
+          this.updateHeaderMuteIcon(chat);
+
+          if (
+            window.ChatSidebar &&
+            typeof window.ChatSidebar.loadConversations === "function"
+          ) {
+            window.ChatSidebar.loadConversations(false).catch(() => {});
+          }
+
+          if (
+            window.ChatPage &&
+            typeof window.ChatPage.loadConversation === "function" &&
+            window.ChatPage.currentChatId &&
+            window.ChatPage.currentChatId.toLowerCase() === openId.toLowerCase()
+          ) {
+            window.ChatPage.loadConversation(openId).catch(() => {});
+          }
+        } catch (error) {
+          console.error("Failed to refresh chat window after block change:", error);
+        }
+      },
+    });
   },
 
   setThemeStatus(conversationId, theme) {
@@ -4797,14 +4967,14 @@ const ChatWindow = {
         )
           .toString()
           .trim();
-        const secondary = nickname || fullName || username;
+        const secondary = nickname || fullName || "";
 
         return `
           <div class="mention-picker-item-main">
             <img class="mention-picker-avatar" src="${escape(avatarUrl)}" alt="avatar" />
             <div class="mention-picker-meta">
               <span class="mention-picker-primary">${escape(username)}</span>
-              <span class="mention-picker-secondary">${escape(secondary)}</span>
+              ${secondary ? `<span class="mention-picker-secondary">${escape(secondary)}</span>` : ""}
             </div>
           </div>
         `;
@@ -5286,7 +5456,6 @@ const ChatWindow = {
       ? this.t("chat.mute.unmute_notifications", "Unmute notifications")
       : this.t("chat.mute.mute_notifications", "Mute notifications");
     const hasProfileTarget = !!(otherUsername || otherAccountId);
-
     const menu = document.createElement("div");
     menu.id = `chat-header-menu-${id}`;
     menu.className = "chat-window-header-menu";
@@ -5350,12 +5519,7 @@ const ChatWindow = {
                     <span>${escapeHtml(this.t("chat.group.leave", "Leave"))}</span>
                 </button>
                 `
-                    : `
-                <button class="chat-menu-item danger" data-action="block-user">
-                    <i data-lucide="ban"></i>
-                    <span>${escapeHtml(this.t("chat.privacy.block_user", "Block user"))}</span>
-                </button>
-                `
+                    : ""
                 }
             </div>
         `;
@@ -5387,14 +5551,6 @@ const ChatWindow = {
         case "open-profile":
           this.closeHeaderMenu();
           if (!hasProfileTarget) {
-            if (window.toastInfo) {
-              window.toastInfo(
-                this.t(
-                  "chat.header.profileUnavailable",
-                  "Profile isn't available right now",
-                ),
-              );
-            }
             return;
           }
           if (
@@ -5436,14 +5592,6 @@ const ChatWindow = {
         case "leave-group":
           this.closeHeaderMenu();
           this.confirmLeaveGroup(id);
-          return;
-        case "block-user":
-          this.closeHeaderMenu();
-          if (window.toastInfo) {
-            window.toastInfo(
-              this.t("common.feature_coming_soon", "Feature coming soon"),
-            );
-          }
           return;
         default:
           return;
@@ -6772,7 +6920,12 @@ const ChatWindow = {
     }
   },
 
-  async handleWindowMembersAction(action, accountId, displayName, username) {
+  async handleWindowMembersAction(
+    action,
+    accountId,
+    displayName,
+    username,
+  ) {
     const normalizedAction = (action || "").toString().toLowerCase();
     const targetAccountId = (accountId || "").toString().toLowerCase();
     if (!normalizedAction || !targetAccountId) return;
@@ -8212,12 +8365,24 @@ const ChatWindow = {
     const sendBtn = document.getElementById(`send-btn-${id}`);
     const hasText = inputField?.innerText.trim().length > 0;
     const hasFiles = chat.pendingFiles && chat.pendingFiles.length > 0;
-    if (sendBtn) sendBtn.disabled = !(hasText || hasFiles);
+    const canSend = this.canSendInConversation(chat.data);
+    if (sendBtn) sendBtn.disabled = !canSend || !(hasText || hasFiles);
   },
 
   handleMediaUpload(id, files, options = {}) {
     const chat = this.openChats.get(id);
     if (!chat || !files || files.length === 0) return;
+    if (!this.canSendInConversation(chat.data)) {
+      if (window.toastInfo) {
+        window.toastInfo(
+          this.t(
+            "chat.blocked.privateConversationDisabled",
+            "You can't send new messages in this conversation",
+          ),
+        );
+      }
+      return;
+    }
 
     const maxFiles =
       window.APP_CONFIG?.MAX_CHAT_ATTACHMENTS_PER_MESSAGE ||
@@ -8465,6 +8630,8 @@ const ChatWindow = {
             senderAvatar,
             authorName,
             isWindow: true,
+            conversation: chat?.data,
+            conversationId: id,
           });
 
           const tempDiv = document.createElement("div");
@@ -8516,6 +8683,7 @@ const ChatWindow = {
             chat.data = metaData;
             this.setThemeStatus(id, metaData.theme ?? metaData.Theme ?? null);
             this.getRuntimeCtx(id, chat);
+            this.applyConversationSendAvailability(id);
             // If window is open (not bubble), refresh its header UI
             if (chat.element) {
               const nameEl = chat.element.querySelector(".chat-header-name");
@@ -8657,6 +8825,8 @@ const ChatWindow = {
             senderAvatar,
             authorName,
             isWindow: true,
+            conversation: chat?.data,
+            conversationId: id,
           });
         });
 
@@ -8781,6 +8951,8 @@ const ChatWindow = {
       senderAvatar,
       authorName,
       isWindow: true,
+      conversation: chat?.data,
+      conversationId: id,
     });
 
     const bubble = tempDiv.firstElementChild;
@@ -8875,6 +9047,17 @@ const ChatWindow = {
   async sendMessage(id) {
     const chat = this.openChats.get(id);
     if (!chat) return;
+    if (!this.canSendInConversation(chat.data)) {
+      if (window.toastInfo) {
+        window.toastInfo(
+          this.t(
+            "chat.blocked.privateConversationDisabled",
+            "You can't send new messages in this conversation",
+          ),
+        );
+      }
+      return;
+    }
 
     const inputField = chat.element.querySelector(".chat-input-field");
     const content = inputField.innerText.trim();

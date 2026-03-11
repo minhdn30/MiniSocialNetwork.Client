@@ -560,11 +560,6 @@ const ChatPage = {
     }
 
     const accountId = this.getPrivateOtherAccountId(meta);
-    const legacyIsOnline = !!(
-      meta.otherMember?.isOnline ??
-      meta.otherMember?.IsOnline ??
-      false
-    );
     if (
       window.PresenceStore &&
       typeof window.PresenceStore.resolveStatus === "function"
@@ -575,10 +570,10 @@ const ChatPage = {
     }
 
     return {
-      canShowStatus: legacyIsOnline,
-      isOnline: legacyIsOnline,
-      showDot: legacyIsOnline,
-      text: legacyIsOnline ? this.t("chat.presence.online", "Online") : "",
+      canShowStatus: false,
+      isOnline: false,
+      showDot: false,
+      text: "",
     };
   },
 
@@ -2180,6 +2175,7 @@ const ChatPage = {
       else headerUser.style.cursor = "default";
     }
 
+    this.applyComposerAvailability(meta);
     this.updateHeaderPresence(meta);
     this.updateHeaderUnreadState(
       meta?.conversationId || meta?.ConversationId || this.currentChatId,
@@ -2213,6 +2209,135 @@ const ChatPage = {
     );
     nameRow.appendChild(iconEl);
     if (window.lucide) lucide.createIcons({ container: nameRow });
+  },
+
+  canSendInConversation(meta) {
+    if (window.BlockUtils?.canSendInConversation) {
+      return window.BlockUtils.canSendInConversation(meta);
+    }
+    const isGroup = !!(meta?.isGroup ?? meta?.IsGroup ?? false);
+    if (isGroup) return true;
+    return !!(meta?.canSendMessage ?? meta?.CanSendMessage ?? true);
+  },
+
+  applyComposerAvailability(meta = this.currentMetaData) {
+    const isGroup = !!(meta?.isGroup ?? meta?.IsGroup ?? false);
+    const canSend = this.canSendInConversation(meta);
+    const isDisabled = !isGroup && !canSend;
+    const container = document.querySelector(".chat-view-input-container");
+    const input = document.getElementById("chat-message-input");
+    const sendBtn = document.getElementById("chat-page-send-btn");
+    const blockedNotice = document.getElementById("chat-page-blocked-notice");
+    const actionButtons = document.querySelectorAll(
+      ".chat-view-input-container .chat-toggle-actions, .chat-view-input-container .chat-icon-btn",
+    );
+    const blockedHint = this.t(
+      "chat.blocked.privateConversationDisabled",
+      "You can't send new messages in this conversation",
+    );
+
+    if (isDisabled) {
+      this.pendingFiles = [];
+      this.updateAttachmentPreview();
+      this.clearReplyBar();
+      if (input) {
+        input.value = "";
+      }
+    }
+
+    if (container) {
+      container.classList.toggle("chat-input-disabled", isDisabled);
+    }
+
+    if (input) {
+      input.readOnly = isDisabled;
+      input.placeholder = isDisabled
+        ? ""
+        : this.t("chat.input.placeholder", "Type a message...");
+    }
+
+    actionButtons.forEach((button) => {
+      button.disabled = isDisabled;
+      button.classList.toggle("is-disabled", isDisabled);
+      button.setAttribute("aria-disabled", isDisabled ? "true" : "false");
+    });
+
+    if (blockedNotice) {
+      blockedNotice.hidden = !isDisabled;
+      if (isDisabled) {
+        blockedNotice.innerHTML = `
+          <span class="chat-blocked-notice-icon" aria-hidden="true">
+            <i data-lucide="ban"></i>
+          </span>
+          <span class="chat-blocked-notice-text"></span>
+        `;
+        const textEl = blockedNotice.querySelector(".chat-blocked-notice-text");
+        if (textEl) {
+          textEl.textContent = blockedHint;
+        }
+        if (window.lucide) {
+          window.lucide.createIcons({ container: blockedNotice });
+        }
+      } else {
+        blockedNotice.innerHTML = "";
+      }
+    }
+
+    if (sendBtn && isDisabled) {
+      sendBtn.disabled = true;
+    }
+
+    return !isDisabled;
+  },
+
+  async toggleBlockCurrentConversation() {
+    const meta = this.currentMetaData;
+    if (!meta || (meta?.isGroup ?? meta?.IsGroup)) return;
+
+    const targetId =
+      meta?.otherMember?.accountId ||
+      meta?.otherMember?.AccountId ||
+      meta?.otherMemberId ||
+      "";
+    if (!targetId || !window.BlockUtils?.toggleBlock) return;
+
+    const targetName =
+      window.BlockUtils.getDisplayName?.(meta?.otherMember || {}) ||
+      this.getUnknownUserLabel();
+
+    window.BlockUtils.toggleBlock({
+      targetId,
+      targetName,
+      targetUsername:
+        meta?.otherMember?.username || meta?.otherMember?.Username || "",
+      targetFullName:
+        meta?.otherMember?.fullName || meta?.otherMember?.FullName || "",
+      isBlockedByCurrentUser: !!(
+        meta?.blockedByCurrentUser ?? meta?.BlockedByCurrentUser
+      ),
+      onSuccess: async () => {
+        try {
+          if (this.currentChatId) {
+            await this.loadConversation(this.currentChatId);
+          }
+          if (
+            window.ChatSidebar &&
+            typeof window.ChatSidebar.loadConversations === "function"
+          ) {
+            window.ChatSidebar.loadConversations(false).catch(() => {});
+          }
+          if (
+            window.ChatWindow &&
+            typeof window.ChatWindow.openById === "function" &&
+            this.currentChatId
+          ) {
+            window.ChatWindow.openById(this.currentChatId, false, false).catch(() => {});
+          }
+        } catch (error) {
+          console.error("Failed to refresh chat-page after block change:", error);
+        }
+      },
+    });
   },
 
   minimizeToBubble() {
@@ -4588,7 +4713,12 @@ const ChatPage = {
     });
   },
 
-  async _handleMembersAction(action, accountId, displayName, username) {
+  async _handleMembersAction(
+    action,
+    accountId,
+    displayName,
+    username,
+  ) {
     const normalizedAction = (action || "").toString().toLowerCase();
     const targetAccountId = (accountId || "").toString().toLowerCase();
     if (!normalizedAction || !targetAccountId) return;
@@ -5756,7 +5886,10 @@ const ChatPage = {
         typeof window.ChatCommon.isSystemMessage === "function" &&
         typeof window.ChatCommon.getSystemMessageText === "function" &&
         window.ChatCommon.isSystemMessage(msg)
-          ? window.ChatCommon.getSystemMessageText(msg)
+          ? window.ChatCommon.getSystemMessageText(msg, {
+              conversation: this.currentMetaData,
+              conversationId: this.currentChatId,
+            })
           : msg.content ?? msg.Content ?? "";
       const messageSentAt = msg.sentAt || msg.SentAt;
 
@@ -6954,14 +7087,6 @@ const ChatPage = {
     }
 
     const profileTarget = privateTargetUsername || privateTargetId;
-    const profileUnavailableText = this.t(
-      "errors.chat.profile_unavailable",
-      "Profile is unavailable",
-    );
-    const featureComingSoonText = this.t(
-      "common.feature_coming_soon",
-      "Feature coming soon",
-    );
     const html = `
             <div class="chat-info-header">
                 <div class="chat-info-avatar">
@@ -6982,7 +7107,7 @@ const ChatPage = {
                 </button>
                 `
                     : `
-                <button class="chat-info-quick-btn" onclick="${profileTarget ? `ChatPage.minimizeToBubble(); (window.ChatCommon && typeof window.ChatCommon.goToProfile === 'function' ? window.ChatCommon.goToProfile('${privateTargetId}', '${privateTargetUsername}') : (window.location.hash = '#/' + encodeURIComponent('${profileTarget}')))` : `window.toastInfo('${profileUnavailableText.replace(/'/g, "\\'")}')`}">
+                <button class="chat-info-quick-btn" onclick="${profileTarget ? `ChatPage.minimizeToBubble(); (window.ChatCommon && typeof window.ChatCommon.goToProfile === 'function' ? window.ChatCommon.goToProfile('${privateTargetId}', '${privateTargetUsername}') : (window.location.hash = '#/' + encodeURIComponent('${profileTarget}')))` : ""}">
                     <div class="chat-info-quick-icon"><i data-lucide="user"></i></div>
                     <span>${this.t("chat.members.actions.profile", "Profile")}</span>
                 </button>
@@ -7088,12 +7213,7 @@ const ChatPage = {
                             <span>${this.t("chat.group.leave", "Leave group")}</span>
                         </div>
                         `
-                            : `
-                        <div class="chat-info-item danger" onclick="window.toastInfo('${featureComingSoonText.replace(/'/g, "\\'")}')">
-                            <i data-lucide="slash"></i>
-                            <span>${this.t("chat.privacy.block_user", "Block user")}</span>
-                        </div>
-                        `
+                            : ""
                         }
                         <div class="chat-info-item danger" id="chat-info-delete-conversation-btn">
                             <i data-lucide="trash-2"></i>
@@ -7451,6 +7571,8 @@ const ChatPage = {
         groupPos,
         senderAvatar,
         authorName,
+        conversation: this.currentMetaData,
+        conversationId: this.currentChatId,
         isPage: true,
       });
 
@@ -7544,6 +7666,8 @@ const ChatPage = {
       groupPos,
       senderAvatar,
       authorName,
+      conversation: this.currentMetaData,
+      conversationId: this.currentChatId,
       isPage: true,
     });
 
@@ -7635,6 +7759,17 @@ const ChatPage = {
     const content = input.value.trim();
     if ((!content && this.pendingFiles.length === 0) || !this.currentChatId)
       return;
+    if (!this.canSendInConversation(this.currentMetaData)) {
+      if (window.toastInfo) {
+        window.toastInfo(
+          this.t(
+            "chat.blocked.privateConversationDisabled",
+            "You can't send new messages in this conversation",
+          ),
+        );
+      }
+      return;
+    }
 
     // Cancel typing indicator immediately
     if (window.ChatTyping) ChatTyping.cancelTyping(this.currentChatId);
@@ -7842,14 +7977,14 @@ const ChatPage = {
         )
           .toString()
           .trim();
-        const secondary = nickname || fullName || username;
+        const secondary = nickname || fullName || "";
 
         return `
           <div class="mention-picker-item-main">
             <img class="mention-picker-avatar" src="${escape(avatarUrl)}" alt="" />
             <div class="mention-picker-meta">
               <span class="mention-picker-primary">${escape(username)}</span>
-              <span class="mention-picker-secondary">${escape(secondary)}</span>
+              ${secondary ? `<span class="mention-picker-secondary">${escape(secondary)}</span>` : ""}
             </div>
           </div>
         `;
@@ -8064,6 +8199,7 @@ const ChatPage = {
     // Block send if no content OR metadata not yet available
     const canSend =
       hasContent &&
+      this.canSendInConversation(this.currentMetaData) &&
       (this.currentMetaData ||
         window.ChatSidebar?.conversations?.find(
           (c) => c.conversationId === this.currentChatId,
@@ -8074,6 +8210,17 @@ const ChatPage = {
 
   async handleMediaUpload(files, options = {}) {
     if (!files || files.length === 0 || !this.currentChatId) return;
+    if (!this.canSendInConversation(this.currentMetaData)) {
+      if (window.toastInfo) {
+        window.toastInfo(
+          this.t(
+            "chat.blocked.privateConversationDisabled",
+            "You can't send new messages in this conversation",
+          ),
+        );
+      }
+      return;
+    }
 
     const maxFiles =
       window.APP_CONFIG?.MAX_CHAT_ATTACHMENTS_PER_MESSAGE ||

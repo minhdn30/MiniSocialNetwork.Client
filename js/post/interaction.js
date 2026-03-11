@@ -39,6 +39,68 @@ const InteractionModule = (function () {
       : await API.Posts.getReacts(id, page, PAGE_SIZE);
   }
 
+  function normalizePagedResponse(data, fallbackPage = 1) {
+    const items = Array.isArray(data?.items)
+      ? data.items
+      : Array.isArray(data?.Items)
+        ? data.Items
+        : [];
+    const page = Number(data?.page ?? data?.Page ?? fallbackPage) || fallbackPage;
+    const totalItems =
+      Number(data?.totalItems ?? data?.TotalItems ?? items.length) || 0;
+    const totalPages = Number(data?.totalPages ?? data?.TotalPages ?? 0) || 0;
+    const hasNext =
+      typeof data?.hasNextPage === "boolean"
+        ? data.hasNextPage
+        : typeof data?.HasNextPage === "boolean"
+          ? data.HasNextPage
+          : totalPages > 0
+            ? page < totalPages
+            : page * PAGE_SIZE < totalItems;
+
+    return {
+      items,
+      page,
+      totalItems,
+      totalPages,
+      hasNextPage: hasNext,
+    };
+  }
+
+  async function fetchVisibleReactPage(id, startPage = 1) {
+    let nextPage = startPage;
+
+    while (true) {
+      const res = await _fetchPage(id, nextPage);
+      if (!res.ok) {
+        return { ok: false, res };
+      }
+
+      const payload = await res.json();
+      const data = normalizePagedResponse(payload, nextPage);
+
+      if (data.items.length > 0 || !data.hasNextPage) {
+        return { ok: true, data };
+      }
+
+      nextPage = data.page + 1;
+    }
+  }
+
+  function renderEmptyReactState(container) {
+    if (!container) return;
+
+    container.innerHTML = `
+      <div class="empty-list-msg">
+        ${interactionT(
+          "post.reactions.emptyVisible",
+          {},
+          "No visible reactions in this list",
+        )}
+      </div>
+    `;
+  }
+
   /**
    * Open the react list modal
    * @param {string} id - PostId or CommentId
@@ -53,9 +115,10 @@ const InteractionModule = (function () {
 
     try {
       // 1. First fetch to verify and get initial data
-      const res = await _fetchPage(id, 1);
+      const pageResult = await fetchVisibleReactPage(id, 1);
+      const res = pageResult?.res;
 
-      if (res.status === 403) {
+      if (!pageResult?.ok && res?.status === 403) {
         if (window.toastError)
           toastError(
             interactionT(
@@ -66,7 +129,7 @@ const InteractionModule = (function () {
           );
         return;
       }
-      if (res.status === 404) {
+      if (!pageResult?.ok && res?.status === 404) {
         if (window.toastError) {
           toastError(
             interactionT("post.reactions.notFound", {}, "Content not found"),
@@ -74,9 +137,9 @@ const InteractionModule = (function () {
         }
         return;
       }
-      if (!res.ok) throw new Error("Load failed");
+      if (!pageResult?.ok) throw new Error("Load failed");
 
-      const data = await res.json();
+      const data = pageResult.data;
       if (!data) return;
       if (!data.totalItems || data.totalItems === 0) {
         if (window.toastInfo) {
@@ -109,7 +172,7 @@ const InteractionModule = (function () {
       if (listContainer) listContainer.innerHTML = "";
 
       // 4. Handle rendering first page and state update
-      _handleDataResponse(data, listContainer);
+      _handleDataResponse(data, listContainer, true);
     } catch (error) {
       console.error(error);
       if (window.toastError) {
@@ -137,10 +200,9 @@ const InteractionModule = (function () {
     if (loader) loader.style.display = "flex";
 
     try {
-      const res = await _fetchPage(id, page);
-      if (!res.ok) throw new Error("Load more failed");
-      const data = await res.json();
-      _handleDataResponse(data, listContainer);
+      const pageResult = await fetchVisibleReactPage(id, page);
+      if (!pageResult?.ok) throw new Error("Load more failed");
+      _handleDataResponse(pageResult.data, listContainer, false);
     } catch (error) {
       console.error(error);
       if (window.toastError) {
@@ -160,23 +222,34 @@ const InteractionModule = (function () {
   /**
    * Process data response, update state, and handle loader UI
    */
-  function _handleDataResponse(data, container) {
-    renderReactList(data.items, container);
+  function _handleDataResponse(data, container, replace = false) {
+    const normalized = normalizePagedResponse(data, currentPage || 1);
+    const visibleItems = normalized.items;
 
-    currentPage = data.page;
-    hasNextPage = data.hasNextPage ?? data.page < data.totalPages;
-    if (Number.isFinite(Number(data.totalItems))) {
-      currentTotalCount = Number(data.totalItems);
+    if (replace && container) {
+      container.innerHTML = "";
+    }
+
+    if (visibleItems.length > 0) {
+      renderReactList(visibleItems, container);
+    } else if (replace && container) {
+      renderEmptyReactState(container);
+    }
+
+    currentPage = normalized.page;
+    hasNextPage = normalized.hasNextPage;
+    if (Number.isFinite(Number(normalized.totalItems))) {
+      currentTotalCount = Number(normalized.totalItems);
     }
 
     const loader = document.getElementById("interactionLoader");
-    if (loader) {
+    if (loader && container) {
       // Keep loader at the bottom
       container.appendChild(loader);
       loader.style.display = hasNextPage ? "flex" : "none";
     }
 
-    if (hasNextPage) {
+    if (hasNextPage && visibleItems.length > 0) {
       checkNeedsMoreReacts(targetId);
     }
   }
