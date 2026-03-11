@@ -1089,11 +1089,40 @@
     // 3. update feed follow buttons
     if (hasRelationState) {
       updateFeedButtons(normalizedAccountId, relation, document);
+      updateSuggestionButtons(normalizedAccountId, relation, document);
+      global.FollowSuggestionsModule?.patchRelationState?.(
+        normalizedAccountId,
+        relation,
+      );
       if (global.PageCache && PageCache.has("home")) {
         const homeCache = PageCache.get("home");
         if (homeCache?.fragment) {
           updateFeedButtons(normalizedAccountId, relation, homeCache.fragment);
+          updateSuggestionButtons(
+            normalizedAccountId,
+            relation,
+            homeCache.fragment,
+          );
         }
+      }
+
+      if (global.PageCache && typeof PageCache.getKeys === "function") {
+        PageCache.getKeys().forEach((cacheKey) => {
+          if (!cacheKey || cacheKey === "home" || !global.RouteHelper?.parseHash)
+            return;
+
+          const parsed = global.RouteHelper.parseHash(cacheKey);
+          if (parsed?.path !== "/suggestions") return;
+
+          const cached = PageCache.get(cacheKey);
+          if (cached?.fragment) {
+            updateSuggestionButtons(
+              normalizedAccountId,
+              relation,
+              cached.fragment,
+            );
+          }
+        });
       }
     }
 
@@ -1210,6 +1239,29 @@
       } else {
         followBtn.onclick = () => FollowModule.followUser(accountId, followBtn);
       }
+    });
+  }
+
+  function updateSuggestionButtons(normalizedAccountId, relation, root = document) {
+    if (!root) return;
+
+    const cards = root.querySelectorAll("[data-follow-suggestion-account-id]");
+    cards.forEach((card) => {
+      const cardAccountId = normalizeAccountId(
+        card.getAttribute("data-follow-suggestion-account-id") ||
+          card.getAttribute("data-account-id"),
+      );
+      if (cardAccountId !== normalizedAccountId) return;
+
+      const actionBtn = card.querySelector(".follow-btn");
+      if (!actionBtn) return;
+
+      const rawAccountId =
+        card.getAttribute("data-follow-suggestion-account-id") ||
+        card.getAttribute("data-account-id") ||
+        normalizedAccountId;
+
+      applyStandardFollowButton(actionBtn, relation, rawAccountId);
     });
   }
 

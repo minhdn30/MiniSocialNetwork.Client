@@ -15,4 +15,8 @@ async function loadHome() {
   if (window.initFeed) {
     initFeed();
   }
+
+  if (window.FollowSuggestionsModule?.initHomeRail) {
+    await window.FollowSuggestionsModule.initHomeRail();
+  }
 }

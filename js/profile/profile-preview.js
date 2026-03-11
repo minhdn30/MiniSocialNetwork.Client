@@ -508,8 +508,19 @@ function hidePreview() {
 }
 window.hidePreview = hidePreview;
 
+function getExplicitProfilePreviewTarget(target) {
+  if (!target || typeof target.closest !== "function") return null;
+
+  return target.closest("[data-profile-preview-id]");
+}
+
 function isProfilePreviewTrigger(target) {
   if (!target || typeof target.closest !== "function") return false;
+
+  const explicitPreviewTarget = getExplicitProfilePreviewTarget(target);
+  if (explicitPreviewTarget) {
+    return true;
+  }
 
   const strictPostHeaderContext = target.closest(
     ".post-header .post-user[data-account-id], #postDetailModal .detail-header .post-user[data-account-id]",
@@ -550,6 +561,11 @@ function isProfilePreviewTrigger(target) {
 }
 
 function resolvePreviewAccountId(target) {
+  const explicitPreviewTarget = getExplicitProfilePreviewTarget(target);
+  if (explicitPreviewTarget?.dataset?.profilePreviewId) {
+    return explicitPreviewTarget.dataset.profilePreviewId;
+  }
+
   // post-tag-name carries its own data-account-id (tagged user, not post author)
   const tagNameEl = target.closest(".post-tag-name");
   if (tagNameEl && tagNameEl.dataset.accountId) {
@@ -623,6 +639,11 @@ function initProfilePreview() {
   if (isTouchDevice) {
     // Mobile: Click to show preview
     document.addEventListener("click", async (e) => {
+      if (getExplicitProfilePreviewTarget(e.target)) {
+        hidePreview();
+        return;
+      }
+
       if (!isProfilePreviewTrigger(e.target)) {
         // Click outside - hide preview
         if (!e.target.closest("#profile-preview")) {

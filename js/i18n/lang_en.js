@@ -2813,6 +2813,37 @@
         requestSent: "Follow request sent",
         unfollowed: "Unfollowed",
       },
+      suggestions: {
+        actions: {
+          viewMore: "View More",
+        },
+        labels: {
+          chattedBefore: "You chatted before",
+          followedByOne: "Followed by {name}",
+          followedByOneAndOthers: "Followed by {name} and {count} others",
+          followedByTwo: "Followed by {first} and {second}",
+          followedByTwoAndOthers:
+            "Followed by {first}, {second} and {count} others",
+          followsYou: "Follows you",
+          mutualFollows: "{count} mutual follows",
+          suggestedForYou: "Suggested for you",
+        },
+        home: {
+          title: "Suggested for you",
+        },
+        page: {
+          title: "Suggested for you",
+        },
+        empty: {
+          title: "No suggestions right now",
+          description:
+            "We will show more people here when your network grows",
+        },
+        error: {
+          title: "Couldn't load suggestions",
+          description: "Please try again in a moment",
+        },
+      },
     },
     notifications: {
       actions: {

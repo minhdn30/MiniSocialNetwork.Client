@@ -2827,6 +2827,38 @@
         requestSent: "Đã gửi yêu cầu theo dõi",
         unfollowed: "Đã bỏ theo dõi",
       },
+      suggestions: {
+        actions: {
+          viewMore: "Xem thêm",
+        },
+        labels: {
+          chattedBefore: "Từng trò chuyện với nhau",
+          followedByOne: "Được {name} theo dõi",
+          followedByOneAndOthers:
+            "Được {name} và {count} người khác theo dõi",
+          followedByTwo: "Được {first} và {second} theo dõi",
+          followedByTwoAndOthers:
+            "Được {first}, {second} và {count} người khác theo dõi",
+          followsYou: "Đang theo dõi bạn",
+          mutualFollows: "{count} người theo dõi chung",
+          suggestedForYou: "Gợi ý cho bạn",
+        },
+        home: {
+          title: "Gợi ý cho bạn",
+        },
+        page: {
+          title: "Gợi ý cho bạn",
+        },
+        empty: {
+          title: "Hiện chưa có gợi ý",
+          description:
+            "Khi mạng lưới của bạn mở rộng, gợi ý sẽ hiện ở đây",
+        },
+        error: {
+          title: "Không thể tải gợi ý",
+          description: "Vui lòng thử lại sau ít phút",
+        },
+      },
     },
     notifications: {
       actions: {
