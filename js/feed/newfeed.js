@@ -5,8 +5,9 @@
   let isLoading = false;
   let hasMore = true;
 
-  let cursorCreatedAt = null;
-  let cursorPostId = null;
+  let cursorToken = null;
+  let legacyCursorCreatedAt = null;
+  let legacyCursorPostId = null;
 
   const LIMIT = APP_CONFIG.NEWSFEED_LIMIT;
   const feedT = (key, params = {}, fallback = "") =>
@@ -20,9 +21,9 @@
       console.warn("Feed DOM not ready");
       return;
     }
-    
+
     // If we are restoring state and have content, don't reset
-    if (!shouldReload && feedContainer.children.length > 0 && cursorCreatedAt) {
+    if (!shouldReload && feedContainer.children.length > 0) {
         console.log("Restoring feed state...");
         return;
     }
@@ -30,19 +31,22 @@
     // reset state khi vào lại home
     isLoading = false;
     hasMore = true;
-    cursorCreatedAt = null;
-    cursorPostId = null;
+    cursorToken = null;
+    legacyCursorCreatedAt = null;
+    legacyCursorPostId = null;
 
     // Register state hooks for PageCache
     window.getPageData = () => ({
-        cursorCreatedAt,
-        cursorPostId,
+        cursorToken,
+        legacyCursorCreatedAt,
+        legacyCursorPostId,
         hasMore
     });
     window.setPageData = (data) => {
         if (!data) return;
-        cursorCreatedAt = data.cursorCreatedAt;
-        cursorPostId = data.cursorPostId;
+        cursorToken = data.cursorToken || null;
+        legacyCursorCreatedAt = data.legacyCursorCreatedAt || null;
+        legacyCursorPostId = data.legacyCursorPostId || null;
         hasMore = data.hasMore;
     };
 
@@ -61,18 +65,34 @@
     }
 
     try {
-      const res = await API.Posts.getFeed(LIMIT, cursorCreatedAt, cursorPostId);
+      let res;
+      if (cursorToken) {
+        res = await API.Posts.getFeed(LIMIT, cursorToken);
+      } else if (legacyCursorCreatedAt && legacyCursorPostId) {
+        res = await API.Posts.getFeed(LIMIT, legacyCursorCreatedAt, legacyCursorPostId);
+      } else {
+        res = await API.Posts.getFeed(LIMIT);
+      }
 
       if (!res.ok) throw new Error("Load feed failed");
 
       const data = await res.json();
+      const nextCursor = data?.nextCursor || null;
 
       renderFeed(data.items);
 
-      if (data.nextCursor) {
-        cursorCreatedAt = data.nextCursor.createdAt;
-        cursorPostId = data.nextCursor.postId;
+      if (nextCursor?.token) {
+        cursorToken = nextCursor.token;
+        legacyCursorCreatedAt = null;
+        legacyCursorPostId = null;
+      } else if (nextCursor?.createdAt && nextCursor?.postId) {
+        cursorToken = null;
+        legacyCursorCreatedAt = nextCursor.createdAt;
+        legacyCursorPostId = nextCursor.postId;
       } else {
+        cursorToken = null;
+        legacyCursorCreatedAt = null;
+        legacyCursorPostId = null;
         hasMore = false;
       }
     } catch (err) {
@@ -85,13 +105,37 @@
 
   function renderFeed(posts) {
     if (!feedContainer) return;
-    
+
+    const existingPostIds = collectExistingPostIds();
+
     posts.forEach((post) => {
+      const postId = normalizePostId(post?.postId);
+      if (!postId || existingPostIds.has(postId)) {
+        return;
+      }
+
+      existingPostIds.add(postId);
       const postEl = createPostElement(post);
       feedContainer.appendChild(postEl);
     });
 
     if (window.lucide) lucide.createIcons();
+  }
+
+  function normalizePostId(value) {
+    return (value || "").toString().trim().toLowerCase();
+  }
+
+  function collectExistingPostIds() {
+    if (!feedContainer) {
+      return new Set();
+    }
+
+    return new Set(
+      Array.from(feedContainer.querySelectorAll("[data-post-id]"))
+        .map((postEl) => normalizePostId(postEl.getAttribute("data-post-id")))
+        .filter(Boolean),
+    );
   }
 
   function normalizeAccountId(value) {
@@ -153,8 +197,8 @@
                   <span class="post-tag-summary hidden"></span>
                 </div>
                 <div class="post-meta">
-                  <span class="post-time" 
-                        title="${PostUtils.formatFullDateTime(post.createdAt)}" 
+                  <span class="post-time"
+                        title="${PostUtils.formatFullDateTime(post.createdAt)}"
                         onclick="openPostDetail('${post.postId}', '${post.postCode}')">${PostUtils.timeAgo(post.createdAt)}</span>
                   <span>•</span>
                   ${PostUtils.renderPrivacyBadge(post.privacy)}
@@ -182,7 +226,7 @@
           </div>
 
           <div class="post-caption"></div>
-          
+
           ${renderMedias(post.medias, post.postId, post.postCode)}
 
           <div class="post-actions">
@@ -190,7 +234,7 @@
               <div class="action-item react-btn"
         data-post-id="${post.postId}"
         data-reacted="${post.isReactedByCurrentUser}">
-       
+
     <i data-lucide="heart"
        class="react-icon ${post.isReactedByCurrentUser ? "reacted" : ""} hover-scale-sm">
     </i>
@@ -226,7 +270,7 @@
           mediaSlider.classList.add("fit-contain");
         }
       }
-      
+
       initMediaSlider(postEl);
       setupMediaLoading(postEl);
       applyDominantColors(postEl);
@@ -238,7 +282,7 @@
       if (tagSummaryEl && window.PostUtils) {
         PostUtils.applyPostTagSummary(tagSummaryEl, post);
       }
-      
+
       return postEl;
   }
 
@@ -282,16 +326,17 @@
 
   function prependPostToFeed(post) {
       if (!feedContainer) return;
-      
+
       // Check if post already exists to avoid duplicates (e.g. from SignalR)
-      if (document.querySelector(`.post[data-post-id="${post.postId}"]` || `.post[data-post-id="${post.postId.toLowerCase()}"]`)) {
+      const normalizedPostId = normalizePostId(post?.postId);
+      if (!normalizedPostId || collectExistingPostIds().has(normalizedPostId)) {
           return;
       }
 
       const postEl = createPostElement(post);
       postEl.classList.add("post-new-fade-in"); // Add animation class
       feedContainer.prepend(postEl);
-      
+
       if (window.lucide) lucide.createIcons();
   }
 

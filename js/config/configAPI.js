@@ -676,11 +676,26 @@
     },
 
     Posts: {
-      getFeed: (limit, cursorCreatedAt, cursorPostId) => {
+      getFeed(limit, cursorTokenOrCreatedAt = null, cursorPostId = null) {
         let url = `/Posts/feed?limit=${limit}`;
-        if (cursorCreatedAt && cursorPostId) {
-          url += `&cursorCreatedAt=${encodeURIComponent(cursorCreatedAt)}&cursorPostId=${cursorPostId}`;
+
+        if (arguments.length >= 3) {
+          const safeCursorCreatedAt = (cursorTokenOrCreatedAt || "").toString().trim();
+          const safeCursorPostId = (cursorPostId || "").toString().trim();
+
+          if (safeCursorCreatedAt && safeCursorPostId) {
+            url += `&cursorCreatedAt=${encodeURIComponent(safeCursorCreatedAt)}&cursorPostId=${encodeURIComponent(safeCursorPostId)}`;
+          }
+
+          return apiFetch(url);
         }
+
+        url += `&cursorMode=token`;
+        const safeCursorToken = (cursorTokenOrCreatedAt || "").toString().trim();
+        if (safeCursorToken) {
+          url += `&cursorToken=${encodeURIComponent(safeCursorToken)}`;
+        }
+
         return apiFetch(url);
       },
       getById: (postId) => apiFetch(`/Posts/${postId}`),
