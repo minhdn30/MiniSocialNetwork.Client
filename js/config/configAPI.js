@@ -1040,6 +1040,14 @@
           url += `&sortByCreatedASC=${request.sortByCreatedASC}`;
         return apiFetch(url);
       },
+      getSuggestions: (request = {}) => {
+        const safePage = Math.max(1, Number(request.page) || 1);
+        const safePageSize = Math.max(1, Number(request.pageSize) || 12);
+        const safeSurface = (request.surface || "page").toString().trim() || "page";
+        return apiFetch(
+          `/Follows/suggestions?page=${encodeURIComponent(safePage)}&pageSize=${encodeURIComponent(safePageSize)}&surface=${encodeURIComponent(safeSurface)}`,
+        );
+      },
     },
 
     Blocks: {

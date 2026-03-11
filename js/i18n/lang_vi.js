@@ -2827,6 +2827,26 @@
         requestSent: "Đã gửi yêu cầu theo dõi",
         unfollowed: "Đã bỏ theo dõi",
       },
+      suggestions: {
+        actions: {
+          viewMore: "Xem thêm",
+        },
+        home: {
+          title: "Gợi ý cho bạn",
+        },
+        page: {
+          title: "Gợi ý cho bạn",
+        },
+        empty: {
+          title: "Hiện chưa có gợi ý",
+          description:
+            "Khi mạng lưới của bạn mở rộng, gợi ý sẽ hiện ở đây",
+        },
+        error: {
+          title: "Không thể tải gợi ý",
+          description: "Vui lòng thử lại sau ít phút",
+        },
+      },
     },
     notifications: {
       actions: {

@@ -8,6 +8,7 @@ const APP_ROUTE_PATHS = AppRouteHelper?.PATHS || {
   HOME: "/",
   ERROR_404: "/404",
   SEARCH: "/search",
+  SUGGESTIONS: "/suggestions",
   EXPLORE: "/explore",
   REELS: "/reels",
   CHAT: "/chat",
@@ -943,6 +944,7 @@ function getCacheKey(hash) {
     if (appIsAccountSettingsPath(parsed.path)) return appBuildAccountSettingsCacheKey(parsed.path);
     if (appIsProfilePath(parsed.path)) return appBuildProfileCacheKey(hash);
     if (appIsChatPath(parsed.path)) return "#/chat";
+    if (parsed.path === APP_ROUTE_PATHS.SUGGESTIONS) return "#/suggestions";
     return hash;
 }
 
@@ -1305,6 +1307,11 @@ async function router() {
       loadHome();
       break;
 
+    case APP_ROUTE_PATHS.SUGGESTIONS:
+      loadSuggestionsPage();
+      setActiveSidebar(APP_ROUTE_PATHS.ROOT);
+      return;
+
     case APP_ROUTE_PATHS.SEARCH:
       loadPlaceholder(appT("common.navigation.search"), "search");
       break;
@@ -1374,6 +1381,13 @@ async function loadChatPage() {
     await loadPage("chat/chat-page");
     if (window.initChatPage) {
         window.initChatPage();
+    }
+}
+
+async function loadSuggestionsPage() {
+    await loadPage("feed/suggestions");
+    if (window.FollowSuggestionsModule?.initPage) {
+        await window.FollowSuggestionsModule.initPage();
     }
 }
 

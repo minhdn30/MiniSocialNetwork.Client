@@ -2813,6 +2813,26 @@
         requestSent: "Follow request sent",
         unfollowed: "Unfollowed",
       },
+      suggestions: {
+        actions: {
+          viewMore: "View More",
+        },
+        home: {
+          title: "Suggested for you",
+        },
+        page: {
+          title: "Suggested for you",
+        },
+        empty: {
+          title: "No suggestions right now",
+          description:
+            "We will show more people here when your network grows",
+        },
+        error: {
+          title: "Couldn't load suggestions",
+          description: "Please try again in a moment",
+        },
+      },
     },
     notifications: {
       actions: {

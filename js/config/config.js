@@ -168,6 +168,9 @@
     MAX_PROFILE_PHONE_LENGTH: 15, // Số ký tự tối đa cho Phone
     MAX_PROFILE_ADDRESS_LENGTH: 100, // Số ký tự tối đa cho Address
     FOLLOW_LIST_PAGE_SIZE: 15, // Số lượng người trong danh sách followers/following load mỗi lần
+    FOLLOW_SUGGESTIONS_HOME_PAGE_SIZE: 8, // Số lượng gợi ý follow hiển thị trên home
+    FOLLOW_SUGGESTIONS_PAGE_SIZE: 18, // Số lượng gợi ý follow tải mỗi lần ở trang suggestions
+    FOLLOW_SUGGESTIONS_MAX_PAGES: 3, // Giới hạn số lần tải thêm từ FE ở trang suggestions
     BLOCKED_USERS_PAGE_SIZE: 20, // Số lượng tài khoản bị chặn load mỗi lần
     CONVERSATIONS_PAGE_SIZE: 20, // Số lượng cuộc trò chuyện load mỗi lần
     CHATPAGE_MESSAGES_PAGE_SIZE: 15, // Số lượng tin nhắn load mỗi lần tại trang Chat Page

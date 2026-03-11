@@ -7,14 +7,103 @@
   align-items: flex-start;
   width: 100%;
   transition: all var(--transition-normal);
-  overflow-x: hidden
+  overflow-x: hidden;
 }
 
+.home-main-layout {
+  width: min(100%, 1008px);
+  display: grid;
+  grid-template-columns: minmax(0, 600px) minmax(320px, 380px);
+  gap: 28px;
+  align-items: flex-start;
+  margin-top: 20px;
+  margin-left: 0;
+}
+
+.home-primary-column {
+  width: 100%;
+  max-width: 600px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-left: 20px;
+}
+
+.home-primary-column > #story-section {
+  width: 100%;
+  max-width: 600px;
+  min-width: 0;
+}
+
+.home-primary-column > #story-section .stories-shell {
+  width: 100%;
+}
+
+.home-feed-shell,
 #feed-section {
   width: 100%;
   max-width: 600px;
-  margin-top: 20px;
-  margin-left: 100px; /* Chỉ đẩy riêng khối Feed lùi vào (khoảng dưới story thứ 2) */
+  min-width: 0;
+}
+
+.home-suggestions-shell {
+  width: 100%;
+  min-width: 0;
+}
+
+.home-suggestions-shell .follow-suggestions-panel {
+  border: none;
+}
+
+.home-suggestions-shell .follow-suggestions-panel-head {
+  border-bottom: none;
+}
+
+.home-suggestions-shell .follow-suggestions-panel-body {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.home-suggestions-shell .follow-suggestion-row,
+.home-suggestions-shell .follow-suggestion-skeleton-item {
+  border-bottom: none;
+}
+
+.home-suggestions-shell .follow-suggestion-row .action-box {
+  width: 140px;
+}
+
+.home-suggestions-shell .follow-suggestion-row .follow-btn {
+  width: 140px;
+  height: 30px;
+  font-size: 13px;
+}
+
+.home-suggestions-shell .follow-suggestion-skeleton-btn {
+  width: 140px;
+  height: 30px;
+}
+
+@media (max-width: 1200px) {
+  .home-container {
+    padding-left: 40px;
+  }
+
+  .home-main-layout {
+    margin-left: 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  .home-primary-column {
+    max-width: 600px;
+    margin-left: 0;
+  }
+
+  .home-suggestions-shell {
+    max-width: 600px;
+  }
 }
 
 /* Responsive cho Mobile & Tablet */
@@ -25,19 +114,29 @@
     padding: 10px 0;
   }
 
-  #feed-section {
+  .home-main-layout {
+    gap: 14px;
     margin-top: 10px;
+  }
+
+  #story-section,
+  #feed-section,
+  .home-suggestions-shell {
     padding: 0 5px;
   }
 }
-
 
 /* Khi Chat Sidebar mở, lùi sát lại để không bị quá trống */
 body.chat-sidebar-open .home-container {
   padding-left: 20px;
 }
 
-body.chat-sidebar-open #feed-section {
+body.chat-sidebar-open .home-main-layout {
+  width: 100%;
+  margin-left: 0;
+}
+
+body.chat-sidebar-open .home-primary-column {
   margin-left: 0;
 }
 
@@ -46,6 +145,11 @@ body.notifications-panel-open .home-container {
   padding-left: 20px;
 }
 
-body.notifications-panel-open #feed-section {
+body.notifications-panel-open .home-main-layout {
+  width: 100%;
+  margin-left: 0;
+}
+
+body.notifications-panel-open .home-primary-column {
   margin-left: 0;
 }
