@@ -252,7 +252,6 @@
 .media-slider .nav {
   position: absolute;
   top: 50%;
-  transform: translateY(-50%);
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -265,14 +264,31 @@
   padding: 0;
   cursor: pointer;
   z-index: 10;
+  /* Hover effect logic - Reference from create-post-modal step 2 */
+  opacity: 0;
+  visibility: hidden;
+  transition: all var(--transition-normal);
+}
+
+.media-slider .nav:hover {
+  background: var(--text-secondary);
 }
 
 .media-slider .prev {
   left: 10px;
+  transform: translateY(-50%) translateX(-8px);
 }
 
 .media-slider .next {
   right: 10px;
+  transform: translateY(-50%) translateX(8px);
+}
+
+.media-slider:hover .nav,
+.media-slider:focus-within .nav {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) translateX(0);
 }
 
 .media-slider .nav i,
@@ -460,6 +476,13 @@
 
 /* Touch devices - Better tap targets */
 @media (hover: none) and (pointer: coarse) {
+  /* Navigation arrows should be visible on touch devices as there is no hover */
+  .media-slider .nav {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(-50%) translateX(0);
+  }
+
   .post-more:hover {
     opacity: 1;
     transform: none;
