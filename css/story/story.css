@@ -1,21 +1,36 @@
 /* Stories container */
 .stories-shell {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
+  --story-feed-block-padding: 16px;
+  --story-feed-inline-padding: 12px;
+  --story-feed-leading-padding: calc(
+    var(--story-feed-inline-padding) -
+      ((var(--story-feed-item-width) - var(--story-feed-avatar-wrapper-size)) / 2)
+  );
+  --story-feed-item-width: 82px;
+  --story-feed-gap: 16px;
+  --story-feed-avatar-wrapper-size: 72px;
+  --story-feed-ring-avatar-size: 60px;
+  --story-feed-name-max-width: 82px;
+  --story-feed-name-font-size: 13px;
+  --story-feed-add-btn-size: 32px;
+  --story-feed-add-icon-size: 18px;
 }
 
 .stories {
   display: flex;
-  gap: 16px;
-  padding: 16px 20px;
+  gap: var(--story-feed-gap);
+  padding: var(--story-feed-block-padding) var(--story-feed-inline-padding);
+  padding-left: var(--story-feed-leading-padding);
   overflow-x: auto;
   overflow-y: hidden;
   scroll-behavior: smooth;
 }
 
 .stories-shell-scrollable .stories {
-  padding-left: 54px;
-  padding-right: 54px;
+  padding-left: var(--story-feed-leading-padding);
+  padding-right: var(--story-feed-inline-padding);
 }
 
 .stories::-webkit-scrollbar {
@@ -24,7 +39,7 @@
 
 .story-feed-nav {
   position: absolute;
-  top: 52px;
+  top: var(--story-feed-nav-top, 52px);
   transform: translateY(-50%);
   z-index: 6;
   width: 34px;
@@ -55,11 +70,11 @@
 }
 
 .story-feed-nav-prev {
-  left: 10px;
+  left: -28px;
 }
 
 .story-feed-nav-next {
-  right: 10px;
+  right: -28px;
 }
 
 .story-feed-nav.is-hidden {
@@ -82,7 +97,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 82px;
+  width: var(--story-feed-item-width);
   cursor: pointer;
 }
 
@@ -121,9 +136,9 @@
 /* Story name */
 .story-name {
   margin-top: 8px;
-  font-size: 13px;
+  font-size: var(--story-feed-name-font-size);
   color: var(--text-secondary);
-  max-width: 82px;
+  max-width: var(--story-feed-name-max-width);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -226,7 +241,6 @@
   background: var(--story-ring-seen-color);
 }
 
-
 /* ─── Story Feed: Scroll enhancements ─── */
 .stories {
   -webkit-overflow-scrolling: touch;
@@ -243,15 +257,15 @@
 /* ─── Story Feed: Avatar wrapper (holds ring + add btn) ─── */
 .story-avatar-wrapper {
   position: relative;
-  width: 72px;
-  height: 72px;
+  width: var(--story-feed-avatar-wrapper-size);
+  height: var(--story-feed-avatar-wrapper-size);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .story-avatar-wrapper .post-avatar-ring {
-  --_avatar: 60px;
+  --_avatar: var(--story-feed-ring-avatar-size);
   cursor: pointer;
 }
 
@@ -263,6 +277,345 @@
 /* ─── Story Feed: Add button Overlay (Centered, no-story state) ─── */
 .story-own {
   cursor: pointer;
+}
+
+.story-quick-mood {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+}
+
+.story-quick-mood:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.story-quick-mood-wrapper {
+  isolation: isolate;
+}
+
+.story-quick-mood-ring {
+  width: calc(var(--story-feed-ring-avatar-size) + 12px);
+  height: calc(var(--story-feed-ring-avatar-size) + 12px);
+  border-radius: 50%;
+  padding: 2px;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(
+    from 210deg,
+    color-mix(in srgb, var(--story-quick-mood-color) 80%, white 20%) 0deg,
+    color-mix(in srgb, var(--story-quick-mood-color) 90%, white 10%) 120deg,
+    color-mix(in srgb, var(--story-quick-mood-color) 78%, black 22%) 240deg,
+    color-mix(in srgb, var(--story-quick-mood-color) 84%, white 16%) 360deg
+  );
+  box-shadow:
+    inset 0 0 0 1px color-mix(
+      in srgb,
+      var(--story-quick-mood-color) 18%,
+      transparent
+    ),
+    0 10px 18px color-mix(in srgb, var(--story-quick-mood-color) 10%, transparent);
+  transition:
+    transform var(--transition-normal),
+    box-shadow var(--transition-normal),
+    filter var(--transition-normal);
+}
+
+.story-quick-mood-core {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid var(--story-ring-gap-color);
+  background: color-mix(
+    in srgb,
+    var(--story-quick-mood-color) 16%,
+    var(--bg-primary)
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    transform var(--transition-normal),
+    background var(--transition-normal),
+    border-color var(--transition-normal);
+}
+
+.story-quick-mood-emoji,
+.story-quick-mood-plus {
+  line-height: 1;
+  user-select: none;
+}
+
+.story-quick-mood-emoji {
+  font-size: clamp(24px, calc(var(--story-feed-ring-avatar-size) * 0.42), 34px);
+  transform: translateY(-1px);
+}
+
+.story-quick-mood-plus {
+  font-size: clamp(26px, calc(var(--story-feed-ring-avatar-size) * 0.5), 38px);
+  font-weight: 300;
+  color: var(--accent-primary);
+  transform: translateY(-2px);
+}
+
+.story-quick-mood .story-name {
+  color: var(--text-secondary);
+}
+
+.story-quick-mood:hover .story-quick-mood-ring,
+.story-quick-mood:focus-visible .story-quick-mood-ring,
+.story-quick-mood-more.is-active .story-quick-mood-ring {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 0 0 1px color-mix(
+      in srgb,
+      var(--story-quick-mood-color) 28%,
+      transparent
+    ),
+    0 14px 22px color-mix(
+      in srgb,
+      var(--story-quick-mood-color) 14%,
+      transparent
+    );
+  filter: saturate(1.06);
+}
+
+.story-quick-mood:hover .story-quick-mood-core,
+.story-quick-mood:focus-visible .story-quick-mood-core,
+.story-quick-mood-more.is-active .story-quick-mood-core {
+  background: color-mix(
+    in srgb,
+    var(--story-quick-mood-color) 22%,
+    var(--bg-primary)
+  );
+}
+
+.story-quick-mood:focus-visible {
+  outline: none;
+}
+
+.story-quick-mood:focus-visible .story-quick-mood-ring {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--accent-primary) 18%, transparent),
+    0 14px 22px color-mix(in srgb, var(--story-quick-mood-color) 14%, transparent);
+}
+
+.story-quick-mood-more .story-quick-mood-ring {
+  box-sizing: border-box;
+  background: transparent;
+  border: 2px dashed var(--border-secondary, var(--border-primary, var(--border-color)));
+  box-shadow: none;
+  filter: none;
+}
+
+.story-quick-mood-more .story-quick-mood-core {
+  background: var(--bg-secondary);
+  border: none;
+}
+
+.story-quick-mood-more .story-quick-mood-plus {
+  color: var(--text-secondary);
+  font-weight: 400;
+  transform: translateY(-1px);
+}
+
+.story-quick-mood-more:hover .story-quick-mood-ring,
+.story-quick-mood-more:focus-visible .story-quick-mood-ring,
+.story-quick-mood-more.is-active .story-quick-mood-ring {
+  border-color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 5%, transparent);
+  box-shadow: none;
+  filter: none;
+}
+
+.story-quick-mood-more:hover .story-quick-mood-core,
+.story-quick-mood-more:focus-visible .story-quick-mood-core,
+.story-quick-mood-more.is-active .story-quick-mood-core {
+  background: color-mix(
+    in srgb,
+    var(--accent-primary) 12%,
+    var(--bg-secondary)
+  );
+}
+
+.story-quick-mood-more:hover .story-quick-mood-plus,
+.story-quick-mood-more:focus-visible .story-quick-mood-plus,
+.story-quick-mood-more.is-active .story-quick-mood-plus {
+  color: var(--accent-primary);
+}
+
+.story-quick-mood-popover {
+  position: absolute;
+  top: calc(100% - 10px);
+  right: max(0px, calc(var(--story-feed-inline-padding) - 2px));
+  z-index: 8;
+  width: min(340px, calc(100vw - 32px));
+  padding-top: 14px;
+  --story-quick-mood-tail-left: 50%;
+}
+
+.story-quick-mood-popover::before {
+  content: none;
+}
+
+.story-quick-mood-popover::after {
+  content: none;
+}
+
+.story-quick-mood-popover-card {
+  position: relative;
+  z-index: 2;
+  border-radius: 18px;
+  border: 1px solid var(--border-primary, var(--border-color));
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-lg, 0 16px 36px rgba(0, 0, 0, 0.18));
+  overflow: visible;
+  isolation: isolate;
+}
+
+.story-quick-mood-popover-card::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: calc(var(--story-quick-mood-tail-left) - 10px);
+  width: 20px;
+  height: 20px;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-primary, var(--border-color));
+  border-left: 1px solid var(--border-primary, var(--border-color));
+  transform: rotate(45deg);
+  border-top-left-radius: 4px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.story-quick-mood-popover-card::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: calc(var(--story-quick-mood-tail-left) - 18px);
+  width: 36px;
+  height: 14px;
+  background: var(--bg-primary);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.story-quick-mood-popover-head {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid color-mix(
+    in srgb,
+    var(--border-primary, var(--border-color)) 72%,
+    transparent
+  );
+}
+
+.story-quick-mood-popover-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.story-quick-mood-popover-head p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.story-quick-mood-popover-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+}
+
+.story-quick-mood-option {
+  appearance: none;
+  border: 1px solid var(--border-primary, var(--border-color));
+  border-radius: 14px;
+  padding: 10px 11px;
+  background: var(--bg-primary);
+  color: inherit;
+  font: inherit;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  transition:
+    border-color var(--transition-normal),
+    background var(--transition-normal),
+    transform var(--transition-normal),
+    box-shadow var(--transition-normal);
+}
+
+.story-quick-mood-option:hover,
+.story-quick-mood-option:focus-visible {
+  border-color: color-mix(
+    in srgb,
+    var(--story-quick-mood-color) 34%,
+    var(--border-primary, var(--border-color))
+  );
+  background: color-mix(
+    in srgb,
+    var(--story-quick-mood-color) 7%,
+    var(--bg-primary)
+  );
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px color-mix(in srgb, var(--story-quick-mood-color) 10%, transparent);
+}
+
+.story-quick-mood-option:focus-visible {
+  outline: none;
+}
+
+.story-quick-mood-option:disabled {
+  opacity: 0.68;
+  cursor: default;
+  transform: none;
+  box-shadow: none;
+}
+
+.story-quick-mood-option-icon {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 21px;
+  background: color-mix(
+    in srgb,
+    var(--story-quick-mood-color) 18%,
+    var(--bg-secondary)
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--story-quick-mood-color) 14%, transparent);
+}
+
+.story-quick-mood-option-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.story-quick-mood-option-label {
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.story-quick-mood-option-text {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-secondary);
 }
 
 .story-own[data-has-stories="false"] .post-avatar {
@@ -281,8 +634,8 @@
 }
 
 .story-add-center-btn {
-  width: 32px;
-  height: 32px;
+  width: var(--story-feed-add-btn-size);
+  height: var(--story-feed-add-btn-size);
   border-radius: 50%;
   /* Glassmorphism Effect */
   background: rgba(255, 255, 255, 0.2);
@@ -309,8 +662,8 @@
 }
 
 .story-add-center-btn svg {
-  width: 18px;
-  height: 18px;
+  width: var(--story-feed-add-icon-size);
+  height: var(--story-feed-add-icon-size);
   display: block;
   color: white;
 }
@@ -368,8 +721,9 @@
   position: absolute;
   inset: 0;
   display: flex;
-  gap: 16px;
-  padding: 16px 20px;
+  gap: var(--story-feed-gap);
+  padding: var(--story-feed-block-padding) var(--story-feed-inline-padding);
+  padding-left: var(--story-feed-leading-padding);
   overflow: hidden;
   will-change: transform, opacity;
   transition:
@@ -378,12 +732,12 @@
 }
 
 .stories-shell-scrollable .stories-transition-overlay {
-  --stories-transition-clip-inline: 54px;
+  --stories-transition-clip-inline: 0px;
 }
 
 .stories-shell-scrollable .stories-transition-track {
-  padding-left: 54px;
-  padding-right: 54px;
+  padding-left: var(--story-feed-leading-padding);
+  padding-right: var(--story-feed-inline-padding);
 }
 
 @media (prefers-reduced-motion: reduce) {

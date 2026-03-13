@@ -1,4 +1,9 @@
 @media (max-width: 768px) {
+  .stories-shell {
+    --story-feed-inline-padding: 20px;
+    --story-feed-leading-padding: var(--story-feed-inline-padding);
+  }
+
   .post-avatar-ring {
     --_avatar: 32px;
   }
@@ -30,10 +35,101 @@
     padding-left: 20px;
     padding-right: 20px;
   }
+
+  .story-quick-mood-popover {
+    top: calc(100% - 8px);
+    left: 12px;
+    right: 12px;
+    width: auto;
+    padding-top: 12px;
+  }
+
+  .story-quick-mood-popover-card {
+    border-radius: 16px;
+  }
+
+  .story-quick-mood-popover-card::before {
+    top: -9px;
+    left: calc(var(--story-quick-mood-tail-left, 50%) - 9px);
+    width: 18px;
+    height: 18px;
+  }
+
+  .story-quick-mood-popover-card::after {
+    left: calc(var(--story-quick-mood-tail-left, 50%) - 16px);
+    width: 32px;
+    height: 12px;
+  }
+
+  .story-quick-mood-popover-grid {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .story-quick-mood-option {
+    min-height: 58px;
+    padding: 9px 10px;
+  }
+
+  .story-quick-mood-option-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 20px;
+  }
 }
 
 @media (max-width: 480px) {
   .post-avatar-ring {
     --_avatar: 28px;
+  }
+
+  .story-quick-mood-popover {
+    left: 10px;
+    right: 10px;
+    padding-top: 11px;
+  }
+
+  .story-quick-mood-popover-head {
+    padding: 12px 14px 8px;
+  }
+
+  .story-quick-mood-popover-card::before {
+    top: -8px;
+    left: calc(var(--story-quick-mood-tail-left, 50%) - 8px);
+    width: 16px;
+    height: 16px;
+  }
+
+  .story-quick-mood-popover-card::after {
+    left: calc(var(--story-quick-mood-tail-left, 50%) - 14px);
+    width: 28px;
+    height: 11px;
+  }
+
+  .story-quick-mood-popover-head h3 {
+    font-size: 14px;
+  }
+
+  .story-quick-mood-popover-head p {
+    font-size: 11px;
+  }
+
+  .story-quick-mood-popover-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 7px;
+    padding: 8px;
+  }
+
+  .story-quick-mood-option {
+    min-height: 54px;
+    padding: 8px 9px;
+  }
+
+  .story-quick-mood-option-label {
+    font-size: 12px;
+  }
+
+  .story-quick-mood-option-text {
+    font-size: 11px;
   }
 }

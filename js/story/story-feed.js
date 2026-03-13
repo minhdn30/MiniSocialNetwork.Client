@@ -3,14 +3,296 @@
 
   /* ─── author queue for story-list viewer ─── */
   const DEFAULT_FEED_INITIAL_LOAD_COUNT = 6;
-  const DEFAULT_FEED_LOAD_MORE_PAGE_SIZE = 30;
-  const DEFAULT_FEED_API_PAGE_SIZE = 30;
+  const DEFAULT_FEED_LOAD_MORE_PAGE_SIZE = 3;
+  const DEFAULT_FEED_API_PAGE_SIZE = 15;
   const DEFAULT_FEED_MIN_SKELETON_MS = 300;
+  const DEFAULT_FEED_ITEM_WIDTH_PX = 82;
+  const DEFAULT_FEED_GAP_PX = 16;
+  const DEFAULT_FEED_AVATAR_WRAPPER_SIZE_PX = 72;
+  const DEFAULT_FEED_RING_AVATAR_SIZE_PX = 60;
+  const DEFAULT_FEED_NAME_FONT_SIZE_PX = 13;
+  const DEFAULT_FEED_ADD_BTN_SIZE_PX = 32;
+  const DEFAULT_FEED_ADD_ICON_SIZE_PX = 18;
+  const DEFAULT_FEED_NAV_TOP_PX = 52;
+  const DEFAULT_FEED_FILL_MIN_COUNT = 5;
+  const DEFAULT_FEED_FILL_MIN_SCALE = 0.92;
+  const DEFAULT_FEED_FILL_MAX_SCALE = 1.22;
+  const STORY_FEED_SIZING_VARIABLES = [
+    "--story-feed-item-width",
+    "--story-feed-gap",
+    "--story-feed-avatar-wrapper-size",
+    "--story-feed-ring-avatar-size",
+    "--story-feed-name-max-width",
+    "--story-feed-name-font-size",
+    "--story-feed-add-btn-size",
+    "--story-feed-add-icon-size",
+    "--story-feed-nav-top",
+  ];
+  const QUICK_MOOD_STORY_CONFIG_FALLBACK = {
+    options: {
+      backgrounds: {
+        accent: {},
+      },
+      textColors: {
+        light: {},
+        ink: {},
+      },
+      fonts: {
+        modern: {},
+      },
+    },
+    defaults: {
+      backgroundColorKey: "accent",
+      textColorKey: "light",
+      fontTextKey: "modern",
+      fontSizePx: 32,
+    },
+  };
+  const STORY_QUICK_MOOD_PRESETS = [
+    {
+      id: "happy",
+      emoji: "😄",
+      accent: "#f59e0b",
+      backgroundKeys: ["sun", "mango", "lemon", "accent"],
+      textColorKeys: ["ink", "light"],
+    },
+    {
+      id: "sad",
+      emoji: "😢",
+      accent: "#6366f1",
+      backgroundKeys: ["royal", "midnight", "dusk", "accent"],
+      textColorKeys: ["light", "ink"],
+    },
+    {
+      id: "calm",
+      emoji: "😌",
+      accent: "#06b6d4",
+      backgroundKeys: ["sky", "aqua", "cloud", "accent"],
+      textColorKeys: ["ink", "light"],
+    },
+    {
+      id: "grateful",
+      emoji: "🙏",
+      accent: "#10b981",
+      backgroundKeys: ["emerald", "forest", "gold", "accent"],
+      textColorKeys: ["light", "ink"],
+    },
+    {
+      id: "excited",
+      emoji: "🤩",
+      accent: "#ec4899",
+      backgroundKeys: ["fuchsia", "neon", "berry", "accent"],
+      textColorKeys: ["light", "ink"],
+    },
+    {
+      id: "sleepy",
+      emoji: "😴",
+      accent: "#8b5cf6",
+      backgroundKeys: ["lavender", "twilight", "dusk", "accent"],
+      textColorKeys: ["light", "ink"],
+    },
+    {
+      id: "tired",
+      emoji: "🥱",
+      accent: "#64748b",
+      backgroundKeys: ["slate", "graphite", "charcoal", "accent"],
+      textColorKeys: ["light", "ink"],
+    },
+    {
+      id: "love",
+      emoji: "🥰",
+      accent: "#ef4444",
+      backgroundKeys: ["rose", "coral", "ruby", "accent"],
+      textColorKeys: ["light", "ink"],
+    },
+    {
+      id: "determined",
+      emoji: "😤",
+      accent: "#14b8a6",
+      backgroundKeys: ["lagoon", "forest", "emerald", "accent"],
+      textColorKeys: ["light", "ink"],
+    },
+    {
+      id: "chill",
+      emoji: "😎",
+      accent: "#0ea5e9",
+      backgroundKeys: ["ocean", "sky", "aqua", "accent"],
+      textColorKeys: ["light", "ink"],
+    },
+  ];
 
   function parsePositiveInt(value, fallbackValue) {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return fallbackValue;
     return parsed > 0 ? Math.trunc(parsed) : fallbackValue;
+  }
+
+  function parsePixelValue(value, fallbackValue = 0) {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : fallbackValue;
+  }
+
+  function clampNumber(value, minValue, maxValue) {
+    if (!Number.isFinite(value)) return minValue;
+    return Math.min(maxValue, Math.max(minValue, value));
+  }
+
+  function parseHexColor(value) {
+    const normalized =
+      typeof value === "string" ? value.trim().replace("#", "") : "";
+    if (!normalized) return null;
+    const hex =
+      normalized.length === 3
+        ? normalized
+            .split("")
+            .map((char) => char + char)
+            .join("")
+        : normalized;
+    if (!/^[0-9a-f]{6}$/i.test(hex)) return null;
+    return {
+      r: Number.parseInt(hex.slice(0, 2), 16),
+      g: Number.parseInt(hex.slice(2, 4), 16),
+      b: Number.parseInt(hex.slice(4, 6), 16),
+    };
+  }
+
+  function getRelativeLuminance(hexColor) {
+    const rgb = parseHexColor(hexColor);
+    if (!rgb) return null;
+    const toLinear = (channel) => {
+      const normalized = channel / 255;
+      return normalized <= 0.03928
+        ? normalized / 12.92
+        : Math.pow((normalized + 0.055) / 1.055, 2.4);
+    };
+    const r = toLinear(rgb.r);
+    const g = toLinear(rgb.g);
+    const b = toLinear(rgb.b);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+
+  function getContrastRatio(foregroundHex, backgroundHex) {
+    const foregroundLuminance = getRelativeLuminance(foregroundHex);
+    const backgroundLuminance = getRelativeLuminance(backgroundHex);
+    if (
+      !Number.isFinite(foregroundLuminance) ||
+      !Number.isFinite(backgroundLuminance)
+    ) {
+      return null;
+    }
+
+    const lighter = Math.max(foregroundLuminance, backgroundLuminance);
+    const darker = Math.min(foregroundLuminance, backgroundLuminance);
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
+  function resolveCssVariableValue(rawValue) {
+    const value = typeof rawValue === "string" ? rawValue.trim() : "";
+    if (!value || !value.startsWith("var(")) return value;
+
+    const match = value.match(
+      /^var\(\s*(--[^,\s)]+)\s*(?:,\s*([^)]+?)\s*)?\)$/i,
+    );
+    if (!match) return value;
+
+    const [, variableName, fallbackValue] = match;
+    const resolved = window
+      .getComputedStyle(document.documentElement)
+      .getPropertyValue(variableName)
+      .trim();
+
+    return resolved || (fallbackValue ? fallbackValue.trim() : "");
+  }
+
+  function normalizeCssColorToken(rawValue) {
+    const value = resolveCssVariableValue(rawValue);
+    if (!value || !document?.createElement) return "";
+
+    const probe = document.createElement("span");
+    probe.style.color = "";
+    probe.style.color = value;
+    return probe.style.color ? probe.style.color.trim() : "";
+  }
+
+  function parseCssColor(value) {
+    const normalized = normalizeCssColorToken(value);
+    if (!normalized) return null;
+
+    const rgbMatch = normalized.match(
+      /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*[\d.]+\s*)?\)$/i,
+    );
+    if (!rgbMatch) {
+      return parseHexColor(normalized);
+    }
+
+    return {
+      r: clampNumber(Number.parseFloat(rgbMatch[1]), 0, 255),
+      g: clampNumber(Number.parseFloat(rgbMatch[2]), 0, 255),
+      b: clampNumber(Number.parseFloat(rgbMatch[3]), 0, 255),
+    };
+  }
+
+  function getCssColorLuminance(value) {
+    const rgb = parseCssColor(value);
+    if (!rgb) return null;
+
+    const toLinear = (channel) => {
+      const normalized = channel / 255;
+      return normalized <= 0.03928
+        ? normalized / 12.92
+        : Math.pow((normalized + 0.055) / 1.055, 2.4);
+    };
+
+    const r = toLinear(rgb.r);
+    const g = toLinear(rgb.g);
+    const b = toLinear(rgb.b);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+
+  function getContrastRatioAgainstLuminance(foregroundHex, backgroundLuminance) {
+    const foregroundLuminance = getRelativeLuminance(foregroundHex);
+    if (
+      !Number.isFinite(foregroundLuminance) ||
+      !Number.isFinite(backgroundLuminance)
+    ) {
+      return null;
+    }
+
+    const lighter = Math.max(foregroundLuminance, backgroundLuminance);
+    const darker = Math.min(foregroundLuminance, backgroundLuminance);
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
+  function extractBackgroundColorLuminances(backgroundCss, fallbackColor) {
+    const cssText = typeof backgroundCss === "string" ? backgroundCss : "";
+    const resolvedCssText = cssText.replace(
+      /var\(\s*(--[^,\s)]+)\s*(?:,\s*([^)]+?)\s*)?\)/gi,
+      (_, variableName, fallbackValue) => {
+        const resolved = window
+          .getComputedStyle(document.documentElement)
+          .getPropertyValue(variableName)
+          .trim();
+        return resolved || (fallbackValue ? fallbackValue.trim() : "");
+      },
+    );
+
+    const colorTokens = resolvedCssText.match(
+      /#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})\b|rgba?\([^)]+\)/gi,
+    );
+    const luminances = (colorTokens || [])
+      .map((token) => getCssColorLuminance(token))
+      .filter((value) => Number.isFinite(value));
+
+    if (luminances.length > 0) {
+      return luminances;
+    }
+
+    const fallbackLuminance = getCssColorLuminance(fallbackColor);
+    return Number.isFinite(fallbackLuminance) ? [fallbackLuminance] : [];
+  }
+
+  function toPixelValue(value) {
+    return `${Math.max(0, value).toFixed(3)}px`;
   }
 
   const FEED_INITIAL_LOAD_COUNT = parsePositiveInt(
@@ -40,6 +322,9 @@
   let feedLanguageBound = false;
   let feedWindowStart = 0;
   let feedTransitionCleanupTimer = null;
+  let feedQuickMoodPickerOpen = false;
+  let feedQuickMoodSubmitting = false;
+  let feedQuickMoodDismissBound = false;
 
   function normalizeAuthorId(value) {
     return (value || "").toString().trim().toLowerCase();
@@ -48,6 +333,159 @@
   function parseCount(value, fallbackValue = 0) {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallbackValue;
+  }
+
+  function isPlainObject(value) {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  }
+
+  function getObjectByKeys(source, keys) {
+    if (!isPlainObject(source) || !Array.isArray(keys)) return null;
+    for (const rawKey of keys) {
+      const key = typeof rawKey === "string" ? rawKey.trim() : "";
+      if (!key) continue;
+      const value = source[key];
+      if (isPlainObject(value)) return value;
+    }
+    return null;
+  }
+
+  function resolveConfigMap(collection, fallbackCollection) {
+    return isPlainObject(collection) && Object.keys(collection).length > 0
+      ? collection
+      : fallbackCollection;
+  }
+
+  function resolveConfigKey(collection, preferredKeys, fallbackKey) {
+    const map = isPlainObject(collection) ? collection : {};
+    const candidates = Array.isArray(preferredKeys)
+      ? preferredKeys
+      : [preferredKeys];
+
+    for (const rawKey of candidates) {
+      const key =
+        typeof rawKey === "string" ? rawKey.trim().toLowerCase() : "";
+      if (key && Object.prototype.hasOwnProperty.call(map, key)) {
+        return key;
+      }
+    }
+
+    const normalizedFallback =
+      typeof fallbackKey === "string" ? fallbackKey.trim().toLowerCase() : "";
+    if (
+      normalizedFallback &&
+      Object.prototype.hasOwnProperty.call(map, normalizedFallback)
+    ) {
+      return normalizedFallback;
+    }
+
+    const firstKey = Object.keys(map)[0];
+    return typeof firstKey === "string" ? firstKey : "";
+  }
+
+  function getQuickMoodStoryConfig() {
+    const rawConfig = isPlainObject(window.STORY_TEXT_EDITOR_CONFIG)
+      ? window.STORY_TEXT_EDITOR_CONFIG
+      : {};
+    const rawOptions =
+      getObjectByKeys(rawConfig, ["options", "styleOptions"]) || {};
+    const rawDefaults =
+      getObjectByKeys(rawConfig, ["defaults", "defaultStyle", "defaultStyles"]) ||
+      {};
+    const rawFontSize =
+      getObjectByKeys(rawConfig, ["fontSize", "fontSizeConfig"]) || {};
+
+    const backgrounds = resolveConfigMap(
+      getObjectByKeys(rawOptions, [
+        "backgrounds",
+        "bgColors",
+        "backgroundOptions",
+      ]),
+      QUICK_MOOD_STORY_CONFIG_FALLBACK.options.backgrounds,
+    );
+    const textColors = resolveConfigMap(
+      getObjectByKeys(rawOptions, ["textColors", "colors", "textColorOptions"]),
+      QUICK_MOOD_STORY_CONFIG_FALLBACK.options.textColors,
+    );
+    const fonts = resolveConfigMap(
+      getObjectByKeys(rawOptions, ["fonts", "fontOptions", "fontFamilies"]),
+      QUICK_MOOD_STORY_CONFIG_FALLBACK.options.fonts,
+    );
+
+    return {
+      backgrounds,
+      textColors,
+      fonts,
+      backgroundColorKey: resolveConfigKey(
+        backgrounds,
+        [
+          rawDefaults.backgroundColorKey,
+          rawDefaults.backgroundKey,
+          rawDefaults.bgKey,
+        ],
+        QUICK_MOOD_STORY_CONFIG_FALLBACK.defaults.backgroundColorKey,
+      ),
+      textColorKey: resolveConfigKey(
+        textColors,
+        [rawDefaults.textColorKey, rawDefaults.colorKey],
+        QUICK_MOOD_STORY_CONFIG_FALLBACK.defaults.textColorKey,
+      ),
+      fontTextKey: resolveConfigKey(
+        fonts,
+        [rawDefaults.fontTextKey, rawDefaults.fontKey],
+        QUICK_MOOD_STORY_CONFIG_FALLBACK.defaults.fontTextKey,
+      ),
+      fontSizePx: parsePositiveInt(
+        rawDefaults.fontSizePx ?? rawDefaults.fontSize ?? rawFontSize.default,
+        QUICK_MOOD_STORY_CONFIG_FALLBACK.defaults.fontSizePx,
+      ),
+    };
+  }
+
+  function resolveQuickMoodTextColorKey(
+    quickMoodConfig,
+    preset,
+    backgroundColorKey,
+  ) {
+    const textColors = quickMoodConfig?.textColors || {};
+    const backgrounds = quickMoodConfig?.backgrounds || {};
+    const lightKey = resolveConfigKey(
+      textColors,
+      ["light", "white", quickMoodConfig?.textColorKey],
+      quickMoodConfig?.textColorKey,
+    );
+    const darkKey = resolveConfigKey(
+      textColors,
+      ["ink", "dark", "black", lightKey],
+      lightKey,
+    );
+
+    if (!preset?.accent || !lightKey || lightKey === darkKey) {
+      return lightKey || darkKey || quickMoodConfig?.textColorKey || "";
+    }
+
+    const backgroundOption = backgrounds[backgroundColorKey] || null;
+    const backgroundLuminances = extractBackgroundColorLuminances(
+      backgroundOption?.css || "",
+      preset.accent,
+    );
+    const whiteContrastFloor = backgroundLuminances.reduce(
+      (lowestContrast, luminance) => {
+        const contrast = getContrastRatioAgainstLuminance("#ffffff", luminance);
+        if (!Number.isFinite(contrast)) return lowestContrast;
+        return Math.min(lowestContrast, contrast);
+      },
+      Number.POSITIVE_INFINITY,
+    );
+
+    if (
+      !Number.isFinite(whiteContrastFloor) ||
+      whiteContrastFloor >= 2.8
+    ) {
+      return lightKey;
+    }
+
+    return darkKey || lightKey;
   }
 
   function resolveHasMoreFromPayload(payload, page, pageSize, fallbackCount) {
@@ -191,8 +629,287 @@
     return feedRenderItems;
   }
 
+  function buildFeedVisualItems(items = feedRenderItems) {
+    const normalizedItems = normalizeFeedRenderItems(items);
+    return normalizedItems.map((item) => ({
+      ...item,
+      visualId: item.accountId,
+      visualType: item.isCurrentUser ? "own-story" : "story",
+    }));
+  }
+
+  function getQuickMoodPresetById(presetId) {
+    const normalizedId =
+      typeof presetId === "string" ? presetId.trim().toLowerCase() : "";
+    return (
+      STORY_QUICK_MOOD_PRESETS.find((preset) => preset.id === normalizedId) ||
+      null
+    );
+  }
+
+  function getQuickMoodLabel(presetId) {
+    const preset = getQuickMoodPresetById(presetId);
+    if (!preset) return "";
+    return window.I18n?.t
+      ? window.I18n.t(
+          `story.feed.quickMood.${preset.id}.label`,
+          {},
+          preset.id,
+        )
+      : preset.id;
+  }
+
+  function getQuickMoodText(presetId, options = {}) {
+    const preset = getQuickMoodPresetById(presetId);
+    if (!preset) return "";
+    const includeEmoji = options?.includeEmoji !== false;
+    const text = window.I18n?.t
+      ? window.I18n.t(`story.feed.quickMood.${preset.id}.text`, {}, preset.id)
+      : preset.id;
+    const normalizedText =
+      typeof text === "string" ? text.trim() : text?.toString?.().trim() || "";
+    if (!normalizedText) {
+      return includeEmoji ? preset.emoji || "" : "";
+    }
+    if (!includeEmoji || !preset.emoji || normalizedText.includes(preset.emoji)) {
+      return normalizedText;
+    }
+    return `${normalizedText} ${preset.emoji}`;
+  }
+
+  function getQuickMoodActionAria(presetId) {
+    const label = getQuickMoodLabel(presetId);
+    return window.I18n?.t
+      ? window.I18n.t(
+          "story.feed.quickMood.actionAria",
+          { label },
+          `Create a quick story for ${label}`,
+        )
+      : `Create a quick story for ${label}`;
+  }
+
+  function shouldShowQuickMoodFillers(windowState, visibleCount) {
+    const actualCount = Array.isArray(windowState?.items)
+      ? windowState.items.filter((item) => item?.visualType !== "quick-mood-more")
+          .length
+      : 0;
+    const hasPrev = (windowState?.normalizedStart || 0) > 0;
+    const hasLoadedNext =
+      (windowState?.normalizedStart || 0) + visibleCount <
+      (windowState?.allItems?.length || 0);
+    const hasNext = hasLoadedNext || feedHasMore;
+    const hasCurrentUser = (windowState?.items || []).some(
+      (item) => item?.isCurrentUser,
+    );
+
+    return (
+      visibleCount >= 2 &&
+      hasCurrentUser &&
+      !hasPrev &&
+      !hasNext &&
+      actualCount >= 1 &&
+      actualCount < visibleCount
+    );
+  }
+
+  function buildQuickMoodFillerItems(windowState, visibleCount) {
+    if (!shouldShowQuickMoodFillers(windowState, visibleCount)) {
+      return [];
+    }
+
+    const actualCount = (windowState?.items || []).length;
+    const fillerSlotCount = Math.max(0, visibleCount - actualCount);
+    if (!fillerSlotCount) {
+      return [];
+    }
+
+    const quickMoodCount = Math.max(0, Math.min(fillerSlotCount - 1, 4));
+    const quickMoodItems = STORY_QUICK_MOOD_PRESETS.slice(0, quickMoodCount).map(
+      (preset) => ({
+        visualId: `quick-mood::${preset.id}`,
+        visualType: "quick-mood",
+        presetId: preset.id,
+        emoji: preset.emoji,
+        accent: preset.accent,
+      }),
+    );
+
+    return quickMoodItems.concat([
+      {
+        visualId: "quick-mood::more",
+        visualType: "quick-mood-more",
+        accent: "#3b82f6",
+      },
+    ]);
+  }
+
+  function buildStoryWindowDisplayItems(windowState) {
+    const baseItems = Array.isArray(windowState?.items)
+      ? windowState.items.slice()
+      : [];
+    const visibleCount = getVisibleWindowCount();
+    const quickMoodItems = buildQuickMoodFillerItems(windowState, visibleCount);
+    if (!quickMoodItems.length) {
+      return baseItems;
+    }
+    return baseItems.concat(quickMoodItems);
+  }
+
   function getVisibleWindowCount() {
-    return Math.max(1, FEED_INITIAL_LOAD_COUNT);
+    const { container } = getStoryFeedElements();
+    if (!container) {
+      return Math.max(1, FEED_INITIAL_LOAD_COUNT);
+    }
+
+    const visibleCount = resolveStoryFeedVisibleCount(container);
+    return Math.max(1, Math.min(FEED_INITIAL_LOAD_COUNT, visibleCount));
+  }
+
+  function getStoryFeedAvailableWidth(container) {
+    if (!container) return 0;
+
+    const style = window.getComputedStyle(container);
+    const paddingInline =
+      parsePixelValue(style.paddingLeft) + parsePixelValue(style.paddingRight);
+    const containerWidth = Math.ceil(container.clientWidth || 0);
+    return Math.max(0, containerWidth - paddingInline);
+  }
+
+  function getStoryFeedBaseTrackWidth(itemCount) {
+    if (!Number.isFinite(itemCount) || itemCount <= 0) return 0;
+    return (
+      itemCount * DEFAULT_FEED_ITEM_WIDTH_PX +
+      Math.max(0, itemCount - 1) * DEFAULT_FEED_GAP_PX
+    );
+  }
+
+  function shouldApplyStoryFeedSizing(renderedCount) {
+    return renderedCount >= DEFAULT_FEED_FILL_MIN_COUNT;
+  }
+
+  function getStoryFeedScaleBounds() {
+    return {
+      minScale: DEFAULT_FEED_FILL_MIN_SCALE,
+      maxScale: DEFAULT_FEED_FILL_MAX_SCALE,
+      allowPartialFill: false,
+    }
+  }
+
+  function resolveStoryFeedVisibleCount(container) {
+    const availableWidth = getStoryFeedAvailableWidth(container);
+    if (!availableWidth) {
+      return Math.max(1, FEED_INITIAL_LOAD_COUNT);
+    }
+
+    const maxVisibleCount = Math.max(1, FEED_INITIAL_LOAD_COUNT);
+    for (
+      let candidateCount = maxVisibleCount;
+      candidateCount >= DEFAULT_FEED_FILL_MIN_COUNT;
+      candidateCount -= 1
+    ) {
+      const baseTrackWidth = getStoryFeedBaseTrackWidth(candidateCount);
+      if (!baseTrackWidth) continue;
+
+      const fillScale = availableWidth / baseTrackWidth;
+      if (
+        fillScale >= DEFAULT_FEED_FILL_MIN_SCALE &&
+        fillScale <= DEFAULT_FEED_FILL_MAX_SCALE
+      ) {
+        return candidateCount;
+      }
+    }
+
+    const measuredCount = Math.max(
+      1,
+      Math.floor(
+        (availableWidth + DEFAULT_FEED_GAP_PX) /
+          (DEFAULT_FEED_ITEM_WIDTH_PX + DEFAULT_FEED_GAP_PX),
+      ),
+    );
+
+    return Math.max(1, Math.min(maxVisibleCount, measuredCount));
+  }
+
+  function clearStoryFeedSizing(shell) {
+    if (!shell) return;
+    STORY_FEED_SIZING_VARIABLES.forEach((variableName) => {
+      shell.style.removeProperty(variableName);
+    });
+  }
+
+  function applyStoryFeedSizing(renderedCount) {
+    const { container, shell } = getStoryFeedElements();
+    if (!container || !shell || !shouldApplyStoryFeedSizing(renderedCount)) {
+      clearStoryFeedSizing(shell);
+      return;
+    }
+
+    const availableWidth = getStoryFeedAvailableWidth(container);
+    const baseTrackWidth = getStoryFeedBaseTrackWidth(renderedCount);
+    if (!availableWidth || !baseTrackWidth) {
+      clearStoryFeedSizing(shell);
+      return;
+    }
+
+    const fillScale = availableWidth / baseTrackWidth;
+    const { minScale, maxScale, allowPartialFill } =
+      getStoryFeedScaleBounds(renderedCount);
+    const scale = clampNumber(
+      fillScale,
+      minScale,
+      maxScale,
+    );
+
+    if (!Number.isFinite(fillScale) || fillScale < minScale) {
+      clearStoryFeedSizing(shell);
+      return;
+    }
+
+    const avatarWrapperSize = DEFAULT_FEED_AVATAR_WRAPPER_SIZE_PX * scale;
+    const nameFontSize = clampNumber(
+      DEFAULT_FEED_NAME_FONT_SIZE_PX * scale,
+      12,
+      14,
+    );
+    const navTopBaseOffset =
+      DEFAULT_FEED_NAV_TOP_PX - DEFAULT_FEED_AVATAR_WRAPPER_SIZE_PX / 2;
+
+    shell.style.setProperty(
+      "--story-feed-item-width",
+      toPixelValue(DEFAULT_FEED_ITEM_WIDTH_PX * scale),
+    );
+    shell.style.setProperty(
+      "--story-feed-gap",
+      toPixelValue(DEFAULT_FEED_GAP_PX * scale),
+    );
+    shell.style.setProperty(
+      "--story-feed-avatar-wrapper-size",
+      toPixelValue(avatarWrapperSize),
+    );
+    shell.style.setProperty(
+      "--story-feed-ring-avatar-size",
+      toPixelValue(DEFAULT_FEED_RING_AVATAR_SIZE_PX * scale),
+    );
+    shell.style.setProperty(
+      "--story-feed-name-max-width",
+      toPixelValue(DEFAULT_FEED_ITEM_WIDTH_PX * scale),
+    );
+    shell.style.setProperty(
+      "--story-feed-name-font-size",
+      toPixelValue(nameFontSize),
+    );
+    shell.style.setProperty(
+      "--story-feed-add-btn-size",
+      toPixelValue(DEFAULT_FEED_ADD_BTN_SIZE_PX * scale),
+    );
+    shell.style.setProperty(
+      "--story-feed-add-icon-size",
+      toPixelValue(DEFAULT_FEED_ADD_ICON_SIZE_PX * scale),
+    );
+    shell.style.setProperty(
+      "--story-feed-nav-top",
+      toPixelValue(navTopBaseOffset + avatarWrapperSize / 2),
+    );
   }
 
   function getFeedNavStep() {
@@ -202,18 +919,22 @@
   }
 
   function clampFeedWindowStart() {
-    const items = applyFeedRenderNormalization();
+    applyFeedRenderNormalization();
+    const items = buildFeedVisualItems(feedRenderItems);
     const maxStart = Math.max(0, items.length - getVisibleWindowCount());
     feedWindowStart = Math.max(0, Math.min(feedWindowStart, maxStart));
     return { items, maxStart };
   }
 
   function getVisibleWindowItems() {
-    const allItems = normalizeFeedRenderItems(feedRenderItems);
+    const allItems = buildFeedVisualItems(feedRenderItems);
     const visibleCount = getVisibleWindowCount();
     const maxStart = Math.max(0, allItems.length - visibleCount);
     const normalizedStart = Math.max(0, Math.min(feedWindowStart, maxStart));
-    const items = allItems.slice(normalizedStart, normalizedStart + visibleCount);
+    const items = allItems.slice(
+      normalizedStart,
+      normalizedStart + visibleCount,
+    );
     return {
       allItems,
       normalizedStart,
@@ -251,8 +972,12 @@
     );
     if (!normalizedId) return;
 
-    feedAuthorItems = feedAuthorItems.filter((a) => a.accountId !== normalizedId);
-    feedRenderItems = feedRenderItems.filter((a) => a.accountId !== normalizedId);
+    feedAuthorItems = feedAuthorItems.filter(
+      (a) => a.accountId !== normalizedId,
+    );
+    feedRenderItems = feedRenderItems.filter(
+      (a) => a.accountId !== normalizedId,
+    );
 
     if (displayItems.length > 0) {
       const displayItem = displayItems[0];
@@ -301,8 +1026,13 @@
     const ringState = normalizeStoryRingStateValue(nextState);
     let changed = false;
 
-    const renderIndex = feedRenderItems.findIndex((item) => item.accountId === id);
-    if (renderIndex >= 0 && feedRenderItems[renderIndex].storyRingState !== ringState) {
+    const renderIndex = feedRenderItems.findIndex(
+      (item) => item.accountId === id,
+    );
+    if (
+      renderIndex >= 0 &&
+      feedRenderItems[renderIndex].storyRingState !== ringState
+    ) {
       feedRenderItems[renderIndex] = {
         ...feedRenderItems[renderIndex],
         storyRingState: ringState,
@@ -310,8 +1040,13 @@
       changed = true;
     }
 
-    const queueIndex = feedAuthorItems.findIndex((item) => item.accountId === id);
-    if (queueIndex >= 0 && feedAuthorItems[queueIndex].storyRingState !== ringState) {
+    const queueIndex = feedAuthorItems.findIndex(
+      (item) => item.accountId === id,
+    );
+    if (
+      queueIndex >= 0 &&
+      feedAuthorItems[queueIndex].storyRingState !== ringState
+    ) {
       feedAuthorItems[queueIndex] = {
         ...feedAuthorItems[queueIndex],
         storyRingState: ringState,
@@ -335,7 +1070,8 @@
   function renderSkeletons(container, count) {
     let html = "";
     for (let i = 0; i < count; i++) {
-      const storyClass = i === 0 ? "story story-skeleton story-own" : "story story-skeleton";
+      const storyClass =
+        i === 0 ? "story story-skeleton story-own" : "story story-skeleton";
       html += `
         <div class="${storyClass}">
           <div class="story-avatar-skeleton skeleton"></div>
@@ -368,9 +1104,62 @@
 
     const defaultAvatar =
       window.APP_CONFIG?.DEFAULT_AVATAR || "assets/images/default-avatar.jpg";
+    const quickMoodMoreLabel = window.I18n?.t
+      ? window.I18n.t("story.feed.quickMood.moreLabel", {}, "More")
+      : "More";
+    const quickMoodMoreAria = window.I18n?.t
+      ? window.I18n.t(
+          "story.feed.quickMood.moreAria",
+          {},
+          "Open more quick story moods",
+        )
+      : "Open more quick story moods";
     let html = "";
 
     items.forEach((item) => {
+      if (item?.visualType === "quick-mood") {
+        const label = getQuickMoodLabel(item.presetId);
+        html += `
+          <button
+            type="button"
+            class="story story-quick-mood"
+            data-preset-id="${escapeAttr(item.presetId)}"
+            style="--story-quick-mood-color: ${escapeAttr(item.accent || "#3b82f6")}"
+            aria-label="${escapeAttr(getQuickMoodActionAria(item.presetId))}"
+            ${feedQuickMoodSubmitting ? "disabled" : ""}
+          >
+            <span class="story-avatar-wrapper story-quick-mood-wrapper" aria-hidden="true">
+              <span class="story-quick-mood-ring">
+                <span class="story-quick-mood-core">
+                  <span class="story-quick-mood-emoji">${item.emoji || ""}</span>
+                </span>
+              </span>
+            </span>
+            <span class="story-name">${escapeAttr(label)}</span>
+          </button>`;
+        return;
+      }
+
+      if (item?.visualType === "quick-mood-more") {
+        html += `
+          <button
+            type="button"
+            class="story story-quick-mood story-quick-mood-more${feedQuickMoodPickerOpen ? " is-active" : ""}"
+            aria-label="${escapeAttr(quickMoodMoreAria)}"
+            ${feedQuickMoodSubmitting ? "disabled" : ""}
+          >
+            <span class="story-avatar-wrapper story-quick-mood-wrapper" aria-hidden="true">
+              <span class="story-quick-mood-ring">
+                <span class="story-quick-mood-core">
+                  <span class="story-quick-mood-plus">+</span>
+                </span>
+              </span>
+            </span>
+            <span class="story-name">${escapeAttr(quickMoodMoreLabel)}</span>
+          </button>`;
+        return;
+      }
+
       const avatarUrl = escapeAttr(item.avatarUrl || defaultAvatar);
       const isOwn = !!item.isCurrentUser;
       const hasStories = item.activeStoryCount > 0;
@@ -384,9 +1173,9 @@
       }
 
       const displayName = isOwn
-        ? (window.I18n?.t
-            ? window.I18n.t("common.labels.you", {}, "You")
-            : "You")
+        ? window.I18n?.t
+          ? window.I18n.t("common.labels.you", {}, "You")
+          : "You"
         : escapeAttr(item.username || item.fullName || "User");
       const dataAuthorAttr =
         ringClass && ringClass !== "story-ring-none"
@@ -424,7 +1213,7 @@
     container.querySelectorAll(".story-own").forEach((storyEl) => {
       const hasStories = storyEl.getAttribute("data-has-stories") === "true";
 
-      storyEl.addEventListener("click", (e) => {
+      storyEl.addEventListener("click", () => {
         if (hasStories) {
           // Nếu có story, click vào wrapper hoặc cả item sẽ mở story viewer
           // Mặc định post-avatar-ring có attribute data-story-author-id sẽ được story-viewer.js xử lý
@@ -439,12 +1228,321 @@
         }
       });
     });
+
+    container
+      .querySelectorAll(".story-quick-mood[data-preset-id]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          const presetId = button.getAttribute("data-preset-id") || "";
+          if (!presetId) return;
+          confirmQuickMoodStory(presetId);
+        });
+      });
+
+    container.querySelectorAll(".story-quick-mood-more").forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (feedQuickMoodSubmitting) return;
+        feedQuickMoodPickerOpen = !feedQuickMoodPickerOpen;
+        renderQuickMoodPicker();
+      });
+    });
+  }
+
+  function getQuickMoodPopoverHtml() {
+    const title = window.I18n?.t
+      ? window.I18n.t(
+          "story.feed.quickMood.pickerTitle",
+          {},
+          "Create story quickly",
+        )
+      : "Create story quickly";
+    const hint = window.I18n?.t
+      ? window.I18n.t(
+          "story.feed.quickMood.pickerHint",
+          {},
+          "Pick a mood to post a text story instantly",
+        )
+      : "Pick a mood to post a text story instantly";
+
+    const optionsHtml = STORY_QUICK_MOOD_PRESETS.map((preset) => {
+      const label = getQuickMoodLabel(preset.id);
+      return `
+        <button
+          type="button"
+          class="story-quick-mood-option"
+          data-preset-id="${escapeAttr(preset.id)}"
+          style="--story-quick-mood-color: ${escapeAttr(preset.accent)}"
+          aria-label="${escapeAttr(getQuickMoodActionAria(preset.id))}"
+          ${feedQuickMoodSubmitting ? "disabled" : ""}
+        >
+          <span class="story-quick-mood-option-icon" aria-hidden="true">${preset.emoji}</span>
+          <span class="story-quick-mood-option-copy">
+            <span class="story-quick-mood-option-label">${escapeAttr(label)}</span>
+            <span class="story-quick-mood-option-text">${escapeAttr(
+              getQuickMoodText(preset.id, { includeEmoji: false }),
+            )}</span>
+          </span>
+        </button>`;
+    }).join("");
+
+    return `
+      <div class="story-quick-mood-popover-card">
+        <div class="story-quick-mood-popover-head">
+          <h3>${escapeAttr(title)}</h3>
+          <p>${escapeAttr(hint)}</p>
+        </div>
+        <div class="story-quick-mood-popover-grid">${optionsHtml}</div>
+      </div>`;
+  }
+
+  function ensureQuickMoodPickerDismissBinding() {
+    if (feedQuickMoodDismissBound) return;
+    feedQuickMoodDismissBound = true;
+
+    document.addEventListener("click", (event) => {
+      if (!feedQuickMoodPickerOpen) return;
+      const { shell } = getStoryFeedElements();
+      if (!shell) return;
+
+      const popover = shell.querySelector(".story-quick-mood-popover");
+      const moreButton = shell.querySelector(".story-quick-mood-more");
+      const target = event.target;
+
+      if (popover?.contains(target) || moreButton?.contains(target)) {
+        return;
+      }
+
+      feedQuickMoodPickerOpen = false;
+      renderQuickMoodPicker();
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (!feedQuickMoodPickerOpen) return;
+      if (event.key !== "Escape") return;
+      feedQuickMoodPickerOpen = false;
+      renderQuickMoodPicker();
+    });
+  }
+
+  function renderQuickMoodPicker() {
+    const { shell, container } = getStoryFeedElements();
+    if (!shell) return;
+
+    let popover = shell.querySelector(".story-quick-mood-popover");
+    if (!popover) {
+      popover = document.createElement("div");
+      popover.className = "story-quick-mood-popover";
+      popover.setAttribute("hidden", "hidden");
+      shell.appendChild(popover);
+    }
+
+    container
+      ?.querySelectorAll(".story-quick-mood-more")
+      .forEach((button) =>
+        button.classList.toggle("is-active", feedQuickMoodPickerOpen),
+      );
+
+    const pickerButton = container?.querySelector(".story-quick-mood-more");
+    if (!feedQuickMoodPickerOpen || !pickerButton) {
+      popover.innerHTML = "";
+      popover.setAttribute("hidden", "hidden");
+      return;
+    }
+
+    popover.innerHTML = getQuickMoodPopoverHtml();
+    popover.removeAttribute("hidden");
+    const popoverRect = popover.getBoundingClientRect();
+    const pickerButtonRect = pickerButton.getBoundingClientRect();
+    const pointerCenterX =
+      pickerButtonRect.left -
+      popoverRect.left +
+      pickerButtonRect.width / 2;
+    const boundedPointerCenterX = clampNumber(
+      pointerCenterX,
+      24,
+      Math.max(24, popoverRect.width - 24),
+    );
+    popover.style.setProperty(
+      "--story-quick-mood-tail-left",
+      `${boundedPointerCenterX.toFixed(2)}px`,
+    );
+
+    popover
+      .querySelectorAll(".story-quick-mood-option[data-preset-id]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          const presetId = button.getAttribute("data-preset-id") || "";
+          if (!presetId) return;
+          confirmQuickMoodStory(presetId);
+        });
+      });
+  }
+
+  function confirmQuickMoodStory(presetId) {
+    if (feedQuickMoodSubmitting) return;
+
+    const preset = getQuickMoodPresetById(presetId);
+    if (!preset) return;
+
+    const label = getQuickMoodLabel(preset.id);
+    const title = window.I18n?.t
+      ? window.I18n.t(
+          "story.feed.quickMood.confirmTitle",
+          {},
+          "Create this story?",
+        )
+      : "Create this story?";
+    const message = window.I18n?.t
+      ? window.I18n.t(
+          "story.feed.quickMood.confirmMessage",
+          { label },
+          `This will create a quick story with the mood ${label}`,
+        )
+      : `This will create a quick story with the mood ${label}`;
+    const confirmText = window.I18n?.t
+      ? window.I18n.t(
+          "story.feed.quickMood.confirmAction",
+          {},
+          "Create story",
+        )
+      : "Create story";
+    const cancelText = window.I18n?.t
+      ? window.I18n.t("common.buttons.cancel", {}, "Cancel")
+      : "Cancel";
+
+    feedQuickMoodPickerOpen = false;
+    renderQuickMoodPicker();
+
+    const onConfirm = () => {
+      submitQuickMoodStory(preset.id);
+    };
+
+    if (window.ChatCommon?.showConfirm) {
+      window.ChatCommon.showConfirm({
+        title,
+        message,
+        confirmText,
+        cancelText,
+        isDanger: false,
+        onConfirm,
+      });
+      return;
+    }
+
+    if (window.confirm(message)) {
+      onConfirm();
+    }
+  }
+
+  async function submitQuickMoodStory(presetId) {
+    if (feedQuickMoodSubmitting) return;
+
+    const preset = getQuickMoodPresetById(presetId);
+    if (!preset) return;
+
+    if (!window.API?.Stories?.create) {
+      if (window.toastError) {
+        window.toastError(
+          window.I18n?.t
+            ? window.I18n.t(
+                "story.create.apiUnavailable",
+                {},
+                "Story API isn't available",
+              )
+            : "Story API isn't available",
+        );
+      }
+      return;
+    }
+
+    feedQuickMoodSubmitting = true;
+    feedQuickMoodPickerOpen = false;
+    renderCurrentStoryWindow("");
+    renderQuickMoodPicker();
+
+    const quickMoodConfig = getQuickMoodStoryConfig();
+    const resolvedBackgroundColorKey = resolveConfigKey(
+      quickMoodConfig.backgrounds,
+      preset.backgroundKeys,
+      quickMoodConfig.backgroundColorKey,
+    );
+    const formData = new FormData();
+    formData.append("ContentType", "2");
+    formData.append("TextContent", getQuickMoodText(preset.id));
+    formData.append(
+      "BackgroundColorKey",
+      resolvedBackgroundColorKey,
+    );
+    formData.append(
+      "TextColorKey",
+      resolveQuickMoodTextColorKey(
+        quickMoodConfig,
+        preset,
+        resolvedBackgroundColorKey,
+      ),
+    );
+    formData.append("FontTextKey", quickMoodConfig.fontTextKey);
+    formData.append("FontSizeKey", String(quickMoodConfig.fontSizePx));
+    formData.append("Privacy", "0");
+    formData.append("ExpiresEnum", "24");
+
+    try {
+      const res = await window.API.Stories.create(formData);
+      if (!res.ok) {
+        if (window.toastError) {
+          window.toastError(
+            window.I18n?.t
+              ? window.I18n.t(
+                  "story.create.createFailed",
+                  {},
+                  "Failed to create story",
+                )
+              : "Failed to create story",
+          );
+        }
+        return;
+      }
+
+      const story = await res.json().catch(() => null);
+      if (window.toastSuccess) {
+        window.toastSuccess(
+          window.I18n?.t
+            ? window.I18n.t(
+                "story.create.createSuccess",
+                {},
+                "Story created successfully",
+              )
+            : "Story created successfully",
+        );
+      }
+      window.dispatchEvent(new CustomEvent("story:created", { detail: story }));
+    } catch (error) {
+      console.error("submitQuickMoodStory failed:", error);
+      if (window.toastError) {
+        window.toastError(
+          window.I18n?.t
+            ? window.I18n.t(
+                "story.create.serverUnavailable",
+                {},
+                "Can't connect to the server",
+              )
+            : "Can't connect to the server",
+        );
+      }
+    } finally {
+      feedQuickMoodSubmitting = false;
+      renderCurrentStoryWindow("");
+      renderQuickMoodPicker();
+    }
   }
 
   function getStoryFeedElements() {
     const container = document.getElementById("story-feed");
     const shell = document.getElementById("story-feed-shell");
-    if (!container || !shell) return { container: null, shell: null, prevBtn: null, nextBtn: null };
+    if (!container || !shell)
+      return { container: null, shell: null, prevBtn: null, nextBtn: null };
     return {
       container,
       shell,
@@ -454,16 +1552,30 @@
   }
 
   function getStoryFeedScrollStep(container) {
-    const configStep = parseCount(window.APP_CONFIG?.STORY_FEED_NAV_SCROLL_STEP_PX, 0);
+    const configStep = parseCount(
+      window.APP_CONFIG?.STORY_FEED_NAV_SCROLL_STEP_PX,
+      0,
+    );
     if (configStep > 0) return configStep;
     return Math.max(220, Math.round((container?.clientWidth || 0) * 0.82));
   }
 
-  function getStoryTransitionShiftPx(container) {
+  function getStoryTransitionShiftPx(container, shiftCount = 0) {
     if (!container) return 0;
+    const normalizedShiftCount = Math.max(0, Math.trunc(shiftCount));
+    if (!normalizedShiftCount) return 0;
+
     const storyEls = container.querySelectorAll(".story");
     if (!storyEls.length) {
-      return Math.max(160, Math.round((container.clientWidth || 0) * 0.72));
+      const fallbackUnit = Math.max(
+        DEFAULT_FEED_ITEM_WIDTH_PX + DEFAULT_FEED_GAP_PX,
+        Math.round((container.clientWidth || 0) * 0.72),
+      );
+      const fallbackShift = fallbackUnit * normalizedShiftCount;
+      return Math.min(
+        fallbackShift,
+        Math.max(fallbackUnit, (container.clientWidth || fallbackShift) - 24),
+      );
     }
 
     let unitStep = 0;
@@ -478,8 +1590,11 @@
       unitStep = Math.round(firstRect.width + gap);
     }
 
-    const desiredShift = Math.max(unitStep, unitStep * getFeedNavStep());
-    const maxShift = Math.max(unitStep, (container.clientWidth || desiredShift) - 24);
+    const desiredShift = Math.max(unitStep, unitStep * normalizedShiftCount);
+    const maxShift = Math.max(
+      unitStep,
+      (container.clientWidth || desiredShift) - 24,
+    );
     return Math.min(desiredShift, maxShift);
   }
 
@@ -497,15 +1612,21 @@
     }
   }
 
-  function runStoryFeedTransition(container, direction, previousHtml = "") {
+  function runStoryFeedTransition(
+    container,
+    direction,
+    previousHtml = "",
+    shiftCount = 0,
+  ) {
     if (!container) return;
     const { shell } = getStoryFeedElements();
     clearStoryFeedTransition(shell, container);
 
     if (direction !== "next" && direction !== "prev") return;
     if (!shell || !previousHtml || !previousHtml.trim()) return;
+    if (!shiftCount) return;
 
-    const shiftPx = getStoryTransitionShiftPx(container);
+    const shiftPx = getStoryTransitionShiftPx(container, shiftCount);
     if (!shiftPx || shiftPx <= 0) return;
 
     const overlay = document.createElement("div");
@@ -513,11 +1634,13 @@
     overlay.setAttribute("aria-hidden", "true");
 
     const oldTrack = document.createElement("div");
-    oldTrack.className = "stories-transition-track stories-transition-track-old";
+    oldTrack.className =
+      "stories-transition-track stories-transition-track-old";
     oldTrack.innerHTML = previousHtml;
 
     const newTrack = document.createElement("div");
-    newTrack.className = "stories-transition-track stories-transition-track-new";
+    newTrack.className =
+      "stories-transition-track stories-transition-track-new";
     newTrack.innerHTML = container.innerHTML;
 
     const incomingFrom = direction === "next" ? shiftPx : -shiftPx;
@@ -549,17 +1672,24 @@
     feedTransitionCleanupTimer = setTimeout(finish, 320);
   }
 
-  function renderCurrentStoryWindow(direction = "") {
+  function renderCurrentStoryWindow(direction = "", transitionOptions = {}) {
     const { container } = getStoryFeedElements();
     if (!container) return;
     const previousHtml =
       direction === "next" || direction === "prev" ? container.innerHTML : "";
+    const shiftCount = Math.max(
+      0,
+      Math.trunc(transitionOptions.shiftCount || 0),
+    );
 
     clampFeedWindowStart();
-    const { items } = getVisibleWindowItems();
-    renderStoryItems(container, items);
-    runStoryFeedTransition(container, direction, previousHtml);
+    const windowState = getVisibleWindowItems();
+    const displayItems = buildStoryWindowDisplayItems(windowState);
+    renderStoryItems(container, displayItems);
+    applyStoryFeedSizing(displayItems.length);
+    runStoryFeedTransition(container, direction, previousHtml, shiftCount);
     updateStoryFeedNavButtons();
+    renderQuickMoodPicker();
   }
 
   async function ensureStoryWindowData(requiredItemsCount) {
@@ -586,12 +1716,14 @@
     const { container, shell, prevBtn, nextBtn } = getStoryFeedElements();
     if (!container || !shell || !prevBtn || !nextBtn) return;
 
+    const renderedCount = container.querySelectorAll(".story").length;
+    applyStoryFeedSizing(renderedCount);
+
     const { allItems, normalizedStart } = getVisibleWindowItems();
     const visibleCount = getVisibleWindowCount();
     const hasPrev = normalizedStart > 0;
     const hasLoadedNext = normalizedStart + visibleCount < allItems.length;
     const hasNext = hasLoadedNext || feedHasMore;
-
     prevBtn.classList.toggle("is-hidden", !hasPrev);
     nextBtn.classList.toggle("is-hidden", !hasNext);
     nextBtn.classList.toggle("is-loading", feedNavActionInFlight);
@@ -603,12 +1735,17 @@
     const { container, prevBtn, nextBtn } = getStoryFeedElements();
     if (!container || !prevBtn || !nextBtn) return;
 
+    ensureQuickMoodPickerDismissBinding();
+
     prevBtn.onclick = () => {
       if (feedNavActionInFlight) return;
       const step = getFeedNavStep();
       if (feedWindowStart <= 0) return;
+      const previousStart = feedWindowStart;
       feedWindowStart = Math.max(0, feedWindowStart - step);
-      renderCurrentStoryWindow("prev");
+      renderCurrentStoryWindow("prev", {
+        shiftCount: previousStart - feedWindowStart,
+      });
     };
 
     nextBtn.onclick = async () => {
@@ -633,8 +1770,9 @@
         return;
       }
 
+      const shiftCount = nextStart - feedWindowStart;
       feedWindowStart = nextStart;
-      renderCurrentStoryWindow("next");
+      renderCurrentStoryWindow("next", { shiftCount });
     };
 
     if (!feedResizeBound) {
@@ -648,14 +1786,16 @@
   /* ─── sync own story UI (no re-fetch) ─── */
 
   /**
-   * Update the ".story-own" element in the feed to reflect current story state.
+   * Update current user story state in feed and re-render current window.
    * @param {boolean} hasStories – whether the current user now has active stories.
    */
   function syncOwnStoryUI(hasStories) {
     const myId = (localStorage.getItem("accountId") || "").toLowerCase();
     if (!myId) return;
 
-    const ownIndex = feedRenderItems.findIndex((item) => item.accountId === myId);
+    const ownIndex = feedRenderItems.findIndex(
+      (item) => item.accountId === myId,
+    );
     if (ownIndex >= 0) {
       feedRenderItems[ownIndex] = {
         ...feedRenderItems[ownIndex],
@@ -663,72 +1803,15 @@
         activeStoryCount: hasStories ? 1 : 0,
         storyRingState: hasStories ? 2 : 0,
       };
-    }
-
-    const container = document.getElementById("story-feed");
-    if (!container) return;
-
-    const storyEl = container.querySelector(".story-own");
-    if (!storyEl) return;
-
-    // Update data attribute
-    storyEl.setAttribute("data-has-stories", String(hasStories));
-
-    const wrapper = storyEl.querySelector(".story-avatar-wrapper");
-    if (!wrapper) return;
-
-    const ring = wrapper.querySelector("a");
-
-    if (hasStories) {
-      // ── Has stories: show ring-unseen, add author attr, remove add-overlay ──
-      if (ring) {
-        ring.classList.remove("story-ring-none");
-        ring.classList.add("post-avatar-ring", "story-ring-unseen");
-        ring.setAttribute("data-story-author-id", myId);
-      }
-      const overlay = wrapper.querySelector(".story-add-overlay");
-      if (overlay) overlay.remove();
-
-      // Remove dimming on avatar
-      const avatar = wrapper.querySelector(".post-avatar");
-      if (avatar) avatar.style.filter = "";
     } else {
-      // ── No stories: show ring-none, remove author attr, add back add-overlay ──
-      if (ring) {
-        ring.classList.remove("story-ring-unseen", "story-ring-seen");
-        ring.classList.add("post-avatar-ring", "story-ring-none");
-        ring.removeAttribute("data-story-author-id");
-      }
-      // Re-add overlay if missing
-      if (!wrapper.querySelector(".story-add-overlay")) {
-        const overlayHtml = `
-          <div class="story-add-overlay">
-            <div class="story-add-center-btn">
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 6V18M6 12H18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-          </div>`;
-        wrapper.insertAdjacentHTML("beforeend", overlayHtml);
-      }
+      feedRenderItems.unshift({
+        ...buildOwnStoryPlaceholder(myId),
+        activeStoryCount: hasStories ? 1 : 0,
+        storyRingState: hasStories ? 2 : 0,
+      });
     }
 
-    // ── Re-bind click handler ──
-    // Clone to remove old listeners, then re-attach
-    const clone = storyEl.cloneNode(true);
-    storyEl.parentNode.replaceChild(clone, storyEl);
-
-    clone.addEventListener("click", (e) => {
-      const nowHasStories = clone.getAttribute("data-has-stories") === "true";
-      if (nowHasStories) {
-        const r = clone.querySelector(".post-avatar-ring");
-        if (r) r.click();
-      } else {
-        if (window.openCreateStoryModal) {
-          window.openCreateStoryModal();
-        }
-      }
-    });
+    renderCurrentStoryWindow("");
   }
 
   /* ─── event listeners for real-time sync ─── */
@@ -743,7 +1826,10 @@
       {
         accountId: detail.accountId || detail.AccountId || myId,
         avatarUrl:
-          detail.avatarUrl || detail.AvatarUrl || localStorage.getItem("avatarUrl") || "",
+          detail.avatarUrl ||
+          detail.AvatarUrl ||
+          localStorage.getItem("avatarUrl") ||
+          "",
         username:
           detail.username ||
           detail.Username ||
@@ -768,7 +1854,8 @@
     const myId = normalizeAuthorId(localStorage.getItem("accountId"));
     const authorId = normalizeAuthorId(detail.authorId || detail.AuthorId);
     const remainingRaw = detail.remainingCount ?? detail.RemainingCount;
-    const hasRemainingInfo = remainingRaw !== undefined && remainingRaw !== null;
+    const hasRemainingInfo =
+      remainingRaw !== undefined && remainingRaw !== null;
     const remaining = parseCount(remainingRaw, 0);
 
     if (authorId && authorId !== myId) {

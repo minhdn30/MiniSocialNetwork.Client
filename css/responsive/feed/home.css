@@ -15,7 +15,14 @@
   }
 
   .home-suggestions-shell {
+    width: 100%;
     max-width: 600px;
+    margin-left: 0;
+  }
+
+  .home-suggestions-shell .follow-suggestions-panel {
+    width: 100%;
+    margin-left: 0;
   }
 }
 

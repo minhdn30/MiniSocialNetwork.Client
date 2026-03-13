@@ -1714,6 +1714,56 @@
       feed: {
         nextStoriesAria: "Tin tiếp theo",
         previousStoriesAria: "Tin trước đó",
+        quickMood: {
+          moreLabel: "Khác",
+          moreAria: "Mở thêm cảm xúc để tạo tin nhanh",
+          pickerTitle: "Tạo tin nhanh",
+          pickerHint: "Chọn một cảm xúc để đăng tin chữ ngay",
+          actionAria: "Tạo tin nhanh với cảm xúc {label}",
+          confirmTitle: "Tạo tin nhanh?",
+          confirmMessage: "Tin sẽ được tạo ngay với cảm xúc {label}",
+          confirmAction: "Tạo tin",
+          happy: {
+            label: "Vui",
+            text: "Đang cảm thấy vui",
+          },
+          sad: {
+            label: "Buồn",
+            text: "Đang cảm thấy buồn",
+          },
+          calm: {
+            label: "Bình yên",
+            text: "Đang cảm thấy bình yên",
+          },
+          grateful: {
+            label: "Biết ơn",
+            text: "Đang cảm thấy biết ơn",
+          },
+          excited: {
+            label: "Hào hứng",
+            text: "Đang cảm thấy hào hứng",
+          },
+          sleepy: {
+            label: "Buồn ngủ",
+            text: "Đang cảm thấy buồn ngủ",
+          },
+          tired: {
+            label: "Mệt",
+            text: "Đang cảm thấy mệt",
+          },
+          love: {
+            label: "Yêu thương",
+            text: "Đang cảm thấy yêu thương",
+          },
+          determined: {
+            label: "Quyết tâm",
+            text: "Đang cảm thấy quyết tâm",
+          },
+          chill: {
+            label: "Thư giãn",
+            text: "Đang cảm thấy thư giãn",
+          },
+        },
       },
     },
     emoji: {

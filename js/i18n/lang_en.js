@@ -1715,6 +1715,56 @@
       feed: {
         nextStoriesAria: "Next stories",
         previousStoriesAria: "Previous stories",
+        quickMood: {
+          moreLabel: "More",
+          moreAria: "Open more moods for a quick story",
+          pickerTitle: "Create story quickly",
+          pickerHint: "Pick a mood to post a text story instantly",
+          actionAria: "Create a quick story for {label}",
+          confirmTitle: "Create this story?",
+          confirmMessage: "This will create a quick story with the mood {label}",
+          confirmAction: "Create story",
+          happy: {
+            label: "Happy",
+            text: "Feeling happy",
+          },
+          sad: {
+            label: "Sad",
+            text: "Feeling sad",
+          },
+          calm: {
+            label: "Calm",
+            text: "Feeling calm",
+          },
+          grateful: {
+            label: "Grateful",
+            text: "Feeling grateful",
+          },
+          excited: {
+            label: "Excited",
+            text: "Feeling excited",
+          },
+          sleepy: {
+            label: "Sleepy",
+            text: "Feeling sleepy",
+          },
+          tired: {
+            label: "Tired",
+            text: "Feeling tired",
+          },
+          love: {
+            label: "Love",
+            text: "Feeling loved",
+          },
+          determined: {
+            label: "Determined",
+            text: "Feeling determined",
+          },
+          chill: {
+            label: "Chill",
+            text: "Feeling chill",
+          },
+        },
       },
     },
     emoji: {

@@ -54,6 +54,8 @@
 
 .home-suggestions-shell .follow-suggestions-panel {
   border: none;
+  width: calc(100% - 20px);
+  margin-left: 15px;
 }
 
 .home-suggestions-shell .follow-suggestions-panel-head {
@@ -96,7 +98,7 @@ body.chat-sidebar-open .home-main-layout {
 }
 
 body.chat-sidebar-open .home-primary-column {
-  margin-left: 0;
+  margin-left: 12px;
 }
 
 /* Khi Notifications Panel mở, áp dụng cùng quy tắc với Chat Sidebar */
@@ -110,7 +112,7 @@ body.notifications-panel-open .home-main-layout {
 }
 
 body.notifications-panel-open .home-primary-column {
-  margin-left: 0;
+  margin-left: 12px;
 }
 
 body.search-panel-open .home-container {
@@ -123,5 +125,5 @@ body.search-panel-open .home-main-layout {
 }
 
 body.search-panel-open .home-primary-column {
-  margin-left: 0;
+  margin-left: 12px;
 }

@@ -40,6 +40,7 @@
     HIGHLIGHT: "highlight",
   };
   const ARCHIVE_PREFETCH_THRESHOLD = 2;
+  const STRIP_ACTIVE_SCROLL_EDGE_PADDING_PX = 28;
   const STORY_PRIVACY_OPTIONS = [
     { value: 0, label: "common.labels.public", icon: "globe" },
     { value: 1, label: "common.labels.followersOnly", icon: "users" },
@@ -116,6 +117,7 @@
     highlightGroupQueueIndex: -1,
     queueHasMore: false,
     viewedAuthors: new Map(), // authorId → "seen" | "partial"
+    isQueueTransitioning: false,
   };
   let storyViewerLanguageBound = false;
 
@@ -744,6 +746,7 @@
       viewerState.dom.prevBtn.addEventListener("click", (event) => {
         event.stopPropagation();
         if (
+          viewerState.isQueueTransitioning ||
           viewerState.dom.prevBtn.classList.contains(
             "sn-story-viewer-nav-disabled",
           )
@@ -756,6 +759,7 @@
       viewerState.dom.nextBtn.addEventListener("click", (event) => {
         event.stopPropagation();
         if (
+          viewerState.isQueueTransitioning ||
           viewerState.dom.nextBtn.classList.contains(
             "sn-story-viewer-nav-disabled",
           )
@@ -1105,6 +1109,16 @@
     }
     viewerState.dom.progress.innerHTML = bars.join("");
     stUpdateProgressFill(0);
+  }
+
+  function stSetQueueTransitionBusy(isBusy) {
+    const nextBusy = isBusy === true;
+    viewerState.isQueueTransitioning = nextBusy;
+
+    [viewerState.dom.prevBtn, viewerState.dom.nextBtn].forEach((button) => {
+      if (!button) return;
+      button.classList.toggle("sn-story-viewer-nav-busy", nextBusy);
+    });
   }
 
   function stRenderNavButtons() {
@@ -1673,7 +1687,7 @@
       `;
     } else {
       menuHtml += `
-        <button class="sn-story-viewer-menu-item" data-action="report-story">
+        <button class="sn-story-viewer-menu-item sn-story-viewer-menu-danger" data-action="report-story">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line>
           </svg>
@@ -3113,6 +3127,7 @@
     wrapper.innerHTML = `<div class="sn-story-viewer-strip">${stripHtml}</div>`;
 
     wrapper.addEventListener("click", (e) => {
+      if (viewerState.isQueueTransitioning) return;
       const item = e.target.closest(".sn-story-viewer-strip-item");
       if (!item) return;
       const index = parseInt(item.getAttribute("data-strip-index"), 10);
@@ -3223,10 +3238,27 @@
     const active = strip?.querySelector(".sn-story-viewer-strip-item.active");
     if (!strip || !active) return;
 
-    active.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-      inline: "center",
+    const stripRect = strip.getBoundingClientRect();
+    const activeRect = active.getBoundingClientRect();
+    const visibleTop = stripRect.top + STRIP_ACTIVE_SCROLL_EDGE_PADDING_PX;
+    const visibleBottom =
+      stripRect.bottom - STRIP_ACTIVE_SCROLL_EDGE_PADDING_PX;
+
+    let nextScrollTop = null;
+    if (activeRect.top < visibleTop) {
+      nextScrollTop = strip.scrollTop - (visibleTop - activeRect.top);
+    } else if (activeRect.bottom > visibleBottom) {
+      nextScrollTop = strip.scrollTop + (activeRect.bottom - visibleBottom);
+    }
+
+    if (nextScrollTop === null) return;
+
+    const prefersReducedMotion = Boolean(
+      global.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches,
+    );
+    strip.scrollTo({
+      top: Math.max(0, nextScrollTop),
+      behavior: prefersReducedMotion ? "auto" : "smooth",
     });
   }
 
@@ -3317,51 +3349,57 @@
   async function stSwitchToAuthor(targetIndex, options = {}) {
     const queue = viewerState.authorQueue;
     if (targetIndex < 0 || targetIndex >= queue.length) return false;
+    if (viewerState.isQueueTransitioning) return false;
 
     const author = queue[targetIndex];
     if (!author) return false;
 
-    // Sync current author ring before switching
-    stSyncCurrentAuthorRing();
+    stSetQueueTransitionBusy(true);
+    try {
+      // Sync current author ring before switching
+      stSyncCurrentAuthorRing();
 
-    // Save queue state
-    const savedQueue = viewerState.authorQueue;
-    const savedQueueHasMore = viewerState.queueHasMore;
-    const savedViewedAuthors = viewerState.viewedAuthors;
-    const resumeStoryId = stGetAuthorResumeStoryId(author.accountId);
+      // Save queue state
+      const savedQueue = viewerState.authorQueue;
+      const savedQueueHasMore = viewerState.queueHasMore;
+      const savedViewedAuthors = viewerState.viewedAuthors;
+      const resumeStoryId = stGetAuthorResumeStoryId(author.accountId);
 
-    viewerState.authorQueueIndex = targetIndex;
+      viewerState.authorQueueIndex = targetIndex;
 
-    // Open the new author (this resets some state, but we restore queue)
-    const openStatus = await stOpenViewerByAuthorId(author.accountId, {
-      syncUrl: true,
-      startAtUnviewed: options.startAtUnviewed !== false,
-      startAtLastStory: options.startAtLastStory || false,
-      resumeStoryId,
-      direction: options.direction || "fade",
-      _keepQueue: true, // internal flag to prevent queue reset
-    });
+      // Open the new author (this resets some state, but we restore queue)
+      const openStatus = await stOpenViewerByAuthorId(author.accountId, {
+        syncUrl: true,
+        startAtUnviewed: options.startAtUnviewed !== false,
+        startAtLastStory: options.startAtLastStory || false,
+        resumeStoryId,
+        direction: options.direction || "fade",
+        _keepQueue: true, // internal flag to prevent queue reset
+      });
 
-    // Restore queue state after open
-    viewerState.authorQueue = savedQueue;
-    viewerState.authorQueueIndex = targetIndex;
-    viewerState.queueHasMore = savedQueueHasMore;
-    viewerState.viewedAuthors = savedViewedAuthors;
-    stPruneAuthorResumeMap(savedQueue);
+      // Restore queue state after open
+      viewerState.authorQueue = savedQueue;
+      viewerState.authorQueueIndex = targetIndex;
+      viewerState.queueHasMore = savedQueueHasMore;
+      viewerState.viewedAuthors = savedViewedAuthors;
+      stPruneAuthorResumeMap(savedQueue);
 
-    if (openStatus !== STORY_OPEN_STATUS.SUCCESS) {
-      // Author unavailable -> remove from queue and continue to next author.
-      if (
-        openStatus === STORY_OPEN_STATUS.UNAVAILABLE &&
-        typeof global.removeStoryFeedAuthor === "function"
-      ) {
-        global.removeStoryFeedAuthor(author.accountId);
+      if (openStatus !== STORY_OPEN_STATUS.SUCCESS) {
+        // Author unavailable -> remove from queue and continue to next author.
+        if (
+          openStatus === STORY_OPEN_STATUS.UNAVAILABLE &&
+          typeof global.removeStoryFeedAuthor === "function"
+        ) {
+          global.removeStoryFeedAuthor(author.accountId);
+        }
+        return false;
       }
-      return false;
-    }
 
-    stUpdateStripHighlight();
-    return true;
+      stUpdateStripHighlight();
+      return true;
+    } finally {
+      stSetQueueTransitionBusy(false);
+    }
   }
 
   /** Go to next author in queue. Returns false if at end. */
@@ -3418,6 +3456,7 @@
 
   async function stSwitchToHighlightGroup(targetIndex, options = {}) {
     if (!stHasHighlightGroupQueue()) return false;
+    if (viewerState.isQueueTransitioning) return false;
     if (
       targetIndex < 0 ||
       targetIndex >= viewerState.highlightGroupQueue.length
@@ -3438,28 +3477,33 @@
       .trim();
     if (!targetAccountId) return false;
 
-    viewerState.highlightGroupQueueIndex = targetIndex;
+    stSetQueueTransitionBusy(true);
+    try {
+      viewerState.highlightGroupQueueIndex = targetIndex;
 
-    const openStatus = await stOpenHighlightViewerByGroup(
-      targetAccountId,
-      group.groupId,
-      {
-        syncUrl: true,
-        direction: options.direction || "fade",
-        startAtLastStory: options.startAtLastStory === true,
-        targetStoryId: options.targetStoryId || "",
-        highlightAuthor: options.highlightAuthor || viewerState.author || {},
-        onRemoveCurrentStory: viewerState.highlightOnRemoveStory,
-        _keepHighlightQueue: true,
-      },
-    );
+      const openStatus = await stOpenHighlightViewerByGroup(
+        targetAccountId,
+        group.groupId,
+        {
+          syncUrl: true,
+          direction: options.direction || "fade",
+          startAtLastStory: options.startAtLastStory === true,
+          targetStoryId: options.targetStoryId || "",
+          highlightAuthor: options.highlightAuthor || viewerState.author || {},
+          onRemoveCurrentStory: viewerState.highlightOnRemoveStory,
+          _keepHighlightQueue: true,
+        },
+      );
 
-    if (openStatus !== STORY_OPEN_STATUS.SUCCESS) {
-      return false;
+      if (openStatus !== STORY_OPEN_STATUS.SUCCESS) {
+        return false;
+      }
+
+      stUpdateStripHighlight();
+      return true;
+    } finally {
+      stSetQueueTransitionBusy(false);
     }
-
-    stUpdateStripHighlight();
-    return true;
   }
 
   async function stGoNextHighlightGroup() {
@@ -3506,6 +3550,7 @@
 
   async function stGoNext() {
     if (!viewerState.isOpen) return;
+    if (viewerState.isQueueTransitioning) return;
     stCloseMoreMenu();
     if (!stEnsureCurrentStoryIndexInBounds()) return;
     if (viewerState.currentIndex >= viewerState.stories.length - 1) {
@@ -3538,6 +3583,7 @@
 
   async function stGoPrev() {
     if (!viewerState.isOpen) return;
+    if (viewerState.isQueueTransitioning) return;
     stCloseMoreMenu();
     if (!stEnsureCurrentStoryIndexInBounds()) return;
     if (viewerState.currentIndex <= 0) {
@@ -4213,14 +4259,19 @@
     return openStatus;
   }
 
-  function stShowLoading() {
+  function stShowLoading(options = {}) {
     stEnsureModal();
+    stStopProgressTimer();
+    const preserveChrome = options.preserveChrome === true;
+    let hasExistingShell = false;
+
     if (viewerState.dom.content) {
       const existingShell = viewerState.dom.content.querySelector(
         ".sn-story-viewer-preview-shell:not(.snsv-preview-shell-leaving)",
       );
 
       if (existingShell) {
+        hasExistingShell = true;
         const outgoingVideo = existingShell.querySelector("video");
         if (outgoingVideo && !outgoingVideo.paused) {
           try {
@@ -4242,20 +4293,23 @@
           '<div class="sn-story-viewer-loading"><div class="spinner spinner-medium"></div></div>';
       }
     }
-    if (viewerState.dom.progress) {
-      viewerState.dom.progress.innerHTML = "";
+    if (viewerState.dom.replyInput) {
+      viewerState.dom.replyInput.value = "";
     }
     viewerState.progressPausedElapsedMs = 0;
     viewerState.isProgressPaused = false;
+    if (preserveChrome && hasExistingShell) {
+      return;
+    }
+    if (viewerState.dom.progress) {
+      viewerState.dom.progress.innerHTML = "";
+    }
     if (viewerState.dom.insight) {
       viewerState.dom.insight.classList.add("sn-story-viewer-hidden");
       viewerState.dom.insight.innerHTML = "";
     }
     if (viewerState.dom.actions) {
       viewerState.dom.actions.classList.add("sn-story-viewer-hidden");
-    }
-    if (viewerState.dom.replyInput) {
-      viewerState.dom.replyInput.value = "";
     }
     if (viewerState.dom.prevBtn) {
       viewerState.dom.prevBtn.classList.add("sn-story-viewer-hidden");
@@ -4419,7 +4473,10 @@
     viewerState.shouldSyncUrl = options.syncUrl !== false;
 
     stEnsureModal();
-    stShowLoading();
+    stShowLoading({
+      preserveChrome:
+        viewerState.isOpen && options._keepHighlightQueue === true,
+    });
 
     viewerState.modal.classList.remove("sn-story-viewer-hidden");
     viewerState.isOpen = true;
@@ -4699,7 +4756,9 @@
     viewerState.shouldSyncUrl = options.syncUrl !== false;
 
     stEnsureModal();
-    stShowLoading();
+    stShowLoading({
+      preserveChrome: viewerState.isOpen && options._keepQueue === true,
+    });
 
     viewerState.modal.classList.remove("sn-story-viewer-hidden");
     viewerState.isOpen = true;
@@ -4940,6 +4999,7 @@
     viewerState.viewedAuthors = new Map();
     viewerState.highlightGroupQueue = [];
     viewerState.highlightGroupQueueIndex = -1;
+    viewerState.isQueueTransitioning = false;
 
     if (viewerState.dom.privacy) {
       viewerState.dom.privacy.classList.remove("sn-story-viewer-hidden");
