@@ -204,6 +204,8 @@
       email: "Email",
       continueWith: "Or continue with",
       continueWithGoogle: "Continue with Google",
+      continueWithFacebook: "Continue with Facebook",
+      continueWithTiktok: "Continue with TikTok",
       forgotPassword: "Forgot your password?",
       welcomeBack: "Welcome Back!",
       welcomeBackDescription: "Log in to stay connected with your community",
@@ -223,6 +225,7 @@
         "Your account is not verified yet. Click Send Code to receive a 6-digit code",
       forgotPasswordResetPrompt: "Create a new password for your account",
       socialAccessUnavailable: "This account can only use the admin portal",
+      socialFeatureComingSoon: "Feature coming soon",
       googleNotConfigured: "Google sign-in is currently unavailable",
       googleCanceled: "Couldn't sign in with Google, please try again",
       googleInitializing:

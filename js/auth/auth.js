@@ -80,6 +80,8 @@ const signupFullnameInput = document.getElementById("signup-fullname");
 const loginEmailInput = document.getElementById("login-email");
 const loginPasswordInput = document.getElementById("login-password");
 const googleLoginBtn = document.getElementById("google-login-btn");
+const facebookLoginBtn = document.getElementById("facebook-login-btn");
+const tiktokLoginBtn = document.getElementById("tiktok-login-btn");
 const googleSigninRenderHost = document.getElementById(
   "google-signin-render-host",
 );
@@ -1406,6 +1408,20 @@ if (googleLoginBtn) {
     startGoogleSignInPrecheck();
   });
 }
+
+function bindComingSoonSocialButton(button) {
+  if (!button) {
+    return;
+  }
+
+  button.addEventListener("click", (e) => {
+    e.preventDefault();
+    showAuthInfoKey("auth.socialFeatureComingSoon");
+  });
+}
+
+bindComingSoonSocialButton(facebookLoginBtn);
+bindComingSoonSocialButton(tiktokLoginBtn);
 
 if (String(appConfig.GOOGLE_CLIENT_ID || "").trim()) {
   const googleInitRetry = setInterval(() => {
