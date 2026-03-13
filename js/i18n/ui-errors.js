@@ -8,6 +8,118 @@
     return (value || "").toString().trim().toLowerCase();
   }
 
+  function trimTrailingPunctuation(value) {
+    return (value || "")
+      .toString()
+      .trim()
+      .replace(/[.!?]+$/g, "")
+      .trim();
+  }
+
+  function extractMessageSummary(rawServerMessage, patterns) {
+    const raw = (rawServerMessage || "").toString().trim();
+    if (!raw || !Array.isArray(patterns)) return "";
+
+    for (const pattern of patterns) {
+      if (!(pattern instanceof RegExp)) continue;
+      const match = raw.match(pattern);
+      const summary = trimTrailingPunctuation(match?.[1] || "");
+      if (summary) return summary;
+    }
+
+    return "";
+  }
+
+  function localizeUserSummary(rawSummary, options = {}) {
+    const summary = trimTrailingPunctuation(rawSummary);
+    if (!summary) return "";
+
+    const moreMatch = summary.match(/^(.*?)(?:,\s*)?and\s+(\d+)\s+more$/i);
+    if (!moreMatch) return summary;
+
+    const users = trimTrailingPunctuation((moreMatch[1] || "").replace(/,\s*$/g, ""));
+    const count = Number(moreMatch[2] || 0);
+    if (!Number.isFinite(count) || count <= 0) {
+      return summary;
+    }
+
+    if (!users) {
+      if (global.I18n?.t && options.moreOnlyKey) {
+        return global.I18n.t(options.moreOnlyKey, { count }, `and ${count} more`);
+      }
+
+      return `and ${count} more`;
+    }
+
+    if (global.I18n?.t && options.listWithMoreKey) {
+      return global.I18n.t(
+        options.listWithMoreKey,
+        { users, count },
+        `${users} and ${count} more`,
+      );
+    }
+
+    return `${users} and ${count} more`;
+  }
+
+  function deriveUiErrorDescriptor(
+    feature,
+    action,
+    status,
+    rawServerMessage,
+    params = {},
+  ) {
+    const key = resolveUiErrorKey(feature, action, status, rawServerMessage);
+    const normalizedFeature = (feature || "").toString().trim().toLowerCase();
+    const normalizedAction = (action || "").toString().trim().toLowerCase();
+    const normalizedMessage = normalizeMessage(rawServerMessage);
+    const resolvedParams = { ...(params || {}) };
+    let resolvedKey = key;
+
+    if (
+      normalizedFeature === "post" &&
+      (normalizedAction === "edit-tags" || normalizedAction === "create")
+    ) {
+      if (normalizedMessage.includes("do not allow being tagged")) {
+        const users = localizeUserSummary(
+          extractMessageSummary(rawServerMessage, [
+            /^these users do not allow being tagged:\s*(.+?)\.?$/i,
+          ]),
+          {
+            listWithMoreKey: "post.editTagging.listWithMore",
+          },
+        );
+
+        if (users) {
+          resolvedKey = "post.editTagging.tagPermissionDeniedSpecific";
+          resolvedParams.users = users;
+        }
+      } else if (
+        normalizedMessage.includes("followers-only post") &&
+        normalizedMessage.includes("not following you")
+      ) {
+        const users = localizeUserSummary(
+          extractMessageSummary(rawServerMessage, [
+            /^these users cannot be tagged in a followers-only post because they are not following you:\s*(.+?)\.?$/i,
+          ]),
+          {
+            listWithMoreKey: "post.editTagging.listWithMore",
+          },
+        );
+
+        if (users) {
+          resolvedKey = "post.editTagging.followOnlyRestrictionSpecific";
+          resolvedParams.users = users;
+        }
+      }
+    }
+
+    return {
+      key: resolvedKey,
+      params: resolvedParams,
+    };
+  }
+
   function resolveAuthMessageKey(action, status, rawServerMessage) {
     const normalizedAction = (action || "").toString().trim().toLowerCase();
     const safeStatus = normalizeStatus(status);
@@ -181,10 +293,19 @@
   }
 
   function formatUiError(feature, action, status, rawServerMessage, params = {}) {
-    const key = resolveUiErrorKey(feature, action, status, rawServerMessage);
+    const descriptor = deriveUiErrorDescriptor(
+      feature,
+      action,
+      status,
+      rawServerMessage,
+      params,
+    );
+
     return {
-      key,
-      message: global.I18n?.t ? global.I18n.t(key, params, key) : key,
+      key: descriptor.key,
+      message: global.I18n?.t
+        ? global.I18n.t(descriptor.key, descriptor.params, descriptor.key)
+        : descriptor.key,
     };
   }
 

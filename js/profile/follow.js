@@ -23,6 +23,16 @@
     return (value || "").toString().trim().toLowerCase();
   }
 
+  function isCurrentViewerAccount(accountId) {
+    const targetId = normalizeAccountId(accountId);
+    if (!targetId) return false;
+
+    const currentId =
+      normalizeAccountId(global.APP_CONFIG?.CURRENT_USER_ID) ||
+      normalizeAccountId(localStorage.getItem("accountId"));
+    return !!currentId && targetId === currentId;
+  }
+
   function followT(key, params = {}, fallback = "") {
     if (global.I18n?.t) {
       return global.I18n.t(key, params, fallback);
@@ -1212,6 +1222,13 @@
       const accountId = userEl.dataset.accountId || normalizedAccountId;
 
       let followBtn = actionsDiv.querySelector(".follow-btn");
+
+      if (isCurrentViewerAccount(accountId)) {
+        if (followBtn) {
+          followBtn.remove();
+        }
+        return;
+      }
 
       if (relation.isFollowing) {
         if (followBtn) {

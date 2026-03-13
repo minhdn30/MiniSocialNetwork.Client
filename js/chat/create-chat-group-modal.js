@@ -94,6 +94,17 @@ async function cgReadFriendlyApiError(res, options = {}) {
     options.fallbackMessage ||
     cgT("errors.chat.generic", "Something went wrong. Please try again.");
 
+  const normalizedAction = (options.action || "").toString().trim().toLowerCase();
+  if (normalizedAction === "create-group") {
+    const parsedError = await cgReadApiErrorPayload(res);
+    const specificMessage = cgFormatCreateGroupApiErrorMessage(
+      parsedError.rawServerMessage,
+    );
+    if (specificMessage) {
+      return specificMessage;
+    }
+  }
+
   if (
     window.ChatCommon &&
     typeof window.ChatCommon.readFriendlyApiError === "function"
@@ -107,6 +118,77 @@ async function cgReadFriendlyApiError(res, options = {}) {
   }
 
   return fallbackMessage;
+}
+
+async function cgReadApiErrorPayload(response) {
+  if (!response) {
+    return {
+      status: 0,
+      rawServerMessage: "",
+    };
+  }
+
+  const status = Number(response.status || 0);
+  const jsonSource =
+    typeof response.clone === "function" ? response.clone() : response;
+  const textSource =
+    typeof response.clone === "function" ? response.clone() : response;
+  let rawServerMessage = "";
+
+  if (jsonSource && typeof jsonSource.json === "function") {
+    try {
+      const data = await jsonSource.json();
+      const messageCandidate =
+        data?.message || data?.Message || data?.title || data?.Title || "";
+      rawServerMessage =
+        typeof messageCandidate === "string" ? messageCandidate.trim() : "";
+    } catch (_error) {
+      // ignore malformed json payloads
+    }
+  }
+
+  if (!rawServerMessage && textSource && typeof textSource.text === "function") {
+    try {
+      const text = await textSource.text();
+      rawServerMessage = typeof text === "string" ? text.trim() : "";
+    } catch (_error) {
+      // ignore plain text parsing failures
+    }
+  }
+
+  return {
+    status,
+    rawServerMessage,
+  };
+}
+
+function cgFormatCreateGroupApiErrorMessage(rawServerMessage) {
+  const normalizedMessage = (rawServerMessage || "").toString().trim();
+  if (!normalizedMessage) return "";
+
+  const invitePrivacyMatch = normalizedMessage.match(
+    /^You are not allowed to add these members due to invite privacy:\s*(.+)$/i,
+  );
+  const restrictedMembers = cgNormalizeGroupInviteMembersSummary(
+    invitePrivacyMatch?.[1],
+  );
+  if (restrictedMembers) {
+    return cgT(
+      "chat.group_modal.invitePrivacyDenied",
+      "You can't add {members} to this group because of their invite privacy settings",
+      { members: restrictedMembers },
+    );
+  }
+
+  return "";
+}
+
+function cgNormalizeGroupInviteMembersSummary(rawSummary) {
+  return String(rawSummary || "")
+    .split(",")
+    .map((part) => part.replace(/^\s*@+/, "").trim())
+    .filter(Boolean)
+    .join(", ");
 }
 
 function cgGetCreateButtonLabel() {

@@ -1442,8 +1442,13 @@
         selectedUnavailable: "Một số người dùng đã chọn hiện không thể gắn thẻ",
         tagPermissionDenied:
           "Một hoặc nhiều người không cho phép người khác gắn thẻ họ",
+        tagPermissionDeniedSpecific:
+          "Bạn không thể gắn thẻ {users} vì họ không cho phép người khác gắn thẻ",
         followOnlyRestriction:
           "Một số người dùng không thể được gắn thẻ trong bài viết chỉ dành cho người theo dõi vì họ chưa theo dõi bạn",
+        followOnlyRestrictionSpecific:
+          "Bạn không thể gắn thẻ {users} trong bài viết chỉ dành cho người theo dõi vì họ chưa theo dõi bạn",
+        listWithMore: "{users} và {count} người khác",
         serverUnavailable: "Không thể kết nối với máy chủ",
         taggingUnavailablePrivate: "Không thể gắn thẻ trong bài viết riêng tư",
         genericUpdateFailed: "Không thể cập nhật bài viết",
@@ -2254,8 +2259,8 @@
         kickTitle: "Xóa khỏi nhóm?",
         assignAdminApiUnavailable: "Không thể cập nhật quyền quản trị",
         confirmationUnavailable: "Không thể xác nhận lúc này",
-        kick_confirm_message: "Xóa @{name} khỏi nhóm này?",
-        kickMessage: "Xóa @{name} khỏi nhóm này?",
+        kick_confirm_message: "Xóa {name} khỏi nhóm này?",
+        kickMessage: "Xóa {name} khỏi nhóm này?",
         assign_admin_title: "Gán quyền quản trị?",
         assignAdminTitle: "Cấp quyền quản trị?",
         kickFailed: "Không thể xóa thành viên khỏi nhóm",
@@ -2264,7 +2269,7 @@
         kickApiUnavailable: "Không thể xóa thành viên khỏi nhóm",
         assign_admin_message:
           "Bạn có muốn cấp quyền quản trị cho {name} không?",
-        assignAdminMessage: "Cấp vai trò quản trị viên cho @{name}?",
+        assignAdminMessage: "Cấp vai trò quản trị viên cho {name}?",
         noMembersFound: "Không tìm thấy thành viên nào",
         assignAdminFailed: "Không thể cấp quyền quản trị viên",
         kick_success: "Đã xóa thành viên khỏi nhóm",
@@ -2277,10 +2282,10 @@
         transfer_owner_success: "Đã chuyển chủ nhóm cho {name}",
         transferOwnerSuccess: "Đã chuyển chủ nhóm",
         revoke_admin_message: "Bạn có muốn gỡ quyền quản trị của {name} không?",
-        revokeAdminMessage: "Xóa vai trò quản trị viên khỏi @{name}?",
+        revokeAdminMessage: "Xóa vai trò quản trị viên khỏi {name}?",
         transfer_owner_message:
           "Bạn có muốn chuyển chủ nhóm cho {name} không? Bạn sẽ trở thành quản trị viên.",
-        transferOwnerMessage: "Chuyển chủ nhóm cho @{name}?",
+        transferOwnerMessage: "Chuyển chủ nhóm cho {name}?",
         revokeAdminApiUnavailable: "Không thể gỡ quyền quản trị",
         transferOwnerApiUnavailable: "Không thể chuyển chủ nhóm",
         revoke_admin_success: "Đã gỡ quyền quản trị của {name}",
@@ -2316,6 +2321,7 @@
         unmuteAction: "Bật",
       },
       header: {
+        backToChats: "Quay lại danh sách chat",
         call: "Gọi điện",
         members: "Thành viên",
         more: "Thêm",
@@ -2346,6 +2352,8 @@
         selected_count: "{count} đã chọn",
         group_name_min_length: "Tên nhóm tối thiểu {count} ký tự",
         select_min_members: "Chọn ít nhất {count} thành viên",
+        invitePrivacyDenied:
+          "Bạn không thể thêm {members} vào nhóm vì cài đặt quyền riêng tư của họ không cho phép",
         create_success: "Tạo nhóm thành công",
       },
       mentions: {
