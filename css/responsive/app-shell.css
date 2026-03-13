@@ -1,0 +1,96 @@
+:root {
+  --cloudm-app-height: 100vh;
+  --cloudm-mobile-nav-height: 68px;
+  --cloudm-mobile-nav-offset: 0px;
+}
+
+body.is-mobile-layout {
+  --cloudm-mobile-nav-offset: calc(
+    var(--cloudm-mobile-nav-height) + env(safe-area-inset-bottom, 0px)
+  );
+}
+
+body.is-mobile-layout .main-content {
+  width: 100%;
+  height: calc(
+    var(--cloudm-app-height, 100vh) - var(--cloudm-mobile-nav-offset, 0px)
+  );
+  min-height: calc(
+    var(--cloudm-app-height, 100vh) - var(--cloudm-mobile-nav-offset, 0px)
+  );
+  margin-left: 0 !important;
+  overscroll-behavior-y: contain;
+}
+
+body.is-mobile-layout .placeholder-container {
+  --placeholder-panel-offset: 0px;
+  min-height: calc(
+    var(--cloudm-app-height, 100vh) - var(--cloudm-mobile-nav-offset, 0px) -
+      40px
+  );
+  padding: 24px 18px;
+}
+
+body.is-mobile-layout .placeholder-content {
+  max-width: 340px;
+  gap: 20px;
+}
+
+body.is-mobile-layout .placeholder-icon {
+  width: 88px;
+  height: 88px;
+}
+
+body.is-mobile-layout .placeholder-content h1 {
+  font-size: 28px;
+}
+
+body.is-mobile-layout .placeholder-content p {
+  font-size: 15px;
+}
+
+body.is-mobile-layout.sidebar-mobile-sheet-open::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(4px);
+  z-index: 1180;
+}
+
+body.is-mobile-layout .search-panel,
+body.is-mobile-layout .notifications-panel,
+body.is-mobile-layout .chat-sidebar-panel {
+  top: 0;
+  left: 0 !important;
+  bottom: var(--cloudm-mobile-nav-offset, 0px) !important;
+  width: 100vw !important;
+  max-width: 100vw !important;
+  height: calc(
+    var(--cloudm-app-height, 100vh) - var(--cloudm-mobile-nav-offset, 0px)
+  ) !important;
+  max-height: calc(
+    var(--cloudm-app-height, 100vh) - var(--cloudm-mobile-nav-offset, 0px)
+  ) !important;
+  z-index: 1300 !important;
+  border-left: none;
+  border-right: none;
+}
+
+body.is-mobile-layout .search-panel-header,
+body.is-mobile-layout .notifications-panel-header,
+body.is-mobile-layout .chat-sidebar-header {
+  padding-top: max(18px, calc(env(safe-area-inset-top, 0px) + 8px));
+}
+
+body.is-mobile-layout .search-panel-list,
+body.is-mobile-layout .notifications-panel-list,
+body.is-mobile-layout .chat-list {
+  padding-bottom: calc(var(--cloudm-mobile-nav-offset, 0px) + 20px);
+}
+
+body.is-mobile-layout .search-panel-state,
+body.is-mobile-layout .notifications-empty-state,
+body.is-mobile-layout .chat-sidebar-empty {
+  padding-bottom: calc(var(--cloudm-mobile-nav-offset, 0px) + 24px);
+}

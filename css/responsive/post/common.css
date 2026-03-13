@@ -1,0 +1,50 @@
+@media (max-width: 768px) {
+  .post-user.has-tag-summary .post-name-row > a {
+    max-width: 56%;
+  }
+
+  .post-user.stacked-tag-summary .post-avatar-ring {
+    --_avatar: 36px;
+  }
+
+  .post-user.stacked-tag-summary .user-meta {
+    min-height: 36px;
+  }
+
+  .post-user.stacked-tag-summary .post-name-row > a {
+    max-width: 100%;
+  }
+
+  .post-tag-summary {
+    max-width: 100%;
+  }
+
+  .privacy-dropdown {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    min-width: 0;
+    width: 100%;
+    border-radius: 16px 16px 0 0;
+    transform: translateY(100%);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .privacy-dropdown.show {
+    transform: translateY(0);
+  }
+
+  .privacy-option {
+    padding: 16px 20px;
+  }
+
+  .privacy-option-title {
+    font-size: 15px;
+  }
+
+  .privacy-option-desc {
+    font-size: 13px;
+  }
+}

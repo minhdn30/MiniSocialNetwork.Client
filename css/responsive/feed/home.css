@@ -1,0 +1,39 @@
+@media (max-width: 1200px) {
+  .home-container {
+    padding-left: 40px;
+  }
+
+  .home-main-layout {
+    margin-left: 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  .home-primary-column {
+    max-width: 600px;
+    margin-left: 0;
+  }
+
+  .home-suggestions-shell {
+    max-width: 600px;
+  }
+}
+
+@media (max-width: 768px) {
+  .home-container {
+    margin-left: 0;
+    width: 100%;
+    padding: 10px 0;
+  }
+
+  .home-main-layout {
+    gap: 14px;
+    margin-top: 10px;
+  }
+
+  #story-section,
+  #feed-section,
+  .home-suggestions-shell {
+    padding: 0 5px;
+  }
+}

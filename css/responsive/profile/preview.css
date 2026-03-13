@@ -1,0 +1,172 @@
+@media (max-width: 1024px) {
+  .profile-preview {
+    width: 300px;
+  }
+
+  .profile-preview-avatar-wrapper {
+    --presence-avatar-size: 60px;
+    width: 60px;
+    height: 60px;
+    margin-top: -30px;
+  }
+
+  .profile-preview-avatar-ring {
+    --_avatar: 52px;
+  }
+
+  .profile-preview-info {
+    margin-top: -15px;
+  }
+}
+
+@media (max-width: 768px) {
+  .profile-preview {
+    width: calc(100vw - 32px);
+    max-width: 340px;
+    border-radius: 12px;
+    background: var(--bg-secondary);
+  }
+
+  .profile-preview-cover {
+    height: 80px;
+  }
+
+  .profile-preview-avatar-wrapper {
+    --presence-avatar-size: 56px;
+    width: 56px;
+    height: 56px;
+    margin-top: -28px;
+    border-width: 2px;
+  }
+
+  .profile-preview-avatar-ring {
+    --_avatar: 48px;
+  }
+
+  .profile-preview-info {
+    margin-top: -14px;
+    margin-left: -16px;
+  }
+
+  .profile-preview-name {
+    font-size: 15px;
+    padding: 8px 16px 8px 20px;
+  }
+
+  .profile-preview-fullname-small {
+    padding: 0 16px 8px 20px !important;
+    font-size: 12px !important;
+  }
+
+  .profile-preview-stats {
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+
+  .profile-preview-stats b {
+    font-size: 15px;
+  }
+
+  .profile-preview-stats span {
+    font-size: 13px;
+  }
+
+  .profile-preview-medias {
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .profile-preview-btn {
+    padding: 8px 0;
+    font-size: 13px;
+    min-height: 38px;
+  }
+
+  .unfollow-popup {
+    max-width: 340px;
+    border-radius: 12px;
+  }
+
+  .unfollow-content {
+    padding: 28px 20px;
+  }
+
+  .unfollow-content h3 {
+    font-size: 17px;
+  }
+
+  .unfollow-content p {
+    font-size: 13px;
+  }
+
+  .unfollow-btn {
+    padding: 13px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-preview {
+    width: calc(100vw - 16px);
+    padding: 12px;
+  }
+
+  .profile-preview-header {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .profile-preview-avatar-wrapper > .profile-preview-avatar-image {
+    width: 44px;
+    height: 44px;
+  }
+
+  .profile-preview-stats {
+    margin-bottom: 8px;
+  }
+
+  .profile-preview-medias {
+    gap: 2px;
+    margin-bottom: 12px;
+  }
+
+  .profile-preview-actions {
+    gap: 6px;
+  }
+
+  .profile-preview-btn {
+    font-size: 12px;
+    padding: 9px 0;
+  }
+
+  .unfollow-popup {
+    max-width: 280px;
+  }
+
+  .unfollow-content {
+    padding: 24px 16px;
+  }
+
+  .unfollow-content h3 {
+    font-size: 16px;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .btn:hover {
+    transform: none;
+  }
+
+  .profile-preview-btn:active {
+    transform: scale(0.96);
+  }
+
+  .profile-preview-btn {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  .profile-preview {
+    touch-action: pan-y;
+  }
+}

@@ -1,0 +1,180 @@
+@media (max-width: 768px) {
+  .search-panel,
+  .notifications-panel {
+    left: 0;
+    width: 100vw;
+    max-width: 100vw;
+  }
+
+  .search-panel {
+    border-left: none;
+  }
+
+  body.search-panel-open .main-content,
+  body.search-panel-open #sidebar:hover ~ .main-content,
+  body.search-panel-open #sidebar.expanded ~ .main-content,
+  body.notifications-panel-open .main-content,
+  body.notifications-panel-open #sidebar:hover ~ .main-content,
+  body.notifications-panel-open #sidebar.expanded ~ .main-content {
+    margin-left: 0;
+  }
+
+  #sidebar:hover ~ .search-panel,
+  #sidebar.expanded ~ .search-panel,
+  #sidebar:hover ~ .notifications-panel,
+  #sidebar.expanded ~ .notifications-panel {
+    left: 0;
+  }
+
+  .search-panel-header {
+    padding-top: max(24px, env(safe-area-inset-top, 0px) + 12px);
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .search-panel-input-shell {
+    min-height: 48px;
+    padding-left: 12px;
+    padding-right: 10px;
+  }
+
+  .search-panel-input-shell input {
+    font-size: 16px;
+  }
+
+  .search-panel-close-btn {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .search-panel-clear-btn,
+  .search-panel-history-remove {
+    width: 36px;
+    height: 36px;
+  }
+
+  .search-panel-item {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .search-panel-item-avatar {
+    width: 44px;
+    height: 44px;
+  }
+
+  .notifications-panel-header {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .notifications-panel-tabs {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .notifications-tab {
+    padding: 12px 8px;
+    font-size: 13px;
+  }
+
+  .notifications-tab-content {
+    gap: 6px;
+  }
+
+  .notifications-tab-badge {
+    position: static;
+    left: auto;
+    top: auto;
+    transform: none;
+  }
+
+  .notifications-tab:hover .notifications-tab-badge,
+  .notifications-tab.active .notifications-tab-badge {
+    transform: none;
+  }
+
+  .notifications-panel-subheader {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .notifications-panel-subheader-content {
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .notifications-item {
+    gap: 10px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .notifications-item-top-row {
+    gap: 8px;
+  }
+
+  .notifications-item-sentence-others {
+    white-space: normal;
+  }
+
+  .notifications-item-actions {
+    flex-wrap: wrap;
+  }
+
+  .notifications-request-btn {
+    min-width: 0;
+    min-height: 36px;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .notifications-item-thumbnail {
+    width: 48px;
+    height: 48px;
+  }
+
+  .chat-sidebar-header {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .chat-avatar-wrapper {
+    --presence-avatar-size: 48px;
+    width: 48px;
+    height: 48px;
+  }
+
+  .chat-avatar-wrapper .chat-sidebar-avatar-ring.story-ring-unseen,
+  .chat-avatar-wrapper .chat-sidebar-avatar-ring.story-ring-seen {
+    --_avatar: 40px;
+  }
+}
+
+@media (max-width: 480px) {
+  .notifications-tab {
+    font-size: 12px;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .notifications-tab-content {
+    gap: 4px;
+  }
+
+  .notifications-tab-badge {
+    min-width: 16px;
+    height: 16px;
+    padding-left: 4px;
+    padding-right: 4px;
+    font-size: 9px;
+  }
+
+  .notifications-panel-settings-btn,
+  .notifications-panel-close-btn,
+  .search-panel-close-btn {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}

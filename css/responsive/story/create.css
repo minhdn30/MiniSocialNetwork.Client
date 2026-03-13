@@ -1,0 +1,91 @@
+@media (max-width: 768px) {
+  #createStoryModal .create-story-modal-container {
+    width: 96vw;
+    height: 90vh;
+  }
+
+  #createStoryModal .create-story-editor-step {
+    grid-template-columns: 1fr;
+  }
+
+  #createStoryModal .create-story-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  #createStoryModal .create-story-preview-panel {
+    min-height: 300px;
+    max-height: 50vh;
+    border-right: none;
+    border-bottom: 1px solid var(--border-tertiary);
+  }
+
+  #createStoryModal .privacy-dropdown {
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+    bottom: 0 !important;
+    min-width: 0;
+    max-width: none;
+    width: auto;
+    border-radius: 16px 16px 0 0;
+    max-height: calc(
+      var(--cloudm-app-height, 100vh) - env(safe-area-inset-top, 0px) - 24px
+    );
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    box-shadow:
+      0 -4px 20px rgba(0, 0, 0, 0.3),
+      0 -1px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  #createStoryModal .privacy-dropdown.dropup {
+    transform: translateY(12px) scale(0.95);
+  }
+}
+
+@media (max-width: 768px) {
+  #createStoryModal .create-story-modal-container {
+    height: var(--cloudm-app-height, 100vh);
+    max-height: var(--cloudm-app-height, 100vh);
+  }
+
+  #createStoryModal .create-story-modal-header {
+    padding-top: max(16px, calc(env(safe-area-inset-top, 0px) + 8px));
+  }
+
+  #createStoryModal .create-story-modal-footer {
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    flex-wrap: wrap;
+    justify-content: stretch;
+  }
+
+  #createStoryModal .create-story-cancel-btn,
+  #createStoryModal .create-story-submit-btn {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  #createStoryModal .create-story-mode-choice-btn {
+    min-height: 132px;
+  }
+}
+
+@media (max-width: 640px) {
+  #createStoryModal .create-story-mode-grid {
+    grid-template-columns: 1fr;
+  }
+
+  #createStoryModal .create-story-preview-panel {
+    padding: 14px;
+    min-height: 220px;
+  }
+
+  #createStoryModal .create-story-form-panel {
+    padding: 14px;
+  }
+
+  #createStoryModal .create-story-modal-header,
+  #createStoryModal .create-story-modal-footer {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}

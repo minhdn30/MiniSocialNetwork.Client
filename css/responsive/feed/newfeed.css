@@ -1,0 +1,107 @@
+@media (max-width: 768px) {
+  .feed {
+    max-width: 100%;
+    padding: 0 10px;
+  }
+
+  .post {
+    padding: 10px;
+    margin-bottom: 12px;
+    border-radius: 10px;
+  }
+
+  .post-avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .post-username {
+    font-size: 14px;
+    max-width: 150px;
+  }
+
+  .post-time {
+    font-size: 13px;
+  }
+
+  .post-more {
+    padding: 6px;
+  }
+
+  .post-more i {
+    width: 18px;
+    height: 18px;
+  }
+
+  .post-actions .left {
+    gap: 14px;
+  }
+
+  .post-actions i {
+    width: 22px;
+    height: 22px;
+  }
+
+  .action-item .count {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .feed {
+    padding: 0 8px;
+  }
+
+  .post {
+    padding: 8px;
+  }
+
+  .post-avatar {
+    width: 28px;
+    height: 28px;
+  }
+
+  .post-username {
+    font-size: 13px;
+    max-width: 120px;
+  }
+
+  .post-caption {
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  .post-actions .left {
+    gap: 12px;
+  }
+
+  .post-actions i {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .media-slider .nav {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(-50%) translateX(0);
+  }
+
+  .post-more:hover {
+    opacity: 1;
+    transform: none;
+  }
+
+  .post-more:active {
+    opacity: 0.7;
+    transform: rotate(90deg);
+  }
+
+  .post-more {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    min-width: 40px;
+    min-height: 40px;
+  }
+}

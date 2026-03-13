@@ -1,0 +1,52 @@
+@media (max-width: 1200px) {
+  .follow-suggestions-panel {
+    position: relative;
+    top: auto;
+  }
+}
+
+@media (max-width: 980px) {
+  .follow-suggestions-list-page {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .follow-suggestions-page {
+    padding: 14px 0 28px;
+  }
+
+  .follow-suggestions-panel-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .follow-suggestions-page-heading h1 {
+    font-size: 22px;
+  }
+}
+
+@media (max-width: 560px) {
+  .follow-suggestion-row,
+  .follow-suggestion-skeleton-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .follow-suggestion-row .action-box,
+  .follow-suggestion-row .follow-btn,
+  .follow-suggestion-skeleton-btn,
+  .follow-suggestions-inline-btn {
+    width: 100%;
+  }
+
+  .follow-suggestion-row .action-box {
+    justify-content: stretch;
+  }
+
+  .follow-suggestions-view-more {
+    align-self: flex-start;
+    padding-left: 0;
+    padding-right: 0;
+  }
+}

@@ -1,0 +1,39 @@
+@media (max-width: 768px) {
+  .post-avatar-ring {
+    --_avatar: 32px;
+  }
+
+  .stories-shell-scrollable .stories {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .story-feed-nav {
+    width: 30px;
+    height: 30px;
+    top: 50px;
+  }
+
+  .story-feed-nav-prev {
+    left: 6px;
+  }
+
+  .story-feed-nav-next {
+    right: 6px;
+  }
+
+  .stories-shell-scrollable .stories-transition-overlay {
+    --stories-transition-clip-inline: 20px;
+  }
+
+  .stories-shell-scrollable .stories-transition-track {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .post-avatar-ring {
+    --_avatar: 28px;
+  }
+}

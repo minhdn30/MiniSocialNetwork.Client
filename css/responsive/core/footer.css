@@ -1,0 +1,11 @@
+@media (max-width: 768px) {
+  .app-footer {
+    padding: 24px 12px
+      calc(28px + var(--cloudm-mobile-nav-offset, 0px));
+    gap: 8px;
+  }
+
+  .app-footer-links {
+    gap: 12px;
+  }
+}
