@@ -4290,11 +4290,23 @@ const ChatPage = {
       });
   },
 
+  _shouldUseMobileMembersActionMenuLayout() {
+    return (
+      window.CloudMResponsive?.isMobileLayout?.() ||
+      document.body.classList.contains("is-mobile-layout") ||
+      window.innerWidth <= 768
+    );
+  },
+
   _positionMembersActionMenu(menuEl, scrollContainer) {
     if (!menuEl || !scrollContainer) return;
 
     menuEl.classList.remove("is-dropup", "is-align-left");
     menuEl.style.maxHeight = "";
+
+    if (this._shouldUseMobileMembersActionMenuLayout()) {
+      return;
+    }
 
     const safePadding = 8;
     const containerRect = scrollContainer.getBoundingClientRect();

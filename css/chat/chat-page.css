@@ -825,41 +825,6 @@
   background: var(--chat-theme-scrollbar-hover, var(--accent-primary));
 }
 
-/* Responsive Design */
-@media (max-width: 768px) {
-  .chat-view-header {
-    height: 60px;
-    padding: 0 12px;
-  }
-
-  .msg-bubble-wrapper {
-    max-width: 85%;
-  }
-
-  .chat-view-messages {
-    padding: 12px;
-    gap: 12px;
-  }
-
-  .chat-view-input-container {
-    padding: 12px;
-  }
-
-  .chat-view-input-actions {
-    display: none; /* Hide secondary actions on mobile for more space */
-  }
-}
-
-@media (max-width: 480px) {
-  .chat-view-name {
-    font-size: 14px;
-  }
-
-  .chat-view-status-text {
-    font-size: 10px;
-  }
-}
-
 /* Message Loading & Transitions */
 .chat-messages-loader {
   flex: 1;
@@ -1177,17 +1142,6 @@
   border-radius: 10px;
 }
 
-@media (max-width: 992px) {
-  .chat-sidebar-info-panel {
-    position: absolute;
-    right: 0;
-    top: 72px;
-    height: calc(100% - 72px);
-    z-index: 100;
-    box-shadow: var(--shadow-2xl);
-    width: 240px !important;
-  }
-}
 /* --- Chat Search Panel (Inline in Info Sidebar) --- */
 
 /* When search panel is open, sidebar needs to stop its own scroll and let the results scroll */

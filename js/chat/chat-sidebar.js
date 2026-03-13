@@ -260,6 +260,13 @@ const ChatSidebar = {
     return this.isChatRoutePath(this.getCurrentPathFromHash());
   },
 
+  shouldUseMobileFloatingMenuLayout() {
+    return (
+      window.innerWidth <= 768 ||
+      document.body.classList.contains("is-mobile-layout")
+    );
+  },
+
   extractConversationIdFromHash() {
     if (
       window.RouteHelper &&
@@ -977,6 +984,12 @@ const ChatSidebar = {
   positionSettingsPopup(popup, anchor) {
     if (!popup || !anchor) return;
 
+    if (this.shouldUseMobileFloatingMenuLayout()) {
+      popup.style.left = "";
+      popup.style.top = "";
+      return;
+    }
+
     const margin = 10;
     const rect = anchor.getBoundingClientRect();
     const popupRect = popup.getBoundingClientRect();
@@ -995,6 +1008,16 @@ const ChatSidebar = {
 
     popup.style.left = `${left}px`;
     popup.style.top = `${top}px`;
+  },
+
+  scheduleSettingsPopupPosition(popup, anchor) {
+    if (!popup || !anchor) return;
+
+    this.positionSettingsPopup(popup, anchor);
+    requestAnimationFrame(() => {
+      if (!popup.isConnected) return;
+      this.positionSettingsPopup(popup, anchor);
+    });
   },
 
   async fetchSidebarSettings() {
@@ -1045,7 +1068,7 @@ const ChatSidebar = {
         `;
 
     document.body.appendChild(popup);
-    this.positionSettingsPopup(popup, anchor);
+    this.scheduleSettingsPopupPosition(popup, anchor);
     lucide.createIcons({ container: popup });
     popup.addEventListener("click", (event) => event.stopPropagation());
 
@@ -1062,7 +1085,7 @@ const ChatSidebar = {
     const onResize = () => {
       const mounted = document.getElementById("chat-sidebar-settings-popup");
       if (mounted) {
-        this.positionSettingsPopup(mounted, anchor);
+        this.scheduleSettingsPopupPosition(mounted, anchor);
       }
     };
 
@@ -1085,7 +1108,7 @@ const ChatSidebar = {
       const initialSettings = await this.fetchSidebarSettings();
       if (!document.getElementById("chat-sidebar-settings-popup")) return;
       this.renderSettingsPopupBody(popup, initialSettings);
-      this.positionSettingsPopup(popup, anchor);
+      this.scheduleSettingsPopupPosition(popup, anchor);
     } catch (error) {
       const message = this.getFriendlyErrorMessage(
         error,
@@ -1099,9 +1122,9 @@ const ChatSidebar = {
                         <i data-lucide="alert-triangle" size="16"></i>
                         <span>${escapeHtml(message)}</span>
                     </div>
-                `;
+        `;
         lucide.createIcons({ container: body });
-        this.positionSettingsPopup(popup, anchor);
+        this.scheduleSettingsPopupPosition(popup, anchor);
       }
       if (window.toastError) {
         toastError(message);
@@ -1280,14 +1303,23 @@ const ChatSidebar = {
     document.body.appendChild(menu);
     lucide.createIcons({ container: menu });
 
-    const rect = anchor.getBoundingClientRect();
     menu.style.position = "fixed";
-    menu.style.top = `${rect.bottom + 8}px`;
-    menu.style.left = `${rect.right - menu.offsetWidth}px`;
+    if (this.shouldUseMobileFloatingMenuLayout()) {
+      menu.style.top = "auto";
+      menu.style.bottom = "0";
+      menu.style.left = "0";
+      menu.style.right = "0";
+    } else {
+      const rect = anchor.getBoundingClientRect();
+      menu.style.bottom = "auto";
+      menu.style.right = "auto";
+      menu.style.top = `${rect.bottom + 8}px`;
+      menu.style.left = `${rect.right - menu.offsetWidth}px`;
 
-    // Adjust if off-screen
-    const menuRect = menu.getBoundingClientRect();
-    if (menuRect.left < 10) menu.style.left = "10px";
+      // Adjust if off-screen
+      const menuRect = menu.getBoundingClientRect();
+      if (menuRect.left < 10) menu.style.left = "10px";
+    }
 
     const closeMenu = (e) => {
       if (!menu.contains(e.target) && e.target !== anchor) {
@@ -1435,6 +1467,7 @@ const ChatSidebar = {
 
   async open() {
     const panel = document.getElementById("chat-panel");
+    if (!panel) return;
     if (window.closeNotificationsPanel) {
       window.closeNotificationsPanel();
     }
@@ -1458,7 +1491,7 @@ const ChatSidebar = {
 
     this.closeSettingsPopup();
     const panel = document.getElementById("chat-panel");
-    panel.classList.remove("show");
+    panel?.classList.remove("show");
     this.isOpen = false;
     document.body.classList.remove("chat-sidebar-open");
 

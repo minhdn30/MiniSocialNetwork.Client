@@ -29,6 +29,13 @@ const ChatActions = {
       : fallback || key;
   },
 
+  shouldUseMobileFloatingMenuLayout() {
+    return (
+      window.innerWidth <= 768 ||
+      document.body.classList.contains("is-mobile-layout")
+    );
+  },
+
   uiError(
     action,
     status = 0,
@@ -1782,16 +1789,23 @@ const ChatActions = {
                 <i data-lucide="pin-off"></i>
                 <span>${this.t("chat.actions.menu.unpin", {}, "Unpin")}</span>
             </div>
-        `;
+    `;
     document.body.appendChild(menu);
 
-    const menuH = menu.offsetHeight || 80;
-    let top = rect.bottom + 4;
-    let left = rect.right - menu.offsetWidth;
-    if (top + menuH > window.innerHeight) top = rect.top - menuH - 4;
-    if (left < 8) left = 8;
-    menu.style.top = `${top}px`;
-    menu.style.left = `${left}px`;
+    if (this.shouldUseMobileFloatingMenuLayout()) {
+      menu.style.top = "auto";
+      menu.style.bottom = "0";
+      menu.style.left = "0";
+      menu.style.right = "0";
+    } else {
+      const menuH = menu.offsetHeight || 80;
+      let top = rect.bottom + 4;
+      let left = rect.right - menu.offsetWidth;
+      if (top + menuH > window.innerHeight) top = rect.top - menuH - 4;
+      if (left < 8) left = 8;
+      menu.style.top = `${top}px`;
+      menu.style.left = `${left}px`;
+    }
 
     this.currentMenu = menu;
     this.bindCurrentMenuAutoClose();
@@ -2723,34 +2737,41 @@ const ChatActions = {
     menu.innerHTML = itemsHtml;
     document.body.appendChild(menu);
 
-    // Position the menu
-    const menuWidth = 180;
-    const menuHeight = menu.offsetHeight || 150;
+    if (this.shouldUseMobileFloatingMenuLayout()) {
+      menu.style.top = "auto";
+      menu.style.bottom = "0";
+      menu.style.left = "0";
+      menu.style.right = "0";
+    } else {
+      // Position the menu
+      const menuWidth = 180;
+      const menuHeight = menu.offsetHeight || 150;
 
-    // Add vertical padding for the arrow
-    let top = rect.bottom + 8;
-    let left = rect.left - menuWidth + rect.width + 5;
-    let posClass = "pos-bottom";
+      // Add vertical padding for the arrow
+      let top = rect.bottom + 8;
+      let left = rect.left - menuWidth + rect.width + 5;
+      let posClass = "pos-bottom";
 
-    // Upward if close to bottom
-    if (top + menuHeight > window.innerHeight) {
-      top = rect.top - menuHeight - 8;
-      posClass = "pos-top";
+      // Upward if close to bottom
+      if (top + menuHeight > window.innerHeight) {
+        top = rect.top - menuHeight - 8;
+        posClass = "pos-top";
+      }
+
+      // Rightward if close to left edge
+      if (left < 10) {
+        left = rect.left - 5;
+      }
+
+      // Leftward if close to right edge
+      if (left + menuWidth > window.innerWidth - 10) {
+        left = window.innerWidth - menuWidth - 10;
+      }
+
+      menu.classList.add(posClass);
+      menu.style.top = `${top}px`;
+      menu.style.left = `${left}px`;
     }
-
-    // Rightward if close to left edge
-    if (left < 10) {
-      left = rect.left - 5;
-    }
-
-    // Leftward if close to right edge
-    if (left + menuWidth > window.innerWidth - 10) {
-      left = window.innerWidth - menuWidth - 10;
-    }
-
-    menu.classList.add(posClass);
-    menu.style.top = `${top}px`;
-    menu.style.left = `${left}px`;
 
     this.currentMenu = menu;
     this.bindCurrentMenuAutoClose();

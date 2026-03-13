@@ -907,50 +907,6 @@ body.is-chat-page #chat-panel .chat-header-actions {
   background: var(--accent-primary);
 }
 
-/* Responsive Design */
-@media (max-width: 768px) {
-  .chat-sidebar-panel {
-    left: 0;
-    width: 100%;
-    z-index: 10001; /* Above mobile bottom nav if any */
-  }
-
-  /* Disable layout push on mobile - Sidebar becomes an overlay */
-  .main-content {
-    margin-left: 0;
-  }
-
-  body.chat-sidebar-open .main-content {
-    margin-left: 0;
-  }
-
-  body.chat-sidebar-open #sidebar:hover ~ .main-content,
-  body.chat-sidebar-open #sidebar.expanded ~ .main-content {
-    margin-left: 0;
-  }
-
-  /* Ensure the panel doesn't try to move when main sidebar is interacted with on mobile */
-  #sidebar:hover ~ .chat-sidebar-panel,
-  #sidebar.expanded ~ .chat-sidebar-panel {
-    left: 0;
-  }
-
-  .chat-sidebar-header {
-    padding: 16px;
-  }
-
-  .chat-avatar-wrapper {
-    --presence-avatar-size: 48px;
-    width: 48px;
-    height: 48px;
-  }
-
-  .chat-avatar-wrapper .chat-sidebar-avatar-ring.story-ring-unseen,
-  .chat-avatar-wrapper .chat-sidebar-avatar-ring.story-ring-seen {
-    --_avatar: 40px;
-  }
-}
-
 /* Sidebar Loader Styles */
 .chat-sidebar-loader {
   display: flex;
