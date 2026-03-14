@@ -1,0 +1,168 @@
+<div class="admin-shell">
+  <div class="admin-mobile-backdrop" id="adminSidebarBackdrop" hidden></div>
+
+  <aside class="admin-sidebar" id="adminSidebar">
+    <div class="admin-sidebar-scroll">
+      <div class="admin-brand">
+        <div class="admin-brand-mark">
+          <i data-lucide="shield-check"></i>
+        </div>
+        <div class="admin-brand-copy">
+          <div class="admin-brand-title" data-i18n="admin.brandTitle">CloudM Admin</div>
+          <div class="admin-brand-subtitle" data-i18n="admin.brandSubtitle">
+            Isolated operational lane for system management
+          </div>
+        </div>
+      </div>
+
+      <section class="admin-account-card">
+        <div class="admin-account-avatar" id="adminCurrentInitials">AD</div>
+        <div class="admin-account-copy">
+          <div class="admin-account-name" id="adminCurrentName">Admin</div>
+          <div class="admin-account-meta" id="adminCurrentMeta">admin@cloudm.local</div>
+        </div>
+        <div class="admin-account-role" id="adminCurrentRole" data-i18n="admin.profile.adminRole">
+          Admin
+        </div>
+      </section>
+
+      <div class="admin-sidebar-group">
+        <div class="admin-sidebar-label" data-i18n="admin.sidebar.control">Control</div>
+
+        <button
+          type="button"
+          class="admin-nav-item active"
+          data-admin-view="overview"
+          aria-current="page"
+        >
+          <i data-lucide="layout-dashboard"></i>
+          <div class="admin-nav-copy">
+            <div class="admin-nav-title" data-i18n="admin.nav.overview">Overview</div>
+            <div class="admin-nav-meta" data-i18n="admin.nav.overviewMeta">Step 6 active</div>
+          </div>
+        </button>
+
+        <button type="button" class="admin-nav-item" data-admin-view="accounts">
+          <i data-lucide="search-check"></i>
+          <div class="admin-nav-copy">
+            <div class="admin-nav-title" data-i18n="admin.nav.accounts">Accounts</div>
+            <div class="admin-nav-meta" data-i18n="admin.nav.accountsMeta">Status control ready</div>
+          </div>
+        </button>
+
+        <button type="button" class="admin-nav-item" data-admin-view="moderation">
+          <i data-lucide="shield-alert"></i>
+          <div class="admin-nav-copy">
+            <div class="admin-nav-title" data-i18n="admin.nav.moderation">Moderation</div>
+            <div class="admin-nav-meta" data-i18n="admin.nav.moderationMeta">Core actions ready</div>
+          </div>
+        </button>
+
+        <button type="button" class="admin-nav-item" data-admin-view="reports">
+          <i data-lucide="files"></i>
+          <div class="admin-nav-copy">
+            <div class="admin-nav-title" data-i18n="admin.nav.reports">Reports</div>
+            <div class="admin-nav-meta" data-i18n="admin.nav.reportsMeta">Admin-first queue</div>
+          </div>
+        </button>
+
+        <button type="button" class="admin-nav-item" data-admin-view="audit-log">
+          <i data-lucide="history"></i>
+          <div class="admin-nav-copy">
+            <div class="admin-nav-title" data-i18n="admin.nav.auditLog">Audit log</div>
+            <div class="admin-nav-meta" data-i18n="admin.nav.auditLogMeta">Mutation history live</div>
+          </div>
+        </button>
+      </div>
+
+      <section class="admin-contract-card">
+        <div class="admin-contract-title" data-i18n="admin.shell.contractTitle">
+          Isolation contract
+        </div>
+        <div class="admin-contract-list">
+          <div class="admin-contract-item">
+            <i data-lucide="panel-top-open"></i>
+            <span data-i18n="admin.shell.contractPointOne">
+              Dedicated admin entry, shell and session storage
+            </span>
+          </div>
+          <div class="admin-contract-item">
+            <i data-lucide="lock-keyhole"></i>
+            <span data-i18n="admin.shell.contractPointTwo">
+              Dedicated admin API namespace and AdminOnly policy
+            </span>
+          </div>
+          <div class="admin-contract-item">
+            <i data-lucide="gauge"></i>
+            <span data-i18n="admin.shell.contractPointThree">
+              No shared realtime or heavy social query lane
+            </span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </aside>
+
+  <main class="admin-main">
+    <header class="admin-topbar">
+      <div class="admin-topbar-copy">
+        <div class="admin-topbar-row">
+          <button
+            type="button"
+            class="admin-icon-btn admin-mobile-toggle"
+            id="adminSidebarToggle"
+            data-i18n-aria-label="admin.actions.openMenu"
+            aria-label="Open navigation"
+          >
+            <i data-lucide="panel-left-open"></i>
+          </button>
+          <span class="admin-topbar-label" data-i18n="admin.topbar.label">Control plane</span>
+        </div>
+
+        <div class="admin-topbar-heading-row">
+          <h1
+            class="admin-topbar-title"
+            id="adminTopbarTitle"
+            data-i18n="admin.topbar.views.overviewTitle"
+          >
+            Shared admin shell
+          </h1>
+          <span class="admin-chip" id="adminTopbarStep" data-i18n="admin.topbar.views.overviewStep">
+            Shell ready
+          </span>
+        </div>
+
+        <p
+          class="admin-topbar-subtitle"
+          id="adminTopbarSubtitle"
+          data-i18n="admin.topbar.views.overviewSubtitle"
+        >
+          A unified shell for the upcoming account, moderation and audit modules.
+        </p>
+      </div>
+
+      <div class="admin-topbar-side">
+        <div class="admin-topbar-status">
+          <span class="admin-status-pill" data-i18n="admin.topbar.sessionTag">Tab session</span>
+          <span class="admin-status-pill subtle" data-i18n="admin.topbar.performanceTag">
+            Read-safe lane
+          </span>
+        </div>
+
+        <div class="admin-topbar-actions">
+          <div class="admin-topbar-stamp" id="adminTopbarTimestamp">--</div>
+          <button type="button" class="admin-action-btn" id="adminThemeToggle">
+            <i data-lucide="sun-moon"></i>
+            <span data-i18n="admin.actions.toggleTheme">Toggle theme</span>
+          </button>
+          <button type="button" class="admin-action-btn" id="adminLogoutBtn">
+            <i data-lucide="log-out"></i>
+            <span data-i18n="admin.actions.logout">Sign out</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div class="admin-shell-content" id="adminShellContent"></div>
+  </main>
+</div>

@@ -1,0 +1,202 @@
+<section class="admin-hero-card">
+  <div class="admin-hero-copy">
+    <div class="admin-eyebrow" data-i18n="admin.eyebrow">Admin Portal Foundation</div>
+    <h2 class="admin-heading" data-i18n="admin.heading">
+      A separate lane for operational control
+    </h2>
+    <p class="admin-subtitle" data-i18n="admin.subtitle">
+      This scaffold keeps admin isolated from the social user flow while preserving the current architecture and minimizing deployment cost.
+    </p>
+  </div>
+
+  <div class="admin-hero-grid">
+    <div class="admin-metric">
+      <div class="admin-metric-label" data-i18n="admin.metrics.frontendLane">Frontend lane</div>
+      <div class="admin-metric-value">admin.html</div>
+    </div>
+
+    <div class="admin-metric">
+      <div class="admin-metric-label" data-i18n="admin.metrics.backendLane">Backend lane</div>
+      <div class="admin-metric-value">api/admin/*</div>
+    </div>
+
+    <div class="admin-metric">
+      <div class="admin-metric-label" data-i18n="admin.metrics.phase">Current phase</div>
+      <div class="admin-metric-value" data-i18n="admin.metrics.phaseValue">Step 6</div>
+    </div>
+
+    <div class="admin-metric">
+      <div class="admin-metric-label" data-i18n="admin.metrics.sessionLane">Session mode</div>
+      <div class="admin-metric-value compact" data-i18n="admin.metrics.sessionLaneValue">
+        sessionStorage per tab
+      </div>
+    </div>
+
+    <div class="admin-metric">
+      <div class="admin-metric-label" data-i18n="admin.metrics.releasePosture">
+        Release posture
+      </div>
+      <div class="admin-metric-value compact" data-i18n="admin.metrics.releasePostureValue">
+        Admin tools expanding
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="admin-card-grid">
+  <article class="admin-card">
+    <div class="admin-card-header">
+      <div>
+        <h3 class="admin-card-title" data-i18n="admin.cards.architectureTitle">
+          Separation rules
+        </h3>
+        <p class="admin-card-description" data-i18n="admin.cards.architectureDescription">
+          Admin stays outside the current social shell, router, auth storage and realtime flow.
+        </p>
+      </div>
+      <span class="admin-chip" data-i18n="admin.chips.required">Required</span>
+    </div>
+
+    <div class="admin-list">
+      <div class="admin-list-item">
+        <i data-lucide="layers-3"></i>
+        <span data-i18n="admin.cards.architecturePointOne">
+          Dedicated FE entry, CSS, JS and page partials
+        </span>
+      </div>
+      <div class="admin-list-item">
+        <i data-lucide="split-square-vertical"></i>
+        <span data-i18n="admin.cards.architecturePointTwo">
+          Dedicated Controller, Service, Repository, DTO and Model lane
+        </span>
+      </div>
+      <div class="admin-list-item">
+        <i data-lucide="gauge"></i>
+        <span data-i18n="admin.cards.architecturePointThree">
+          No admin logic inside current social hot paths
+        </span>
+      </div>
+    </div>
+  </article>
+
+  <article class="admin-card">
+    <div class="admin-card-header">
+      <div>
+        <h3 class="admin-card-title" data-i18n="admin.cards.bootstrapTitle">Bootstrap status</h3>
+        <p class="admin-card-description" data-i18n="admin.cards.bootstrapDescription">
+          Minimal backend wiring confirms the isolated admin lane exists without touching social behavior.
+        </p>
+      </div>
+      <span
+        class="admin-chip success"
+        id="adminBootstrapStatus"
+        data-i18n="admin.bootstrapPending"
+      >
+        Pending
+      </span>
+    </div>
+
+    <div class="admin-definition-list">
+      <div class="admin-definition-row">
+        <div class="admin-definition-label" data-i18n="admin.bootstrap.apiNamespace">
+          API namespace
+        </div>
+        <div class="admin-definition-value" id="adminBootstrapApiNamespace">api/admin</div>
+      </div>
+      <div class="admin-definition-row">
+        <div class="admin-definition-label" data-i18n="admin.bootstrap.controller">Controller</div>
+        <div class="admin-definition-value" id="adminBootstrapController">AdminPortalController</div>
+      </div>
+      <div class="admin-definition-row">
+        <div class="admin-definition-label" data-i18n="admin.bootstrap.service">Service</div>
+        <div class="admin-definition-value" id="adminBootstrapService">AdminPortalService</div>
+      </div>
+      <div class="admin-definition-row">
+        <div class="admin-definition-label" data-i18n="admin.bootstrap.repository">
+          Repository
+        </div>
+        <div class="admin-definition-value" id="adminBootstrapRepository">
+          AdminPortalRepository
+        </div>
+      </div>
+      <div class="admin-definition-row">
+        <div class="admin-definition-label" data-i18n="admin.bootstrap.checkedAt">Checked at</div>
+        <div class="admin-definition-value" id="adminBootstrapCheckedAt">n/a</div>
+      </div>
+    </div>
+
+    <p class="admin-footnote" id="adminBootstrapModules">
+      Admin bootstrap endpoint is not reachable yet
+    </p>
+  </article>
+
+  <article class="admin-card">
+    <div class="admin-card-header">
+      <div>
+        <h3 class="admin-card-title" data-i18n="admin.cards.nextStepsTitle">
+          Next steps after approval
+        </h3>
+        <p class="admin-card-description" data-i18n="admin.cards.nextStepsDescription">
+          Each next phase stays small, reviewable and isolated from social user flow.
+        </p>
+      </div>
+      <span class="admin-chip muted" data-i18n="admin.chips.planned">Planned</span>
+    </div>
+
+    <div class="admin-list">
+      <div class="admin-list-item">
+        <i data-lucide="panel-left-open"></i>
+        <span data-i18n="admin.cards.nextPointOne">
+          Live now: account status manager, moderation center and report queue
+        </span>
+      </div>
+      <div class="admin-list-item">
+        <i data-lucide="history"></i>
+        <span data-i18n="admin.cards.nextPointTwo">
+          Next: deepen report workflows and resolution patterns
+        </span>
+      </div>
+      <div class="admin-list-item">
+        <i data-lucide="shield-alert"></i>
+        <span data-i18n="admin.cards.nextPointThree">
+          Later: add permission tiers once the core admin tools stabilize
+        </span>
+      </div>
+    </div>
+  </article>
+
+  <article class="admin-card">
+    <div class="admin-card-header">
+      <div>
+        <h3 class="admin-card-title" data-i18n="admin.cards.guardrailsTitle">
+          Performance guardrails
+        </h3>
+        <p class="admin-card-description" data-i18n="admin.cards.guardrailsDescription">
+          This shell is built to avoid cross-impact with the current social experience.
+        </p>
+      </div>
+      <span class="admin-chip muted" data-i18n="admin.chips.reviewFirst">Review first</span>
+    </div>
+
+    <div class="admin-list">
+      <div class="admin-list-item">
+        <i data-lucide="database-zap"></i>
+        <span data-i18n="admin.cards.guardrailsPointOne">
+          Keep admin queries filtered, paged and separate from social hot paths
+        </span>
+      </div>
+      <div class="admin-list-item">
+        <i data-lucide="refresh-cw"></i>
+        <span data-i18n="admin.cards.guardrailsPointTwo">
+          Avoid shared refresh-token flow until session storage can be isolated safely
+        </span>
+      </div>
+      <div class="admin-list-item">
+        <i data-lucide="radio-tower"></i>
+        <span data-i18n="admin.cards.guardrailsPointThree">
+          Keep admin outside the social realtime lane in the current phase
+        </span>
+      </div>
+    </div>
+  </article>
+</section>
