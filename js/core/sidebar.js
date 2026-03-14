@@ -78,6 +78,48 @@ function normalizeSidebarSoundEffectsEnabled(value, fallback = true) {
   return Boolean(fallback);
 }
 
+const SIDEBAR_DOCUMENT_TITLE_FALLBACK = "CloudM";
+const SIDEBAR_DOCUMENT_TITLE_UNREAD_PREFIX_REGEX = /^\(\d+\)\s*/;
+let sidebarDocumentTitleState = {
+  baseTitle: "",
+  messageUnreadCount: 0,
+  notificationUnreadCount: 0,
+};
+
+function normalizeSidebarUnreadCount(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.floor(parsed));
+}
+
+function resolveSidebarBaseDocumentTitle() {
+  const currentTitle = (document.title || "")
+    .toString()
+    .replace(SIDEBAR_DOCUMENT_TITLE_UNREAD_PREFIX_REGEX, "")
+    .trim();
+
+  if (currentTitle) {
+    sidebarDocumentTitleState.baseTitle = currentTitle;
+  }
+
+  if (!sidebarDocumentTitleState.baseTitle) {
+    sidebarDocumentTitleState.baseTitle = SIDEBAR_DOCUMENT_TITLE_FALLBACK;
+  }
+
+  return sidebarDocumentTitleState.baseTitle;
+}
+
+function syncSidebarDocumentTitle() {
+  const baseTitle = resolveSidebarBaseDocumentTitle();
+  const totalUnread =
+    normalizeSidebarUnreadCount(sidebarDocumentTitleState.messageUnreadCount) +
+    normalizeSidebarUnreadCount(
+      sidebarDocumentTitleState.notificationUnreadCount,
+    );
+
+  document.title = totalUnread > 0 ? `(${totalUnread}) ${baseTitle}` : baseTitle;
+}
+
 function applySidebarProfileRoutes() {
   const selfProfilePath = sidebarResolveSelfProfilePath();
   const selfSettingsPath = sidebarResolveSelfSettingsPath();
@@ -275,16 +317,21 @@ window.scheduleGlobalUnreadRefresh = scheduleGlobalUnreadRefresh;
  * Set the global Messages badge to an exact value.
  */
 function setGlobalMessageBadge(count) {
+  const safeCount = normalizeSidebarUnreadCount(count);
   const badge = document.getElementById("messages-badge");
-  if (!badge) return;
-  if (count > 0) {
-    badge.textContent = count > 99 ? "99+" : count;
-    badge.style.display = "";
-  } else {
-    badge.textContent = "";
-    badge.style.display = "none";
+  if (badge) {
+    if (safeCount > 0) {
+      badge.textContent = safeCount > 99 ? "99+" : safeCount;
+      badge.style.display = "";
+    } else {
+      badge.textContent = "";
+      badge.style.display = "none";
+    }
+    badge.dataset.count = safeCount;
   }
-  badge.dataset.count = count;
+
+  sidebarDocumentTitleState.messageUnreadCount = safeCount;
+  syncSidebarDocumentTitle();
 }
 
 /**
@@ -453,21 +500,25 @@ window.scheduleGlobalNotificationUnreadRefresh =
   scheduleGlobalNotificationUnreadRefresh;
 
 function setGlobalNotificationBadge(count) {
-  const badge = document.getElementById("notifications-badge");
   const safeCount = Number.isFinite(Number(count))
     ? Math.max(0, Math.floor(Number(count)))
     : 0;
-  if (!badge) return;
+  const badge = document.getElementById("notifications-badge");
 
-  if (safeCount > 0) {
-    const cap = getNotificationsBadgeCap();
-    badge.textContent = safeCount > cap ? `${cap}+` : `${safeCount}`;
-    badge.style.display = "";
-  } else {
-    badge.textContent = "";
-    badge.style.display = "none";
+  if (badge) {
+    if (safeCount > 0) {
+      const cap = getNotificationsBadgeCap();
+      badge.textContent = safeCount > cap ? `${cap}+` : `${safeCount}`;
+      badge.style.display = "";
+    } else {
+      badge.textContent = "";
+      badge.style.display = "none";
+    }
+    badge.dataset.count = safeCount;
   }
-  badge.dataset.count = safeCount;
+
+  sidebarDocumentTitleState.notificationUnreadCount = safeCount;
+  syncSidebarDocumentTitle();
 }
 window.setGlobalNotificationBadge = setGlobalNotificationBadge;
 window.loadGlobalNotificationBadge = loadGlobalNotificationBadge;
