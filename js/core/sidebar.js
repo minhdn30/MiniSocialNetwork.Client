@@ -180,9 +180,11 @@ async function loadSidebar() {
   // Load create group modal
   await loadCreateChatGroupModal();
 
-  // Attach global navigation listener to sidebar menu items
+  // Attach global navigation listener to sidebar routes
   sidebarRoot.addEventListener("click", (e) => {
-    const menuItem = e.target.closest(".menu-item, .dropdown-item");
+    const menuItem = e.target.closest(
+      ".menu-item, .dropdown-item, .sidebar-logo",
+    );
     if (menuItem && menuItem.dataset.route) {
       if (!menuItem.getAttribute("onclick")) {
         navigate(e, menuItem.dataset.route, menuItem);
