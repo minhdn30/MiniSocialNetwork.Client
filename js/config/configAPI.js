@@ -13,6 +13,30 @@
   let refreshPromise = null;
   let activeApiBase = null;
 
+  function isAuthPage() {
+    if (window.PageRoutes?.isAuthPage) {
+      return window.PageRoutes.isAuthPage();
+    }
+    const pathname = (window.location.pathname || "").toLowerCase();
+    return pathname === "/auth" || pathname === "/auth/" || pathname === "/auth.html" || pathname === "/auth/index.html";
+  }
+
+  function getAuthPageUrl(query) {
+    if (window.PageRoutes?.getAuthUrl) {
+      return window.PageRoutes.getAuthUrl(query);
+    }
+    const params = new URLSearchParams(query || "");
+    const queryString = params.toString();
+    return queryString ? `/auth?${queryString}` : "/auth";
+  }
+
+  function getHomePageUrl() {
+    if (window.PageRoutes?.getHomeUrl) {
+      return window.PageRoutes.getHomeUrl();
+    }
+    return "/";
+  }
+
   function normalizeApiBase(baseUrl) {
     if (typeof baseUrl !== "string") return null;
     const trimmed = baseUrl.trim();
@@ -233,7 +257,7 @@
   }
 
   function redirectBlockedSocialSession() {
-    if (window.location.pathname.includes("auth.html")) {
+    if (isAuthPage()) {
       return;
     }
 
@@ -242,7 +266,7 @@
     }
 
     blockedSocialSessionRedirected = true;
-    window.location.href = "auth.html?reason=social";
+    window.location.href = getAuthPageUrl({ reason: "social" });
   }
 
   function handleBlockedSocialSession() {
@@ -357,8 +381,8 @@
             handleBlockedSocialSession();
           } else {
             clearClientSession();
-            if (!window.location.pathname.includes("auth.html")) {
-              window.location.href = "auth.html?reason=restricted";
+            if (!isAuthPage()) {
+              window.location.href = getAuthPageUrl({ reason: "restricted" });
             }
           }
         }
@@ -385,8 +409,8 @@
       if (isHardRefreshAuthFailure(err)) {
         console.error("❌ Auto-logout due to refresh auth failure:", err);
         clearClientSession();
-        if (!window.location.pathname.includes("auth.html")) {
-          window.location.href = "auth.html";
+        if (!isAuthPage()) {
+          window.location.href = getAuthPageUrl();
         }
       } else {
         console.warn(
@@ -438,8 +462,8 @@
                   data.message.toLowerCase().includes("reactivate"))
               ) {
                 clearClientSession();
-                if (!window.location.pathname.includes("auth.html")) {
-                  window.location.href = "auth.html?reason=restricted";
+                if (!isAuthPage()) {
+                  window.location.href = getAuthPageUrl({ reason: "restricted" });
                 }
               }
             } catch (e) {}
@@ -1468,8 +1492,8 @@
             window.closeToast(activeReactivationToast);
           }
           activeReactivationToast = null;
-          if (window.location.pathname.includes("auth.html")) {
-            window.location.href = "index.html";
+          if (isAuthPage()) {
+            window.location.href = getHomePageUrl();
           } else {
             location.reload();
           }

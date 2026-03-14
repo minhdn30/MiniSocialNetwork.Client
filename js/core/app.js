@@ -1579,7 +1579,9 @@ function clearSessionAndRedirect() {
   }
   
   PageCache.clearAll();
-  window.location.href = "auth.html";
+  window.location.href = window.PageRoutes?.getAuthUrl
+    ? window.PageRoutes.getAuthUrl()
+    : "/auth";
 }
 
 let logoutInFlight = false;

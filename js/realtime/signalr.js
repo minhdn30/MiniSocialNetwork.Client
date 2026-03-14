@@ -60,8 +60,15 @@ async function requestLogout() {
       window.PageCache.clearAll();
     }
 
-    if (!window.location.pathname.includes("auth.html")) {
-      window.location.href = "auth.html";
+    const isAuthPage = window.PageRoutes?.isAuthPage
+      ? window.PageRoutes.isAuthPage()
+      : ["/auth", "/auth/", "/auth.html", "/auth/index.html"].includes(
+          (window.location.pathname || "").toLowerCase(),
+        );
+    if (!isAuthPage) {
+      window.location.href = window.PageRoutes?.getAuthUrl
+        ? window.PageRoutes.getAuthUrl()
+        : "/auth";
     }
   })();
 
