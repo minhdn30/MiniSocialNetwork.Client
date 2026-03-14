@@ -1,11 +1,25 @@
 <footer class="app-footer" aria-label="Application Footer" data-i18n-auto data-i18n-aria-label="footer.ariaFooter">
-  <nav class="app-footer-links" aria-label="Footer Navigation" data-i18n-aria-label="footer.ariaNav">
-    <span class="app-footer-link" data-i18n="footer.home">Home</span>
-    <span class="app-footer-link" data-i18n="footer.search">Search</span>
-    <span class="app-footer-link" data-i18n="footer.explore">Explore</span>
-    <span class="app-footer-link" data-i18n="footer.reels">Reels</span>
-  </nav>
-  <div class="app-footer-copy">
-    &copy; <span data-app-footer-year></span> CloudM
+  <div class="app-footer-shell">
+    <a class="app-footer-brand" href="#/" data-route="/">
+      <span class="app-footer-brand-mark" aria-hidden="true">
+        <img class="app-footer-brand-logo" src="assets/images/favicon.png" alt="" />
+      </span>
+      <span class="app-footer-brand-name">CloudM</span>
+      <span class="app-footer-status" data-i18n="footer.badges.experimental">Experimental build</span>
+    </a>
+
+    <nav class="app-footer-links" aria-label="Footer Navigation" data-i18n-aria-label="footer.ariaNav">
+      <a class="app-footer-link" href="#/" data-route="/" data-i18n="footer.home">Home</a>
+      <a class="app-footer-link" href="#/search" data-route="/search" data-i18n="footer.search">Search</a>
+      <a class="app-footer-link" href="#/explore" data-route="/explore" data-i18n="footer.explore">Explore</a>
+      <a class="app-footer-link" href="#/reels" data-route="/reels" data-i18n="footer.reels">Reels</a>
+      <a class="app-footer-link" href="#/about-us" data-route="/about-us" data-i18n="footer.about">About</a>
+    </nav>
+
+    <div class="app-footer-copy">
+      <span data-i18n="footer.copyPrefix">Social app in progress</span>
+      <span class="app-footer-copy-dot" aria-hidden="true"></span>
+      <span>&copy; <span data-app-footer-year></span> CloudM</span>
+    </div>
   </div>
 </footer>

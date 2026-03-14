@@ -612,6 +612,9 @@
 
     await loadCurrentSettings();
     setupToggleButtons();
+    if (window.AppFooter?.mountMainContent) {
+      await window.AppFooter.mountMainContent();
+    }
 
     if (window.lucide) {
       lucide.createIcons();

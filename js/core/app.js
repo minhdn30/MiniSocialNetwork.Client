@@ -6,6 +6,7 @@ const AppRouteHelper = window.RouteHelper;
 const APP_ROUTE_PATHS = AppRouteHelper?.PATHS || {
   ROOT: "/",
   HOME: "/",
+  ABOUT: "/about-us",
   ERROR_404: "/404",
   SEARCH: "/search",
   SUGGESTIONS: "/suggestions",
@@ -1387,6 +1388,10 @@ async function router() {
       setActiveSidebar(APP_ROUTE_PATHS.ROOT);
       return;
 
+    case APP_ROUTE_PATHS.ABOUT:
+      loadAboutUsPage();
+      break;
+
     case APP_ROUTE_PATHS.SEARCH:
       loadPlaceholder(appT("common.navigation.search"), "search");
       break;
@@ -1480,6 +1485,13 @@ async function loadSuggestionsPage() {
     await loadPage("feed/suggestions");
     if (window.FollowSuggestionsModule?.initPage) {
         await window.FollowSuggestionsModule.initPage();
+    }
+}
+
+async function loadAboutUsPage() {
+    await loadPage("core/about-us");
+    if (window.AppFooter?.mountMainContent) {
+        await window.AppFooter.mountMainContent();
     }
 }
 

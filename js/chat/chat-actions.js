@@ -2725,15 +2725,6 @@ const ChatActions = {
             ` + itemsHtml;
     }
 
-    if (!isOwn) {
-      itemsHtml += `
-                <div class="msg-more-item danger" onclick="window.toastInfo('${this.t("chat.actions.menu.reportSuccess", {}, "Report sent").replace(/'/g, "\\'")}')">
-                    <i data-lucide="alert-triangle"></i>
-                    <span>${this.t("chat.actions.menu.report", {}, "Report")}</span>
-                </div>
-            `;
-    }
-
     menu.innerHTML = itemsHtml;
     document.body.appendChild(menu);
 

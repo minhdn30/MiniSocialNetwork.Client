@@ -2,6 +2,7 @@ const SidebarRouteHelper = window.RouteHelper;
 const SIDEBAR_ROUTE_PATHS = SidebarRouteHelper?.PATHS || {
   ROOT: "/",
   HOME: "/",
+  ABOUT: "/about-us",
   SEARCH: "/search",
   EXPLORE: "/explore",
   REELS: "/reels",
@@ -1353,11 +1354,6 @@ function openHelp(e) {
   window.toastInfo?.(window.I18n?.t("sidebar.featureComingSoon") || "");
 }
 
-function openAbout(e) {
-  e.stopPropagation();
-  closeLanguageMenu();
-  window.toastInfo?.(window.I18n?.t("sidebar.featureComingSoon") || "");
-}
 async function loadCreateChatGroupModal() {
   const res = await fetch("pages/chat/create-chat-group-modal.html");
   const modalHTML = await res.text();

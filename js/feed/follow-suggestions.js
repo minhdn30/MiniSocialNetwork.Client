@@ -854,6 +854,9 @@
     pruneSuggestionRouteCaches(buildSuggestionsHash());
     bindScrollListener();
     resetPageState();
+    if (global.AppFooter?.mountMainContent) {
+      await global.AppFooter.mountMainContent();
+    }
     await loadNextPage({ reset: true });
   }
 

@@ -1015,10 +1015,13 @@
   }
 
   function renderSharedProfileFooter() {
-    if (!window.AppFooter || typeof window.AppFooter.mount !== "function")
+    if (
+      !window.AppFooter ||
+      typeof window.AppFooter.mountMainContent !== "function"
+    )
       return;
 
-    window.AppFooter.mount("#profile-footer-slot").catch(() => {});
+    window.AppFooter.mountMainContent().catch(() => {});
   }
 
   function resetState() {

@@ -1201,10 +1201,6 @@ body.is-profile-page .main-content::-webkit-scrollbar:horizontal {
   margin-top: 20px;
 }
 
-.profile-footer-slot {
-  margin-top: auto;
-}
-
 .profile-posts-grid.placeholder-mode {
   display: flex;
   flex-direction: column;

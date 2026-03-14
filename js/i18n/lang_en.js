@@ -343,6 +343,11 @@
       search: "Search",
       explore: "Explore",
       reels: "Reels",
+      about: "About",
+      badges: {
+        experimental: "Experimental build",
+      },
+      copyPrefix: "Social app in progress",
       ariaFooter: "Application Footer",
       ariaNav: "Footer Navigation",
     },
@@ -3056,6 +3061,73 @@
         weekOther: "{count} weeks",
       },
       title: "Notifications",
+    },
+    aboutPage: {
+      eyebrow: "About CloudM",
+      title: "A familiar little social space, made in the CloudM way",
+      subtitle:
+        "CloudM is a social app inspired by Instagram and Facebook, built so posting, sharing stories, and chatting all feel simple and close.",
+      noteLabel: "A small note",
+      noteValue:
+        "CloudM is still an experimental build. Some features are not complete yet, and a few parts may still be a bit rough or buggy. Thanks for bearing with us.",
+      recommendations: {
+        label: "Recommended right now",
+        desktop: "Desktop",
+        darkMode: "Dark mode",
+        english: "English",
+      },
+      principles: {
+        connection: {
+          title: "Familiar, but still our own",
+          description:
+            "CloudM borrows the social rhythm people already know, then keeps the experience lighter and easier to approach.",
+        },
+        privacy: {
+          title: "Easy to understand",
+          description:
+            "Privacy, posting, and messaging should feel clear enough that you do not have to stop and think too much.",
+        },
+        speed: {
+          title: "Still growing every day",
+          description:
+            "This is an early version, so we are still polishing flows, filling feature gaps, and cleaning up rough edges.",
+        },
+      },
+      story: {
+        label: "Where CloudM comes from",
+        title: "Inspired by Instagram and Facebook, but kept lighter and more personal",
+        descriptionPrimary:
+          "You will see familiar pieces here like posts, stories, highlights, and messaging. The idea is to bring them together in one place that feels friendly and easy to use day to day.",
+        descriptionSecondary:
+          "Because CloudM is still a test version, not everything is fully complete yet. Some features may be missing, some interactions may still change, and bugs can still happen. We really appreciate your patience.",
+      },
+      experience: {
+        label: "What is already here",
+        items: {
+          sharing: "Posting and story sharing in a flow that feels familiar",
+          chat: "Messaging that stays close to the rest of the social experience",
+          privacy: "Privacy controls that are easier to find and understand",
+          performance:
+            "A responsive interface that keeps improving on desktop and mobile",
+        },
+      },
+      values: {
+        community: {
+          title: "Close and friendly",
+          description:
+            "CloudM is meant to feel like a place where people can share small daily moments without too much friction.",
+        },
+        control: {
+          title: "Simple before fancy",
+          description:
+            "We would rather make core actions clear and comfortable first than overload the app with too much complexity.",
+        },
+        design: {
+          title: "Built step by step",
+          description:
+            "CloudM is still being refined, so the product will keep changing as features are completed and feedback comes in.",
+        },
+      },
     },
   };
 })(window);

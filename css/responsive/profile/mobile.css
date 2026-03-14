@@ -195,10 +195,6 @@
     gap: 10px;
   }
 
-  .profile-footer-slot {
-    margin-top: auto;
-  }
-
   .profile-tabs {
     justify-content: flex-start;
     gap: 24px;

@@ -273,8 +273,7 @@
         "Tài khoản của bạn đang bị hạn chế, vui lòng liên hệ hỗ trợ",
       accountSuspended:
         "Tài khoản của bạn đang bị tạm khóa, vui lòng liên hệ hỗ trợ",
-      accountBanned:
-        "Tài khoản của bạn đã bị cấm, vui lòng liên hệ hỗ trợ",
+      accountBanned: "Tài khoản của bạn đã bị cấm, vui lòng liên hệ hỗ trợ",
       accountNotFound: "Không tìm thấy tài khoản",
       invalidResetCode: "Mã đặt lại không hợp lệ hoặc đã hết hạn",
       prepareResetRequestFailed: "Không thể bắt đầu yêu cầu đặt lại",
@@ -349,6 +348,11 @@
       search: "Tìm kiếm",
       explore: "Khám phá",
       reels: "Reels",
+      about: "Giới thiệu",
+      badges: {
+        experimental: "Bản thử nghiệm",
+      },
+      copyPrefix: "Ứng dụng vẫn đang được hoàn thiện",
       ariaNav: "Điều hướng chân trang",
       ariaFooter: "Chân trang ứng dụng",
     },
@@ -3083,6 +3087,75 @@
         weekOther: "{count} tuần",
       },
       title: "Thông báo",
+    },
+    aboutPage: {
+      eyebrow: "Về CloudM",
+      title: "Một góc mạng xã hội quen thuộc theo cách của CloudM",
+      subtitle:
+        "CloudM là một ứng dụng mạng xã hội lấy cảm hứng từ Instagram và Facebook, để việc đăng bài, xem tin và nhắn tin với nhau trở nên đơn giản và gần gũi hơn.",
+      noteLabel: "Lưu ý nhỏ",
+      noteValue:
+        "CloudM hiện vẫn là bản thử nghiệm. Một vài tính năng chưa đầy đủ, một số chỗ có thể còn hơi thô hoặc phát sinh lỗi nhỏ. Mong mọi người thông cảm và góp ý thêm để CloudM hoàn thiện hơn.",
+      recommendations: {
+        label: "Khuyên dùng lúc này",
+        desktop: "Desktop",
+        darkMode: "Dark mode",
+        english: "Tiếng Anh",
+      },
+      principles: {
+        connection: {
+          title: "Quen mắt nhưng vẫn có nét riêng",
+          description:
+            "CloudM lấy nhịp sử dụng quen thuộc từ những mạng xã hội lớn, rồi giữ trải nghiệm gọn hơn và dễ tiếp cận hơn.",
+        },
+        privacy: {
+          title: "Dễ hiểu, dễ dùng",
+          description:
+            "Từ quyền riêng tư đến đăng bài hay nhắn tin, mọi thứ nên đủ rõ để dùng thoải mái mà không phải suy nghĩ quá nhiều.",
+        },
+        speed: {
+          title: "Vẫn đang hoàn thiện mỗi ngày",
+          description:
+            "Đây vẫn là phiên bản đầu nên CloudM sẽ còn tiếp tục được hoàn thiện, bổ sung những tính năng còn thiếu và làm mượt các phần chưa ổn.",
+        },
+      },
+      story: {
+        label: "CloudM đến từ đâu",
+        title:
+          "Lấy cảm hứng từ Instagram và Facebook, nhưng giữ cảm giác nhẹ và gần hơn",
+        descriptionPrimary:
+          "Ở đây sẽ có những thứ quen thuộc như bài viết, tin, tin nổi bật và nhắn tin. Mục tiêu là gom chúng về một chỗ để trải nghiệm hằng ngày tự nhiên, thân thiện và dễ dùng hơn.",
+        descriptionSecondary:
+          "Vì CloudM vẫn là bản thử nghiệm nên chưa phải mọi thứ đã hoàn chỉnh. Một số tính năng còn thiếu, một số tương tác có thể còn thay đổi và bug vẫn có thể xuất hiện. Mong mọi người thông cảm và góp ý thêm để CloudM tốt hơn.",
+      },
+      experience: {
+        label: "Hiện tại đã có gì",
+        items: {
+          sharing:
+            "Đăng bài và chia sẻ tin theo một flow quen thuộc, dễ bắt nhịp",
+          chat: "Nhắn tin được đặt gần toàn bộ trải nghiệm mạng xã hội",
+          privacy: "Các tùy chọn quyền riêng tư rõ ràng và dễ tìm hơn",
+          performance:
+            "Giao diện đang tiếp tục được tối ưu để dùng ổn trên cả máy tính lẫn điện thoại",
+        },
+      },
+      values: {
+        community: {
+          title: "Gần gũi và thân thiện",
+          description:
+            "CloudM hướng tới cảm giác là một nơi để chia sẻ những điều nhỏ mỗi ngày mà không bị quá nặng nề hay rối mắt.",
+        },
+        control: {
+          title: "Đơn giản trước",
+          description:
+            "CloudM ưu tiên để các thao tác cốt lõi rõ ràng và dễ dùng trước, thay vì cố đưa quá nhiều thứ phức tạp vào cùng lúc.",
+        },
+        design: {
+          title: "Hoàn thiện từng bước",
+          description:
+            "CloudM vẫn đang được chỉnh dần theo phản hồi thực tế, nên giao diện và tính năng sẽ còn tiếp tục thay đổi trong thời gian tới.",
+        },
+      },
     },
   };
 })(window);
