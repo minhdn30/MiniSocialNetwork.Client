@@ -1,0 +1,155 @@
+<div class="admin-lookup-page">
+  <section class="admin-lookup-grid">
+    <article class="admin-card admin-lookup-search-card">
+      <div class="admin-card-header">
+        <div>
+          <h2 class="admin-card-title" data-i18n="admin.accountLookup.searchTitle">
+            Find accounts safely
+          </h2>
+          <p class="admin-card-description" data-i18n="admin.accountLookup.searchDescription">
+            Search by email, username or accountId before applying controlled status changes.
+          </p>
+        </div>
+        <span class="admin-chip" data-i18n="admin.accountLookup.readOnlyChip">Controlled write</span>
+      </div>
+
+      <form id="adminAccountLookupForm" class="admin-lookup-form">
+        <label class="admin-lookup-field">
+          <span data-i18n="admin.accountLookup.searchLabel">Lookup keyword</span>
+          <input
+            id="adminAccountLookupInput"
+            type="text"
+            autocomplete="off"
+            data-i18n-placeholder="admin.accountLookup.searchPlaceholder"
+            placeholder="Enter email, username or accountId"
+          />
+        </label>
+
+        <button type="submit" id="adminAccountLookupSubmit" class="admin-login-submit admin-lookup-submit">
+          <span data-i18n="admin.accountLookup.searchSubmit">Search accounts</span>
+        </button>
+      </form>
+
+      <div id="adminAccountLookupMessage" class="admin-login-message" aria-live="polite"></div>
+    </article>
+
+    <article class="admin-card admin-lookup-guide-card">
+      <div class="admin-card-header">
+        <div>
+          <h2 class="admin-card-title" data-i18n="admin.accountLookup.guideTitle">
+            Lookup guardrails
+          </h2>
+          <p class="admin-card-description" data-i18n="admin.accountLookup.guideDescription">
+            Account status management stays narrow, explicit and fully audited.
+          </p>
+        </div>
+      </div>
+
+      <div class="admin-list">
+        <div class="admin-list-item">
+          <i data-lucide="search"></i>
+          <span data-i18n="admin.accountLookup.guidePointOne">
+            Use at least 3 characters, or an exact email/accountId for faster lookup
+          </span>
+        </div>
+        <div class="admin-list-item">
+          <i data-lucide="database"></i>
+          <span data-i18n="admin.accountLookup.guidePointTwo">
+            Results are limited and sorted to avoid heavy scans on large datasets
+          </span>
+        </div>
+        <div class="admin-list-item">
+          <i data-lucide="shield"></i>
+          <span data-i18n="admin.accountLookup.guidePointThree">
+            Every status mutation requires a reason and flows into admin audit
+          </span>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <section class="admin-card admin-control-deck" id="adminAccountStatusDeck" hidden>
+    <div class="admin-card-header">
+      <div>
+        <h2 class="admin-card-title" data-i18n="admin.accountLookup.controlTitle">
+          Account status manager
+        </h2>
+        <p class="admin-card-description" data-i18n="admin.accountLookup.controlDescription">
+          Select an account result to apply a controlled status change with an audit reason.
+        </p>
+      </div>
+      <span class="admin-chip muted" id="adminAccountStatusCurrentState" data-i18n="admin.accountLookup.controlIdleChip">
+        Awaiting selection
+      </span>
+    </div>
+
+    <div class="admin-control-target" id="adminAccountStatusTargetSummary">
+      Select an account card to prepare a status change.
+    </div>
+
+    <form id="adminAccountStatusForm" class="admin-control-form">
+      <div class="admin-control-grid">
+        <label class="admin-audit-field">
+          <span data-i18n="admin.accountLookup.controlStatusLabel">Target status</span>
+          <select id="adminAccountStatusSelect" class="admin-audit-select"></select>
+        </label>
+
+        <label class="admin-audit-field">
+          <span data-i18n="admin.accountLookup.controlReasonLabel">Reason</span>
+          <textarea
+            id="adminAccountStatusReason"
+            class="admin-control-textarea"
+            data-i18n-placeholder="admin.accountLookup.controlReasonPlaceholder"
+            placeholder="State the reason for this status change"
+          ></textarea>
+        </label>
+      </div>
+
+      <div class="admin-control-actions">
+        <button type="button" class="admin-action-btn" id="adminAccountStatusCancel">
+          <i data-lucide="x"></i>
+          <span data-i18n="admin.accountLookup.controlCancel">Clear selection</span>
+        </button>
+        <button type="submit" class="admin-login-submit admin-control-submit" id="adminAccountStatusSubmit">
+          <span data-i18n="admin.accountLookup.controlSubmit">Confirm status change</span>
+        </button>
+      </div>
+    </form>
+
+    <div id="adminAccountStatusMessage" class="admin-login-message" aria-live="polite"></div>
+  </section>
+
+  <section class="admin-card admin-lookup-results-card">
+    <div class="admin-card-header">
+      <div>
+        <h2 class="admin-card-title" data-i18n="admin.accountLookup.resultsTitle">
+          Account results
+        </h2>
+        <p class="admin-card-description" data-i18n="admin.accountLookup.resultsDescription">
+          Review account metadata and pick a result to manage status from the isolated admin lane.
+        </p>
+      </div>
+      <span class="admin-chip muted" id="adminAccountLookupCount" data-i18n="admin.accountLookup.idleCount">
+        Waiting for search
+      </span>
+    </div>
+
+    <div
+      class="admin-lookup-results-summary"
+      id="adminAccountLookupSummary"
+      data-i18n="admin.accountLookup.idleSummary"
+    >
+      Search by email, username or accountId
+    </div>
+
+    <div
+      class="admin-lookup-empty-state"
+      id="adminAccountLookupState"
+      data-i18n="admin.accountLookup.idleState"
+    >
+      Start with a precise keyword to inspect account data without touching the social flow.
+    </div>
+
+    <div class="admin-lookup-results-grid" id="adminAccountLookupResults"></div>
+  </section>
+</div>
