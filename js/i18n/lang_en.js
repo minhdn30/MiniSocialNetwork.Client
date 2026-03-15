@@ -192,7 +192,7 @@
       },
     },
     auth: {
-      title: "CloudM Auth",
+      title: "CloudM",
       createAccount: "Create Account",
       signInHeading: "Sign in",
       registrationRules: "Registration rules",
@@ -269,6 +269,8 @@
       accountRestricted: "Your account is restricted",
       accountRestrictedSupport:
         "Your account is restricted, please contact support",
+      accountSuspended: "Your account has been suspended, please contact support",
+      accountBanned: "Your account has been banned, please contact support",
       accountNotFound: "Account not found",
       invalidResetCode: "Reset code is invalid or has expired",
       prepareResetRequestFailed: "Couldn't start the reset request right now",
@@ -341,6 +343,11 @@
       search: "Search",
       explore: "Explore",
       reels: "Reels",
+      about: "About",
+      badges: {
+        experimental: "Experimental build",
+      },
+      copyPrefix: "Social app in progress",
       ariaFooter: "Application Footer",
       ariaNav: "Footer Navigation",
     },
@@ -437,6 +444,7 @@
         comingSoon: "More options coming soon",
         blockedUsersComingSoon: "Blocked users list coming soon",
         reportComingSoon: "Report feature coming soon",
+        reportUnavailable: "We couldn't send your report right now",
         blockComingSoon: "Block feature coming soon",
       },
       page: {
@@ -997,8 +1005,7 @@
           title: "Who Can Tag Me",
         },
         soundEffects: {
-          description:
-            "Turn sounds on or off in the app",
+          description: "Turn sounds on or off in the app",
           title: "Sound Effects",
         },
         title: "Account Settings",
@@ -1460,16 +1467,27 @@
         commentingOff: "Commenting turned off",
         reportDialog: {
           title: "Report",
+          descriptionAccount: "Why are you reporting this account?",
           descriptionPost: "Why are you reporting this post?",
+          descriptionStory: "Why are you reporting this story?",
           descriptionComment: "Why are you reporting this comment?",
+          descriptionReply: "Why are you reporting this reply?",
           spam: "It's spam",
           nudity: "Nudity or sexual activity",
           hate: "Hate speech or symbols",
           violence: "Violence or dangerous organizations",
           falseInformation: "False information",
           scam: "Scam or fraud",
+          failed: "We couldn't send your report right now",
+          alreadyReported:
+            "You've already reported this item and it's still under review",
+          rateLimited:
+            "You're reporting too fast right now. Please try again shortly",
+          successAccount: "Thanks for reporting this account. We'll review it",
           successPost: "Thanks for reporting this post. We'll review it",
+          successStory: "Thanks for reporting this story. We'll review it",
           successComment: "Thanks for reporting this comment. We'll review it",
+          successReply: "Thanks for reporting this reply. We'll review it",
         },
         following: "Following",
         unfollowed: "Unfollowed",
@@ -1557,6 +1575,7 @@
         apiUnavailable: "Story isn't available right now",
         processImageFailed:
           "Failed to process image, uploading the original instead",
+        tooFast: "You're creating stories too quickly. Please wait a few seconds",
         createFailed: "Failed to create story",
         createSuccess: "Story created successfully",
         serverUnavailable: "Could not connect to server",
@@ -1707,6 +1726,7 @@
         deleteSuccess: "Story deleted",
         deleteFailed: "Failed to delete story",
         reportComingSoon: "Report feature will be available soon",
+        reportUnavailable: "We couldn't send your report right now",
         permissionDenied: "You no longer have permission to view this story",
         resolveRouteFailed: "Failed to resolve story route",
         highlightGroupUnavailable: "This highlight is no longer available",
@@ -1725,7 +1745,8 @@
           pickerHint: "Pick a mood to post a text story instantly",
           actionAria: "Create a quick story for {label}",
           confirmTitle: "Create this story?",
-          confirmMessage: "This will create a quick story with the mood {label}",
+          confirmMessage:
+            "This will create a quick story with the mood {label}",
           confirmAction: "Create story",
           happy: {
             label: "Happy",
@@ -3041,6 +3062,76 @@
         weekOther: "{count} weeks",
       },
       title: "Notifications",
+    },
+    aboutPage: {
+      eyebrow: "About CloudM",
+      title: "A familiar little social space, made in the CloudM way",
+      subtitle:
+        "CloudM is a social app inspired by Instagram and Facebook, built so posting, sharing stories, and chatting all feel simple and close.",
+      noteLabel: "A small note",
+      noteValue:
+        "CloudM is still an experimental build. Some features are not complete yet, and a few parts may still be a bit rough or buggy. Thanks for bearing with us.",
+      recommendations: {
+        label: "Recommended right now",
+        desktop: "Desktop",
+        darkMode: "Dark mode",
+        english: "English",
+      },
+      principles: {
+        connection: {
+          title: "Familiar, but still our own",
+          description:
+            "CloudM borrows the social rhythm people already know, then keeps the experience lighter and easier to approach.",
+        },
+        privacy: {
+          title: "Easy to understand",
+          description:
+            "Privacy, posting, and messaging should feel clear enough that you do not have to stop and think too much.",
+        },
+        speed: {
+          title: "Still growing every day",
+          description:
+            "This is an early version, so we are still polishing flows, filling feature gaps, and cleaning up rough edges.",
+        },
+      },
+      story: {
+        label: "Where CloudM comes from",
+        title: "Inspired by Instagram and Facebook, but kept lighter and more personal",
+        descriptionPrimary:
+          "You will see familiar pieces here like posts, stories, highlights, and messaging. The idea is to bring them together in one place that feels friendly and easy to use day to day.",
+        descriptionSecondary:
+          "Because CloudM is still a test version, not everything is fully complete yet. Some features may be missing, some interactions may still change, and bugs can still happen. We really appreciate your patience.",
+      },
+      experience: {
+        label: "What you can do on CloudM right now",
+        items: {
+          sharing:
+            "Browse your feed to catch posts and fresh updates from people you care about",
+          chat:
+            "Chat with your friends in a way that feels familiar and comfortable",
+          privacy:
+            "Share your moments through stories and posts",
+          performance:
+            "Check notifications and follow suggestions so you do not miss the connections worth noticing",
+        },
+      },
+      values: {
+        community: {
+          title: "Close and friendly",
+          description:
+            "CloudM is meant to feel like a place where people can share small daily moments without too much friction.",
+        },
+        control: {
+          title: "Simple before fancy",
+          description:
+            "We would rather make core actions clear and comfortable first than overload the app with too much complexity.",
+        },
+        design: {
+          title: "Built step by step",
+          description:
+            "CloudM is still being refined, so the product will keep changing as features are completed and feedback comes in.",
+        },
+      },
     },
   };
 })(window);

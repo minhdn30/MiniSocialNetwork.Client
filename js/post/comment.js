@@ -1756,20 +1756,6 @@ const CommentModule = (function () {
     attachMentionPicker(input);
   }
 
-  function reportComment(commentId, isReply) {
-    document.getElementById("commentOptionsOverlay")?.remove();
-    console.log("Report comment:", commentId, "isReply:", isReply);
-    if (window.toastInfo) {
-      toastInfo(
-        cmtT(
-          "post.comments.reportSuccess",
-          {},
-          "Thank you for reporting this comment.",
-        ),
-      );
-    }
-  }
-
   /**
    * Helper to get edited label HTML
    */
@@ -1849,7 +1835,7 @@ const CommentModule = (function () {
     }
 
     if (window.showReportReasons) {
-      window.showReportReasons(commentId, "comment");
+      window.showReportReasons(commentId, isReply ? "reply" : "comment");
     } else {
       console.error("Report module not found");
       if (window.toastInfo) {

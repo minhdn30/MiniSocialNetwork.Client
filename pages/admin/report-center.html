@@ -1,0 +1,201 @@
+<div class="admin-page-stack admin-report-page">
+  <section class="admin-lookup-grid admin-functional-grid">
+    <article class="admin-card admin-section-card">
+      <div class="admin-card-header">
+        <div>
+          <h2 class="admin-card-title" data-i18n="admin.reports.title">
+            Report queue
+          </h2>
+          <p class="admin-card-description" data-i18n="admin.reports.description">
+            Create internal cases and review the queue in one place.
+          </p>
+        </div>
+        <span class="admin-chip" data-i18n="admin.reports.chip">Queue</span>
+      </div>
+
+      <form id="adminReportCreateForm" class="admin-control-form">
+        <div class="admin-control-grid">
+          <label class="admin-audit-field">
+            <span data-i18n="admin.reports.targetTypeLabel">Target type</span>
+            <select id="adminReportTargetType" class="admin-audit-select">
+              <option value="Account" data-i18n="admin.reports.targetTypes.account">Account</option>
+              <option value="Post" data-i18n="admin.reports.targetTypes.post">Post</option>
+              <option value="Story" data-i18n="admin.reports.targetTypes.story">Story</option>
+              <option value="Comment" data-i18n="admin.reports.targetTypes.comment">Comment</option>
+              <option value="Reply" data-i18n="admin.reports.targetTypes.reply">Reply</option>
+            </select>
+          </label>
+
+          <label class="admin-audit-field">
+            <span data-i18n="admin.reports.targetIdLabel">Target ID</span>
+            <input
+              id="adminReportTargetId"
+              type="text"
+              autocomplete="off"
+              class="admin-control-input"
+              data-i18n-placeholder="admin.reports.targetIdPlaceholder"
+              placeholder="Enter the exact targetId"
+            />
+          </label>
+
+          <label class="admin-audit-field">
+            <span data-i18n="admin.reports.reasonCodeLabel">Reason code</span>
+            <select id="adminReportReasonCode" class="admin-audit-select">
+              <option value="spam" data-i18n="admin.reports.reasonCodes.spam">Spam</option>
+              <option value="abuse" data-i18n="admin.reports.reasonCodes.abuse">Abuse</option>
+              <option value="hate" data-i18n="admin.reports.reasonCodes.hate">Hate</option>
+              <option value="violence" data-i18n="admin.reports.reasonCodes.violence">Violence</option>
+              <option value="scam" data-i18n="admin.reports.reasonCodes.scam">Scam</option>
+              <option value="other" data-i18n="admin.reports.reasonCodes.other">Other</option>
+            </select>
+          </label>
+
+          <label class="admin-audit-field">
+            <span data-i18n="admin.reports.detailLabel">Detail</span>
+            <textarea
+              id="adminReportDetail"
+              class="admin-control-textarea"
+              data-i18n-placeholder="admin.reports.detailPlaceholder"
+              placeholder="Add extra context for this internal report"
+            ></textarea>
+          </label>
+        </div>
+
+        <button type="submit" class="admin-login-submit admin-control-submit" id="adminReportCreateSubmit">
+          <span data-i18n="admin.reports.createSubmit">Create internal report</span>
+        </button>
+      </form>
+
+      <div id="adminReportCreateMessage" class="admin-login-message" aria-live="polite"></div>
+    </article>
+
+    <article class="admin-card admin-section-card">
+      <div class="admin-card-header">
+        <div>
+          <h2 class="admin-card-title" data-i18n="admin.reports.queueTitle">
+            Filters
+          </h2>
+          <p class="admin-card-description" data-i18n="admin.reports.queueDescription">
+            Narrow the queue before changing report status.
+          </p>
+        </div>
+      </div>
+
+      <form id="adminReportFilterForm" class="admin-control-form">
+        <div class="admin-control-grid">
+          <label class="admin-audit-field">
+            <span data-i18n="admin.reports.statusFilterLabel">Status</span>
+            <select id="adminReportStatusFilter" class="admin-audit-select">
+              <option value="" data-i18n="admin.reports.statusFilter.all">All statuses</option>
+              <option value="Open" data-i18n="admin.reports.statusFilter.open">Open</option>
+              <option value="InReview" data-i18n="admin.reports.statusFilter.inReview">In review</option>
+              <option value="Resolved" data-i18n="admin.reports.statusFilter.resolved">Resolved</option>
+              <option value="Dismissed" data-i18n="admin.reports.statusFilter.dismissed">Dismissed</option>
+            </select>
+          </label>
+
+          <label class="admin-audit-field">
+            <span data-i18n="admin.reports.targetFilterLabel">Target type</span>
+            <select id="adminReportTargetFilter" class="admin-audit-select">
+              <option value="" data-i18n="admin.reports.targetFilter.all">All targets</option>
+              <option value="Account" data-i18n="admin.reports.targetTypes.account">Account</option>
+              <option value="Post" data-i18n="admin.reports.targetTypes.post">Post</option>
+              <option value="Story" data-i18n="admin.reports.targetTypes.story">Story</option>
+              <option value="Comment" data-i18n="admin.reports.targetTypes.comment">Comment</option>
+              <option value="Reply" data-i18n="admin.reports.targetTypes.reply">Reply</option>
+            </select>
+          </label>
+        </div>
+
+        <button type="submit" class="admin-action-btn" id="adminReportRefreshBtn">
+          <i data-lucide="refresh-cw"></i>
+          <span data-i18n="admin.reports.refreshSubmit">Refresh queue</span>
+        </button>
+      </form>
+
+      <div id="adminReportFilterMessage" class="admin-login-message" aria-live="polite"></div>
+    </article>
+  </section>
+
+  <section class="admin-card admin-control-deck" id="adminReportStatusDeck" hidden>
+    <div class="admin-card-header">
+      <div>
+        <h2 class="admin-card-title" data-i18n="admin.reports.statusDeckTitle">
+          Report status
+        </h2>
+        <p class="admin-card-description" data-i18n="admin.reports.statusDeckDescription">
+          Move the selected case to the next queue state with a note.
+        </p>
+      </div>
+      <span class="admin-chip muted" id="adminReportStatusChip" data-i18n="admin.reports.statusDeckIdleChip">
+        Awaiting report
+      </span>
+    </div>
+
+    <div class="admin-control-target" id="adminReportStatusSummary">
+      Select a report entry to manage its queue status.
+    </div>
+
+    <form id="adminReportStatusForm" class="admin-control-form">
+      <div class="admin-control-grid">
+        <label class="admin-audit-field">
+          <span data-i18n="admin.reports.statusUpdateLabel">Target status</span>
+          <select id="adminReportStatusSelect" class="admin-audit-select">
+            <option value="Open" data-i18n="admin.reports.statusFilter.open">Open</option>
+            <option value="InReview" data-i18n="admin.reports.statusFilter.inReview">In review</option>
+            <option value="Resolved" data-i18n="admin.reports.statusFilter.resolved">Resolved</option>
+            <option value="Dismissed" data-i18n="admin.reports.statusFilter.dismissed">Dismissed</option>
+          </select>
+        </label>
+
+        <label class="admin-audit-field">
+          <span data-i18n="admin.reports.statusNoteLabel">Operator note</span>
+          <textarea
+            id="adminReportStatusNote"
+            class="admin-control-textarea"
+            data-i18n-placeholder="admin.reports.statusNotePlaceholder"
+            placeholder="Capture the reason for this queue transition"
+          ></textarea>
+        </label>
+      </div>
+
+      <div class="admin-control-actions">
+        <button type="button" class="admin-action-btn" id="adminReportStatusClear">
+          <i data-lucide="x"></i>
+          <span data-i18n="admin.reports.clearSelection">Clear selection</span>
+        </button>
+        <button type="submit" class="admin-login-submit admin-control-submit" id="adminReportStatusSubmit">
+          <span data-i18n="admin.reports.statusSubmit">Confirm status update</span>
+        </button>
+      </div>
+    </form>
+
+    <div id="adminReportStatusMessage" class="admin-login-message" aria-live="polite"></div>
+  </section>
+
+  <section class="admin-card admin-lookup-results-card">
+    <div class="admin-card-header">
+      <div>
+        <h2 class="admin-card-title" data-i18n="admin.reports.resultsTitle">
+          Recent reports
+        </h2>
+        <p class="admin-card-description" data-i18n="admin.reports.resultsDescription">
+          Queue items appear here after refresh.
+        </p>
+      </div>
+      <span class="admin-chip muted" id="adminReportCount" data-i18n="admin.reports.idleCount">
+        Waiting for queue
+      </span>
+    </div>
+
+    <div class="admin-lookup-results-summary" id="adminReportSummary" data-i18n="admin.reports.idleSummary">
+      Refresh the queue to load recent reports.
+    </div>
+
+    <div class="admin-lookup-empty-state" id="adminReportState" data-i18n="admin.reports.idleState">
+      Report items appear here after the queue loads.
+    </div>
+
+    <div class="admin-lookup-results-grid admin-report-results-grid" id="adminReportResults"></div>
+  </section>
+</div>

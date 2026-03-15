@@ -714,6 +714,9 @@
     updatePasswordProgress();
     applyPasswordStatusToUi();
     await loadPasswordStatus();
+    if (window.AppFooter?.mountMainContent) {
+      await window.AppFooter.mountMainContent();
+    }
   }
 
   if (window.I18n?.onChange) {

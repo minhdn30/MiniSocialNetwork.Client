@@ -120,6 +120,83 @@
       textColorKeys: ["light", "ink"],
     },
   ];
+  const sfT = (key, params = {}, fallback = "") =>
+    window.I18n?.t ? window.I18n.t(key, params, fallback || key) : (fallback || key);
+
+  function sfUiError(action, status, rawMessage, fallbackKey) {
+    if (window.UIErrors?.resolveMessage) {
+      return window.UIErrors.resolveMessage(
+        "story",
+        action,
+        status,
+        rawMessage,
+        fallbackKey,
+        sfT(fallbackKey, {}, fallbackKey),
+      );
+    }
+
+    const resolved = window.UIErrors?.format?.("story", action, status, rawMessage);
+    return resolved?.message || sfT(fallbackKey, {}, fallbackKey);
+  }
+
+  async function sfReadErrorMessage(
+    response,
+    action = "create",
+    fallbackKey = "errors.story.create",
+  ) {
+    const fallbackMessage = sfT(
+      fallbackKey,
+      {},
+      action === "create" ? "Couldn't create story" : "Couldn't load story",
+    );
+    if (!response) return fallbackMessage;
+
+    let rawMessage = "";
+    const readJson = async () => {
+      if (!response || typeof response.json !== "function") return null;
+      if (typeof response.clone === "function") {
+        return await response.clone().json();
+      }
+      return await response.json();
+    };
+    const readText = async () => {
+      if (!response || typeof response.text !== "function") return "";
+      if (typeof response.clone === "function") {
+        return await response.clone().text();
+      }
+      return await response.text();
+    };
+
+    try {
+      const data = await readJson();
+      if (typeof data?.message === "string" && data.message.trim()) {
+        rawMessage = data.message.trim();
+      } else if (typeof data?.Message === "string" && data.Message.trim()) {
+        rawMessage = data.Message.trim();
+      } else if (typeof data?.title === "string" && data.title.trim()) {
+        rawMessage = data.title.trim();
+      } else if (typeof data?.Title === "string" && data.Title.trim()) {
+        rawMessage = data.Title.trim();
+      } else if (data?.errors && typeof data.errors === "object") {
+        const firstKey = Object.keys(data.errors)[0];
+        const firstValue = firstKey ? data.errors[firstKey] : null;
+        if (Array.isArray(firstValue) && firstValue.length > 0) {
+          rawMessage = String(firstValue[0] || "").trim();
+        }
+      }
+    } catch (_) {}
+
+    if (!rawMessage) {
+      try {
+        const text = await readText();
+        if (typeof text === "string" && text.trim()) {
+          rawMessage = text.trim();
+        }
+      } catch (_) {}
+    }
+
+    return sfUiError(action, response.status, rawMessage, fallbackKey);
+  }
 
   function parsePositiveInt(value, fallbackValue) {
     const parsed = Number(value);
@@ -1445,13 +1522,11 @@
     if (!window.API?.Stories?.create) {
       if (window.toastError) {
         window.toastError(
-          window.I18n?.t
-            ? window.I18n.t(
-                "story.create.apiUnavailable",
-                {},
-                "Story API isn't available",
-              )
-            : "Story API isn't available",
+          sfT(
+            "story.create.apiUnavailable",
+            {},
+            "Story API isn't available",
+          ),
         );
       }
       return;
@@ -1491,16 +1566,13 @@
     try {
       const res = await window.API.Stories.create(formData);
       if (!res.ok) {
+        const message = await sfReadErrorMessage(
+          res,
+          "create",
+          "errors.story.create",
+        );
         if (window.toastError) {
-          window.toastError(
-            window.I18n?.t
-              ? window.I18n.t(
-                  "story.create.createFailed",
-                  {},
-                  "Failed to create story",
-                )
-              : "Failed to create story",
-          );
+          window.toastError(message);
         }
         return;
       }
@@ -1508,13 +1580,11 @@
       const story = await res.json().catch(() => null);
       if (window.toastSuccess) {
         window.toastSuccess(
-          window.I18n?.t
-            ? window.I18n.t(
-                "story.create.createSuccess",
-                {},
-                "Story created successfully",
-              )
-            : "Story created successfully",
+          sfT(
+            "story.create.createSuccess",
+            {},
+            "Story created successfully",
+          ),
         );
       }
       window.dispatchEvent(new CustomEvent("story:created", { detail: story }));
@@ -1522,13 +1592,11 @@
       console.error("submitQuickMoodStory failed:", error);
       if (window.toastError) {
         window.toastError(
-          window.I18n?.t
-            ? window.I18n.t(
-                "story.create.serverUnavailable",
-                {},
-                "Can't connect to the server",
-              )
-            : "Can't connect to the server",
+          sfT(
+            "story.create.serverUnavailable",
+            {},
+            "Can't connect to the server",
+          ),
         );
       }
     } finally {

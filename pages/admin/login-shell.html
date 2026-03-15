@@ -1,0 +1,60 @@
+<div class="admin-login-shell">
+  <section class="admin-login-panel admin-login-copy-panel">
+    <div class="admin-login-badge" data-i18n="admin.login.badge">
+      CloudM Admin
+    </div>
+    <h1 class="admin-login-heading" data-i18n="admin.login.heading">
+      Operations sign in
+    </h1>
+    <p class="admin-login-description" data-i18n="admin.login.description">
+      Use an admin account to enter the isolated control workspace.
+    </p>
+  </section>
+
+  <section class="admin-login-panel admin-login-form-panel">
+    <div class="admin-login-form-card">
+      <div class="admin-login-form-header">
+        <div class="admin-login-form-label" data-i18n="admin.login.formLabel">
+          Admin access
+        </div>
+        <h2 class="admin-login-form-title" data-i18n="admin.login.formTitle">
+          Use an admin account
+        </h2>
+      </div>
+
+      <form id="adminLoginForm" class="admin-login-form">
+        <label class="admin-login-field">
+          <span data-i18n="admin.login.email">Email</span>
+          <input
+            id="adminLoginEmail"
+            type="email"
+            autocomplete="username"
+            data-i18n-placeholder="admin.login.emailPlaceholder"
+            placeholder="Enter your admin email"
+          />
+        </label>
+
+        <label class="admin-login-field">
+          <span data-i18n="admin.login.password">Password</span>
+          <input
+            id="adminLoginPassword"
+            type="password"
+            autocomplete="current-password"
+            data-i18n-placeholder="admin.login.passwordPlaceholder"
+            placeholder="Enter your password"
+          />
+        </label>
+
+        <div
+          id="adminLoginMessage"
+          class="admin-login-message"
+          aria-live="polite"
+        ></div>
+
+        <button type="submit" id="adminLoginSubmit" class="admin-login-submit">
+          <span data-i18n="admin.login.submit">Sign in</span>
+        </button>
+      </form>
+    </div>
+  </section>
+</div>

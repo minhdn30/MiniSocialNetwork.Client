@@ -107,6 +107,8 @@
     }
 
     const currentPath = parseHashPath(global.location.hash || "");
+    const isAboutRoute =
+      currentPath === "/about-us" || currentPath.startsWith("/about-us/");
     const isExploreRoute = currentPath === "/explore" || currentPath.startsWith("/explore/");
     const isReelsRoute = currentPath === "/reels" || currentPath.startsWith("/reels/");
 
@@ -114,6 +116,7 @@
       "active",
       isProfileLikeRoute(currentPath) ||
         isAccountSettingsRoute(currentPath) ||
+        isAboutRoute ||
         isExploreRoute ||
         isReelsRoute,
     );

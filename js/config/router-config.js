@@ -2,6 +2,7 @@
   const PATHS = Object.freeze({
     ROOT: "/",
     HOME: "/",
+    ABOUT: "/about-us",
     ERROR_404: "/404",
     SEARCH: "/search",
     EXPLORE: "/explore",

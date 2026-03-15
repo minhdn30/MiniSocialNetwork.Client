@@ -1,0 +1,72 @@
+<div class="admin-page-stack admin-audit-page">
+  <section class="admin-card admin-section-card admin-audit-control-card">
+    <div class="admin-card-header">
+      <div>
+        <h2 class="admin-card-title" data-i18n="admin.auditLog.introTitle">
+          Audit log
+        </h2>
+        <p class="admin-card-description" data-i18n="admin.auditLog.introDescription">
+          Filter recent admin actions and review the timeline.
+        </p>
+      </div>
+      <span class="admin-chip" data-i18n="admin.auditLog.liveChip">Live</span>
+    </div>
+
+    <form id="adminAuditLogForm" class="admin-audit-form">
+      <div class="admin-audit-field-row">
+        <label class="admin-audit-field">
+          <span data-i18n="admin.auditLog.moduleLabel">Module</span>
+          <select id="adminAuditModuleSelect" class="admin-audit-select">
+            <option value="" data-i18n="admin.auditLog.moduleFilter.all">All modules</option>
+            <option value="auth" data-i18n="admin.auditLog.moduleFilter.auth">Auth</option>
+            <option value="accounts" data-i18n="admin.auditLog.moduleFilter.accounts">Accounts</option>
+            <option value="moderation" data-i18n="admin.auditLog.moduleFilter.moderation">Moderation</option>
+            <option value="audit" data-i18n="admin.auditLog.moduleFilter.audit">Audit</option>
+          </select>
+        </label>
+
+        <label class="admin-audit-field">
+          <span data-i18n="admin.auditLog.actionLabel">Action type</span>
+          <select id="adminAuditActionSelect" class="admin-audit-select">
+            <option value="" data-i18n="admin.auditLog.actionFilter.all">All actions</option>
+            <option value="AdminLogin" data-i18n="admin.auditLog.actionFilter.adminLogin">
+              Admin login
+            </option>
+          </select>
+        </label>
+      </div>
+
+      <button type="submit" id="adminAuditRefreshBtn" class="admin-login-submit admin-audit-submit">
+        <span data-i18n="admin.auditLog.refreshSubmit">Refresh logs</span>
+      </button>
+    </form>
+
+    <div id="adminAuditLogMessage" class="admin-login-message" aria-live="polite"></div>
+  </section>
+
+  <section class="admin-card admin-audit-results-card">
+    <div class="admin-card-header">
+      <div>
+        <h2 class="admin-card-title" data-i18n="admin.auditLog.timelineTitle">
+          Recent activity
+        </h2>
+        <p class="admin-card-description" data-i18n="admin.auditLog.timelineDescription">
+          Every record stays inside the admin lane.
+        </p>
+      </div>
+      <span class="admin-chip muted" id="adminAuditLogCount" data-i18n="admin.auditLog.idleCount">
+        Waiting for logs
+      </span>
+    </div>
+
+    <div class="admin-lookup-results-summary" id="adminAuditLogSummary" data-i18n="admin.auditLog.idleSummary">
+      Recent admin actions appear here
+    </div>
+
+    <div class="admin-lookup-empty-state" id="adminAuditLogState" data-i18n="admin.auditLog.idleState">
+      Audit entries will appear here once admin actions are recorded.
+    </div>
+
+    <div class="admin-audit-timeline" id="adminAuditLogTimeline"></div>
+  </section>
+</div>

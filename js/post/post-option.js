@@ -184,12 +184,6 @@ function showPostOptions(
       <button class="post-option" onclick="editPost('${postId}')">
         <i data-lucide="edit"></i><span>${poT("post.options.menu.edit", {}, "Edit")}</span>
       </button>
-      <button class="post-option" onclick="hidePostLikes('${postId}')">
-        <i data-lucide="eye-off"></i><span>${poT("post.options.menu.hideLikeCount", {}, "Hide like count")}</span>
-      </button>
-      <button class="post-option" onclick="turnOffCommenting('${postId}')">
-        <i data-lucide="message-square-off"></i><span>${poT("post.options.menu.turnOffCommenting", {}, "Turn off commenting")}</span>
-      </button>
     `;
   } else {
     const safePostCodeForJs = (postCode || "")
@@ -201,9 +195,6 @@ function showPostOptions(
       <button class="post-option post-option-danger" onclick="reportPost('${postId}')">
         <i data-lucide="flag"></i><span>${poT("post.options.menu.report", {}, "Report")}</span>
       </button>
-      <button class="post-option" onclick="hidePost('${postId}')">
-        <i data-lucide="eye-off"></i><span>${poT("post.options.menu.hide", {}, "Hide")}</span>
-      </button>
       ${
         isCurrentUserTagged
           ? `<button class="post-option" onclick="untagMeFromPost('${postId}')">
@@ -213,9 +204,6 @@ function showPostOptions(
       }
       <button class="post-option" onclick="copyPostLink('${safePostCodeForJs}')">
         <i data-lucide="link"></i><span>${poT("post.options.menu.copyLink", {}, "Copy link")}</span>
-      </button>
-      <button class="post-option" onclick="aboutThisAccount('${accountId}')">
-        <i data-lucide="info"></i><span>${poT("post.options.menu.aboutAccount", {}, "About this account")}</span>
       </button>
     `;
   }
@@ -599,29 +587,25 @@ function showReportReasons(targetId, type = 'post') {
   closePostOptions();
   document.querySelector(".post-options-overlay")?.remove();
 
+  const normalizedType = normalizeReportType(type);
+
   const overlay = document.createElement("div");
   overlay.className = "post-options-overlay";
 
   const popup = document.createElement("div");
   popup.className = "post-options-popup";
 
-  const typeLabel = type === "comment"
-    ? poT("common.labels.comment", {}, "comment")
-    : poT("common.labels.post", {}, "post");
-
   popup.innerHTML = `
     <div class="post-options-header">
       <h3>${poT("post.options.reportDialog.title", {}, "Report")}</h3>
-      <p>${type === "comment"
-        ? poT("post.options.reportDialog.descriptionComment", {}, "Why are you reporting this comment?")
-        : poT("post.options.reportDialog.descriptionPost", {}, "Why are you reporting this post?")}</p>
+      <p>${getReportDescription(normalizedType)}</p>
     </div>
-    <button class="post-option" onclick="submitReport('${targetId}', 'spam', '${type}')">${poT("post.options.reportDialog.spam", {}, "It's spam")}</button>
-    <button class="post-option" onclick="submitReport('${targetId}', 'inappropriate', '${type}')">${poT("post.options.reportDialog.nudity", {}, "Nudity or sexual activity")}</button>
-    <button class="post-option" onclick="submitReport('${targetId}', 'hate', '${type}')">${poT("post.options.reportDialog.hate", {}, "Hate speech or symbols")}</button>
-    <button class="post-option" onclick="submitReport('${targetId}', 'violence', '${type}')">${poT("post.options.reportDialog.violence", {}, "Violence or dangerous organizations")}</button>
-    <button class="post-option" onclick="submitReport('${targetId}', 'false', '${type}')">${poT("post.options.reportDialog.falseInformation", {}, "False information")}</button>
-    <button class="post-option" onclick="submitReport('${targetId}', 'scam', '${type}')">${poT("post.options.reportDialog.scam", {}, "Scam or fraud")}</button>
+    <button class="post-option" onclick="submitReport('${targetId}', 'spam', '${normalizedType}')">${poT("post.options.reportDialog.spam", {}, "It's spam")}</button>
+    <button class="post-option" onclick="submitReport('${targetId}', 'inappropriate', '${normalizedType}')">${poT("post.options.reportDialog.nudity", {}, "Nudity or sexual activity")}</button>
+    <button class="post-option" onclick="submitReport('${targetId}', 'hate', '${normalizedType}')">${poT("post.options.reportDialog.hate", {}, "Hate speech or symbols")}</button>
+    <button class="post-option" onclick="submitReport('${targetId}', 'violence', '${normalizedType}')">${poT("post.options.reportDialog.violence", {}, "Violence or dangerous organizations")}</button>
+    <button class="post-option" onclick="submitReport('${targetId}', 'false', '${normalizedType}')">${poT("post.options.reportDialog.falseInformation", {}, "False information")}</button>
+    <button class="post-option" onclick="submitReport('${targetId}', 'scam', '${normalizedType}')">${poT("post.options.reportDialog.scam", {}, "Scam or fraud")}</button>
     <button class="post-option post-option-cancel" onclick="this.closest('.post-options-overlay').remove()">${poT("post.options.menu.cancel", {}, "Cancel")}</button>
   `;
 
@@ -635,26 +619,195 @@ function showReportReasons(targetId, type = 'post') {
   };
 }
 
-function submitReport(targetId, reason, type = 'post') {
-  console.log(`Report ${type}:`, targetId, reason);
-  document.querySelector(".post-options-overlay")?.remove();
-  
-  if (window.toastSuccess) {
-      toastSuccess(
-        type === "comment"
-          ? poT(
-              "post.options.reportDialog.successComment",
-              {},
-              "Thanks for reporting. We'll review this comment.",
-            )
-          : poT(
-              "post.options.reportDialog.successPost",
-              {},
-              "Thanks for reporting. We'll review this post.",
-            ),
+function normalizeReportType(type = "post") {
+  const normalizedType = (type || "").toString().trim().toLowerCase();
+  switch (normalizedType) {
+    case "account":
+    case "profile":
+      return "account";
+    case "story":
+      return "story";
+    case "comment":
+      return "comment";
+    case "reply":
+      return "reply";
+    default:
+      return "post";
+  }
+}
+
+function getReportApiTargetType(type = "post") {
+  switch (normalizeReportType(type)) {
+    case "account":
+      return "Account";
+    case "story":
+      return "Story";
+    case "comment":
+      return "Comment";
+    case "reply":
+      return "Reply";
+    default:
+      return "Post";
+  }
+}
+
+function getReportDescription(type = "post") {
+  switch (normalizeReportType(type)) {
+    case "account":
+      return poT(
+        "post.options.reportDialog.descriptionAccount",
+        {},
+        "Why are you reporting this account?",
       );
-  } else {
-      console.log("Report submitted.");
+    case "story":
+      return poT(
+        "post.options.reportDialog.descriptionStory",
+        {},
+        "Why are you reporting this story?",
+      );
+    case "reply":
+      return poT(
+        "post.options.reportDialog.descriptionReply",
+        {},
+        "Why are you reporting this reply?",
+      );
+    case "comment":
+      return poT(
+        "post.options.reportDialog.descriptionComment",
+        {},
+        "Why are you reporting this comment?",
+      );
+    default:
+      return poT(
+        "post.options.reportDialog.descriptionPost",
+        {},
+        "Why are you reporting this post?",
+      );
+  }
+}
+
+function getReportSuccessMessage(type = "post") {
+  switch (normalizeReportType(type)) {
+    case "account":
+      return poT(
+        "post.options.reportDialog.successAccount",
+        {},
+        "Thanks for reporting this account. We'll review it",
+      );
+    case "story":
+      return poT(
+        "post.options.reportDialog.successStory",
+        {},
+        "Thanks for reporting this story. We'll review it",
+      );
+    case "reply":
+      return poT(
+        "post.options.reportDialog.successReply",
+        {},
+        "Thanks for reporting this reply. We'll review it",
+      );
+    case "comment":
+      return poT(
+        "post.options.reportDialog.successComment",
+        {},
+        "Thanks for reporting this comment. We'll review it",
+      );
+    default:
+      return poT(
+        "post.options.reportDialog.successPost",
+        {},
+        "Thanks for reporting this post. We'll review it",
+      );
+  }
+}
+
+async function getReportFailureMessage(response) {
+  let serverMessage = "";
+
+  try {
+    const payload = await response.clone().json();
+    serverMessage = (payload?.message || "").toString().trim().toLowerCase();
+  } catch (_) {
+    serverMessage = "";
+  }
+
+  if (
+    response.status === 429 ||
+    serverMessage.includes("sending reports too quickly")
+  ) {
+    return poT(
+      "post.options.reportDialog.rateLimited",
+      {},
+      "You're reporting too fast right now. Please try again shortly",
+    );
+  }
+
+  if (
+    serverMessage.includes("already have an open report") ||
+    serverMessage.includes("already reported")
+  ) {
+    return poT(
+      "post.options.reportDialog.alreadyReported",
+      {},
+      "You've already reported this item and it's still under review",
+    );
+  }
+
+  return poT(
+    "post.options.reportDialog.failed",
+    {},
+    "We couldn't send your report right now",
+  );
+}
+
+async function submitReport(targetId, reason, type = 'post') {
+  document.querySelector(".post-options-overlay")?.remove();
+
+  const normalizedType = normalizeReportType(type);
+  const normalizedTargetId = (targetId || "").toString().trim();
+  const normalizedReason = (reason || "").toString().trim().toLowerCase();
+
+  if (!normalizedTargetId || !normalizedReason || typeof window.apiFetch !== "function") {
+    toastError(
+      poT(
+        "post.options.reportDialog.failed",
+        {},
+        "We couldn't send your report right now",
+      ),
+    );
+    return;
+  }
+
+  try {
+    const response = await window.apiFetch("/Reports", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        targetType: getReportApiTargetType(normalizedType),
+        targetId: normalizedTargetId,
+        reasonCode: normalizedReason,
+      }),
+    });
+
+    if (!response.ok) {
+      const failureMessage = await getReportFailureMessage(response);
+      throw new Error(failureMessage);
+    }
+
+    toastSuccess(getReportSuccessMessage(normalizedType));
+  } catch (error) {
+    console.error("Failed to submit report:", error);
+    toastError(
+      error instanceof Error && error.message
+        ? error.message
+        : poT(
+            "post.options.reportDialog.failed",
+            {},
+            "We couldn't send your report right now",
+          ),
+    );
   }
 }
 

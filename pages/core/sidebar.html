@@ -1,7 +1,7 @@
 <!-- Sidebar -->
 <aside class="sidebar">
   <div class="sidebar-logo" data-route="/home">
-    <span class="logo-icon">&#9729;</span>
+    <img class="logo-icon" src="assets/images/favicon.png" alt="CloudM" />
     <span class="logo-text">CloudM</span>
   </div>
 
@@ -19,16 +19,6 @@
     <a class="menu-item search" href="#/search" data-route="/search">
       <i data-lucide="search"></i>
       <span data-i18n="common.navigation.search">Search</span>
-    </a>
-
-    <a class="menu-item explore" href="#/explore" data-route="/explore">
-      <i data-lucide="compass"></i>
-      <span data-i18n="common.navigation.explore">Explore</span>
-    </a>
-
-    <a class="menu-item reels" href="#/reels" data-route="/reels">
-      <i data-lucide="clapperboard"></i>
-      <span data-i18n="common.navigation.reels">Reels</span>
     </a>
 
     <a class="menu-item messages" href="#/messages" data-route="/messages">
@@ -69,6 +59,16 @@
         </div>
       </div>
     </div>
+
+    <a class="menu-item explore" href="#/explore" data-route="/explore">
+      <i data-lucide="compass"></i>
+      <span data-i18n="common.navigation.explore">Explore</span>
+    </a>
+
+    <a class="menu-item reels" href="#/reels" data-route="/reels">
+      <i data-lucide="clapperboard"></i>
+      <span data-i18n="common.navigation.reels">Reels</span>
+    </a>
   </nav>
 
   <div class="sidebar-footer">
@@ -179,7 +179,11 @@
           <span data-i18n="common.navigation.helpSupport">Help & Support</span>
         </div>
 
-        <div class="dropdown-item" onclick="openAbout(event)">
+        <div
+          class="dropdown-item"
+          data-route="/about-us"
+          onclick="navigate(event, '/about-us')"
+        >
           <i data-lucide="info"></i>
           <span data-i18n="common.navigation.about">About</span>
         </div>

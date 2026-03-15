@@ -66,6 +66,135 @@
     : [remoteHubBase];
   const apiBase = apiBaseCandidates[0];
   const hubBase = hubBaseCandidates[0];
+  const pagePaths = Object.freeze({
+    HOME: "/",
+    HOME_FILE: "/index.html",
+    AUTH: "/auth",
+    AUTH_FILE: "/auth.html",
+    AUTH_INDEX_FILE: "/auth/index.html",
+  });
+
+  function normalizePathname(pathname) {
+    let value = (pathname || "").toString().trim();
+    if (!value) return pagePaths.HOME;
+
+    if (!value.startsWith("/")) {
+      value = `/${value}`;
+    }
+
+    value = value.replace(/\/{2,}/g, "/");
+
+    if (value.length > 1 && value.endsWith("/")) {
+      value = value.slice(0, -1);
+    }
+
+    return value || pagePaths.HOME;
+  }
+
+  function getCanonicalPathname(pathname) {
+    const normalizedPath = normalizePathname(pathname);
+    if (normalizedPath === pagePaths.HOME_FILE) {
+      return pagePaths.HOME;
+    }
+    if (
+      normalizedPath === pagePaths.AUTH_FILE ||
+      normalizedPath === pagePaths.AUTH_INDEX_FILE
+    ) {
+      return pagePaths.AUTH;
+    }
+    return normalizedPath;
+  }
+
+  function isAuthPage(pathname = global.location?.pathname || pagePaths.HOME) {
+    return getCanonicalPathname(pathname) === pagePaths.AUTH;
+  }
+
+  function isHomePage(pathname = global.location?.pathname || pagePaths.HOME) {
+    return getCanonicalPathname(pathname) === pagePaths.HOME;
+  }
+
+  function toSearchParams(query) {
+    if (query instanceof URLSearchParams) {
+      return new URLSearchParams(query.toString());
+    }
+
+    if (typeof query === "string") {
+      return new URLSearchParams(query.startsWith("?") ? query.slice(1) : query);
+    }
+
+    const params = new URLSearchParams();
+    if (!query || typeof query !== "object") {
+      return params;
+    }
+
+    Object.entries(query).forEach(([key, value]) => {
+      if (!key || value === undefined || value === null) return;
+      params.set(key, String(value));
+    });
+
+    return params;
+  }
+
+  function buildPageUrl(pathname, query) {
+    const normalizedPath = normalizePathname(pathname);
+    const params = toSearchParams(query);
+    const queryString = params.toString();
+    return queryString ? `${normalizedPath}?${queryString}` : normalizedPath;
+  }
+
+  function normalizeHash(hash) {
+    const value = (hash || "").toString().trim();
+    if (!value) return "";
+    return value.startsWith("#") ? value : `#${value}`;
+  }
+
+  function getPreferredHomePath() {
+    return pagePaths.HOME;
+  }
+
+  function getPreferredAuthPath() {
+    return pagePaths.AUTH;
+  }
+
+  function getHomeUrl(query, hash) {
+    return `${buildPageUrl(getPreferredHomePath(), query)}${normalizeHash(hash)}`;
+  }
+
+  function getAuthUrl(query, hash) {
+    return `${buildPageUrl(getPreferredAuthPath(), query)}${normalizeHash(hash)}`;
+  }
+
+  function canonicalizeEntryPath() {
+    if (!global.history?.replaceState) {
+      return;
+    }
+
+    const rawPath = (global.location?.pathname || pagePaths.HOME).toString().trim();
+    const currentPath = rawPath
+      ? rawPath.startsWith("/")
+        ? rawPath.replace(/\/{2,}/g, "/")
+        : `/${rawPath}`.replace(/\/{2,}/g, "/")
+      : pagePaths.HOME;
+    const canonicalPath = getCanonicalPathname(currentPath);
+    if (currentPath === canonicalPath) {
+      return;
+    }
+
+    const nextUrl = `${canonicalPath}${global.location?.search || ""}${global.location?.hash || ""}`;
+    global.history.replaceState(global.history.state, "", nextUrl);
+  }
+
+  global.PageRoutes = {
+    PATHS: pagePaths,
+    normalizePathname,
+    getCanonicalPathname,
+    isAuthPage,
+    isHomePage,
+    getHomeUrl,
+    getAuthUrl,
+  };
+
+  canonicalizeEntryPath();
   const fallbackChatThemeOptions = [
     {
       key: "default",
@@ -124,6 +253,7 @@
     API_BASE_CANDIDATES: apiBaseCandidates, // API fallback candidates (local dev)
     HUB_BASE: hubBase, // SignalR
     HUB_BASE_CANDIDATES: hubBaseCandidates, // SignalR fallback candidates (local dev)
+    PAGE_PATHS: pagePaths,
     DEFAULT_AVATAR: "assets/images/default-avatar.jpg", // Default avatar image
     NEWSFEED_LIMIT: 5, // Max newsfeed limit/1 rq
     CAPTION_TRUNCATE_LENGTH: 150, // Chiều dài nội dung post tối đa trước khi bị cắt và hiện nút "more"

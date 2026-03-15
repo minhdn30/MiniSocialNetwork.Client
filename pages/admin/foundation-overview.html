@@ -1,0 +1,144 @@
+<section class="admin-overview-panel">
+  <div class="admin-overview-copy">
+    <div class="admin-eyebrow" data-i18n="admin.eyebrow">Operations desk</div>
+    <h2 class="admin-heading" data-i18n="admin.heading">CloudM admin</h2>
+    <p class="admin-subtitle" data-i18n="admin.subtitle">
+      Accounts, moderation, reports and audit in one isolated workspace.
+    </p>
+  </div>
+
+  <div class="admin-overview-metrics">
+    <article class="admin-overview-metric">
+      <div class="admin-overview-kicker" data-i18n="admin.overview.metrics.accountsLabel">
+        Accounts
+      </div>
+      <div class="admin-overview-value" data-i18n="admin.overview.metrics.accountsValue">
+        Status control
+      </div>
+    </article>
+
+    <article class="admin-overview-metric">
+      <div class="admin-overview-kicker" data-i18n="admin.overview.metrics.moderationLabel">
+        Moderation
+      </div>
+      <div class="admin-overview-value" data-i18n="admin.overview.metrics.moderationValue">
+        Hide, restore, remove
+      </div>
+    </article>
+
+    <article class="admin-overview-metric">
+      <div class="admin-overview-kicker" data-i18n="admin.overview.metrics.reportsLabel">
+        Reports
+      </div>
+      <div class="admin-overview-value" data-i18n="admin.overview.metrics.reportsValue">
+        Queue review
+      </div>
+    </article>
+
+    <article class="admin-overview-metric">
+      <div class="admin-overview-kicker" data-i18n="admin.overview.metrics.auditLabel">
+        Audit
+      </div>
+      <div class="admin-overview-value" data-i18n="admin.overview.metrics.auditValue">
+        Action history
+      </div>
+    </article>
+  </div>
+</section>
+
+<section class="admin-overview-grid">
+  <article class="admin-card admin-overview-card">
+    <div class="admin-card-header">
+      <div>
+        <h3 class="admin-card-title" data-i18n="admin.overview.systemTitle">System pulse</h3>
+        <p class="admin-card-description" data-i18n="admin.overview.systemDescription">
+          Current admin lane posture.
+        </p>
+      </div>
+      <span class="admin-chip success" id="adminBootstrapStatus" data-i18n="admin.bootstrapPending">
+        Live
+      </span>
+    </div>
+
+    <div class="admin-overview-details">
+      <div class="admin-overview-row">
+        <span data-i18n="admin.overview.systemSession">Session</span>
+        <strong data-i18n="admin.overview.systemSessionValue">Tab isolated</strong>
+      </div>
+      <div class="admin-overview-row">
+        <span data-i18n="admin.overview.systemCheckedAt">Last sync</span>
+        <strong id="adminBootstrapCheckedAt" data-i18n="admin.common.notAvailable">Not available</strong>
+      </div>
+      <div class="admin-overview-row">
+        <span data-i18n="admin.overview.systemModules">Modules</span>
+        <strong id="adminBootstrapModules" data-i18n="admin.modulePlaceholder">No modules yet</strong>
+      </div>
+    </div>
+  </article>
+
+  <article class="admin-card admin-overview-card">
+    <div class="admin-card-header">
+      <div>
+        <h3 class="admin-card-title" data-i18n="admin.overview.accountTitle">Account control</h3>
+        <p class="admin-card-description" data-i18n="admin.overview.accountDescription">
+          Search exact accounts and move status with audit reason.
+        </p>
+      </div>
+    </div>
+
+    <div class="admin-list compact">
+      <div class="admin-list-item">
+        <i data-lucide="search-check"></i>
+        <span data-i18n="admin.overview.accountPointOne">Lookup by email, username or accountId</span>
+      </div>
+      <div class="admin-list-item">
+        <i data-lucide="badge-alert"></i>
+        <span data-i18n="admin.overview.accountPointTwo">All current account statuses are available</span>
+      </div>
+    </div>
+  </article>
+
+  <article class="admin-card admin-overview-card">
+    <div class="admin-card-header">
+      <div>
+        <h3 class="admin-card-title" data-i18n="admin.overview.moderationTitle">Moderation</h3>
+        <p class="admin-card-description" data-i18n="admin.overview.moderationDescription">
+          Act on exact targets only.
+        </p>
+      </div>
+    </div>
+
+    <div class="admin-list compact">
+      <div class="admin-list-item">
+        <i data-lucide="shield-alert"></i>
+        <span data-i18n="admin.overview.moderationPointOne">Post and story support hide and restore</span>
+      </div>
+      <div class="admin-list-item">
+        <i data-lucide="message-square-x"></i>
+        <span data-i18n="admin.overview.moderationPointTwo">Comment and reply remain remove only</span>
+      </div>
+    </div>
+  </article>
+
+  <article class="admin-card admin-overview-card">
+    <div class="admin-card-header">
+      <div>
+        <h3 class="admin-card-title" data-i18n="admin.overview.reportsTitle">Reports</h3>
+        <p class="admin-card-description" data-i18n="admin.overview.reportsDescription">
+          Work through internal and user-submitted cases.
+        </p>
+      </div>
+    </div>
+
+    <div class="admin-list compact">
+      <div class="admin-list-item">
+        <i data-lucide="files"></i>
+        <span data-i18n="admin.overview.reportsPointOne">Create internal reports from admin</span>
+      </div>
+      <div class="admin-list-item">
+        <i data-lucide="arrow-right-left"></i>
+        <span data-i18n="admin.overview.reportsPointTwo">Move cases across queue statuses with notes</span>
+      </div>
+    </div>
+  </article>
+</section>

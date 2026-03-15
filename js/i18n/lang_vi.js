@@ -193,7 +193,7 @@
     },
     auth: {
       sending: "Đang gửi...",
-      title: "CloudM Đăng nhập",
+      title: "CloudM",
       createAccount: "Tạo tài khoản",
       signInHeading: "Đăng nhập",
       fullName: "Họ tên",
@@ -271,6 +271,9 @@
       accountRestricted: "Tài khoản của bạn đang bị hạn chế",
       accountRestrictedSupport:
         "Tài khoản của bạn đang bị hạn chế, vui lòng liên hệ hỗ trợ",
+      accountSuspended:
+        "Tài khoản của bạn đang bị tạm khóa, vui lòng liên hệ hỗ trợ",
+      accountBanned: "Tài khoản của bạn đã bị cấm, vui lòng liên hệ hỗ trợ",
       accountNotFound: "Không tìm thấy tài khoản",
       invalidResetCode: "Mã đặt lại không hợp lệ hoặc đã hết hạn",
       prepareResetRequestFailed: "Không thể bắt đầu yêu cầu đặt lại",
@@ -345,6 +348,11 @@
       search: "Tìm kiếm",
       explore: "Khám phá",
       reels: "Reels",
+      about: "Giới thiệu",
+      badges: {
+        experimental: "Bản thử nghiệm",
+      },
+      copyPrefix: "Ứng dụng vẫn đang được hoàn thiện",
       ariaNav: "Điều hướng chân trang",
       ariaFooter: "Chân trang ứng dụng",
     },
@@ -385,6 +393,7 @@
         pendingRequests: "Yêu cầu đã gửi",
         blockedUsersComingSoon: "Danh sách chặn đang được phát triển",
         reportComingSoon: "Chức năng báo cáo đang được phát triển",
+        reportUnavailable: "Hiện chưa thể gửi báo cáo",
         blockComingSoon: "Chức năng Block đang được phát triển",
       },
       page: {
@@ -997,8 +1006,7 @@
           title: "Ai có thể gắn thẻ tôi",
         },
         soundEffects: {
-          description:
-            "Bật hoặc tắt âm báo trong ứng dụng",
+          description: "Bật hoặc tắt âm báo trong ứng dụng",
           title: "Hiệu ứng âm thanh",
         },
         title: "Cài đặt tài khoản",
@@ -1269,16 +1277,27 @@
         },
         reportDialog: {
           title: "Báo cáo",
+          descriptionAccount: "Tại sao bạn lại báo cáo tài khoản này?",
           descriptionComment: "Tại sao bạn lại báo cáo bình luận này?",
           spam: "Đó là thư rác",
           descriptionPost: "Tại sao bạn lại báo cáo bài viết này?",
+          descriptionStory: "Tại sao bạn lại báo cáo tin này?",
+          descriptionReply: "Tại sao bạn lại báo cáo câu trả lời này?",
           hate: "Lời nói hoặc biểu tượng căm thù",
           falseInformation: "Thông tin sai sự thật",
           nudity: "Ảnh khỏa thân hoặc hoạt động tình dục",
           violence: "Các tổ chức bạo lực hoặc nguy hiểm",
+          failed: "Hiện chưa thể gửi báo cáo",
+          alreadyReported:
+            "Bạn đã báo cáo mục này và mục đó vẫn đang được xem xét",
+          rateLimited:
+            "Bạn đang báo cáo quá nhanh. Vui lòng thử lại sau một chút",
+          successAccount: "Đã gửi báo cáo. Tài khoản này sẽ được xem xét.",
           successComment: "Đã gửi báo cáo. Bình luận này sẽ được xem xét.",
           scam: "Lừa đảo hoặc gian lận",
           successPost: "Đã gửi báo cáo. Bài viết này sẽ được xem xét.",
+          successStory: "Đã gửi báo cáo. Tin này sẽ được xem xét.",
+          successReply: "Đã gửi báo cáo. Câu trả lời này sẽ được xem xét.",
         },
         following: "Đang theo dõi",
         postUnavailable: "Bài viết này không còn khả dụng",
@@ -1561,6 +1580,7 @@
         uploadMediaFirst: "Vui lòng tải ảnh hoặc video lên trước",
         serverUnavailable: "Không thể kết nối với máy chủ",
         discardTitle: "Không lưu tin này?",
+        tooFast: "Bạn đang tạo tin quá nhanh. Vui lòng chờ vài giây rồi thử lại",
         createFailed: "Không thể tạo tin",
         unsupportedMedia: "Chỉ hỗ trợ tệp ảnh hoặc video",
         createSuccess: "Đã tạo tin",
@@ -1703,6 +1723,7 @@
         viewersLoading: "Đang tải danh sách người xem...",
         deleteSuccess: "Đã xóa tin",
         reportComingSoon: "Chức năng báo cáo đang được phát triển",
+        reportUnavailable: "Hiện chưa thể gửi báo cáo",
         highlightFallbackName: "Tin nổi bật",
         deleteFailed: "Không thể xóa tin",
         deleteDescription:
@@ -3067,6 +3088,77 @@
         weekOther: "{count} tuần",
       },
       title: "Thông báo",
+    },
+    aboutPage: {
+      eyebrow: "Về CloudM",
+      title: "Một góc mạng xã hội quen thuộc theo cách của CloudM",
+      subtitle:
+        "CloudM là một ứng dụng mạng xã hội lấy cảm hứng từ Instagram và Facebook, để việc đăng bài, xem tin và nhắn tin với nhau trở nên đơn giản và gần gũi hơn.",
+      noteLabel: "Lưu ý nhỏ",
+      noteValue:
+        "CloudM hiện vẫn là bản thử nghiệm. Một vài tính năng chưa đầy đủ, một số chỗ có thể còn hơi thô hoặc phát sinh lỗi nhỏ. Mong mọi người thông cảm và góp ý thêm để CloudM hoàn thiện hơn.",
+      recommendations: {
+        label: "Khuyên dùng lúc này",
+        desktop: "Desktop",
+        darkMode: "Dark mode",
+        english: "Tiếng Anh",
+      },
+      principles: {
+        connection: {
+          title: "Quen mắt nhưng vẫn có nét riêng",
+          description:
+            "CloudM lấy nhịp sử dụng quen thuộc từ những mạng xã hội lớn, rồi giữ trải nghiệm gọn hơn và dễ tiếp cận hơn.",
+        },
+        privacy: {
+          title: "Dễ hiểu, dễ dùng",
+          description:
+            "Từ quyền riêng tư đến đăng bài hay nhắn tin, mọi thứ nên đủ rõ để dùng thoải mái mà không phải suy nghĩ quá nhiều.",
+        },
+        speed: {
+          title: "Vẫn đang hoàn thiện mỗi ngày",
+          description:
+            "Đây vẫn là phiên bản đầu nên CloudM sẽ còn tiếp tục được hoàn thiện, bổ sung những tính năng còn thiếu và làm mượt các phần chưa ổn.",
+        },
+      },
+      story: {
+        label: "CloudM đến từ đâu",
+        title:
+          "Lấy cảm hứng từ Instagram và Facebook, nhưng giữ cảm giác nhẹ và gần hơn",
+        descriptionPrimary:
+          "Ở đây sẽ có những thứ quen thuộc như bài viết, tin, tin nổi bật và nhắn tin. Mục tiêu là gom chúng về một chỗ để trải nghiệm hằng ngày tự nhiên, thân thiện và dễ dùng hơn.",
+        descriptionSecondary:
+          "Vì CloudM vẫn là bản thử nghiệm nên chưa phải mọi thứ đã hoàn chỉnh. Một số tính năng còn thiếu, một số tương tác có thể còn thay đổi và bug vẫn có thể xuất hiện. Mong mọi người thông cảm và góp ý thêm để CloudM tốt hơn.",
+      },
+      experience: {
+        label: "Lúc này trên CloudM, bạn có thể",
+        items: {
+          sharing:
+            "Lướt feed để xem bài viết và những cập nhật mới từ người bạn quan tâm",
+          chat:
+            "Trò chuyện cùng bạn bè theo cách quen thuộc và thoải mái",
+          privacy:
+            "Chia sẻ những khoảnh khắc của bạn qua tin và bài viết",
+          performance:
+            "Xem thông báo và gợi ý theo dõi để không bỏ lỡ những kết nối đáng chú ý",
+        },
+      },
+      values: {
+        community: {
+          title: "Gần gũi và thân thiện",
+          description:
+            "CloudM hướng tới cảm giác là một nơi để chia sẻ những điều nhỏ mỗi ngày mà không bị quá nặng nề hay rối mắt.",
+        },
+        control: {
+          title: "Đơn giản trước",
+          description:
+            "CloudM ưu tiên để các thao tác cốt lõi rõ ràng và dễ dùng trước, thay vì cố đưa quá nhiều thứ phức tạp vào cùng lúc.",
+        },
+        design: {
+          title: "Hoàn thiện từng bước",
+          description:
+            "CloudM vẫn đang được chỉnh dần theo phản hồi thực tế, nên giao diện và tính năng sẽ còn tiếp tục thay đổi trong thời gian tới.",
+        },
+      },
     },
   };
 })(window);

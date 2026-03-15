@@ -310,6 +310,9 @@
 
     bindEvents();
     await loadBlockedUsers(true);
+    if (window.AppFooter?.mountMainContent) {
+      await window.AppFooter.mountMainContent();
+    }
 
     if (window.lucide) {
       window.lucide.createIcons();

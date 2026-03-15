@@ -408,6 +408,21 @@ input:focus {
   transition: transform 0.6s ease-in-out;
 }
 
+.auth-overlay-logo {
+  width: clamp(140px, 44%, 190px);
+  max-width: 70%;
+  height: auto;
+  margin-bottom: 6px;
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.18));
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.overlay-panel .auth-overlay-logo + p {
+  margin-top: 4px;
+  margin-bottom: 24px;
+}
+
 .overlay-left {
   transform: translateX(-20%);
 }

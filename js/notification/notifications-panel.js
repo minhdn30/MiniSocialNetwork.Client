@@ -115,7 +115,6 @@
       requestsSummaryBadge: null,
       list: null,
       loader: null,
-      settingsBtn: null,
       closeBtn: null,
     },
     onResize: null,
@@ -1303,9 +1302,6 @@
       <div class="notifications-panel-header">
         <div class="notifications-header-title-area">
           <h2>${escapeHtml(npT("notification.panel.title"))}</h2>
-          <button class="chat-icon-btn notifications-panel-settings-btn" id="notifications-panel-settings-btn" title="${escapeHtml(npT("notification.panel.settingsTitle"))}">
-            <i data-lucide="settings" size="19"></i>
-          </button>
         </div>
         <button class="chat-icon-btn notifications-panel-close-btn" id="notifications-panel-close-btn" title="${escapeHtml(npT("notification.panel.closeTitle"))}">
           <i data-lucide="x" size="22"></i>
@@ -1379,9 +1375,6 @@
     );
     state.dom.list = panel.querySelector("#notifications-panel-list");
     state.dom.loader = panel.querySelector("#notifications-panel-more-loader");
-    state.dom.settingsBtn = panel.querySelector(
-      "#notifications-panel-settings-btn",
-    );
     state.dom.closeBtn = panel.querySelector("#notifications-panel-close-btn");
 
     bindPanelEvents();
@@ -1423,15 +1416,6 @@
   }
 
   function bindPanelEvents() {
-    if (state.dom.settingsBtn && !state.dom.settingsBtn.dataset.bound) {
-      state.dom.settingsBtn.dataset.bound = "1";
-      state.dom.settingsBtn.addEventListener("click", () => {
-        if (global.toastInfo) {
-          global.toastInfo(npT("notification.settingsComingSoon"));
-        }
-      });
-    }
-
     if (state.dom.closeBtn && !state.dom.closeBtn.dataset.bound) {
       state.dom.closeBtn.dataset.bound = "1";
       state.dom.closeBtn.addEventListener("click", () => close());

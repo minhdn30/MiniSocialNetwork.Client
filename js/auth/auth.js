@@ -293,6 +293,14 @@ function resolveAuthErrorMessageKey(action, status, rawMessage, fallbackKey) {
     return literalKey;
   }
 
+  if (normalizedRaw.includes("account has been suspended")) {
+    return "auth.accountSuspended";
+  }
+
+  if (normalizedRaw.includes("account has been banned")) {
+    return "auth.accountBanned";
+  }
+
   if (normalizedAction === "login") {
     if (safeStatus === 401) {
       if (
@@ -301,6 +309,7 @@ function resolveAuthErrorMessageKey(action, status, rawMessage, fallbackKey) {
       ) {
         return "auth.emailNotVerifiedLogin";
       }
+
       return "auth.invalidCredentials";
     }
 
@@ -363,11 +372,14 @@ function showAuthInfoKey(key, type = "info", params = {}) {
 }
 
 function buildReactivationToastHtml(message) {
+  const authUrl = window.PageRoutes?.getAuthUrl
+    ? window.PageRoutes.getAuthUrl()
+    : "/auth";
   return `<div>
         <p style="margin-bottom: 8px;">${message}</p>
         <div class="toast-actions">
           <button class="toast-btn" onclick="window.reactivateAccountAction()">${authText("auth.reactivateNow", {}, "Reactivate now")}</button>
-          <button class="toast-btn secondary" onclick="window.location.href='auth.html'">${authText("auth.later", {}, "Later")}</button>
+          <button class="toast-btn secondary" onclick="window.location.href='${authUrl}'">${authText("auth.later", {}, "Later")}</button>
         </div>
       </div>`;
 }
@@ -667,7 +679,9 @@ async function handleAuthenticatedRedirect(loginData, successMessage) {
 
   showToast(successMessage, "success");
   setTimeout(() => {
-    window.location.href = "index.html";
+    window.location.href = window.PageRoutes?.getHomeUrl
+      ? window.PageRoutes.getHomeUrl()
+      : "/";
   }, 700);
   return true;
 }

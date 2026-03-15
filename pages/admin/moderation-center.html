@@ -1,0 +1,124 @@
+<div class="admin-page-stack admin-moderation-page">
+  <section class="admin-card admin-section-card">
+    <div class="admin-card-header">
+      <div>
+        <h2 class="admin-card-title" data-i18n="admin.moderation.title">
+          Moderation
+        </h2>
+        <p class="admin-card-description" data-i18n="admin.moderation.description">
+          Use an exact lookup, then apply the correct action.
+        </p>
+      </div>
+      <span class="admin-chip" data-i18n="admin.moderation.chip">Actions</span>
+    </div>
+
+    <form id="adminModerationLookupForm" class="admin-control-form">
+      <div class="admin-control-grid">
+        <label class="admin-audit-field">
+          <span data-i18n="admin.moderation.targetTypeLabel">Target type</span>
+          <select id="adminModerationTargetType" class="admin-audit-select">
+            <option value="Post" data-i18n="admin.moderation.targetTypes.post">Post</option>
+            <option value="Story" data-i18n="admin.moderation.targetTypes.story">Story</option>
+            <option value="Comment" data-i18n="admin.moderation.targetTypes.comment">Comment</option>
+            <option value="Reply" data-i18n="admin.moderation.targetTypes.reply">Reply</option>
+          </select>
+        </label>
+
+        <label class="admin-audit-field">
+          <span data-i18n="admin.moderation.lookupLabel">Lookup key</span>
+          <input
+            id="adminModerationKeyword"
+            type="text"
+            autocomplete="off"
+            class="admin-control-input"
+            data-i18n-placeholder="admin.moderation.lookupPlaceholder"
+            placeholder="Enter postCode or exact targetId"
+          />
+        </label>
+      </div>
+
+      <button type="submit" class="admin-login-submit admin-control-submit" id="adminModerationLookupSubmit">
+        <span data-i18n="admin.moderation.lookupSubmit">Look up target</span>
+      </button>
+    </form>
+
+    <div id="adminModerationLookupMessage" class="admin-login-message" aria-live="polite"></div>
+  </section>
+
+  <section class="admin-card admin-control-deck" id="adminModerationActionDeck" hidden>
+    <div class="admin-card-header">
+      <div>
+        <h2 class="admin-card-title" data-i18n="admin.moderation.actionTitle">
+          Moderation action
+        </h2>
+        <p class="admin-card-description" data-i18n="admin.moderation.actionDescription">
+          Review the target, then confirm the action with a reason.
+        </p>
+      </div>
+      <span class="admin-chip muted" id="adminModerationCurrentState" data-i18n="admin.moderation.actionIdleChip">
+        Awaiting target
+      </span>
+    </div>
+
+    <div class="admin-control-target" id="adminModerationTargetSummary">
+      Look up a target to unlock moderation actions.
+    </div>
+
+    <form id="adminModerationActionForm" class="admin-control-form">
+      <div class="admin-control-grid">
+        <label class="admin-audit-field">
+          <span data-i18n="admin.moderation.actionLabel">Action</span>
+          <select id="adminModerationActionSelect" class="admin-audit-select"></select>
+        </label>
+
+        <label class="admin-audit-field">
+          <span data-i18n="admin.moderation.reasonLabel">Reason</span>
+          <textarea
+            id="adminModerationReason"
+            class="admin-control-textarea"
+            data-i18n-placeholder="admin.moderation.reasonPlaceholder"
+            placeholder="State the reason for this moderation action"
+          ></textarea>
+        </label>
+      </div>
+
+      <div class="admin-control-actions">
+        <button type="button" class="admin-action-btn" id="adminModerationClear">
+          <i data-lucide="x"></i>
+          <span data-i18n="admin.moderation.clearSelection">Clear target</span>
+        </button>
+        <button type="submit" class="admin-login-submit admin-control-submit" id="adminModerationActionSubmit">
+          <span data-i18n="admin.moderation.actionSubmit">Confirm moderation action</span>
+        </button>
+      </div>
+    </form>
+
+    <div id="adminModerationActionMessage" class="admin-login-message" aria-live="polite"></div>
+  </section>
+
+  <section class="admin-card admin-lookup-results-card">
+    <div class="admin-card-header">
+      <div>
+        <h2 class="admin-card-title" data-i18n="admin.moderation.resultTitle">
+          Target details
+        </h2>
+        <p class="admin-card-description" data-i18n="admin.moderation.resultDescription">
+          The matched target appears here with current state and owner context.
+        </p>
+      </div>
+      <span class="admin-chip muted" id="adminModerationResultCount" data-i18n="admin.moderation.idleCount">
+        Waiting for target
+      </span>
+    </div>
+
+    <div class="admin-lookup-results-summary" id="adminModerationSummary" data-i18n="admin.moderation.idleSummary">
+      Use an exact key to look up a moderation target.
+    </div>
+
+    <div class="admin-lookup-empty-state" id="adminModerationState" data-i18n="admin.moderation.idleState">
+      Moderation target details appear here after a successful lookup.
+    </div>
+
+    <div class="admin-lookup-results-grid admin-moderation-results-grid" id="adminModerationResults"></div>
+  </section>
+</div>

@@ -2,6 +2,7 @@ const SidebarRouteHelper = window.RouteHelper;
 const SIDEBAR_ROUTE_PATHS = SidebarRouteHelper?.PATHS || {
   ROOT: "/",
   HOME: "/",
+  ABOUT: "/about-us",
   SEARCH: "/search",
   EXPLORE: "/explore",
   REELS: "/reels",
@@ -76,6 +77,48 @@ function normalizeSidebarSoundEffectsEnabled(value, fallback = true) {
   }
 
   return Boolean(fallback);
+}
+
+const SIDEBAR_DOCUMENT_TITLE_FALLBACK = "CloudM";
+const SIDEBAR_DOCUMENT_TITLE_UNREAD_PREFIX_REGEX = /^\(\d+\)\s*/;
+let sidebarDocumentTitleState = {
+  baseTitle: "",
+  messageUnreadCount: 0,
+  notificationUnreadCount: 0,
+};
+
+function normalizeSidebarUnreadCount(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.floor(parsed));
+}
+
+function resolveSidebarBaseDocumentTitle() {
+  const currentTitle = (document.title || "")
+    .toString()
+    .replace(SIDEBAR_DOCUMENT_TITLE_UNREAD_PREFIX_REGEX, "")
+    .trim();
+
+  if (currentTitle) {
+    sidebarDocumentTitleState.baseTitle = currentTitle;
+  }
+
+  if (!sidebarDocumentTitleState.baseTitle) {
+    sidebarDocumentTitleState.baseTitle = SIDEBAR_DOCUMENT_TITLE_FALLBACK;
+  }
+
+  return sidebarDocumentTitleState.baseTitle;
+}
+
+function syncSidebarDocumentTitle() {
+  const baseTitle = resolveSidebarBaseDocumentTitle();
+  const totalUnread =
+    normalizeSidebarUnreadCount(sidebarDocumentTitleState.messageUnreadCount) +
+    normalizeSidebarUnreadCount(
+      sidebarDocumentTitleState.notificationUnreadCount,
+    );
+
+  document.title = totalUnread > 0 ? `(${totalUnread}) ${baseTitle}` : baseTitle;
 }
 
 function applySidebarProfileRoutes() {
@@ -180,9 +223,11 @@ async function loadSidebar() {
   // Load create group modal
   await loadCreateChatGroupModal();
 
-  // Attach global navigation listener to sidebar menu items
+  // Attach global navigation listener to sidebar routes
   sidebarRoot.addEventListener("click", (e) => {
-    const menuItem = e.target.closest(".menu-item, .dropdown-item");
+    const menuItem = e.target.closest(
+      ".menu-item, .dropdown-item, .sidebar-logo",
+    );
     if (menuItem && menuItem.dataset.route) {
       if (!menuItem.getAttribute("onclick")) {
         navigate(e, menuItem.dataset.route, menuItem);
@@ -273,16 +318,21 @@ window.scheduleGlobalUnreadRefresh = scheduleGlobalUnreadRefresh;
  * Set the global Messages badge to an exact value.
  */
 function setGlobalMessageBadge(count) {
+  const safeCount = normalizeSidebarUnreadCount(count);
   const badge = document.getElementById("messages-badge");
-  if (!badge) return;
-  if (count > 0) {
-    badge.textContent = count > 99 ? "99+" : count;
-    badge.style.display = "";
-  } else {
-    badge.textContent = "";
-    badge.style.display = "none";
+  if (badge) {
+    if (safeCount > 0) {
+      badge.textContent = safeCount > 99 ? "99+" : safeCount;
+      badge.style.display = "";
+    } else {
+      badge.textContent = "";
+      badge.style.display = "none";
+    }
+    badge.dataset.count = safeCount;
   }
-  badge.dataset.count = count;
+
+  sidebarDocumentTitleState.messageUnreadCount = safeCount;
+  syncSidebarDocumentTitle();
 }
 
 /**
@@ -451,21 +501,25 @@ window.scheduleGlobalNotificationUnreadRefresh =
   scheduleGlobalNotificationUnreadRefresh;
 
 function setGlobalNotificationBadge(count) {
-  const badge = document.getElementById("notifications-badge");
   const safeCount = Number.isFinite(Number(count))
     ? Math.max(0, Math.floor(Number(count)))
     : 0;
-  if (!badge) return;
+  const badge = document.getElementById("notifications-badge");
 
-  if (safeCount > 0) {
-    const cap = getNotificationsBadgeCap();
-    badge.textContent = safeCount > cap ? `${cap}+` : `${safeCount}`;
-    badge.style.display = "";
-  } else {
-    badge.textContent = "";
-    badge.style.display = "none";
+  if (badge) {
+    if (safeCount > 0) {
+      const cap = getNotificationsBadgeCap();
+      badge.textContent = safeCount > cap ? `${cap}+` : `${safeCount}`;
+      badge.style.display = "";
+    } else {
+      badge.textContent = "";
+      badge.style.display = "none";
+    }
+    badge.dataset.count = safeCount;
   }
-  badge.dataset.count = safeCount;
+
+  sidebarDocumentTitleState.notificationUnreadCount = safeCount;
+  syncSidebarDocumentTitle();
 }
 window.setGlobalNotificationBadge = setGlobalNotificationBadge;
 window.loadGlobalNotificationBadge = loadGlobalNotificationBadge;
@@ -1300,11 +1354,6 @@ function openHelp(e) {
   window.toastInfo?.(window.I18n?.t("sidebar.featureComingSoon") || "");
 }
 
-function openAbout(e) {
-  e.stopPropagation();
-  closeLanguageMenu();
-  window.toastInfo?.(window.I18n?.t("sidebar.featureComingSoon") || "");
-}
 async function loadCreateChatGroupModal() {
   const res = await fetch("pages/chat/create-chat-group-modal.html");
   const modalHTML = await res.text();

@@ -2093,12 +2093,18 @@
   function stReportStory() {
     const story = stCurrentStory();
     if (!story) return;
-    if (global.toastInfo) {
-      global.toastInfo(
+
+    if (typeof global.showReportReasons === "function") {
+      global.showReportReasons(story.storyId, "story");
+      return;
+    }
+
+    if (global.toastError) {
+      global.toastError(
         stT(
-          "story.viewer.reportComingSoon",
+          "story.viewer.reportUnavailable",
           {},
-          "Report feature will be available soon.",
+          "We couldn't send your report right now",
         ),
       );
     }
