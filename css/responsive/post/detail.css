@@ -51,11 +51,15 @@
     height: var(--cloudm-app-height, 100vh);
     max-height: var(--cloudm-app-height, 100vh);
     border-radius: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
   }
 
   #postDetailModal .post-detail-layout {
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible;
+    min-height: 100%;
   }
 
   #postDetailModal .detail-media-container {
@@ -79,10 +83,11 @@
 
   #postDetailModal .detail-info-container {
     width: 100%;
-    flex: 1;
-    height: 0;
+    flex: 0 0 auto;
+    height: auto;
     min-width: 0;
     min-height: 0;
+    overflow: visible;
     border-left: none;
     border-top: 1px solid var(--border-primary);
   }
@@ -90,8 +95,8 @@
   #postDetailModal #detailViewPanel {
     display: flex;
     flex-direction: column;
-    min-height: 0;
-    flex: 1 1 auto;
+    min-height: auto;
+    flex: 0 0 auto;
   }
 
   #postDetailModal .detail-header .user-avatar,
@@ -107,17 +112,15 @@
 
   #postDetailModal .detail-body {
     min-height: 0;
-    overflow-y: auto;
+    overflow: visible;
     padding: 12px;
-    padding-bottom: calc(
-      112px + env(safe-area-inset-bottom, 0px)
-    );
+    padding-bottom: 16px;
   }
 
   #postDetailModal .detail-footer {
     position: sticky;
     bottom: 0;
-    margin-top: auto;
+    margin-top: 0;
     padding: 10px 12px;
     padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     box-shadow: 0 -8px 20px rgba(0, 0, 0, 0.12);

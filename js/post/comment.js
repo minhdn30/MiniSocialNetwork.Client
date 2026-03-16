@@ -166,6 +166,32 @@ const CommentModule = (function () {
     });
   }
 
+  function isMobilePostDetailScrollHostCard() {
+    return !!window.matchMedia?.("(max-width: 768px)")?.matches;
+  }
+
+  function getDetailScrollViewport() {
+    const detailBody = document.getElementById("detailBody");
+    if (!detailBody) return null;
+
+    if (isMobilePostDetailScrollHostCard()) {
+      const detailCard = document.querySelector("#postDetailModal .post-detail-card");
+      if (detailCard) return detailCard;
+    }
+
+    return detailBody;
+  }
+
+  function clearDetailScrollViewportListeners() {
+    const detailBody = document.getElementById("detailBody");
+    if (detailBody) detailBody.onscroll = null;
+
+    const detailCard = document.querySelector("#postDetailModal .post-detail-card");
+    if (detailCard && detailCard !== detailBody) {
+      detailCard.onscroll = null;
+    }
+  }
+
   function buildCommentAvatarHtml(owner, ringSizeClass = "") {
     const avatarUrl = owner?.avatarUrl || APP_CONFIG.DEFAULT_AVATAR;
     const ringClass = isCurrentViewerAccount(owner?.accountId)
@@ -219,6 +245,7 @@ const CommentModule = (function () {
     // Clear DOM if exists
     const list = document.getElementById("detailCommentsList");
     if (list) list.innerHTML = "";
+    clearDetailScrollViewportListeners();
   }
 
   function resolveCommentCursor(data) {
@@ -585,15 +612,15 @@ const CommentModule = (function () {
    * Helper to ensure scrollbar appears if there's more content
    */
   function checkNeedsMoreComments(postId) {
-    const detailBody = document.getElementById("detailBody");
-    if (!detailBody) return;
+    const scrollViewport = getDetailScrollViewport();
+    if (!scrollViewport) return;
 
     // Use a small delay to let DOM settle
     setTimeout(() => {
       if (!commentHasNext || isCommentsLoading) return;
 
       // If content height is less than or near container height, load more
-      if (detailBody.scrollHeight <= detailBody.clientHeight + 100) {
+      if (scrollViewport.scrollHeight <= scrollViewport.clientHeight + 100) {
         loadComments(postId, false);
       }
     }, 100);
@@ -603,19 +630,19 @@ const CommentModule = (function () {
    * Setup infinite scroll for comments
    */
   function setupScrollListener(postId) {
-    const detailBody = document.getElementById("detailBody");
-    if (!detailBody) return;
+    const scrollViewport = getDetailScrollViewport();
+    if (!scrollViewport) return;
 
-    // Remove existing if any (prevent duplicates)
-    detailBody.onscroll = null;
+    // Remove existing listeners on both possible hosts to prevent duplicates
+    clearDetailScrollViewportListeners();
 
-    detailBody.onscroll = () => {
+    scrollViewport.onscroll = () => {
       if (isCommentsLoading || !commentHasNext) return;
 
       // Check if near bottom
       const nearBottom =
-        detailBody.scrollTop + detailBody.clientHeight >=
-        detailBody.scrollHeight - 50;
+        scrollViewport.scrollTop + scrollViewport.clientHeight >=
+        scrollViewport.scrollHeight - 50;
       if (nearBottom) {
         loadComments(postId, false);
       }
@@ -878,9 +905,9 @@ const CommentModule = (function () {
       e.stopPropagation();
       if (window.EmojiUtils) {
         const btnRect = emojiBtn.getBoundingClientRect();
-        const detailBody = document.getElementById("detailBody");
-        const bodyRect = detailBody
-          ? detailBody.getBoundingClientRect()
+        const scrollViewport = getDetailScrollViewport();
+        const bodyRect = scrollViewport
+          ? scrollViewport.getBoundingClientRect()
           : { top: 0 };
 
         const spaceAbove = btnRect.top - bodyRect.top;
@@ -1654,9 +1681,9 @@ const CommentModule = (function () {
       e.stopPropagation();
       if (window.EmojiUtils) {
         const btnRect = emojiBtn.getBoundingClientRect();
-        const detailBody = document.getElementById("detailBody");
-        const bodyRect = detailBody
-          ? detailBody.getBoundingClientRect()
+        const scrollViewport = getDetailScrollViewport();
+        const bodyRect = scrollViewport
+          ? scrollViewport.getBoundingClientRect()
           : { top: 0, right: window.innerWidth };
 
         const spaceAbove = btnRect.top - bodyRect.top;
