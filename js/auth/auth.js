@@ -1562,17 +1562,25 @@ signupForm.addEventListener("submit", async (e) => {
       }
 
       showAuthInfoKey("auth.signUpSuccess", "success");
-      const sent = await sendVerificationCode(email, { switchToCode: false });
-      if (!sent) {
-        return;
+      if (loginEmailInput) {
+        loginEmailInput.value = email;
+        syncFloatingFieldState(loginEmailInput);
       }
-
-      setPendingAutoLogin(email, password);
-      openVerifyModal({
-        email,
-        mode: VERIFY_MODAL_MODE.SIGNUP,
-        step: VERIFY_MODAL_STEP.CODE,
-      });
+      if (loginPasswordInput) {
+        loginPasswordInput.value = password;
+        syncFloatingFieldState(loginPasswordInput);
+      }
+      signupForm.reset();
+      signupUsernameInput && syncFloatingFieldState(signupUsernameInput);
+      signupFullnameInput && syncFloatingFieldState(signupFullnameInput);
+      const signupEmailInput = document.getElementById("signup-email");
+      const signupPasswordInput = document.getElementById("signup-password");
+      const signupConfirmPasswordInput = document.getElementById("cf-password");
+      signupEmailInput && syncFloatingFieldState(signupEmailInput);
+      signupPasswordInput && syncFloatingFieldState(signupPasswordInput);
+      signupConfirmPasswordInput &&
+        syncFloatingFieldState(signupConfirmPasswordInput);
+      container.classList.remove("right-panel-active");
     } catch (err) {
       console.error(err);
       showAuthInfoKey("errors.generic", "error");
