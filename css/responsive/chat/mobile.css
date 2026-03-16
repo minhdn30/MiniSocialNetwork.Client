@@ -1,4 +1,82 @@
 @media (max-width: 768px) {
+  body.chat-window-mobile-active {
+    overflow: hidden;
+  }
+
+  body.chat-window-mobile-active:not(.is-chat-page) .chat-window-container {
+    display: flex !important;
+    position: fixed;
+    inset: 0 0 var(--cloudm-mobile-nav-offset, 0px) 0;
+    width: 100%;
+    height: calc(
+      var(--cloudm-app-height, 100vh) - var(--cloudm-mobile-nav-offset, 0px)
+    );
+    gap: 0;
+    z-index: 1304;
+  }
+
+  body.chat-window-mobile-active:not(.is-chat-page) #chat-windows-stack {
+    inset: 0 0 var(--cloudm-mobile-nav-offset, 0px) 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    gap: 0;
+    padding: 0;
+  }
+
+  body.chat-window-mobile-active:not(.is-chat-page) #chat-bubbles-stack {
+    display: none !important;
+  }
+
+  body.chat-window-mobile-active:not(.is-chat-page)
+    .chat-box.chat-mobile-window-hidden {
+    display: none !important;
+  }
+
+  body.chat-window-mobile-active:not(.is-chat-page)
+    .chat-box.chat-mobile-window-active {
+    display: flex !important;
+  }
+
+  body.chat-window-mobile-active:not(.is-chat-page) .chat-box {
+    width: 100vw;
+    max-width: 100vw;
+    height: calc(
+      var(--cloudm-app-height, 100vh) - var(--cloudm-mobile-nav-offset, 0px)
+    );
+    max-height: calc(
+      var(--cloudm-app-height, 100vh) - var(--cloudm-mobile-nav-offset, 0px)
+    );
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+
+  body.chat-window-mobile-active:not(.is-chat-page) .chat-box-header {
+    padding-top: max(10px, calc(env(safe-area-inset-top, 0px) + 6px));
+    border-radius: 0;
+    cursor: default;
+  }
+
+  body.chat-window-mobile-active:not(.is-chat-page) .chat-header-actions {
+    margin-left: 12px;
+  }
+
+  body.chat-window-mobile-active:not(.is-chat-page)
+    .chat-header-actions
+    .chat-btn:not(.close) {
+    display: none !important;
+  }
+
+  body.chat-window-mobile-active:not(.is-chat-page) .chat-input-area {
+    padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+    border-radius: 0;
+  }
+
   body.chat-mobile-list-active .chat-main {
     display: none;
   }

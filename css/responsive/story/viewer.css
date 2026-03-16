@@ -82,6 +82,10 @@
     padding-right: 12px;
   }
 
+  .sn-story-viewer-surface {
+    min-height: 0;
+  }
+
   body.light-mode .sn-story-viewer-progress {
     border-radius: 0;
   }
@@ -89,6 +93,11 @@
   .sn-story-viewer-header {
     padding-left: 12px;
     padding-right: 12px;
+  }
+
+  .sn-story-viewer-header-actions {
+    flex-direction: row-reverse;
+    gap: 4px;
   }
 
   .sn-story-viewer-mobile-close {
@@ -100,6 +109,17 @@
   .sn-story-viewer-author {
     gap: 10px;
     max-width: calc(100% - 88px);
+  }
+
+  .sn-story-viewer-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    aspect-ratio: auto;
+  }
+
+  .sn-story-viewer-text-preview {
+    padding: 28px 24px 36px;
+    font-size: clamp(24px, 8vw, 40px);
   }
 
   .sn-story-viewer-nav-prev {
@@ -120,12 +140,25 @@
     padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   }
 
+  body:not(.light-mode) .sn-story-viewer-self-insight,
+  body:not(.light-mode) .sn-story-viewer-actions {
+    background:
+      linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.74) 0%,
+        rgba(0, 0, 0, 0.42) 100%
+      );
+    backdrop-filter: blur(10px);
+    border-top-color: rgba(255, 255, 255, 0.08);
+  }
+
   .sn-story-viewer-react-frame {
     justify-content: center;
   }
 
   .sn-story-viewer-reply-frame {
-    padding-left: 12px;
+    min-height: 52px;
+    padding-left: 14px;
   }
 
   .sn-story-viewer-reply-input {
@@ -140,7 +173,19 @@
   }
 
   .sn-story-viewer-more-menu {
+    left: auto;
+    right: 36px;
     max-width: min(220px, calc(100vw - 24px));
+  }
+
+  .sn-story-viewer-more-menu::before {
+    left: auto;
+    right: 11px;
+  }
+
+  .sn-story-viewer-more-menu::after {
+    left: auto;
+    right: 12px;
   }
 
   .sn-story-viewer-viewers-panel {

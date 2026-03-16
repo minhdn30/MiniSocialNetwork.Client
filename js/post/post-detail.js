@@ -1376,14 +1376,27 @@ function renderPostDetail(post, navigateDirection = null) {
 
 // Slider Logic
 let currentSlide = 0;
+let detailSliderPointerId = null;
+let detailSliderStartX = 0;
+let detailSliderStartY = 0;
+let detailSliderDeltaX = 0;
+let detailSliderDragging = false;
 function initDetailSlider(total) {
+    const slider = document.getElementById("detailMediaContainer");
     const wrapper = document.getElementById("detailSliderWrapper");
     const prev = document.getElementById("detailNavPrev");
     const next = document.getElementById("detailNavNext");
     const dots = document.getElementById("detailSliderDots");
+    if (!slider || !wrapper || !prev || !next || !dots) return;
     
     currentSlide = 0;
+    detailSliderPointerId = null;
+    detailSliderStartX = 0;
+    detailSliderStartY = 0;
+    detailSliderDeltaX = 0;
+    detailSliderDragging = false;
     wrapper.style.transform = `translateX(0)`;
+    wrapper.style.transition = "";
     dots.innerHTML = "";
 
     if (total <= 1) {
@@ -1405,14 +1418,108 @@ function initDetailSlider(total) {
 
     prev.onclick = () => goToSlide((currentSlide - 1 + total) % total);
     next.onclick = () => goToSlide((currentSlide + 1) % total);
+
+    if (slider.dataset.swipeBound === "true") {
+        return;
+    }
+
+    const mobileSwipeQuery = window.matchMedia("(max-width: 768px)");
+
+    function isSwipeEnabled() {
+        if (window.CloudMResponsive?.isMobileLayout) {
+            return window.CloudMResponsive.isMobileLayout();
+        }
+
+        return mobileSwipeQuery.matches;
+    }
+
+    function handlePointerMove(event) {
+        if (event.pointerId !== detailSliderPointerId) return;
+        const slideCount = wrapper.children.length;
+        if (slideCount <= 1) return;
+
+        detailSliderDeltaX = event.clientX - detailSliderStartX;
+        const deltaY = event.clientY - detailSliderStartY;
+
+        if (!detailSliderDragging) {
+            if (Math.abs(detailSliderDeltaX) < 8 && Math.abs(deltaY) < 8) return;
+            if (Math.abs(deltaY) > Math.abs(detailSliderDeltaX)) {
+                detailSliderPointerId = null;
+                detailSliderDeltaX = 0;
+                return;
+            }
+
+            detailSliderDragging = true;
+            wrapper.style.transition = "none";
+        }
+
+        const sliderWidth = slider.clientWidth || 1;
+        const minTranslate = -((slideCount - 1) * sliderWidth);
+        const baseTranslate = -(currentSlide * sliderWidth);
+        let nextTranslate = baseTranslate + detailSliderDeltaX;
+
+        if (nextTranslate > 0) {
+            nextTranslate *= 0.35;
+        } else if (nextTranslate < minTranslate) {
+            nextTranslate =
+                minTranslate + (nextTranslate - minTranslate) * 0.35;
+        }
+
+        wrapper.style.transform = `translate3d(${nextTranslate}px, 0, 0)`;
+        event.preventDefault();
+    }
+
+    function finishPointerDrag(event) {
+        if (event.pointerId !== detailSliderPointerId) return;
+        const slideCount = wrapper.children.length;
+
+        const wasDragging = detailSliderDragging;
+        const finalDeltaX = detailSliderDeltaX;
+        detailSliderPointerId = null;
+        detailSliderDeltaX = 0;
+        detailSliderDragging = false;
+
+        if (!wasDragging) return;
+
+        const sliderWidth = slider.clientWidth || 1;
+        const swipeThreshold = Math.min(96, sliderWidth * 0.18);
+
+        if (finalDeltaX <= -swipeThreshold && currentSlide < slideCount - 1) {
+            currentSlide += 1;
+        } else if (finalDeltaX >= swipeThreshold && currentSlide > 0) {
+            currentSlide -= 1;
+        }
+
+        goToSlide(currentSlide);
+    }
+
+    slider.addEventListener("pointerdown", (event) => {
+        if (!isSwipeEnabled()) return;
+        if (event.pointerType !== "touch" && event.pointerType !== "pen") return;
+        if (event.button !== undefined && event.button !== 0) return;
+        if (event.target.closest(".detail-nav, .media-dots, video")) return;
+
+        detailSliderPointerId = event.pointerId;
+        detailSliderStartX = event.clientX;
+        detailSliderStartY = event.clientY;
+        detailSliderDeltaX = 0;
+        detailSliderDragging = false;
+    });
+
+    slider.addEventListener("pointermove", handlePointerMove);
+    slider.addEventListener("pointerup", finishPointerDrag);
+    slider.addEventListener("pointercancel", finishPointerDrag);
+    slider.dataset.swipeBound = "true";
 }
 
 function goToSlide(index) {
     const wrapper = document.getElementById("detailSliderWrapper");
     const dots = document.getElementById("detailSliderDots").children;
     const total = dots.length;
+    if (!wrapper || total === 0) return;
     
     currentSlide = index;
+    wrapper.style.transition = "";
     wrapper.style.transform = `translateX(-${index * 100}%)`;
     
     Array.from(dots).forEach((dot, i) => {

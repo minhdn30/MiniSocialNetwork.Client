@@ -60,6 +60,94 @@ function sidebarIsAccountSettingsPath(path) {
   );
 }
 
+function sidebarIsMobileLayout() {
+  return (
+    window.CloudMResponsive?.isMobileLayout?.() || window.innerWidth <= 768
+  );
+}
+
+function sidebarIsAboutPath(path) {
+  const normalizedPath = (path || "").toString().trim();
+  return (
+    normalizedPath === SIDEBAR_ROUTE_PATHS.ABOUT ||
+    normalizedPath.startsWith(`${SIDEBAR_ROUTE_PATHS.ABOUT}/`)
+  );
+}
+
+function sidebarIsExplorePath(path) {
+  const normalizedPath = (path || "").toString().trim();
+  return (
+    normalizedPath === SIDEBAR_ROUTE_PATHS.EXPLORE ||
+    normalizedPath.startsWith(`${SIDEBAR_ROUTE_PATHS.EXPLORE}/`)
+  );
+}
+
+function sidebarIsReelsPath(path) {
+  const normalizedPath = (path || "").toString().trim();
+  return (
+    normalizedPath === SIDEBAR_ROUTE_PATHS.REELS ||
+    normalizedPath.startsWith(`${SIDEBAR_ROUTE_PATHS.REELS}/`)
+  );
+}
+
+function sidebarIsMoreRoute(path) {
+  return (
+    SidebarRouteHelper?.isProfilePath?.(path) ||
+    sidebarIsAccountSettingsPath(path) ||
+    sidebarIsAboutPath(path) ||
+    sidebarIsExplorePath(path) ||
+    sidebarIsReelsPath(path)
+  );
+}
+
+function sidebarIsChatSidebarOpen() {
+  return (
+    !!window.ChatSidebar?.isOpen &&
+    !!document.getElementById("chat-panel")?.classList.contains("show")
+  );
+}
+
+function sidebarIsChatRoute(path) {
+  const routePath = (path || "").toString().trim();
+  if (!routePath) return false;
+  if (SidebarRouteHelper?.isPathPrefix) {
+    return (
+      SidebarRouteHelper.isPathPrefix(routePath, SIDEBAR_ROUTE_PATHS.CHAT) ||
+      SidebarRouteHelper.isPathPrefix(routePath, SIDEBAR_ROUTE_PATHS.MESSAGES)
+    );
+  }
+  return (
+    routePath === SIDEBAR_ROUTE_PATHS.CHAT ||
+    routePath.startsWith(`${SIDEBAR_ROUTE_PATHS.CHAT}/`) ||
+    routePath === SIDEBAR_ROUTE_PATHS.MESSAGES ||
+    routePath.startsWith(`${SIDEBAR_ROUTE_PATHS.MESSAGES}/`)
+  );
+}
+
+function sidebarResolveMobileExclusiveActiveTarget(targetRoute) {
+  if (window.SearchPanel?.isOpen) {
+    return SIDEBAR_ROUTE_PATHS.SEARCH;
+  }
+
+  if (window.NotificationsPanel?.isOpen) {
+    return SIDEBAR_ROUTE_PATHS.NOTIFICATIONS;
+  }
+
+  if (sidebarIsChatSidebarOpen()) {
+    return SIDEBAR_ROUTE_PATHS.MESSAGES;
+  }
+
+  if (sidebarIsMoreRoute(targetRoute)) {
+    return "more";
+  }
+
+  const normalizedRoute = (targetRoute || "").toString().trim();
+  if (sidebarIsChatRoute(normalizedRoute)) {
+    return SIDEBAR_ROUTE_PATHS.MESSAGES;
+  }
+  return normalizedRoute || SIDEBAR_ROUTE_PATHS.HOME;
+}
+
 function sidebarGetAccountSettingsCacheKey(path) {
   const subpage = SidebarRouteHelper?.extractAccountSettingsSubpage
     ? SidebarRouteHelper.extractAccountSettingsSubpage(path)
@@ -742,11 +830,15 @@ function setActiveSidebar(route) {
   const myId = localStorage.getItem("accountId")?.toLowerCase();
   const myUsername = localStorage.getItem("username")?.toLowerCase();
   const selfProfilePath = sidebarResolveSelfProfilePath();
-  const selfSettingsPath = sidebarResolveSelfSettingsPath();
+  const isMobileLayout = sidebarIsMobileLayout();
 
   if (sidebarIsAccountSettingsPath(targetRoute)) {
     targetRoute = selfProfilePath;
   }
+
+  const mobileExclusiveActiveTarget = isMobileLayout
+    ? sidebarResolveMobileExclusiveActiveTarget(targetRoute)
+    : "";
 
   // Helper inside to check if a route belongs to ME
   const isRouteMine = (r) => {
@@ -786,24 +878,15 @@ function setActiveSidebar(route) {
       ? SidebarRouteHelper.isHomePath(r)
       : r === "/" || r === "/home" || r === "";
 
-  const isChatRoute = (r) => {
-    const routePath = (r || "").toString().trim();
-    if (!routePath) return false;
-    if (SidebarRouteHelper?.isPathPrefix) {
-      return (
-        SidebarRouteHelper.isPathPrefix(routePath, SIDEBAR_ROUTE_PATHS.CHAT) ||
-        SidebarRouteHelper.isPathPrefix(routePath, SIDEBAR_ROUTE_PATHS.MESSAGES)
-      );
-    }
-    return (
-      routePath === SIDEBAR_ROUTE_PATHS.CHAT ||
-      routePath.startsWith(`${SIDEBAR_ROUTE_PATHS.CHAT}/`) ||
-      routePath === SIDEBAR_ROUTE_PATHS.MESSAGES ||
-      routePath.startsWith(`${SIDEBAR_ROUTE_PATHS.MESSAGES}/`)
-    );
-  };
-
   document.querySelectorAll(".sidebar .menu-item").forEach((item) => {
+    if (item.classList.contains("more-trigger")) {
+      item.classList.toggle(
+        "active",
+        isMobileLayout && mobileExclusiveActiveTarget === "more",
+      );
+      return;
+    }
+
     const dataRoute = item.dataset.route;
     const href = item.getAttribute("href")?.replace("#", "");
 
@@ -819,7 +902,7 @@ function setActiveSidebar(route) {
       (dataRoute === selfProfilePath && isRouteMine(targetRoute));
 
     if (dataRoute === SIDEBAR_ROUTE_PATHS.MESSAGES) {
-      isActive = isChatRoute(targetRoute);
+      isActive = sidebarIsChatRoute(targetRoute) || sidebarIsChatSidebarOpen();
     }
 
     if (
@@ -839,6 +922,16 @@ function setActiveSidebar(route) {
     // Special case: Profile button only active if it's our OWN profile (no params)
     if (dataRoute === selfProfilePath && isViewingOtherProfile) {
       isActive = false;
+    }
+
+    if (isMobileLayout) {
+      isActive =
+        mobileExclusiveActiveTarget !== "more" &&
+        ((dataRoute === SIDEBAR_ROUTE_PATHS.MESSAGES &&
+          mobileExclusiveActiveTarget === SIDEBAR_ROUTE_PATHS.MESSAGES) ||
+          dataRoute === mobileExclusiveActiveTarget ||
+          href === mobileExclusiveActiveTarget ||
+          (isHome(dataRoute) && isHome(mobileExclusiveActiveTarget)));
     }
 
     item.classList.toggle("active", isActive);

@@ -28,6 +28,9 @@ const ChatWindow = {
   _dragInteractionLockCount: 0,
   _initialized: false,
   _languageCleanup: null,
+  _isRestoringState: false,
+  _mobilePresentationActiveId: "",
+  _mobilePresentationSessionActive: false,
 
   init() {
     if (this._initialized) return;
@@ -176,6 +179,13 @@ const ChatWindow = {
       true,
     );
     window.addEventListener("hashchange", () => this.resetDragInteractionState());
+    window.addEventListener("hashchange", () =>
+      this.syncMobileWindowPresentation(),
+    );
+    window.addEventListener("resize", () => this.syncMobileWindowPresentation());
+    window.addEventListener("cloudm:viewport-change", () =>
+      this.syncMobileWindowPresentation(),
+    );
 
     this.registerRealtimeHandlers();
     this.initPresenceTracking();
@@ -498,6 +508,100 @@ const ChatWindow = {
     this.refreshReplyBarsLanguage();
   },
 
+  isMobileWindowLayout() {
+    return (
+      !document.body.classList.contains("is-chat-page") &&
+      (window.CloudMResponsive?.isMobileLayout?.() ||
+        document.body.classList.contains("is-mobile-layout") ||
+        window.innerWidth <= 768)
+    );
+  },
+
+  activateMobileWindowPresentation(conversationId = "") {
+    const normalizedConversationId = this.normalizeConversationId(
+      conversationId,
+    );
+    this._mobilePresentationSessionActive = !!normalizedConversationId;
+    this._mobilePresentationActiveId = normalizedConversationId;
+    this.syncMobileWindowPresentation();
+  },
+
+  clearMobileWindowPresentation() {
+    const body = document.body;
+    if (!body) return;
+
+    body.classList.remove("chat-window-mobile-active");
+    this.openChats.forEach((chat) => {
+      chat?.element?.classList.remove(
+        "chat-mobile-window-active",
+        "chat-mobile-window-hidden",
+      );
+    });
+  },
+
+  syncMobileWindowPresentation(preferredConversationId = "") {
+    const body = document.body;
+    if (!body) return;
+
+    const normalizedPreferredId = this.normalizeConversationId(
+      preferredConversationId,
+    );
+    if (normalizedPreferredId) {
+      this._mobilePresentationActiveId =
+        this.getOpenChatId(normalizedPreferredId) || normalizedPreferredId;
+    }
+
+    if (!this.isMobileWindowLayout()) {
+      this.clearMobileWindowPresentation();
+      return;
+    }
+
+    const activeId =
+      this.getOpenChatId(this._mobilePresentationActiveId) ||
+      this._mobilePresentationActiveId;
+    const activeChat = activeId ? this.openChats.get(activeId) : null;
+    const shouldShowActiveWindow = !!(
+      this._mobilePresentationSessionActive &&
+      activeId &&
+      activeChat &&
+      !activeChat.minimized &&
+      !activeChat._isClosing &&
+      activeChat.element
+    );
+
+    this.openChats.forEach((chat, id) => {
+      if (!chat?.element) return;
+
+      const isActiveWindow = shouldShowActiveWindow && id === activeId;
+      chat.element.classList.toggle("chat-mobile-window-active", isActiveWindow);
+      chat.element.classList.toggle(
+        "chat-mobile-window-hidden",
+        shouldShowActiveWindow && !isActiveWindow,
+      );
+    });
+
+    body.classList.toggle("chat-window-mobile-active", shouldShowActiveWindow);
+
+    if (!shouldShowActiveWindow) {
+      this.openChats.forEach((chat) => {
+        chat?.element?.classList.remove(
+          "chat-mobile-window-active",
+          "chat-mobile-window-hidden",
+        );
+      });
+
+      const activeChatStillAvailable = !!(
+        activeId &&
+        activeChat &&
+        !activeChat._isClosing
+      );
+      if (!activeChatStillAvailable) {
+        this._mobilePresentationActiveId = "";
+        this._mobilePresentationSessionActive = false;
+      }
+    }
+  },
+
   saveState() {
     try {
       const state = Array.from(this.openChats.entries()).map(([id, chat]) => ({
@@ -646,10 +750,16 @@ const ChatWindow = {
       };
 
       const runRestoreSequentially = async () => {
-        for (const item of state) {
-          await restoreItemInOrder(item);
+        this._isRestoringState = true;
+        try {
+          for (const item of state) {
+            await restoreItemInOrder(item);
+          }
+          this.saveState();
+        } finally {
+          this._isRestoringState = false;
+          this.syncMobileWindowPresentation();
         }
-        this.saveState();
       };
 
       runRestoreSequentially().catch((err) => {
@@ -1483,7 +1593,15 @@ const ChatWindow = {
     chatObj._realtimeJoining = false;
     this.tryJoinRealtimeConversation(realId, chatObj);
 
+    if (
+      this._mobilePresentationActiveId &&
+      this._mobilePresentationActiveId.toLowerCase() === oldId.toLowerCase()
+    ) {
+      this._mobilePresentationActiveId = realId;
+    }
+
     this.saveState();
+    this.syncMobileWindowPresentation();
     return realId;
   },
 
@@ -2610,6 +2728,11 @@ const ChatWindow = {
       }
       this.tryJoinRealtimeConversation(convId, chat);
       this.saveState();
+      if (shouldFocus && !this._isRestoringState && this.isMobileWindowLayout()) {
+        this.activateMobileWindowPresentation(convId);
+      } else {
+        this.syncMobileWindowPresentation();
+      }
       return;
     }
 
@@ -2633,6 +2756,11 @@ const ChatWindow = {
     }
 
     this.saveState();
+    if (shouldFocus && !this._isRestoringState && this.isMobileWindowLayout()) {
+      this.activateMobileWindowPresentation(convId);
+    } else {
+      this.syncMobileWindowPresentation();
+    }
   },
 
   async openById(convId, priorityLeft = false, shouldFocus = true) {
@@ -3264,6 +3392,7 @@ const ChatWindow = {
       }
     }
     this.saveState();
+    this.syncMobileWindowPresentation();
   },
 
   minimizeWindowToBubble(id, immediate = false) {
@@ -3290,6 +3419,7 @@ const ChatWindow = {
         windowEl.classList.remove("no-transition");
       });
       this.renderBubble(id, chat.data);
+      this.syncMobileWindowPresentation();
       return true;
     }
 
@@ -3302,6 +3432,7 @@ const ChatWindow = {
       liveChat.element.style.display = "none";
       liveChat.element.classList.add("minimized");
       this.renderBubble(id, liveChat.data);
+      this.syncMobileWindowPresentation();
     };
 
     const onTransitionEnd = (event) => {
@@ -3370,6 +3501,11 @@ const ChatWindow = {
       chat.unreadCount = unreadCount;
       chatBox.classList.toggle("has-unread", unreadCount > 0);
       this.saveState();
+    }
+
+    if (this._mobilePresentationSessionActive && this.isMobileWindowLayout()) {
+      this._mobilePresentationActiveId = id;
+      this.syncMobileWindowPresentation();
     }
 
     // Auto-focus input with visible caret.
@@ -3448,6 +3584,14 @@ const ChatWindow = {
         this.openChats.delete(openId);
       }
       this.saveState();
+      if (
+        this._mobilePresentationActiveId &&
+        this._mobilePresentationActiveId.toLowerCase() ===
+          (openId || "").toLowerCase()
+      ) {
+        this._mobilePresentationActiveId = "";
+      }
+      this.syncMobileWindowPresentation();
     };
 
     const shouldAnimateBubbleClose = !!(

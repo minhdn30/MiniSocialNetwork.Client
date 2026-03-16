@@ -1,6 +1,12 @@
 /* mobile-only overrides for profile and settings pages */
 
 @media (max-width: 768px) {
+  .profile-modal-overlay {
+    z-index: 1400;
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
   #profile-preview {
     display: none !important;
   }
@@ -93,31 +99,7 @@
     flex-wrap: wrap;
   }
 
-  .profile-btn {
-    min-width: 44px;
-    max-width: none;
-    height: 40px;
-    padding: 0 12px;
-    border-radius: 12px;
-    background: var(--bg-secondary) !important;
-    border: 1px solid var(--border-primary);
-  }
-
-  .profile-btn:hover {
-    max-width: none;
-    padding: 0 12px;
-  }
-
-  .profile-btn span {
-    max-width: none;
-    opacity: 1;
-    margin-left: 8px;
-    pointer-events: auto;
-  }
-
-  .profile-actions .profile-btn-edit,
-  .profile-actions #profile-settings-btn,
-  .profile-actions .profile-btn-more {
+  .profile-actions .profile-btn {
     width: 40px;
     min-width: 40px;
     max-width: 40px;
@@ -126,9 +108,12 @@
     padding: 0;
   }
 
-  .profile-actions .profile-btn-edit span,
-  .profile-actions #profile-settings-btn span,
-  .profile-actions .profile-btn-more span {
+  .profile-actions .profile-btn:hover {
+    max-width: 40px;
+    padding: 0;
+  }
+
+  .profile-actions .profile-btn span {
     display: none;
   }
 
@@ -250,26 +235,28 @@
 
   .profile-modal-content {
     max-width: 100vw;
-    height: 100vh;
-    max-height: 100vh;
+    height: var(--cloudm-app-height, 100vh);
+    max-height: var(--cloudm-app-height, 100vh);
     border-radius: 0;
     border: none;
   }
 
   .profile-modal-header {
-    padding: 16px 20px;
+    padding: max(16px, calc(env(safe-area-inset-top, 0px) + 8px)) 20px 16px;
   }
 
   .profile-modal-body {
     padding: 18px 16px 20px;
     overflow-x: hidden;
+    min-height: 0;
   }
 
   .profile-modal-footer {
-    padding: 16px;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
     flex-direction: column-reverse;
     align-items: stretch;
     gap: 10px;
+    background: var(--bg-primary);
   }
 
   .profile-modal-footer .profile-btn-secondary,
@@ -576,9 +563,8 @@
     gap: 8px;
   }
 
-  .profile-btn {
-    flex: 1 1 calc(50% - 4px);
-    justify-content: center;
+  .profile-actions .profile-btn {
+    flex: 0 0 40px;
   }
 
   .profile-tabs {

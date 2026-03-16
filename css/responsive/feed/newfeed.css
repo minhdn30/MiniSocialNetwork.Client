@@ -37,6 +37,20 @@
     gap: 14px;
   }
 
+  .post .follow-btn {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+    border-radius: 10px;
+  }
+
+  .post .follow-btn span {
+    display: none;
+  }
+
   .post-actions i {
     width: 22px;
     height: 22px;
@@ -73,6 +87,12 @@
 
   .post-actions .left {
     gap: 12px;
+  }
+
+  .post .follow-btn {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
   }
 
   .post-actions i {

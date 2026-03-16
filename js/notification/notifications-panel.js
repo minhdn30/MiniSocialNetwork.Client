@@ -4419,7 +4419,14 @@
     document.body.classList.add("notifications-panel-open");
     state.isOpen = true;
     state.openRevealPending = true;
-    setSidebarNotificationsActive(true);
+    if (typeof global.setActiveSidebar === "function") {
+      const path = global.RouteHelper?.parseHash
+        ? global.RouteHelper.parseHash(global.location.hash || "").path
+        : "";
+      global.setActiveSidebar(path);
+    } else {
+      setSidebarNotificationsActive(true);
+    }
 
     updateTabUi();
     publishVisibleUnreadSummary();

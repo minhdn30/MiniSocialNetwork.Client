@@ -77,9 +77,23 @@
   }
 
   .profile-preview-btn {
-    padding: 8px 0;
+    width: 40px;
+    min-width: 40px;
+    flex: 0 0 40px;
+    justify-content: center;
+    gap: 0;
+    padding: 0;
     font-size: 13px;
-    min-height: 38px;
+    min-height: 40px;
+  }
+
+  .profile-preview-actions {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .profile-preview-btn span {
+    display: none;
   }
 
   .unfollow-popup {
@@ -132,11 +146,14 @@
 
   .profile-preview-actions {
     gap: 6px;
+    justify-content: center;
   }
 
   .profile-preview-btn {
-    font-size: 12px;
-    padding: 9px 0;
+    width: 38px;
+    min-width: 38px;
+    flex-basis: 38px;
+    min-height: 38px;
   }
 
   .unfollow-popup {

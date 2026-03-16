@@ -1478,9 +1478,13 @@ const ChatSidebar = {
     this.isOpen = true;
     document.body.classList.add("chat-sidebar-open");
 
-    document.querySelectorAll(".sidebar .menu-item").forEach((item) => {
-      if (item.dataset.route === "/messages") item.classList.add("active");
-    });
+    if (window.setActiveSidebar) {
+      window.setActiveSidebar();
+    } else {
+      document.querySelectorAll(".sidebar .menu-item").forEach((item) => {
+        if (item.dataset.route === "/messages") item.classList.add("active");
+      });
+    }
 
     requestAnimationFrame(() => this.updateTabsIndicator());
     await this.loadConversations();

@@ -7,12 +7,21 @@
   let lastMobileState = null;
   let resizeFrame = null;
 
-  function setAppHeightVariable() {
-    const height = Math.max(
+  function resolveViewportHeight() {
+    const viewportHeight = Number(global.visualViewport?.height || 0);
+    if (viewportHeight > 0) {
+      return viewportHeight;
+    }
+
+    return Math.max(
       global.innerHeight || 0,
       document.documentElement?.clientHeight || 0,
       0,
     );
+  }
+
+  function setAppHeightVariable() {
+    const height = resolveViewportHeight();
     document.documentElement.style.setProperty(
       "--cloudm-app-height",
       `${height || 0}px`,
@@ -70,5 +79,9 @@
   touchQuery.addEventListener("change", () => syncResponsiveState(true));
   global.addEventListener("resize", handleResize);
   global.addEventListener("orientationchange", handleResize);
+  if (global.visualViewport) {
+    global.visualViewport.addEventListener("resize", handleResize);
+    global.visualViewport.addEventListener("scroll", handleResize);
+  }
   global.addEventListener("pageshow", () => syncResponsiveState(false));
 })(window);

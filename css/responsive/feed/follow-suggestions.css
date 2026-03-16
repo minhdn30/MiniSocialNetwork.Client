@@ -24,24 +24,69 @@
   .follow-suggestions-page-heading h1 {
     font-size: 22px;
   }
+
+  .follow-suggestions-panel .follow-suggestion-row,
+  .follow-suggestions-panel .follow-suggestion-skeleton-item,
+  .follow-suggestions-list-page .follow-suggestion-row,
+  .follow-suggestions-list-page .follow-suggestion-skeleton-item {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .follow-suggestions-panel .follow-suggestion-row .action-box,
+  .follow-suggestions-list-page .follow-suggestion-row .action-box {
+    width: auto !important;
+    justify-content: flex-end;
+  }
+
+  .follow-suggestions-panel .follow-suggestion-row .follow-btn,
+  .follow-suggestions-list-page .follow-suggestion-row .follow-btn {
+    width: 40px !important;
+    min-width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: 10px;
+    justify-content: center;
+    gap: 0;
+    flex: 0 0 40px;
+  }
+
+  .follow-suggestions-panel .follow-suggestion-row .follow-btn span,
+  .follow-suggestions-list-page .follow-suggestion-row .follow-btn span {
+    display: none;
+  }
+
+  .follow-suggestions-panel .follow-suggestion-skeleton-btn,
+  .follow-suggestions-list-page .follow-suggestion-skeleton-btn {
+    width: 40px !important;
+    min-width: 40px;
+  }
 }
 
 @media (max-width: 560px) {
-  .follow-suggestion-row,
-  .follow-suggestion-skeleton-item {
-    flex-direction: column;
-    align-items: stretch;
+  .follow-suggestions-panel .follow-suggestion-row,
+  .follow-suggestions-panel .follow-suggestion-skeleton-item,
+  .follow-suggestions-list-page .follow-suggestion-row,
+  .follow-suggestions-list-page .follow-suggestion-skeleton-item {
+    flex-direction: row;
+    align-items: center;
   }
 
-  .follow-suggestion-row .action-box,
-  .follow-suggestion-row .follow-btn,
-  .follow-suggestion-skeleton-btn,
-  .follow-suggestions-inline-btn {
-    width: 100%;
+  .follow-suggestions-panel .follow-suggestion-row .action-box,
+  .follow-suggestions-list-page .follow-suggestion-row .action-box,
+  .follow-suggestions-panel .follow-suggestion-skeleton-btn,
+  .follow-suggestions-list-page .follow-suggestion-skeleton-btn {
+    width: auto;
   }
 
-  .follow-suggestion-row .action-box {
-    justify-content: stretch;
+  .follow-suggestions-panel .follow-suggestion-row .action-box,
+  .follow-suggestions-list-page .follow-suggestion-row .action-box {
+    justify-content: flex-end;
+  }
+
+  .follow-suggestions-panel .follow-suggestion-row .follow-btn,
+  .follow-suggestions-list-page .follow-suggestion-row .follow-btn {
+    width: 40px !important;
   }
 
   .follow-suggestions-view-more {
